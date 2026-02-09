@@ -205,11 +205,41 @@ def run_pipeline(profile_name=None, skip_collect=False, no_email=False):
                 logger.info("")
                 logger.info("--- OWN CHANNEL COLLECTION ---")
                 try:
-                    own_posts = collector.collect_posts(
-                        handle=own_handle,
-                        competitor_name=profile.name,
-                        count=config.DEFAULT_POSTS_PER_COMPETITOR,
-                    )
+                    # Prefer Graph API for own-channel (returns saves/shares)
+                    graph_collector = None
+                    try:
+                        from collectors.instagram_graph import create_graph_collector
+                        graph_collector = create_graph_collector()
+                    except ImportError:
+                        pass
+
+                    if graph_collector and graph_collector.health_check():
+                        logger.info(
+                            "  Using Instagram Graph API "
+                            "(saves + shares available)"
+                        )
+                        own_posts = graph_collector.collect_posts(
+                            handle=own_handle,
+                            competitor_name=profile.name,
+                            count=config.DEFAULT_POSTS_PER_COMPETITOR,
+                        )
+                    else:
+                        if config.IG_GRAPH_ACCESS_TOKEN:
+                            logger.warning(
+                                "  Graph API token set but health check "
+                                "failed. Falling back to scraper."
+                            )
+                        else:
+                            logger.info(
+                                "  Tip: Set IG_GRAPH_ACCESS_TOKEN for "
+                                "saves/shares on your own posts"
+                            )
+                        own_posts = collector.collect_posts(
+                            handle=own_handle,
+                            competitor_name=profile.name,
+                            count=config.DEFAULT_POSTS_PER_COMPETITOR,
+                        )
+
                     own_new = store_own_posts(
                         own_posts, profile.profile_name
                     )

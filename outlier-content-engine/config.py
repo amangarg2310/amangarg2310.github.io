@@ -41,6 +41,9 @@ APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
 COLLECTION_SOURCE = os.getenv("COLLECTION_SOURCE", "rapidapi")
 DEFAULT_POSTS_PER_COMPETITOR = 12
 
+# ── Instagram Graph API (own-channel only, provides saves/shares) ──
+IG_GRAPH_ACCESS_TOKEN = os.getenv("IG_GRAPH_ACCESS_TOKEN")
+
 # ── TikTok Data Collection ──
 TIKTOK_RAPIDAPI_KEY = os.getenv("TIKTOK_RAPIDAPI_KEY", os.getenv("RAPIDAPI_KEY", ""))
 TIKTOK_COLLECTION_SOURCE = os.getenv("TIKTOK_COLLECTION_SOURCE", "rapidapi")

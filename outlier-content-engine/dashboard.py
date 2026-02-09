@@ -228,11 +228,24 @@ def get_outlier_posts(competitor=None, sort_by="score"):
             # Map outlier_score (typically 1-20+) to 0-100 range
             engagement_score_pct = min(100, round(score * 10)) if score else 0
 
+            platform = row["platform"] or "instagram"
+
+            # Build correct post URL per platform
+            if platform == "tiktok":
+                post_url = f"https://www.tiktok.com/@{row['competitor_handle']}/video/{row['post_id']}"
+            else:
+                post_url = f"https://www.instagram.com/p/{row['post_id']}/"
+
+            # Data quality: which metrics are actually populated
+            has_saves = saves > 0 or row["saves"] is not None
+            has_shares = shares > 0 or row["shares"] is not None
+            has_views = views > 0 or row["views"] is not None
+
             outliers.append({
                 "post_id": row["post_id"],
                 "competitor_name": row["competitor_name"],
                 "competitor_handle": row["competitor_handle"],
-                "platform": row["platform"] or "instagram",
+                "platform": platform,
                 "caption": row["caption"] or "",
                 "media_type": row["media_type"] or "image",
                 "media_url": row["media_url"] or "",
@@ -250,7 +263,10 @@ def get_outlier_posts(competitor=None, sort_by="score"):
                 "engagement_multiplier": round(score / 0.6, 1) if score else 0,
                 "audio_name": row["audio_name"] or "",
                 "content_tags": tags,
-                "post_url": f"https://www.instagram.com/p/{row['post_id']}/",
+                "post_url": post_url,
+                "has_saves": has_saves,
+                "has_shares": has_shares,
+                "has_views": has_views,
             })
 
         return outliers

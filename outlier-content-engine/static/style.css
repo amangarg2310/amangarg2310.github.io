@@ -113,6 +113,15 @@ body {
 .filter-pill:hover{color:var(--text);background:var(--surface)}
 .filter-pill.active{background:var(--card);color:var(--accent);border-color:var(--border);box-shadow:0 1px 3px rgba(0,0,0,.2)}
 
+/* ── Data Quality Bar ── */
+.data-quality-bar{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.dq-item{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim);background:var(--surface);padding:6px 12px;border-radius:var(--radius-xs);border:1px solid var(--border)}
+.dq-item svg{flex-shrink:0;color:var(--text-muted)}
+.dq-item>span:nth-child(2){font-weight:600;color:var(--text-secondary)}
+.dq-metrics{color:var(--text-dim);font-size:10px}
+.dq-note{color:var(--warning);font-size:10px;font-weight:500}
+.dq-full{color:var(--success);font-size:10px;font-weight:500}
+
 /* ── Forms ── */
 .form-group{margin-bottom:20px}
 .form-label{display:block;font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px}

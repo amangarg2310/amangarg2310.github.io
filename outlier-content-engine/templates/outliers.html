@@ -8,13 +8,14 @@
 <!-- Filter Bar -->
 <div class="filter-bar">
     <div class="filter-group">
-        <span class="filter-label">Platform</span>
-        <div class="filter-pills" id="platform-pills">
+        <span class="filter-label">Competitor</span>
+        <div class="filter-pills" id="competitor-pills">
             <button class="filter-pill {% if not selected_competitor %}active{% endif %}"
                     onclick="applyFilter('competitor', '')">All</button>
             {% for comp in profile.competitors %}
-            <button class="filter-pill {% if selected_competitor == comp.handles.get('instagram', '') %}active{% endif %}"
-                    onclick="applyFilter('competitor', '{{ comp.handles.get('instagram', '') }}')">
+            {% set comp_handle = comp.handles.get('instagram', comp.handles.get('tiktok', '')) %}
+            <button class="filter-pill {% if selected_competitor == comp_handle %}active{% endif %}"
+                    onclick="applyFilter('competitor', '{{ comp_handle }}')">
                 {{ comp.name }}
             </button>
             {% endfor %}
@@ -25,6 +26,8 @@
         <div class="filter-pills" id="sort-pills">
             <button class="filter-pill {% if sort_by == 'score' %}active{% endif %}"
                     onclick="applyFilter('sort', 'score')">Score</button>
+            <button class="filter-pill {% if sort_by == 'comments' %}active{% endif %}"
+                    onclick="applyFilter('sort', 'comments')">Comments</button>
             <button class="filter-pill {% if sort_by == 'saves' %}active{% endif %}"
                     onclick="applyFilter('sort', 'saves')">Saves</button>
             <button class="filter-pill {% if sort_by == 'shares' %}active{% endif %}"
@@ -34,6 +37,22 @@
             <button class="filter-pill {% if sort_by == 'date' %}active{% endif %}"
                     onclick="applyFilter('sort', 'date')">Recent</button>
         </div>
+    </div>
+</div>
+
+<!-- Data Quality Info -->
+<div class="data-quality-bar">
+    <div class="dq-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+        <span>Instagram</span>
+        <span class="dq-metrics">Likes, Comments, Views (Reels), Shares (Reels only)</span>
+        <span class="dq-note">Saves are private</span>
+    </div>
+    <div class="dq-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+        <span>TikTok</span>
+        <span class="dq-metrics">All metrics: Likes, Comments, Saves, Shares, Views, Audio</span>
+        <span class="dq-full">Full data</span>
     </div>
 </div>
 
@@ -117,8 +136,10 @@
             </span>
             {% endif %}
 
-            <!-- Metrics Row (prioritize saves, shares, views) -->
+            <!-- Metrics Row (platform-aware: show available data) -->
             <div class="metrics-row">
+                {% if post.platform == 'tiktok' %}
+                {# TikTok: all metrics available #}
                 <div class="m-cell">
                     <span class="m-icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
@@ -140,6 +161,43 @@
                     <span class="m-val">{{ "{:,}".format(post.views) if post.views else "---" }}</span>
                     <span class="m-lbl">Views</span>
                 </div>
+                {% else %}
+                {# Instagram: saves private, shares Reels-only, views for video #}
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.comments) }}</span>
+                    <span class="m-lbl">Comments</span>
+                </div>
+                {% if post.has_shares and post.shares > 0 %}
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.shares) }}</span>
+                    <span class="m-lbl">Shares</span>
+                </div>
+                {% endif %}
+                {% if post.has_views and post.views > 0 %}
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.views) }}</span>
+                    <span class="m-lbl">Views</span>
+                </div>
+                {% endif %}
+                {% if post.has_saves and post.saves > 0 %}
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.saves) }}</span>
+                    <span class="m-lbl">Saves</span>
+                </div>
+                {% endif %}
+                {% endif %}
             </div>
         </div>
 

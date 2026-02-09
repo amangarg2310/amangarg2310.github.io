@@ -23,39 +23,64 @@ from profile_loader import BrandProfile, OutlierSettings, ContentTags
 logger = logging.getLogger(__name__)
 
 # ── Engagement Weights ──
-# Saves and shares indicate high intent; likes are low-effort.
-ENGAGEMENT_WEIGHTS = {
-    "saves": 4,
-    "shares": 3,
-    "comments": 2,
-    "likes": 1,
-    "views": 0.5,
+# Platform-aware: Instagram lacks saves (private) and shares are spotty.
+# TikTok returns all metrics. Weights adapt so the formula stays useful.
+PLATFORM_WEIGHTS = {
+    "tiktok": {
+        "saves": 4,
+        "shares": 3,
+        "comments": 2,
+        "likes": 1,
+        "views": 0.5,
+    },
+    "instagram": {
+        # saves=0 weight (always null from public API)
+        # shares get moderate weight (only available on Reels)
+        # comments promoted as the top signal
+        "saves": 0,
+        "shares": 2,
+        "comments": 3,
+        "likes": 1,
+        "views": 0.5,
+    },
 }
+
+# Default fallback (used for unknown platforms)
+DEFAULT_WEIGHTS = PLATFORM_WEIGHTS["instagram"]
+
+
+def get_weights(platform: str = "instagram") -> dict:
+    """Return the weight dict for a given platform."""
+    return PLATFORM_WEIGHTS.get(platform, DEFAULT_WEIGHTS)
 
 
 def calculate_weighted_engagement(likes: int, comments: int,
                                   saves: int, shares: int,
-                                  views: int = 0) -> float:
-    """Weighted engagement score — intent-heavy actions count more."""
+                                  views: int = 0,
+                                  platform: str = "instagram") -> float:
+    """Weighted engagement score — adapts weights per platform."""
+    w = get_weights(platform)
     return (
-        likes * ENGAGEMENT_WEIGHTS["likes"] +
-        comments * ENGAGEMENT_WEIGHTS["comments"] +
-        saves * ENGAGEMENT_WEIGHTS["saves"] +
-        shares * ENGAGEMENT_WEIGHTS["shares"] +
-        views * ENGAGEMENT_WEIGHTS["views"]
+        likes * w["likes"] +
+        comments * w["comments"] +
+        saves * w["saves"] +
+        shares * w["shares"] +
+        views * w["views"]
     )
 
 
 def get_primary_driver(likes: int, comments: int,
                        saves: int, shares: int,
-                       views: int = 0) -> str:
+                       views: int = 0,
+                       platform: str = "instagram") -> str:
     """Return the engagement type contributing most weighted value."""
+    w = get_weights(platform)
     contributions = {
-        "likes": likes * ENGAGEMENT_WEIGHTS["likes"],
-        "comments": comments * ENGAGEMENT_WEIGHTS["comments"],
-        "saves": saves * ENGAGEMENT_WEIGHTS["saves"],
-        "shares": shares * ENGAGEMENT_WEIGHTS["shares"],
-        "views": views * ENGAGEMENT_WEIGHTS["views"],
+        "likes": likes * w["likes"],
+        "comments": comments * w["comments"],
+        "saves": saves * w["saves"],
+        "shares": shares * w["shares"],
+        "views": views * w["views"],
     }
     return max(contributions, key=contributions.get)
 
@@ -171,7 +196,7 @@ class OutlierDetector:
         ).isoformat()
 
         rows = conn.execute("""
-            SELECT likes, comments, saves, shares, views
+            SELECT likes, comments, saves, shares, views, platform
             FROM competitor_posts
             WHERE competitor_handle = ?
               AND brand_profile = ?
@@ -193,7 +218,10 @@ class OutlierDetector:
             saves = row["saves"] or 0
             shares = row["shares"] or 0
             views = row["views"] or 0
-            total = calculate_weighted_engagement(likes, comms, saves, shares, views)
+            platform = row["platform"] or "instagram"
+            total = calculate_weighted_engagement(
+                likes, comms, saves, shares, views, platform=platform
+            )
             engagements.append(total)
             likes_list.append(likes)
             comments_list.append(comms)
@@ -235,9 +263,10 @@ class OutlierDetector:
             saves = row["saves"] or 0
             shares = row["shares"] or 0
             views = row["views"] or 0
+            platform = row["platform"] or "instagram"
             total_engagement = likes + comms + saves + shares
             weighted_eng = calculate_weighted_engagement(
-                likes, comms, saves, shares, views
+                likes, comms, saves, shares, views, platform=platform
             )
 
             # Skip if baseline mean is 0 (avoid division by zero)
@@ -276,7 +305,10 @@ class OutlierDetector:
                 caption, row["media_type"] or ""
             )
 
-            post_url = f"https://www.instagram.com/p/{row['post_id']}/"
+            if platform == "tiktok":
+                post_url = f"https://www.tiktok.com/@{handle}/video/{row['post_id']}"
+            else:
+                post_url = f"https://www.instagram.com/p/{row['post_id']}/"
 
             outliers.append(OutlierPost(
                 post_id=row["post_id"],
@@ -298,7 +330,8 @@ class OutlierDetector:
                 outlier_score=round(outlier_score, 2),
                 weighted_engagement=round(weighted_eng, 2),
                 primary_engagement_driver=get_primary_driver(
-                    likes, comms, saves, shares, views
+                    likes, comms, saves, shares, views,
+                    platform=platform,
                 ),
                 content_tags=content_tags,
             ))

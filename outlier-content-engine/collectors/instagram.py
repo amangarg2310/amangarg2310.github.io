@@ -361,6 +361,26 @@ class RapidAPIInstagramCollector(BaseCollector):
                     or item.get("thumbnail_url")
                 )
 
+                # Extract audio info from Reels/clips
+                audio_id = None
+                audio_name = None
+                music_meta = item.get("music_metadata") or {}
+                music_info = music_meta.get("music_info") or {}
+                if music_info:
+                    audio_id = str(music_info.get("music_id", "")) or None
+                    audio_name = music_info.get("title")
+                if not audio_id:
+                    # Try clips_metadata path
+                    clips_meta = item.get("clips_metadata") or {}
+                    original_sound = clips_meta.get("original_sound_info") or {}
+                    if original_sound:
+                        audio_id = str(original_sound.get("audio_asset_id", "")) or None
+                        audio_name = audio_name or original_sound.get("original_audio_title")
+
+                # saves: try extraction (usually null for competitor posts,
+                # but may be present for own-channel via Graph API)
+                saves_raw = item.get("save_count")
+
                 post = CollectedPost(
                     post_id=item.get("code", item.get("pk", "")),
                     competitor_name=competitor_name,
@@ -371,7 +391,7 @@ class RapidAPIInstagramCollector(BaseCollector):
                     caption=caption,
                     likes=item.get("like_count", 0),
                     comments=item.get("comment_count", 0),
-                    saves=None,  # not available from public API
+                    saves=saves_raw,
                     shares=item.get("reshare_count"),
                     views=item.get("play_count") or item.get("view_count"),
                     posted_at=posted_at,
@@ -379,6 +399,8 @@ class RapidAPIInstagramCollector(BaseCollector):
                     hashtags=hashtags,
                     mentioned_accounts=mentions,
                     follower_count=follower_count,
+                    audio_id=audio_id,
+                    audio_name=audio_name,
                 )
                 posts.append(post)
 
@@ -535,6 +557,11 @@ class ApifyInstagramCollector(BaseCollector):
                 hashtags = re.findall(r"#(\w+)", caption)
                 mentions = re.findall(r"@(\w+)", caption)
 
+                # Extract audio info from Apify response
+                music_info = item.get("musicInfo") or {}
+                audio_id = str(music_info.get("id", "")) or None
+                audio_name = music_info.get("title") or music_info.get("name")
+
                 post = CollectedPost(
                     post_id=item.get("shortCode", item.get("id", "")),
                     competitor_name=competitor_name,
@@ -545,14 +572,16 @@ class ApifyInstagramCollector(BaseCollector):
                     caption=caption,
                     likes=item.get("likesCount", 0),
                     comments=item.get("commentsCount", 0),
-                    saves=None,
-                    shares=None,
+                    saves=item.get("savesCount"),
+                    shares=item.get("sharesCount"),
                     views=item.get("videoViewCount"),
                     posted_at=posted_at,
                     media_url=item.get("displayUrl"),
                     hashtags=hashtags,
                     mentioned_accounts=mentions,
                     follower_count=item.get("ownerFollowerCount"),
+                    audio_id=audio_id,
+                    audio_name=audio_name,
                 )
                 posts.append(post)
             except Exception as e:
