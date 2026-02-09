@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block page_title %}Overview{% endblock %}
+{% block page_subtitle %}{{ profile.name }} — {{ profile.vertical }}{% endblock %}
+
+{% block content %}
+
+<!-- Quick Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_posts }}</div>
+        <div class="stat-label">Posts Tracked</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value accent">{{ stats.total_outliers }}</div>
+        <div class="stat-label">Outliers Found</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.competitors }}</div>
+        <div class="stat-label">Competitors</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value success">{{ stats.reports }}</div>
+        <div class="stat-label">Reports Generated</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Quick Actions</div>
+            <div class="card-subtitle">Run the engine or manage your setup</div>
+        </div>
+    </div>
+    <div class="flex gap-12" style="flex-wrap:wrap;">
+        <form method="POST" action="{{ url_for('run_engine') }}" style="display:inline;">
+            <button type="submit" class="btn btn-primary">
+                &#9654; Run Full Pipeline
+            </button>
+        </form>
+        <form method="POST" action="{{ url_for('run_engine') }}" style="display:inline;">
+            <input type="hidden" name="skip_collect" value="1">
+            <button type="submit" class="btn btn-secondary">
+                &#9881; Analyze Existing Data
+            </button>
+        </form>
+        <a href="{{ url_for('competitors_page') }}" class="btn btn-outline">
+            + Add Competitor
+        </a>
+    </div>
+</div>
+
+<!-- Competitor Overview -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Competitors Being Monitored</div>
+        <a href="{{ url_for('competitors_page') }}" class="btn btn-outline btn-sm">Manage</a>
+    </div>
+    {% if profile.competitors %}
+    <div class="competitor-grid">
+        {% for comp in profile.competitors %}
+        <div class="competitor-card">
+            <div class="competitor-name">{{ comp.name }}</div>
+            <div class="competitor-platforms mt-8">
+                {% for platform, handle in comp.handles.items() %}
+                <span class="platform-badge">{{ platform }}: @{{ handle }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#9775;</div>
+        <h3>No competitors yet</h3>
+        <p>Add competitors to start tracking their content performance.</p>
+        <a href="{{ url_for('competitors_page') }}" class="btn btn-primary">Add Your First Competitor</a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Recent Runs -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Recent Runs</div>
+    </div>
+    {% if recent_runs %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Posts Collected</th>
+                    <th>New Posts</th>
+                    <th>Errors</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in recent_runs %}
+                <tr>
+                    <td>{{ run.run_timestamp }}</td>
+                    <td>{{ run.posts_collected }}</td>
+                    <td>{{ run.posts_new }}</td>
+                    <td>
+                        {% if run.errors and run.errors != '[]' %}
+                        <span class="badge badge-danger">{{ run.error_count }}</span>
+                        {% else %}
+                        <span class="badge badge-success">None</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ run.duration_seconds }}s</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#128202;</div>
+        <h3>No runs yet</h3>
+        <p>Run the pipeline to start collecting competitor data and finding outliers.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard{% endblock %} — Outlier Content Engine</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <h1>Outlier Engine</h1>
+        <div class="brand-sub">Competitor Intelligence</div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <div class="nav-section">Dashboard</div>
+        <a href="{{ url_for('index') }}" class="{% if active_page == 'home' %}active{% endif %}">
+            <span class="nav-icon">&#9632;</span> Overview
+        </a>
+        <a href="{{ url_for('outliers_page') }}" class="{% if active_page == 'outliers' %}active{% endif %}">
+            <span class="nav-icon">&#9733;</span> Outliers
+        </a>
+        <a href="{{ url_for('reports_page') }}" class="{% if active_page == 'reports' %}active{% endif %}">
+            <span class="nav-icon">&#9993;</span> Reports
+        </a>
+
+        <div class="nav-section">Configuration</div>
+        <a href="{{ url_for('competitors_page') }}" class="{% if active_page == 'competitors' %}active{% endif %}">
+            <span class="nav-icon">&#9775;</span> Competitors
+        </a>
+        <a href="{{ url_for('voice_page') }}" class="{% if active_page == 'voice' %}active{% endif %}">
+            <span class="nav-icon">&#9998;</span> Brand Voice
+        </a>
+        <a href="{{ url_for('settings_page') }}" class="{% if active_page == 'settings' %}active{% endif %}">
+            <span class="nav-icon">&#9881;</span> Settings
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <label class="text-xs" style="display:block; margin-bottom:6px;">Active Profile</label>
+        <form method="POST" action="{{ url_for('switch_profile') }}">
+            <select name="profile" class="profile-switcher" onchange="this.form.submit()">
+                {% for p in available_profiles %}
+                <option value="{{ p }}" {% if p == active_profile %}selected{% endif %}>{{ p }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main">
+    <div class="page-header">
+        <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+        <p>{% block page_subtitle %}{% endblock %}</p>
+    </div>
+
+    <div class="page-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

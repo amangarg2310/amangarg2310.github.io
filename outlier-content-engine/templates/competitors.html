@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Competitors{% endblock %}
+{% block page_title %}Competitors{% endblock %}
+{% block page_subtitle %}Add, edit, or remove the brands you're monitoring{% endblock %}
+
+{% block content %}
+
+<!-- Add New Competitor -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Add a Competitor</div>
+    </div>
+    <form method="POST" action="{{ url_for('add_competitor') }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Brand Name</label>
+                <input type="text" name="name" class="form-input" placeholder="e.g. Nike" required>
+                <div class="form-hint">The display name for this competitor</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Instagram Handle</label>
+                <div style="position:relative;">
+                    <input type="text" name="instagram" class="form-input" placeholder="e.g. nike" style="padding-left:28px;">
+                    <span style="position:absolute; left:12px; top:11px; color:var(--text-muted);">@</span>
+                </div>
+                <div class="form-hint">Their Instagram username (without the @)</div>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">TikTok Handle <span class="text-muted">(optional)</span></label>
+                <div style="position:relative;">
+                    <input type="text" name="tiktok" class="form-input" placeholder="e.g. nike" style="padding-left:28px;">
+                    <span style="position:absolute; left:12px; top:11px; color:var(--text-muted);">@</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Facebook Handle <span class="text-muted">(optional)</span></label>
+                <div style="position:relative;">
+                    <input type="text" name="facebook" class="form-input" placeholder="e.g. nike" style="padding-left:28px;">
+                    <span style="position:absolute; left:12px; top:11px; color:var(--text-muted);">@</span>
+                </div>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">+ Add Competitor</button>
+    </form>
+</div>
+
+<!-- Current Competitors -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Current Competitors</div>
+            <div class="card-subtitle">{{ profile.competitors | length }} brands being monitored</div>
+        </div>
+    </div>
+
+    {% if profile.competitors %}
+    <div class="competitor-grid">
+        {% for comp in profile.competitors %}
+        <div class="competitor-card">
+            <div class="competitor-name">{{ comp.name }}</div>
+            <div class="competitor-platforms mt-8">
+                {% for platform, handle in comp.handles.items() %}
+                <span class="platform-badge">
+                    {% if platform == 'instagram' %}&#128247;{% elif platform == 'tiktok' %}&#127926;{% else %}&#127760;{% endif %}
+                    {{ platform }}: @{{ handle }}
+                </span>
+                {% endfor %}
+            </div>
+            <div class="competitor-actions">
+                <form method="POST" action="{{ url_for('remove_competitor') }}" style="display:inline;">
+                    <input type="hidden" name="name" value="{{ comp.name }}">
+                    <button type="submit" class="btn btn-danger btn-sm"
+                            onclick="return confirm('Remove {{ comp.name }} from your competitor list?')">
+                        Remove
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#9775;</div>
+        <h3>No competitors yet</h3>
+        <p>Use the form above to add brands you want to monitor.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

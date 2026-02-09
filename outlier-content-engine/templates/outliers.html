@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Outliers{% endblock %}
+{% block page_title %}Outlier Posts{% endblock %}
+{% block page_subtitle %}Posts that significantly outperformed their account's average{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<div class="card">
+    <form method="GET" action="{{ url_for('outliers_page') }}" class="flex gap-12" style="flex-wrap:wrap; align-items:end;">
+        <div class="form-group" style="margin-bottom:0; min-width:180px;">
+            <label class="form-label">Competitor</label>
+            <select name="competitor" class="form-select">
+                <option value="">All competitors</option>
+                {% for comp in profile.competitors %}
+                <option value="{{ comp.handles.get('instagram', '') }}"
+                        {% if selected_competitor == comp.handles.get('instagram', '') %}selected{% endif %}>
+                    {{ comp.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0; min-width:150px;">
+            <label class="form-label">Sort By</label>
+            <select name="sort" class="form-select">
+                <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Outlier Score</option>
+                <option value="likes" {% if sort_by == 'likes' %}selected{% endif %}>Likes</option>
+                <option value="comments" {% if sort_by == 'comments' %}selected{% endif %}>Comments</option>
+                <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Most Recent</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-outline btn-sm">Apply Filters</button>
+    </form>
+</div>
+
+<!-- Results Summary -->
+{% if outliers %}
+<p class="text-muted mb-16">Showing {{ outliers | length }} outlier posts</p>
+
+{% for post in outliers %}
+<div class="outlier-card">
+    <div class="outlier-rank">{{ loop.index }}</div>
+
+    <div class="flex-between" style="padding-right:48px;">
+        <div>
+            <span class="fw-600" style="font-size:16px;">{{ post.competitor_name }}</span>
+            <span class="text-muted text-sm" style="margin-left:8px;">@{{ post.competitor_handle }}</span>
+        </div>
+        <span class="multiplier-badge">{{ post.outlier_score }}x score</span>
+    </div>
+
+    {% if post.caption %}
+    <div class="outlier-caption">
+        "{{ post.caption[:300] }}{% if post.caption|length > 300 %}...{% endif %}"
+    </div>
+    {% endif %}
+
+    <div style="margin-top:12px;">
+        <div class="outlier-metric">
+            <div class="outlier-metric-value">{{ "{:,}".format(post.likes) }}</div>
+            <div class="outlier-metric-label">Likes</div>
+        </div>
+        <div class="outlier-metric">
+            <div class="outlier-metric-value">{{ "{:,}".format(post.comments) }}</div>
+            <div class="outlier-metric-label">Comments</div>
+        </div>
+        {% if post.views %}
+        <div class="outlier-metric">
+            <div class="outlier-metric-value">{{ "{:,}".format(post.views) }}</div>
+            <div class="outlier-metric-label">Views</div>
+        </div>
+        {% endif %}
+        <div class="outlier-metric">
+            <div class="outlier-metric-value">{{ post.engagement_multiplier }}x</div>
+            <div class="outlier-metric-label">vs. Average</div>
+        </div>
+    </div>
+
+    <div class="flex-between mt-16">
+        <div class="flex gap-8">
+            <span class="badge badge-neutral">{{ post.media_type }}</span>
+            {% if post.posted_at %}
+            <span class="badge badge-neutral">{{ post.posted_at[:10] }}</span>
+            {% endif %}
+            {% if post.content_tags %}
+                {% for tag in post.content_tags[:3] %}
+                <span class="badge badge-primary">{{ tag }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% if post.post_url %}
+        <a href="{{ post.post_url }}" target="_blank" class="btn btn-outline btn-sm">
+            View Post &#8599;
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state-icon">&#9733;</div>
+        <h3>No outliers found yet</h3>
+        <p>Outliers appear after running the pipeline at least once. The engine needs a few posts per competitor to establish baselines before it can detect what's unusual.</p>
+        <form method="POST" action="{{ url_for('run_engine') }}">
+            <button type="submit" class="btn btn-primary">Run Pipeline Now</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

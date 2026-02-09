@@ -93,6 +93,28 @@ Each profile defines:
 - **Content tags** — themes, hook types, and formats relevant to your vertical
 - **Outlier settings** — engagement multiplier, std dev threshold, lookback window
 
+## Web Dashboard
+
+A visual dashboard for non-technical users to manage everything without touching config files.
+
+```bash
+python dashboard.py                # runs at http://localhost:5000
+python dashboard.py --port 8080    # custom port
+```
+
+**Dashboard pages:**
+
+| Page | What you can do |
+|------|----------------|
+| **Overview** | See stats, run the pipeline with one click, view recent runs |
+| **Competitors** | Add or remove competitors with a simple form (no YAML editing) |
+| **Brand Voice** | Edit tone, themes, example captions — the AI uses these to rewrite content |
+| **Outliers** | Browse detected outlier posts, filter by competitor, sort by score/likes/date |
+| **Reports** | View and download generated HTML intelligence reports |
+| **Settings** | Adjust outlier sensitivity with sliders, manage content categories |
+
+The profile switcher in the sidebar lets you swap between brands instantly.
+
 ## CLI Options
 
 ```bash
@@ -107,6 +129,7 @@ python main.py --no-email             # Save report locally instead of emailing
 ```
 outlier-content-engine/
 ├── main.py                 # Pipeline orchestrator
+├── dashboard.py            # Flask web dashboard
 ├── config.py               # Environment-driven global settings
 ├── profile_loader.py       # YAML profile loader + validation
 ├── profiles/
@@ -118,6 +141,16 @@ outlier-content-engine/
 ├── outlier_detector.py     # Statistical outlier detection + content tagging
 ├── analyzer.py             # GPT-4o-mini analysis + brand voice rewriter
 ├── reporter.py             # HTML email report generator
+├── templates/              # Dashboard HTML templates
+│   ├── base.html           # Layout with sidebar navigation
+│   ├── index.html          # Overview / home page
+│   ├── competitors.html    # Competitor management
+│   ├── voice.html          # Brand voice editor
+│   ├── outliers.html       # Outlier post viewer
+│   ├── reports.html        # Report viewer + downloads
+│   └── settings.html       # Detection thresholds + content tags
+├── static/
+│   └── style.css           # Dashboard styles
 ├── data/                   # SQLite database + saved reports (gitignored)
 ├── requirements.txt
 └── .env.example
@@ -142,6 +175,6 @@ The engine tracks token usage in SQLite and enforces a configurable monthly ceil
 - [ ] Historical trend tracking
 - [ ] Own-brand performance comparison
 - [ ] Slack/Discord real-time alerts
-- [ ] Web dashboard UI
+- [x] Web dashboard UI
 - [ ] Multi-brand batch runs
 - [ ] Cross-vertical profile templates

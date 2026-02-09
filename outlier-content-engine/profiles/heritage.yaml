@@ -1,85 +1,72 @@
-# ──────────────────────────────────────
-# BRAND PROFILE — Heritage
-# Swap this file (or create a new one) to run the engine for a different brand/vertical
-# Set ACTIVE_PROFILE=heritage in .env to use this profile
-# ──────────────────────────────────────
-
 brand:
-  name: "Heritage"
-  vertical: "premium streetwear"
-  tagline: "Every thread holds a story."
-  description: >
-    Heritage is modern nostalgia for the self-made generation.
-    Streetwear redefined: mature, intentional, built for those
-    who've earned their quiet confidence.
-
+  name: Heritage
+  vertical: premium streetwear
+  tagline: Every thread holds a story.
+  description: Heritage is modern nostalgia for the self-made generation.
 voice:
-  tone: "Confident but never loud. Mature. Nostalgic but forward-looking."
-  language_style: "Minimal, intentional. Short declarative sentences. Poetic restraint."
+  tone: Confident but never loud. Mature. Nostalgic but forward-looking.
+  language_style: Minimal, intentional. Short declarative sentences. Poetic restraint.
   themes:
-    - "self-made legacy"
-    - "quiet luxury"
-    - "memory as identity"
-    - "craftsmanship"
-    - "earned confidence"
+  - self-made legacy
+  - quiet luxury
+  - memory as identity
+  - craftsmanship
+  - earned confidence
   avoids:
-    - "hype language"
-    - "drop culture urgency"
-    - "trend-chasing"
-    - "excessive emojis"
-    - "ALL CAPS"
+  - hype language
+  - drop culture urgency
+  - trend-chasing
+  - excessive emojis
+  - ALL CAPS
   example_captions:
-    - "Built different. Worn deliberately."
-    - "Some things are worth the wait. Legacy doesn't rush."
-    - "Where we came from is woven into everything we make."
-
+  - Built different. Worn deliberately.
+  - Some things are worth the wait. Legacy doesn't rush.
+  - Where we came from is woven into everything we make.
 competitors:
-  - name: "Fear of God / Essentials"
-    handles:
-      instagram: "fearofgod"
-      tiktok: "fearofgod"
-  - name: "Kith"
-    handles:
-      instagram: "kith"
-      tiktok: "kith"
-  - name: "Aimé Leon Dore"
-    handles:
-      instagram: "aimeleondore"
-      tiktok: "aimeleondore"
-  - name: "Rhude"
-    handles:
-      instagram: "rhude"
-      tiktok: "rhude"
-  - name: "John Elliott"
-    handles:
-      instagram: "johnelliottco"
-      tiktok: "johnelliott"
-  - name: "Represent"
-    handles:
-      instagram: "representclo"
-      tiktok: "representclo"
-
+- name: Fear of God / Essentials
+  handles:
+    instagram: fearofgod
+    tiktok: fearofgod
+- name: Kith
+  handles:
+    instagram: kith
+    tiktok: kith
+- name: Aimé Leon Dore
+  handles:
+    instagram: aimeleondore
+    tiktok: aimeleondore
+- name: Rhude
+  handles:
+    instagram: rhude
+    tiktok: rhude
+- name: John Elliott
+  handles:
+    instagram: johnelliottco
+    tiktok: johnelliott
+- name: Represent
+  handles:
+    instagram: representclo
+    tiktok: representclo
 content_tags:
   themes:
-    - "drop announcement"
-    - "styling"
-    - "culture/nostalgia"
-    - "brand story"
-    - "collaboration"
-    - "behind the scenes"
+  - drop announcement
+  - styling
+  - culture/nostalgia
+  - brand story
+  - collaboration
+  - behind the scenes
   hook_types:
-    - "question"
-    - "bold statement"
-    - "behind-the-scenes"
-    - "product showcase"
-    - "lifestyle"
-    - "UGC"
+  - question
+  - bold statement
+  - behind-the-scenes
+  - product showcase
+  - lifestyle
+  - UGC
   formats:
-    - "reel"
-    - "carousel"
-    - "static image"
-    - "video"
-
+  - reel
+  - carousel
+  - static image
+  - video
 outlier_settings:
   engagement_multiplier: 2.0
   std_dev_threshold: 1.5

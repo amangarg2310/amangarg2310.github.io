@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Brand Voice{% endblock %}
+{% block page_title %}Brand Voice{% endblock %}
+{% block page_subtitle %}Define how {{ profile.name }} sounds — the AI uses this to rewrite content in your voice{% endblock %}
+
+{% block content %}
+
+<form method="POST" action="{{ url_for('save_voice') }}">
+
+    <!-- Brand Identity -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Brand Identity</div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Brand Name</label>
+                <input type="text" name="brand_name" class="form-input" value="{{ profile.name }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Industry / Vertical</label>
+                <input type="text" name="vertical" class="form-input" value="{{ profile.vertical }}" required>
+                <div class="form-hint">e.g. premium streetwear, specialty coffee, SaaS</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tagline</label>
+            <input type="text" name="tagline" class="form-input" value="{{ profile.tagline }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Brand Description</label>
+            <textarea name="description" class="form-textarea" rows="3">{{ profile.description }}</textarea>
+            <div class="form-hint">A short description that gives the AI context about who your brand is</div>
+        </div>
+    </div>
+
+    <!-- Voice Settings -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Voice & Tone</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tone</label>
+            <textarea name="tone" class="form-textarea" rows="2">{{ profile.voice.tone }}</textarea>
+            <div class="form-hint">Describe how your brand sounds. e.g. "Confident but never loud. Mature."</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Writing Style</label>
+            <textarea name="language_style" class="form-textarea" rows="2">{{ profile.voice.language_style }}</textarea>
+            <div class="form-hint">How does your brand write? e.g. "Minimal, intentional. Short declarative sentences."</div>
+        </div>
+    </div>
+
+    <!-- Themes -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Core Themes</div>
+                <div class="card-subtitle">Topics your brand consistently talks about</div>
+            </div>
+        </div>
+        <div class="tag-list mb-16" id="themes-tags">
+            {% for theme in profile.voice.themes %}
+            <span class="tag">
+                {{ theme }}
+                <input type="hidden" name="themes" value="{{ theme }}">
+                <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+            </span>
+            {% endfor %}
+        </div>
+        <div class="flex gap-8">
+            <input type="text" id="new-theme" class="form-input" placeholder="Add a theme..." style="max-width:300px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="addTag('themes')">Add</button>
+        </div>
+    </div>
+
+    <!-- Things to Avoid -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Things to Avoid</div>
+                <div class="card-subtitle">The AI will never use these in your content</div>
+            </div>
+        </div>
+        <div class="tag-list mb-16" id="avoids-tags">
+            {% for item in profile.voice.avoids %}
+            <span class="tag">
+                {{ item }}
+                <input type="hidden" name="avoids" value="{{ item }}">
+                <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+            </span>
+            {% endfor %}
+        </div>
+        <div class="flex gap-8">
+            <input type="text" id="new-avoid" class="form-input" placeholder="Add something to avoid..." style="max-width:300px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="addTag('avoids')">Add</button>
+        </div>
+    </div>
+
+    <!-- Example Captions -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Example Captions</div>
+                <div class="card-subtitle">2-5 captions that perfectly capture your brand voice — the AI uses these as reference</div>
+            </div>
+        </div>
+        <div id="captions-container">
+            {% for cap in profile.voice.example_captions %}
+            <div class="form-group flex gap-8" style="align-items:start;">
+                <textarea name="example_captions" class="form-textarea" rows="2" style="flex:1;">{{ cap }}</textarea>
+                <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="addCaption()">+ Add Another Caption</button>
+    </div>
+
+    <!-- Save -->
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Brand Voice</button>
+    </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addTag(type) {
+    const input = document.getElementById('new-' + type.replace('s', ''));
+    // fallback: try alternate id patterns
+    let el = input || document.getElementById('new-' + type);
+    if (!el) {
+        // themes -> new-theme, avoids -> new-avoid
+        const singular = type === 'themes' ? 'theme' : 'avoid';
+        el = document.getElementById('new-' + singular);
+    }
+    if (!el || !el.value.trim()) return;
+
+    const container = document.getElementById(type + '-tags');
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `
+        ${el.value.trim()}
+        <input type="hidden" name="${type}" value="${el.value.trim()}">
+        <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+    `;
+    container.appendChild(tag);
+    el.value = '';
+}
+
+function addCaption() {
+    const container = document.getElementById('captions-container');
+    const div = document.createElement('div');
+    div.className = 'form-group flex gap-8';
+    div.style.alignItems = 'start';
+    div.innerHTML = `
+        <textarea name="example_captions" class="form-textarea" rows="2" style="flex:1;" placeholder="Write an example caption..."></textarea>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    container.appendChild(div);
+}
+
+// Allow Enter key to add tags
+document.querySelectorAll('#new-theme, #new-avoid').forEach(el => {
+    el.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const type = this.id.replace('new-', '') + 's';
+            addTag(type);
+        }
+    });
+});
+</script>
+{% endblock %}
