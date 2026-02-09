@@ -1,0 +1,501 @@
+"""
+Instagram Collector — fetches public competitor post data.
+
+Supports two data sources:
+  1. RapidAPI Instagram scrapers (primary, free tier)
+  2. Apify Instagram Scraper (fallback, pay-per-result)
+
+Uses the abstract BaseCollector interface so sources are swappable.
+"""
+
+import json
+import logging
+import sqlite3
+import time
+import re
+from datetime import datetime, timezone
+from typing import List, Optional, Dict
+
+import requests
+
+import config
+from collectors import BaseCollector, CollectedPost
+
+logger = logging.getLogger(__name__)
+
+
+# ── Database Setup ──
+
+DB_SCHEMA = """
+CREATE TABLE IF NOT EXISTS competitor_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id TEXT NOT NULL,
+    brand_profile TEXT NOT NULL,
+    platform TEXT NOT NULL DEFAULT 'instagram',
+    competitor_name TEXT NOT NULL,
+    competitor_handle TEXT NOT NULL,
+    posted_at TEXT,
+    caption TEXT,
+    media_type TEXT,
+    media_url TEXT,
+    likes INTEGER DEFAULT 0,
+    comments INTEGER DEFAULT 0,
+    saves INTEGER,
+    shares INTEGER,
+    views INTEGER,
+    follower_count INTEGER,
+    estimated_engagement_rate REAL,
+    is_outlier INTEGER DEFAULT 0,
+    outlier_score REAL,
+    content_tags TEXT,
+    collected_at TEXT NOT NULL,
+    UNIQUE(post_id, platform)
+);
+
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    estimated_cost_usd REAL,
+    context TEXT
+);
+
+CREATE TABLE IF NOT EXISTS collection_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_timestamp TEXT NOT NULL,
+    profile_name TEXT NOT NULL,
+    competitors_collected INTEGER DEFAULT 0,
+    posts_collected INTEGER DEFAULT 0,
+    posts_new INTEGER DEFAULT 0,
+    errors TEXT,
+    duration_seconds REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_posts_competitor_date
+    ON competitor_posts(competitor_handle, collected_at);
+CREATE INDEX IF NOT EXISTS idx_posts_outlier
+    ON competitor_posts(is_outlier);
+CREATE INDEX IF NOT EXISTS idx_posts_profile
+    ON competitor_posts(brand_profile);
+"""
+
+
+def init_database(db_path=None):
+    """Create the database and tables if they don't exist."""
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(DB_SCHEMA)
+    conn.commit()
+    conn.close()
+    logger.info(f"Database initialized at {db_path}")
+
+
+def store_posts(posts: List[CollectedPost], profile_name: str,
+                db_path=None) -> int:
+    """
+    Store collected posts in SQLite. Returns count of new posts inserted.
+    Uses INSERT OR IGNORE to skip duplicates (same post_id + platform).
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    new_count = 0
+
+    for post in posts:
+        # Compute engagement rate if follower count is available
+        engagement_rate = None
+        if post.follower_count and post.follower_count > 0:
+            total_engagement = (
+                post.likes + post.comments +
+                (post.saves or 0) + (post.shares or 0)
+            )
+            engagement_rate = total_engagement / post.follower_count
+
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO competitor_posts
+                (post_id, brand_profile, platform, competitor_name,
+                 competitor_handle, posted_at, caption, media_type,
+                 media_url, likes, comments, saves, shares, views,
+                 follower_count, estimated_engagement_rate, collected_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                post.post_id, profile_name, post.platform,
+                post.competitor_name, post.competitor_handle,
+                post.posted_at.isoformat() if post.posted_at else None,
+                post.caption, post.media_type, post.media_url,
+                post.likes, post.comments, post.saves, post.shares,
+                post.views, post.follower_count, engagement_rate, now,
+            ))
+            if cursor.rowcount > 0:
+                new_count += 1
+        except sqlite3.Error as e:
+            logger.error(f"DB insert error for post {post.post_id}: {e}")
+
+    conn.commit()
+    conn.close()
+    return new_count
+
+
+# ── RapidAPI Instagram Collector ──
+
+class RapidAPIInstagramCollector(BaseCollector):
+    """
+    Fetches Instagram posts via RapidAPI Instagram scrapers.
+
+    Uses the 'instagram-scraper-api2' endpoint (or similar).
+    Free tier typically offers 100-500 requests/month.
+    6 competitors * 1 request/day = ~180 requests/month.
+    """
+
+    API_HOST = "instagram-scraper-api2.p.rapidapi.com"
+    BASE_URL = f"https://{API_HOST}/v1"
+
+    def __init__(self, api_key: str):
+        if not api_key:
+            raise ValueError(
+                "RAPIDAPI_KEY is required. Get one at https://rapidapi.com "
+                "and subscribe to an Instagram scraper API."
+            )
+        self.api_key = api_key
+        self.headers = {
+            "x-rapidapi-key": api_key,
+            "x-rapidapi-host": self.API_HOST,
+        }
+
+    def health_check(self) -> bool:
+        """Test API connectivity."""
+        try:
+            resp = self._make_request("/info", {"username_or_id_or_url": "instagram"})
+            return resp is not None
+        except Exception as e:
+            logger.error(f"RapidAPI health check failed: {e}")
+            return False
+
+    def collect_posts(self, handle: str, competitor_name: str,
+                      count: int = 12) -> List[CollectedPost]:
+        """Fetch recent posts for an Instagram handle."""
+        logger.info(f"  Fetching posts for @{handle} via RapidAPI...")
+
+        # First get profile info for follower count
+        follower_count = self._get_follower_count(handle)
+
+        # Fetch recent posts
+        data = self._make_request("/posts", {
+            "username_or_id_or_url": handle,
+        })
+
+        if not data:
+            logger.warning(f"  No data returned for @{handle}")
+            return []
+
+        posts = self._parse_posts(data, handle, competitor_name,
+                                  follower_count, count)
+        logger.info(f"  Collected {len(posts)} posts from @{handle}")
+        return posts
+
+    def _get_follower_count(self, handle: str) -> Optional[int]:
+        """Fetch follower count from profile info."""
+        try:
+            data = self._make_request("/info", {
+                "username_or_id_or_url": handle,
+            })
+            if data and "data" in data:
+                return data["data"].get("follower_count")
+        except Exception as e:
+            logger.warning(f"  Could not fetch follower count for @{handle}: {e}")
+        return None
+
+    def _make_request(self, endpoint: str, params: dict,
+                      max_retries: int = 3) -> Optional[dict]:
+        """Make an API request with retry logic and rate limit handling."""
+        url = f"{self.BASE_URL}{endpoint}"
+
+        for attempt in range(max_retries):
+            try:
+                resp = requests.get(url, headers=self.headers, params=params,
+                                    timeout=30)
+
+                if resp.status_code == 429:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning(f"  Rate limited, waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+
+                if resp.status_code == 200:
+                    return resp.json()
+
+                logger.error(
+                    f"  API error {resp.status_code}: {resp.text[:200]}"
+                )
+                return None
+
+            except requests.exceptions.Timeout:
+                logger.warning(f"  Request timeout (attempt {attempt + 1})")
+                time.sleep(2 ** attempt)
+            except requests.exceptions.RequestException as e:
+                logger.error(f"  Request failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+
+        return None
+
+    def _parse_posts(self, data: dict, handle: str, competitor_name: str,
+                     follower_count: Optional[int],
+                     limit: int) -> List[CollectedPost]:
+        """Parse RapidAPI response into CollectedPost objects."""
+        posts = []
+        items = data.get("data", {}).get("items", [])
+
+        for item in items[:limit]:
+            try:
+                # Parse timestamp
+                posted_at = None
+                ts = item.get("taken_at")
+                if ts:
+                    posted_at = datetime.fromtimestamp(ts, tz=timezone.utc)
+
+                # Determine media type
+                media_type = self._detect_media_type(item)
+
+                # Extract caption text
+                caption_data = item.get("caption") or {}
+                caption = caption_data.get("text", "") if isinstance(caption_data, dict) else ""
+
+                # Extract hashtags and mentions from caption
+                hashtags = re.findall(r"#(\w+)", caption)
+                mentions = re.findall(r"@(\w+)", caption)
+
+                # Get media URL
+                media_url = (
+                    item.get("image_versions2", {}).get("candidates", [{}])[0].get("url")
+                    or item.get("thumbnail_url")
+                )
+
+                post = CollectedPost(
+                    post_id=item.get("code", item.get("pk", "")),
+                    competitor_name=competitor_name,
+                    competitor_handle=handle,
+                    platform="instagram",
+                    post_url=f"https://www.instagram.com/p/{item.get('code', '')}/",
+                    media_type=media_type,
+                    caption=caption,
+                    likes=item.get("like_count", 0),
+                    comments=item.get("comment_count", 0),
+                    saves=None,  # not available from public API
+                    shares=item.get("reshare_count"),
+                    views=item.get("play_count") or item.get("view_count"),
+                    posted_at=posted_at,
+                    media_url=media_url,
+                    hashtags=hashtags,
+                    mentioned_accounts=mentions,
+                    follower_count=follower_count,
+                )
+                posts.append(post)
+
+            except Exception as e:
+                logger.warning(f"  Error parsing post: {e}")
+                continue
+
+        return posts
+
+    def _detect_media_type(self, item: dict) -> str:
+        """Determine post type from API response."""
+        media_type = item.get("media_type", 0)
+        product_type = item.get("product_type", "")
+
+        if product_type == "clips" or media_type == 2:
+            return "reel"
+        elif media_type == 8:
+            return "carousel"
+        elif media_type == 2:
+            return "video"
+        else:
+            return "image"
+
+
+# ── Apify Instagram Collector ──
+
+class ApifyInstagramCollector(BaseCollector):
+    """
+    Fallback data source using Apify Instagram Scraper.
+
+    Cost: ~$5 per 1,000 results.
+    6 competitors * 12 posts = ~72 posts/run.
+    """
+
+    BASE_URL = "https://api.apify.com/v2"
+    ACTOR_ID = "shu8hvrXbJbY3Eb9W"  # apify/instagram-post-scraper
+
+    def __init__(self, api_token: str):
+        if not api_token:
+            raise ValueError(
+                "APIFY_API_TOKEN is required. Get one at https://apify.com"
+            )
+        self.api_token = api_token
+
+    def health_check(self) -> bool:
+        """Test Apify API access."""
+        try:
+            resp = requests.get(
+                f"{self.BASE_URL}/acts/{self.ACTOR_ID}",
+                params={"token": self.api_token},
+                timeout=10,
+            )
+            return resp.status_code == 200
+        except Exception as e:
+            logger.error(f"Apify health check failed: {e}")
+            return False
+
+    def collect_posts(self, handle: str, competitor_name: str,
+                      count: int = 12) -> List[CollectedPost]:
+        """Fetch recent posts via Apify actor."""
+        logger.info(f"  Fetching posts for @{handle} via Apify...")
+
+        run_input = {
+            "username": [handle],
+            "resultsLimit": count,
+        }
+
+        try:
+            # Start the actor run
+            resp = requests.post(
+                f"{self.BASE_URL}/acts/{self.ACTOR_ID}/runs",
+                params={"token": self.api_token},
+                json=run_input,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            run_data = resp.json().get("data", {})
+            run_id = run_data.get("id")
+
+            if not run_id:
+                logger.error("  Failed to start Apify actor run")
+                return []
+
+            # Wait for the run to complete
+            dataset_items = self._wait_for_results(run_id)
+            posts = self._parse_apify_posts(dataset_items, handle,
+                                            competitor_name, count)
+            logger.info(f"  Collected {len(posts)} posts from @{handle}")
+            return posts
+
+        except Exception as e:
+            logger.error(f"  Apify collection failed for @{handle}: {e}")
+            return []
+
+    def _wait_for_results(self, run_id: str,
+                          timeout_seconds: int = 120) -> List[dict]:
+        """Poll for actor run completion and return results."""
+        start = time.time()
+
+        while time.time() - start < timeout_seconds:
+            try:
+                resp = requests.get(
+                    f"{self.BASE_URL}/actor-runs/{run_id}",
+                    params={"token": self.api_token},
+                    timeout=10,
+                )
+                run_info = resp.json().get("data", {})
+                status = run_info.get("status")
+
+                if status == "SUCCEEDED":
+                    dataset_id = run_info.get("defaultDatasetId")
+                    return self._fetch_dataset(dataset_id)
+                elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
+                    logger.error(f"  Apify run {status}")
+                    return []
+
+                time.sleep(5)
+            except Exception as e:
+                logger.warning(f"  Error checking run status: {e}")
+                time.sleep(5)
+
+        logger.error("  Apify run timed out")
+        return []
+
+    def _fetch_dataset(self, dataset_id: str) -> List[dict]:
+        """Fetch results from completed actor run."""
+        try:
+            resp = requests.get(
+                f"{self.BASE_URL}/datasets/{dataset_id}/items",
+                params={"token": self.api_token, "format": "json"},
+                timeout=30,
+            )
+            return resp.json()
+        except Exception as e:
+            logger.error(f"  Failed to fetch dataset: {e}")
+            return []
+
+    def _parse_apify_posts(self, items: List[dict], handle: str,
+                           competitor_name: str,
+                           limit: int) -> List[CollectedPost]:
+        """Parse Apify response into CollectedPost objects."""
+        posts = []
+
+        for item in items[:limit]:
+            try:
+                posted_at = None
+                ts = item.get("timestamp")
+                if ts:
+                    posted_at = datetime.fromisoformat(
+                        ts.replace("Z", "+00:00")
+                    )
+
+                caption = item.get("caption", "") or ""
+                hashtags = re.findall(r"#(\w+)", caption)
+                mentions = re.findall(r"@(\w+)", caption)
+
+                post = CollectedPost(
+                    post_id=item.get("shortCode", item.get("id", "")),
+                    competitor_name=competitor_name,
+                    competitor_handle=handle,
+                    platform="instagram",
+                    post_url=item.get("url", f"https://www.instagram.com/p/{item.get('shortCode', '')}/"),
+                    media_type=item.get("type", "image").lower(),
+                    caption=caption,
+                    likes=item.get("likesCount", 0),
+                    comments=item.get("commentsCount", 0),
+                    saves=None,
+                    shares=None,
+                    views=item.get("videoViewCount"),
+                    posted_at=posted_at,
+                    media_url=item.get("displayUrl"),
+                    hashtags=hashtags,
+                    mentioned_accounts=mentions,
+                    follower_count=item.get("ownerFollowerCount"),
+                )
+                posts.append(post)
+            except Exception as e:
+                logger.warning(f"  Error parsing Apify post: {e}")
+                continue
+
+        return posts
+
+
+# ── Factory ──
+
+def create_collector(source: Optional[str] = None) -> BaseCollector:
+    """
+    Create the appropriate Instagram collector based on config.
+
+    Args:
+        source: "rapidapi" or "apify". Defaults to COLLECTION_SOURCE env var.
+
+    Returns:
+        An Instagram collector instance.
+    """
+    source = source or config.COLLECTION_SOURCE
+
+    if source == "rapidapi":
+        return RapidAPIInstagramCollector(api_key=config.RAPIDAPI_KEY)
+    elif source == "apify":
+        return ApifyInstagramCollector(api_token=config.APIFY_API_TOKEN)
+    else:
+        raise ValueError(
+            f"Unknown collection source: '{source}'. Use 'rapidapi' or 'apify'."
+        )
