@@ -60,6 +60,9 @@ class BrandProfile:
     content_tags: ContentTags
     outlier_settings: OutlierSettings
     profile_name: str = ""  # the filename key, e.g. "heritage"
+    own_channel: Dict[str, str] = field(default_factory=dict)
+    follower_count: Optional[int] = None
+    team_size: Optional[str] = None  # "solo", "small_team", "agency"
 
     def get_competitors(self, platform: str = "instagram") -> List[CompetitorConfig]:
         """Return competitors that have a handle for the given platform."""
@@ -101,6 +104,11 @@ class BrandProfile:
     def get_content_tags(self) -> ContentTags:
         """Return content tag categories for the active vertical."""
         return self.content_tags
+
+    def get_own_handle(self, platform: str = "instagram") -> Optional[str]:
+        """Return the brand's own handle for the given platform, or None."""
+        handle = self.own_channel.get(platform)
+        return handle if handle else None
 
 
 # Fields required in the YAML for a valid profile
@@ -227,4 +235,7 @@ def _build_profile(data: dict, profile_name: str) -> BrandProfile:
         content_tags=content_tags,
         outlier_settings=outlier_settings,
         profile_name=profile_name,
+        own_channel=brand.get("own_channel", {}) or {},
+        follower_count=brand.get("follower_count"),
+        team_size=brand.get("team_size"),
     )

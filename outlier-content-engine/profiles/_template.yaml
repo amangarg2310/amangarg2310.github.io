@@ -13,6 +13,11 @@ brand:
   tagline: ""
   # Optional. Brief brand description for context.
   description: ""
+  # Optional. Your brand's own social handles.
+  # Used to collect your posts and learn your real writing voice.
+  own_channel:
+    instagram: ""
+    # tiktok: ""
 
 voice:
   # Required. Describe the overall tone of your brand's written voice.

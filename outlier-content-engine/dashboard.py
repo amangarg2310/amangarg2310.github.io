@@ -241,6 +241,51 @@ def get_outlier_posts(competitor=None, sort_by="score"):
         return []
 
 
+def get_voice_analysis():
+    """Load voice analysis and top own posts for the dashboard."""
+    if not config.DB_PATH.exists():
+        return None, []
+
+    profile_name = get_active_profile_name()
+
+    try:
+        conn = get_db()
+
+        # Load voice analysis
+        row = conn.execute("""
+            SELECT voice_data, analyzed_at, source_post_count
+            FROM voice_analysis
+            WHERE brand_profile = ?
+            ORDER BY analyzed_at DESC LIMIT 1
+        """, (profile_name,)).fetchone()
+
+        voice = None
+        if row:
+            voice = {
+                "voice_data": json.loads(row["voice_data"]),
+                "analyzed_at": row["analyzed_at"][:10],
+                "source_post_count": row["source_post_count"],
+            }
+
+        # Load top own posts
+        own_posts = conn.execute("""
+            SELECT post_id, caption, likes, comments, saves, shares,
+                   media_type, media_url, posted_at,
+                   (COALESCE(likes,0) + COALESCE(comments,0) +
+                    COALESCE(saves,0) + COALESCE(shares,0)) as total_engagement
+            FROM competitor_posts
+            WHERE brand_profile = ? AND is_own_channel = 1
+                  AND caption IS NOT NULL AND caption != ''
+            ORDER BY total_engagement DESC
+            LIMIT 10
+        """, (profile_name,)).fetchall()
+
+        conn.close()
+        return voice, [dict(row) for row in own_posts]
+    except Exception:
+        return None, []
+
+
 def get_report_files():
     """Get list of generated HTML report files."""
     profile_name = get_active_profile_name()
@@ -300,9 +345,12 @@ def competitors_page():
 def voice_page():
     """Brand voice editor page."""
     profile = get_profile()
+    voice_analysis, own_top_posts = get_voice_analysis()
     return render_template("voice.html",
                            active_page="voice",
-                           profile=profile)
+                           profile=profile,
+                           voice_analysis=voice_analysis,
+                           own_top_posts=own_top_posts)
 
 
 @app.route("/outliers")
@@ -447,6 +495,14 @@ def save_voice():
     # Update example captions
     captions = request.form.getlist("example_captions")
     data["voice"]["example_captions"] = [c for c in captions if c.strip()]
+
+    # Update own channel handle
+    own_ig = request.form.get("own_instagram", "").strip().lstrip("@")
+    if own_ig:
+        data.setdefault("brand", {}).setdefault("own_channel", {})
+        data["brand"]["own_channel"]["instagram"] = own_ig
+    elif "own_channel" in data.get("brand", {}):
+        data["brand"]["own_channel"]["instagram"] = ""
 
     save_profile_data(data)
     flash("Brand voice updated successfully.", "success")

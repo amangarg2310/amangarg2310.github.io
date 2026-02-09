@@ -3,6 +3,8 @@ brand:
   vertical: premium streetwear
   tagline: Every thread holds a story.
   description: Heritage is modern nostalgia for the self-made generation.
+  own_channel:
+    instagram: heritagebrand
 voice:
   tone: Confident but never loud. Mature. Nostalgic but forward-looking.
   language_style: Minimal, intentional. Short declarative sentences. Poetic restraint.

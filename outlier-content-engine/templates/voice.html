@@ -5,7 +5,130 @@
 
 {% block content %}
 
+<!-- Voice Analysis Insights -->
+{% if voice_analysis %}
+<div class="card" style="border-left: 3px solid var(--success);">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Learned Voice Profile</div>
+            <div class="card-subtitle">
+                Extracted from {{ voice_analysis.source_post_count }} of your top-performing posts
+                (last analyzed: {{ voice_analysis.analyzed_at }})
+            </div>
+        </div>
+        <span class="badge badge-success">Active</span>
+    </div>
+
+    <div class="outlier-caption" style="font-style:normal; margin-bottom:16px;">
+        {{ voice_analysis.voice_data.voice_summary }}
+    </div>
+
+    <div class="form-row" style="gap:24px;">
+        <div>
+            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Sentence Style</div>
+            <div class="text-sm">{{ voice_analysis.voice_data.sentence_patterns.structure }}, {{ voice_analysis.voice_data.sentence_patterns.avg_length }} sentences</div>
+        </div>
+        <div>
+            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Vocabulary</div>
+            <div class="text-sm">{{ voice_analysis.voice_data.vocabulary.formality }} formality</div>
+        </div>
+        <div>
+            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Emoji Usage</div>
+            <div class="text-sm">{{ voice_analysis.voice_data.emoji_usage }}</div>
+        </div>
+        <div>
+            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Caption Length</div>
+            <div class="text-sm">{{ voice_analysis.voice_data.caption_length }}</div>
+        </div>
+    </div>
+
+    <div class="mt-16">
+        <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Tone Markers</div>
+        <div class="tag-list">
+            {% for marker in voice_analysis.voice_data.tone_markers %}
+            <span class="badge badge-primary">{{ marker }}</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="mt-16">
+        <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Signature Moves</div>
+        <div class="tag-list">
+            {% for move in voice_analysis.voice_data.signature_moves %}
+            <span class="badge badge-neutral">{{ move }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% elif profile.own_channel and profile.own_channel.get('instagram') %}
+<div class="card">
+    <div class="empty-state" style="padding:24px;">
+        <h3>Voice analysis not yet available</h3>
+        <p>Run the pipeline to collect your posts and analyze your writing voice.</p>
+        <form method="POST" action="{{ url_for('run_engine') }}">
+            <button type="submit" class="btn btn-primary">Run Pipeline</button>
+        </form>
+    </div>
+</div>
+
+{% else %}
+<div class="card" style="border-left: 3px solid var(--warning);">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Learn Your Real Voice</div>
+            <div class="card-subtitle">Add your Instagram handle below to let the AI learn your actual writing style from your top posts</div>
+        </div>
+    </div>
+    <p class="text-sm text-muted">
+        Without your own channel configured, the AI uses only the static voice settings below.
+        Adding your handle lets it analyze your real captions and match your style precisely.
+    </p>
+</div>
+{% endif %}
+
+{% if own_top_posts %}
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Your Top-Performing Posts</div>
+            <div class="card-subtitle">These posts drove the most engagement and shape your voice profile</div>
+        </div>
+    </div>
+    {% for post in own_top_posts[:5] %}
+    <div style="padding:12px; border-bottom:1px solid var(--border-light);">
+        <div class="flex-between">
+            <span class="badge badge-neutral">{{ post.media_type or 'post' }}</span>
+            <span class="text-sm text-muted">
+                {{ "{:,}".format(post.total_engagement) }} engagement
+            </span>
+        </div>
+        <div class="outlier-caption" style="margin-top:8px;">
+            "{{ post.caption[:200] }}{% if post.caption|length > 200 %}...{% endif %}"
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <form method="POST" action="{{ url_for('save_voice') }}">
+
+    <!-- Own Channel -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Your Instagram Handle</div>
+                <div class="card-subtitle">The AI collects your posts to learn your real writing voice</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Instagram Handle</label>
+            <input type="text" name="own_instagram" class="form-input"
+                   value="{{ profile.own_channel.get('instagram', '') if profile.own_channel else '' }}"
+                   placeholder="yourbrand" style="max-width:300px;">
+            <div class="form-hint">Without the @ symbol. Leave blank if you don't want voice learning.</div>
+        </div>
+    </div>
 
     <!-- Brand Identity -->
     <div class="card">

@@ -93,6 +93,88 @@ def init_database(db_path=None):
     logger.info(f"Database initialized at {db_path}")
 
 
+def migrate_database(db_path=None):
+    """Run schema migrations for new features. Safe to call multiple times."""
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    # Check existing columns on competitor_posts
+    cursor = conn.execute("PRAGMA table_info(competitor_posts)")
+    existing_columns = {row[1] for row in cursor.fetchall()}
+
+    new_columns = {
+        "is_own_channel": "INTEGER DEFAULT 0",
+        "audio_id": "TEXT",
+        "audio_name": "TEXT",
+        "is_trending_audio": "INTEGER DEFAULT 0",
+        "weighted_engagement_score": "REAL",
+        "primary_engagement_driver": "TEXT",
+    }
+
+    for col_name, col_type in new_columns.items():
+        if col_name not in existing_columns:
+            conn.execute(
+                f"ALTER TABLE competitor_posts ADD COLUMN {col_name} {col_type}"
+            )
+            logger.info(f"  Added column: competitor_posts.{col_name}")
+
+    # New tables
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS voice_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            analyzed_at TEXT NOT NULL,
+            source_post_count INTEGER,
+            voice_data TEXT NOT NULL,
+            top_post_ids TEXT,
+            UNIQUE(brand_profile)
+        );
+
+        CREATE TABLE IF NOT EXISTS content_series (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            competitor_handle TEXT,
+            series_name TEXT NOT NULL,
+            format_pattern TEXT,
+            post_count INTEGER DEFAULT 0,
+            avg_engagement REAL,
+            first_seen TEXT,
+            last_seen TEXT,
+            cadence_days REAL,
+            is_active INTEGER DEFAULT 1,
+            description TEXT,
+            post_ids TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_posts_own_channel
+            ON competitor_posts(is_own_channel);
+        CREATE INDEX IF NOT EXISTS idx_posts_audio
+            ON competitor_posts(audio_id);
+    """)
+
+    conn.commit()
+    conn.close()
+    logger.info("Database migrations complete")
+
+
+def store_own_posts(posts: List[CollectedPost], profile_name: str,
+                    db_path=None) -> int:
+    """Store own-channel posts. Reuses store_posts then marks them."""
+    new_count = store_posts(posts, profile_name, db_path)
+
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+    for post in posts:
+        conn.execute("""
+            UPDATE competitor_posts
+            SET is_own_channel = 1
+            WHERE post_id = ? AND brand_profile = ?
+        """, (post.post_id, profile_name))
+    conn.commit()
+    conn.close()
+    return new_count
+
+
 def store_posts(posts: List[CollectedPost], profile_name: str,
                 db_path=None) -> int:
     """
@@ -121,8 +203,9 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
                 (post_id, brand_profile, platform, competitor_name,
                  competitor_handle, posted_at, caption, media_type,
                  media_url, likes, comments, saves, shares, views,
-                 follower_count, estimated_engagement_rate, collected_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 follower_count, estimated_engagement_rate, collected_at,
+                 audio_id, audio_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 post.post_id, profile_name, post.platform,
                 post.competitor_name, post.competitor_handle,
@@ -130,6 +213,8 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
                 post.caption, post.media_type, post.media_url,
                 post.likes, post.comments, post.saves, post.shares,
                 post.views, post.follower_count, engagement_rate, now,
+                getattr(post, 'audio_id', None),
+                getattr(post, 'audio_name', None),
             ))
             if cursor.rowcount > 0:
                 new_count += 1

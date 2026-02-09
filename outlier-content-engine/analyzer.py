@@ -31,10 +31,16 @@ class ContentAnalyzer:
     All brand-specific prompt content is loaded from the active profile.
     """
 
-    def __init__(self, profile: BrandProfile, db_path=None):
+    def __init__(self, profile: BrandProfile, db_path=None,
+                 voice_data=None, own_top_captions=None,
+                 audio_insights=None, series_data=None):
         self.profile = profile
         self.db_path = db_path or config.DB_PATH
         self.client = None  # lazy init — only create when needed
+        self.voice_data = voice_data
+        self.own_top_captions = own_top_captions or []
+        self.audio_insights = audio_insights
+        self.series_data = series_data
 
     def _get_client(self) -> OpenAI:
         """Lazy-initialize the OpenAI client."""
@@ -114,9 +120,95 @@ class ContentAnalyzer:
         vertical = self.profile.vertical
         n_rewrite = self.profile.outlier_settings.top_outliers_to_rewrite
 
+        # Build learned voice section
+        learned_voice_section = ""
+        if self.voice_data:
+            vd = self.voice_data
+            sp = vd.get("sentence_patterns", {})
+            vocab = vd.get("vocabulary", {})
+            learned_voice_section = f"""
+
+LEARNED VOICE PROFILE (extracted from {brand}'s own top-performing posts):
+Voice summary: {vd.get('voice_summary', 'N/A')}
+Sentence style: {sp.get('structure', 'N/A')}, {sp.get('avg_length', 'N/A')} sentences
+Vocabulary: {vocab.get('formality', 'N/A')} formality
+Distinctive phrases: {', '.join(vocab.get('distinctive_phrases', []))}
+Opening patterns: {', '.join(vd.get('opening_patterns', []))}
+Closing patterns: {', '.join(vd.get('closing_patterns', []))}
+Emoji usage: {vd.get('emoji_usage', 'N/A')}
+Tone markers: {', '.join(vd.get('tone_markers', []))}
+Signature moves: {', '.join(vd.get('signature_moves', []))}
+Caption length preference: {vd.get('caption_length', 'N/A')}
+Punctuation: {vd.get('punctuation_habits', 'N/A')}
+
+IMPORTANT: When rewriting content, match these real voice patterns precisely.
+The output should be indistinguishable from the brand's own writing."""
+
+        # Build real caption examples section
+        real_examples_section = ""
+        if self.own_top_captions:
+            captions_list = "\n".join(
+                f'  - "{cap[:300]}"' for cap in self.own_top_captions[:8]
+            )
+            real_examples_section = f"""
+
+REAL TOP-PERFORMING CAPTIONS from {brand}'s own Instagram (use these as
+primary style reference — these outperformed {brand}'s average):
+{captions_list}"""
+
+        # Build audio context section
+        audio_section = ""
+        if self.audio_insights and self.audio_insights.get("trending_audio"):
+            trending = self.audio_insights["trending_audio"][:5]
+            audio_list = "\n".join(
+                f"  - {a.get('audio_name', 'Unknown')} "
+                f"(used in {a.get('outlier_count', 0)} outliers)"
+                for a in trending
+            )
+            audio_section = f"""
+
+TRENDING AUDIO across competitor outliers:
+{audio_list}
+Consider suggesting trending audio in your content recommendations."""
+
+        # Build series context section
+        series_section = ""
+        if self.series_data:
+            series_list = "\n".join(
+                f"  - {s.get('series_name', 'Unknown')}: "
+                f"{s.get('post_count', 0)} posts, "
+                f"avg engagement {s.get('avg_engagement', 0):,.0f} "
+                f"({s.get('competitor', 'unknown')})"
+                for s in self.series_data[:5]
+            )
+            series_section = f"""
+
+DETECTED CONTENT SERIES (recurring formats that consistently perform):
+{series_list}
+Consider suggesting similar recurring format ideas for {brand}."""
+
+        # Scale-aware section
+        scale_section = ""
+        if self.profile.follower_count:
+            fc = self.profile.follower_count
+            if fc < 10000:
+                scale_note = "This is a growing account. Focus on community-building, engagement-driving content. Suggest content that encourages saves and shares."
+            elif fc < 100000:
+                scale_note = "This is a mid-size account. Balance reach content with community engagement. Suggest a mix of viral formats and brand-building."
+            else:
+                scale_note = "This is a large account. Focus on brand authority and cultural relevance. Suggest premium formats."
+            scale_section = f"""
+
+SCALE CONTEXT: {brand} has ~{fc:,} followers. {scale_note}"""
+
         return f"""You are a {vertical} content strategist and brand voice specialist for {brand}.
 
 {voice_prompt}
+{learned_voice_section}
+{real_examples_section}
+{audio_section}
+{series_section}
+{scale_section}
 
 ---
 

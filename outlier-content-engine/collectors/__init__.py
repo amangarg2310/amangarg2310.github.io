@@ -31,6 +31,8 @@ class CollectedPost:
     hashtags: List[str] = field(default_factory=list)
     mentioned_accounts: List[str] = field(default_factory=list)
     follower_count: Optional[int] = None  # of the competitor at collection time
+    audio_id: Optional[str] = None        # music/audio track ID
+    audio_name: Optional[str] = None      # music/audio track name
 
 
 class BaseCollector(ABC):
