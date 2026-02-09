@@ -179,7 +179,8 @@ def get_outlier_posts(competitor=None, sort_by="score"):
             SELECT post_id, competitor_name, competitor_handle, platform,
                    caption, media_type, media_url, posted_at, likes, comments,
                    saves, shares, views, outlier_score, content_tags,
-                   estimated_engagement_rate
+                   weighted_engagement_score, primary_engagement_driver,
+                   audio_id, audio_name
             FROM competitor_posts
             WHERE brand_profile = ? AND is_outlier = 1
         """
@@ -193,6 +194,9 @@ def get_outlier_posts(competitor=None, sort_by="score"):
             "score": "outlier_score DESC",
             "likes": "likes DESC",
             "comments": "comments DESC",
+            "saves": "COALESCE(saves, 0) DESC",
+            "shares": "COALESCE(shares, 0) DESC",
+            "weighted": "COALESCE(weighted_engagement_score, 0) DESC",
             "date": "posted_at DESC",
         }
         query += f" ORDER BY {sort_map.get(sort_by, 'outlier_score DESC')}"
@@ -211,26 +215,40 @@ def get_outlier_posts(competitor=None, sort_by="score"):
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-            # Calculate engagement multiplier from outlier_score
-            # (outlier_score = 0.6 * multiplier + 0.4 * std_devs)
             score = row["outlier_score"] or 0
+            weighted = row["weighted_engagement_score"] or 0
+            likes = row["likes"] or 0
+            comments = row["comments"] or 0
+            saves = row["saves"] or 0
+            shares = row["shares"] or 0
+            views = row["views"] or 0
+            total_eng = likes + comments + saves + shares
+
+            # Compute engagement score as 0-100 for the circular widget
+            # Map outlier_score (typically 1-20+) to 0-100 range
+            engagement_score_pct = min(100, round(score * 10)) if score else 0
 
             outliers.append({
                 "post_id": row["post_id"],
                 "competitor_name": row["competitor_name"],
                 "competitor_handle": row["competitor_handle"],
-                "platform": row["platform"],
+                "platform": row["platform"] or "instagram",
                 "caption": row["caption"] or "",
                 "media_type": row["media_type"] or "image",
                 "media_url": row["media_url"] or "",
                 "posted_at": row["posted_at"] or "",
-                "likes": row["likes"] or 0,
-                "comments": row["comments"] or 0,
-                "saves": row["saves"],
-                "shares": row["shares"],
-                "views": row["views"],
+                "likes": likes,
+                "comments": comments,
+                "saves": saves,
+                "shares": shares,
+                "views": views,
+                "total_engagement": total_eng,
                 "outlier_score": round(score, 2),
+                "weighted_engagement": round(weighted, 0),
+                "primary_driver": row["primary_engagement_driver"] or "",
+                "engagement_score_pct": engagement_score_pct,
                 "engagement_multiplier": round(score / 0.6, 1) if score else 0,
+                "audio_name": row["audio_name"] or "",
                 "content_tags": tags,
                 "post_url": f"https://www.instagram.com/p/{row['post_id']}/",
             })

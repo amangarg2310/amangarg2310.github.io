@@ -19,9 +19,9 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Instagram Handle</label>
-                <div style="position:relative;">
+                <div class="input-with-prefix">
+                    <span class="input-prefix">@</span>
                     <input type="text" name="instagram" class="form-input" placeholder="e.g. nike" style="padding-left:28px;">
-                    <span style="position:absolute; left:12px; top:11px; color:var(--text-muted);">@</span>
                 </div>
                 <div class="form-hint">Their Instagram username (without the @)</div>
             </div>
@@ -29,16 +29,16 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">TikTok Handle <span class="text-muted">(optional)</span></label>
-                <div style="position:relative;">
+                <div class="input-with-prefix">
+                    <span class="input-prefix">@</span>
                     <input type="text" name="tiktok" class="form-input" placeholder="e.g. nike" style="padding-left:28px;">
-                    <span style="position:absolute; left:12px; top:11px; color:var(--text-muted);">@</span>
                 </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Facebook Handle <span class="text-muted">(optional)</span></label>
-                <div style="position:relative;">
+                <div class="input-with-prefix">
+                    <span class="input-prefix">@</span>
                     <input type="text" name="facebook" class="form-input" placeholder="e.g. nike" style="padding-left:28px;">
-                    <span style="position:absolute; left:12px; top:11px; color:var(--text-muted);">@</span>
                 </div>
             </div>
         </div>
@@ -63,8 +63,14 @@
             <div class="competitor-platforms mt-8">
                 {% for platform, handle in comp.handles.items() %}
                 <span class="platform-badge">
-                    {% if platform == 'instagram' %}&#128247;{% elif platform == 'tiktok' %}&#127926;{% else %}&#127760;{% endif %}
-                    {{ platform }}: @{{ handle }}
+                    {% if platform == 'instagram' %}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/></svg>
+                    {% elif platform == 'tiktok' %}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+                    {% else %}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    {% endif %}
+                    @{{ handle }}
                 </span>
                 {% endfor %}
             </div>
@@ -82,7 +88,9 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <div class="empty-state-icon">&#9775;</div>
+        <div class="empty-state-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
         <h3>No competitors yet</h3>
         <p>Use the form above to add brands you want to monitor.</p>
     </div>

@@ -7,10 +7,13 @@
 
 <!-- Voice Analysis Insights -->
 {% if voice_analysis %}
-<div class="card" style="border-left: 3px solid var(--success);">
+<div class="voice-card">
     <div class="card-header">
         <div>
-            <div class="card-title">Learned Voice Profile</div>
+            <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                Learned Voice Profile
+            </div>
             <div class="card-subtitle">
                 Extracted from {{ voice_analysis.source_post_count }} of your top-performing posts
                 (last analyzed: {{ voice_analysis.analyzed_at }})
@@ -19,31 +22,31 @@
         <span class="badge badge-success">Active</span>
     </div>
 
-    <div class="outlier-caption" style="font-style:normal; margin-bottom:16px;">
+    <div class="voice-summary">
         {{ voice_analysis.voice_data.voice_summary }}
     </div>
 
-    <div class="form-row" style="gap:24px;">
-        <div>
-            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Sentence Style</div>
-            <div class="text-sm">{{ voice_analysis.voice_data.sentence_patterns.structure }}, {{ voice_analysis.voice_data.sentence_patterns.avg_length }} sentences</div>
+    <div class="voice-stat-grid">
+        <div class="voice-stat">
+            <div class="voice-stat-label">Sentence Style</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.sentence_patterns.structure }}, {{ voice_analysis.voice_data.sentence_patterns.avg_length }} sentences</div>
         </div>
-        <div>
-            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Vocabulary</div>
-            <div class="text-sm">{{ voice_analysis.voice_data.vocabulary.formality }} formality</div>
+        <div class="voice-stat">
+            <div class="voice-stat-label">Vocabulary</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.vocabulary.formality }} formality</div>
         </div>
-        <div>
-            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Emoji Usage</div>
-            <div class="text-sm">{{ voice_analysis.voice_data.emoji_usage }}</div>
+        <div class="voice-stat">
+            <div class="voice-stat-label">Emoji Usage</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.emoji_usage }}</div>
         </div>
-        <div>
-            <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Caption Length</div>
-            <div class="text-sm">{{ voice_analysis.voice_data.caption_length }}</div>
+        <div class="voice-stat">
+            <div class="voice-stat-label">Caption Length</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.caption_length }}</div>
         </div>
     </div>
 
     <div class="mt-16">
-        <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Tone Markers</div>
+        <div class="voice-stat-label" style="margin-bottom:8px;">Tone Markers</div>
         <div class="tag-list">
             {% for marker in voice_analysis.voice_data.tone_markers %}
             <span class="badge badge-primary">{{ marker }}</span>
@@ -52,7 +55,7 @@
     </div>
 
     <div class="mt-16">
-        <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Signature Moves</div>
+        <div class="voice-stat-label" style="margin-bottom:8px;">Signature Moves</div>
         <div class="tag-list">
             {% for move in voice_analysis.voice_data.signature_moves %}
             <span class="badge badge-neutral">{{ move }}</span>
@@ -64,6 +67,9 @@
 {% elif profile.own_channel and profile.own_channel.get('instagram') %}
 <div class="card">
     <div class="empty-state" style="padding:24px;">
+        <div class="empty-state-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
         <h3>Voice analysis not yet available</h3>
         <p>Run the pipeline to collect your posts and analyze your writing voice.</p>
         <form method="POST" action="{{ url_for('run_engine') }}">
@@ -76,7 +82,10 @@
 <div class="card" style="border-left: 3px solid var(--warning);">
     <div class="card-header">
         <div>
-            <div class="card-title">Learn Your Real Voice</div>
+            <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Learn Your Real Voice
+            </div>
             <div class="card-subtitle">Add your Instagram handle below to let the AI learn your actual writing style from your top posts</div>
         </div>
     </div>
@@ -96,14 +105,14 @@
         </div>
     </div>
     {% for post in own_top_posts[:5] %}
-    <div style="padding:12px; border-bottom:1px solid var(--border-light);">
+    <div class="own-post-item">
         <div class="flex-between">
             <span class="badge badge-neutral">{{ post.media_type or 'post' }}</span>
-            <span class="text-sm text-muted">
+            <span class="text-sm" style="color: var(--accent);">
                 {{ "{:,}".format(post.total_engagement) }} engagement
             </span>
         </div>
-        <div class="outlier-caption" style="margin-top:8px;">
+        <div class="own-post-caption">
             "{{ post.caption[:200] }}{% if post.caption|length > 200 %}...{% endif %}"
         </div>
     </div>
@@ -252,10 +261,8 @@
 <script>
 function addTag(type) {
     const input = document.getElementById('new-' + type.replace('s', ''));
-    // fallback: try alternate id patterns
     let el = input || document.getElementById('new-' + type);
     if (!el) {
-        // themes -> new-theme, avoids -> new-avoid
         const singular = type === 'themes' ? 'theme' : 'avoid';
         el = document.getElementById('new-' + singular);
     }
@@ -285,7 +292,6 @@ function addCaption() {
     container.appendChild(div);
 }
 
-// Allow Enter key to add tags
 document.querySelectorAll('#new-theme, #new-avoid').forEach(el => {
     el.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {

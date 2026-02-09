@@ -332,7 +332,11 @@ def run_pipeline(profile_name=None, skip_collect=False, no_email=False):
     run_stats["duration_seconds"] = round(time.time() - start_time, 1)
 
     reporter = ReportGenerator(profile)
-    html = reporter.generate_report(analysis, outliers, baselines, run_stats)
+    html = reporter.generate_report(
+        analysis, outliers, baselines, run_stats,
+        audio_insights=audio_insights,
+        series_data=series_data,
+    )
 
     # Always save a local copy
     local_path = reporter.save_local(html)

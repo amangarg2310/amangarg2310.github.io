@@ -5,116 +5,174 @@
 
 {% block content %}
 
-<!-- Filters -->
-<div class="card">
-    <form method="GET" action="{{ url_for('outliers_page') }}" class="flex gap-12" style="flex-wrap:wrap; align-items:end;">
-        <div class="form-group" style="margin-bottom:0; min-width:180px;">
-            <label class="form-label">Competitor</label>
-            <select name="competitor" class="form-select">
-                <option value="">All competitors</option>
-                {% for comp in profile.competitors %}
-                <option value="{{ comp.handles.get('instagram', '') }}"
-                        {% if selected_competitor == comp.handles.get('instagram', '') %}selected{% endif %}>
-                    {{ comp.name }}
-                </option>
-                {% endfor %}
-            </select>
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <span class="filter-label">Platform</span>
+        <div class="filter-pills" id="platform-pills">
+            <button class="filter-pill {% if not selected_competitor %}active{% endif %}"
+                    onclick="applyFilter('competitor', '')">All</button>
+            {% for comp in profile.competitors %}
+            <button class="filter-pill {% if selected_competitor == comp.handles.get('instagram', '') %}active{% endif %}"
+                    onclick="applyFilter('competitor', '{{ comp.handles.get('instagram', '') }}')">
+                {{ comp.name }}
+            </button>
+            {% endfor %}
         </div>
-        <div class="form-group" style="margin-bottom:0; min-width:150px;">
-            <label class="form-label">Sort By</label>
-            <select name="sort" class="form-select">
-                <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Outlier Score</option>
-                <option value="likes" {% if sort_by == 'likes' %}selected{% endif %}>Likes</option>
-                <option value="comments" {% if sort_by == 'comments' %}selected{% endif %}>Comments</option>
-                <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Most Recent</option>
-            </select>
-        </div>
-        <button type="submit" class="btn btn-outline btn-sm">Apply Filters</button>
-    </form>
-</div>
-
-<!-- Results Summary -->
-{% if outliers %}
-<p class="text-muted mb-16">Showing {{ outliers | length }} outlier posts</p>
-
-{% for post in outliers %}
-<div class="outlier-card">
-    <div class="outlier-rank">{{ loop.index }}</div>
-
-    <div class="outlier-card-body">
-        {% if post.media_url %}
-        <div class="outlier-media">
-            <img src="{{ post.media_url }}" alt="Post by @{{ post.competitor_handle }}"
-                 loading="lazy" onerror="this.parentElement.classList.add('media-broken')">
-            {% if post.media_type in ['reel', 'video', 'clip'] %}
-            <span class="media-type-overlay">&#9654;</span>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        <div class="outlier-content">
-            <div class="flex-between" style="padding-right:{% if not post.media_url %}48px{% else %}0{% endif %};">
-                <div>
-                    <span class="fw-600" style="font-size:16px;">{{ post.competitor_name }}</span>
-                    <span class="text-muted text-sm" style="margin-left:8px;">@{{ post.competitor_handle }}</span>
-                </div>
-                <span class="multiplier-badge">{{ post.outlier_score }}x score</span>
-            </div>
-
-            {% if post.caption %}
-            <div class="outlier-caption">
-                "{{ post.caption[:300] }}{% if post.caption|length > 300 %}...{% endif %}"
-            </div>
-            {% endif %}
-
-            <div style="margin-top:12px;">
-                <div class="outlier-metric">
-                    <div class="outlier-metric-value">{{ "{:,}".format(post.likes) }}</div>
-                    <div class="outlier-metric-label">Likes</div>
-                </div>
-                <div class="outlier-metric">
-                    <div class="outlier-metric-value">{{ "{:,}".format(post.comments) }}</div>
-                    <div class="outlier-metric-label">Comments</div>
-                </div>
-                {% if post.views %}
-                <div class="outlier-metric">
-                    <div class="outlier-metric-value">{{ "{:,}".format(post.views) }}</div>
-                    <div class="outlier-metric-label">Views</div>
-                </div>
-                {% endif %}
-                <div class="outlier-metric">
-                    <div class="outlier-metric-value">{{ post.engagement_multiplier }}x</div>
-                    <div class="outlier-metric-label">vs. Average</div>
-                </div>
-            </div>
-
-            <div class="flex-between mt-16">
-                <div class="flex gap-8" style="flex-wrap:wrap;">
-                    <span class="badge badge-neutral">{{ post.media_type }}</span>
-                    {% if post.posted_at %}
-                    <span class="badge badge-neutral">{{ post.posted_at[:10] }}</span>
-                    {% endif %}
-                    {% if post.content_tags %}
-                        {% for tag in post.content_tags[:3] %}
-                        <span class="badge badge-primary">{{ tag }}</span>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-                {% if post.post_url %}
-                <a href="{{ post.post_url }}" target="_blank" class="btn btn-outline btn-sm">
-                    View Post &#8599;
-                </a>
-                {% endif %}
-            </div>
+    </div>
+    <div class="filter-group">
+        <span class="filter-label">Sort</span>
+        <div class="filter-pills" id="sort-pills">
+            <button class="filter-pill {% if sort_by == 'score' %}active{% endif %}"
+                    onclick="applyFilter('sort', 'score')">Score</button>
+            <button class="filter-pill {% if sort_by == 'saves' %}active{% endif %}"
+                    onclick="applyFilter('sort', 'saves')">Saves</button>
+            <button class="filter-pill {% if sort_by == 'shares' %}active{% endif %}"
+                    onclick="applyFilter('sort', 'shares')">Shares</button>
+            <button class="filter-pill {% if sort_by == 'weighted' %}active{% endif %}"
+                    onclick="applyFilter('sort', 'weighted')">Weighted</button>
+            <button class="filter-pill {% if sort_by == 'date' %}active{% endif %}"
+                    onclick="applyFilter('sort', 'date')">Recent</button>
         </div>
     </div>
 </div>
-{% endfor %}
+
+<!-- Results -->
+{% if outliers %}
+<p class="text-muted mb-16">Showing {{ outliers | length }} outlier posts</p>
+
+<div class="outlier-grid">
+    {% for post in outliers %}
+    {% set grad_class = "grad-" ~ ((loop.index0 % 5) + 1) %}
+    <div class="outlier-card" style="animation-delay: {{ loop.index0 * 0.04 }}s">
+        <!-- Gradient Header -->
+        <div class="outlier-card-header {{ grad_class }}">
+            <div class="header-top">
+                <span class="handle-pill">
+                    {% if post.platform == 'tiktok' %}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+                    {% else %}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+                    {% endif %}
+                    @{{ post.competitor_handle }}
+                </span>
+                {% if post.content_tags %}
+                <span class="franchise-tag">{{ post.content_tags[0] }}</span>
+                {% endif %}
+            </div>
+            <div class="header-meta">
+                <span class="competitor-label">{{ post.competitor_name }}</span>
+                {% if post.posted_at %}
+                <span class="post-date">{{ post.posted_at[:10] }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="outlier-card-body">
+            <!-- Caption + Score Row -->
+            <div class="caption-score-row">
+                <div class="caption-area">
+                    {% if post.caption %}
+                    <p class="card-caption">"{{ post.caption[:180] }}{% if post.caption|length > 180 %}...{% endif %}"</p>
+                    {% else %}
+                    <p class="card-caption text-muted">(No caption)</p>
+                    {% endif %}
+                </div>
+                <div class="eng-score">
+                    {% set pct = post.engagement_score_pct %}
+                    {% set circ = 251.2 %}
+                    {% set offset = circ - (circ * pct / 100) %}
+                    {% if pct >= 90 %}{% set ring_class = "ring-cyan" %}
+                    {% elif pct >= 75 %}{% set ring_class = "ring-green" %}
+                    {% elif pct >= 50 %}{% set ring_class = "ring-yellow" %}
+                    {% else %}{% set ring_class = "ring-muted" %}{% endif %}
+                    <svg viewBox="0 0 88 88" class="score-svg">
+                        <circle class="bg-ring" cx="44" cy="44" r="40"/>
+                        <circle class="fg-ring {{ ring_class }}" cx="44" cy="44" r="40"
+                                stroke-dasharray="{{ circ }}"
+                                stroke-dashoffset="{{ offset }}"
+                                style="animation: scoreRing 1s ease-out {{ loop.index0 * 0.08 }}s both"/>
+                    </svg>
+                    <span class="score-val">{{ pct }}</span>
+                </div>
+            </div>
+
+            <!-- Audio Tag -->
+            {% if post.audio_name %}
+            <div class="audio-tag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                {{ post.audio_name[:40] }}
+            </div>
+            {% endif %}
+
+            <!-- Primary Driver -->
+            {% if post.primary_driver %}
+            <span class="drv drv-{{ post.primary_driver }}">
+                {% if post.primary_driver == 'saves' %}Saves-driven
+                {% elif post.primary_driver == 'shares' %}Shares-driven
+                {% elif post.primary_driver == 'comments' %}Comments-driven
+                {% elif post.primary_driver == 'views' %}Views-driven
+                {% else %}Likes-driven{% endif %}
+            </span>
+            {% endif %}
+
+            <!-- Metrics Row (prioritize saves, shares, views) -->
+            <div class="metrics-row">
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.saves) }}</span>
+                    <span class="m-lbl">Saves</span>
+                </div>
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.shares) }}</span>
+                    <span class="m-lbl">Shares</span>
+                </div>
+                <div class="m-cell">
+                    <span class="m-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </span>
+                    <span class="m-val">{{ "{:,}".format(post.views) if post.views else "---" }}</span>
+                    <span class="m-lbl">Views</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Footer -->
+        <div class="outlier-card-ft">
+            <div class="sec-metrics">
+                <span title="Likes">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                    {{ "{:,}".format(post.likes) }}
+                </span>
+                <span title="Comments">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                    {{ "{:,}".format(post.comments) }}
+                </span>
+                <span class="badge badge-neutral" style="font-size:11px;">{{ post.media_type }}</span>
+            </div>
+            {% if post.post_url %}
+            <a href="{{ post.post_url }}" target="_blank" rel="noopener" class="view-link">
+                View
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
 
 {% else %}
 <div class="card">
     <div class="empty-state">
-        <div class="empty-state-icon">&#9733;</div>
+        <div class="empty-state-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
         <h3>No outliers found yet</h3>
         <p>Outliers appear after running the pipeline at least once. The engine needs a few posts per competitor to establish baselines before it can detect what's unusual.</p>
         <form method="POST" action="{{ url_for('run_engine') }}">
@@ -124,4 +182,14 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilter(key, value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set(key, value);
+    window.location.href = url.toString();
+}
+</script>
 {% endblock %}

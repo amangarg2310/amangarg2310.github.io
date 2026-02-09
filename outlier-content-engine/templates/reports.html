@@ -10,7 +10,8 @@
         <div class="card-title">Generated Reports</div>
         <form method="POST" action="{{ url_for('run_engine') }}" style="display:inline;">
             <button type="submit" class="btn btn-primary btn-sm">
-                &#9654; Generate New Report
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Generate New Report
             </button>
         </form>
     </div>
@@ -26,9 +27,11 @@
         </div>
         <div class="flex gap-8">
             <a href="{{ url_for('view_report', filename=report.filename) }}" class="btn btn-outline btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 View
             </a>
             <a href="{{ url_for('download_report', filename=report.filename) }}" class="btn btn-secondary btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Download
             </a>
         </div>
@@ -36,7 +39,9 @@
     {% endfor %}
     {% else %}
     <div class="empty-state">
-        <div class="empty-state-icon">&#9993;</div>
+        <div class="empty-state-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
         <h3>No reports yet</h3>
         <p>Reports are generated each time you run the pipeline. Click the button above to create your first one.</p>
     </div>

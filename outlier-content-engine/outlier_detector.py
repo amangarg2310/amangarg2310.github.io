@@ -176,6 +176,7 @@ class OutlierDetector:
             WHERE competitor_handle = ?
               AND brand_profile = ?
               AND collected_at >= ?
+              AND COALESCE(is_own_channel, 0) = 0
         """, (handle, self.profile.profile_name, cutoff)).fetchall()
 
         if len(rows) < 3:
@@ -222,6 +223,7 @@ class OutlierDetector:
             FROM competitor_posts
             WHERE competitor_handle = ?
               AND brand_profile = ?
+              AND COALESCE(is_own_channel, 0) = 0
             ORDER BY collected_at DESC
         """, (handle, self.profile.profile_name)).fetchall()
 
