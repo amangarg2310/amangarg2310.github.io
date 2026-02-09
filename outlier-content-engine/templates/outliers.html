@@ -41,58 +41,72 @@
 <div class="outlier-card">
     <div class="outlier-rank">{{ loop.index }}</div>
 
-    <div class="flex-between" style="padding-right:48px;">
-        <div>
-            <span class="fw-600" style="font-size:16px;">{{ post.competitor_name }}</span>
-            <span class="text-muted text-sm" style="margin-left:8px;">@{{ post.competitor_handle }}</span>
-        </div>
-        <span class="multiplier-badge">{{ post.outlier_score }}x score</span>
-    </div>
-
-    {% if post.caption %}
-    <div class="outlier-caption">
-        "{{ post.caption[:300] }}{% if post.caption|length > 300 %}...{% endif %}"
-    </div>
-    {% endif %}
-
-    <div style="margin-top:12px;">
-        <div class="outlier-metric">
-            <div class="outlier-metric-value">{{ "{:,}".format(post.likes) }}</div>
-            <div class="outlier-metric-label">Likes</div>
-        </div>
-        <div class="outlier-metric">
-            <div class="outlier-metric-value">{{ "{:,}".format(post.comments) }}</div>
-            <div class="outlier-metric-label">Comments</div>
-        </div>
-        {% if post.views %}
-        <div class="outlier-metric">
-            <div class="outlier-metric-value">{{ "{:,}".format(post.views) }}</div>
-            <div class="outlier-metric-label">Views</div>
-        </div>
-        {% endif %}
-        <div class="outlier-metric">
-            <div class="outlier-metric-value">{{ post.engagement_multiplier }}x</div>
-            <div class="outlier-metric-label">vs. Average</div>
-        </div>
-    </div>
-
-    <div class="flex-between mt-16">
-        <div class="flex gap-8">
-            <span class="badge badge-neutral">{{ post.media_type }}</span>
-            {% if post.posted_at %}
-            <span class="badge badge-neutral">{{ post.posted_at[:10] }}</span>
-            {% endif %}
-            {% if post.content_tags %}
-                {% for tag in post.content_tags[:3] %}
-                <span class="badge badge-primary">{{ tag }}</span>
-                {% endfor %}
+    <div class="outlier-card-body">
+        {% if post.media_url %}
+        <div class="outlier-media">
+            <img src="{{ post.media_url }}" alt="Post by @{{ post.competitor_handle }}"
+                 loading="lazy" onerror="this.parentElement.classList.add('media-broken')">
+            {% if post.media_type in ['reel', 'video', 'clip'] %}
+            <span class="media-type-overlay">&#9654;</span>
             {% endif %}
         </div>
-        {% if post.post_url %}
-        <a href="{{ post.post_url }}" target="_blank" class="btn btn-outline btn-sm">
-            View Post &#8599;
-        </a>
         {% endif %}
+
+        <div class="outlier-content">
+            <div class="flex-between" style="padding-right:{% if not post.media_url %}48px{% else %}0{% endif %};">
+                <div>
+                    <span class="fw-600" style="font-size:16px;">{{ post.competitor_name }}</span>
+                    <span class="text-muted text-sm" style="margin-left:8px;">@{{ post.competitor_handle }}</span>
+                </div>
+                <span class="multiplier-badge">{{ post.outlier_score }}x score</span>
+            </div>
+
+            {% if post.caption %}
+            <div class="outlier-caption">
+                "{{ post.caption[:300] }}{% if post.caption|length > 300 %}...{% endif %}"
+            </div>
+            {% endif %}
+
+            <div style="margin-top:12px;">
+                <div class="outlier-metric">
+                    <div class="outlier-metric-value">{{ "{:,}".format(post.likes) }}</div>
+                    <div class="outlier-metric-label">Likes</div>
+                </div>
+                <div class="outlier-metric">
+                    <div class="outlier-metric-value">{{ "{:,}".format(post.comments) }}</div>
+                    <div class="outlier-metric-label">Comments</div>
+                </div>
+                {% if post.views %}
+                <div class="outlier-metric">
+                    <div class="outlier-metric-value">{{ "{:,}".format(post.views) }}</div>
+                    <div class="outlier-metric-label">Views</div>
+                </div>
+                {% endif %}
+                <div class="outlier-metric">
+                    <div class="outlier-metric-value">{{ post.engagement_multiplier }}x</div>
+                    <div class="outlier-metric-label">vs. Average</div>
+                </div>
+            </div>
+
+            <div class="flex-between mt-16">
+                <div class="flex gap-8" style="flex-wrap:wrap;">
+                    <span class="badge badge-neutral">{{ post.media_type }}</span>
+                    {% if post.posted_at %}
+                    <span class="badge badge-neutral">{{ post.posted_at[:10] }}</span>
+                    {% endif %}
+                    {% if post.content_tags %}
+                        {% for tag in post.content_tags[:3] %}
+                        <span class="badge badge-primary">{{ tag }}</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                {% if post.post_url %}
+                <a href="{{ post.post_url }}" target="_blank" class="btn btn-outline btn-sm">
+                    View Post &#8599;
+                </a>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 {% endfor %}

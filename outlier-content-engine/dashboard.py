@@ -177,7 +177,7 @@ def get_outlier_posts(competitor=None, sort_by="score"):
 
         query = """
             SELECT post_id, competitor_name, competitor_handle, platform,
-                   caption, media_type, posted_at, likes, comments,
+                   caption, media_type, media_url, posted_at, likes, comments,
                    saves, shares, views, outlier_score, content_tags,
                    estimated_engagement_rate
             FROM competitor_posts
@@ -222,6 +222,7 @@ def get_outlier_posts(competitor=None, sort_by="score"):
                 "platform": row["platform"],
                 "caption": row["caption"] or "",
                 "media_type": row["media_type"] or "image",
+                "media_url": row["media_url"] or "",
                 "posted_at": row["posted_at"] or "",
                 "likes": row["likes"] or 0,
                 "comments": row["comments"] or 0,
