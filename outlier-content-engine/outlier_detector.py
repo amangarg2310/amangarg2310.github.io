@@ -22,6 +22,43 @@ from profile_loader import BrandProfile, OutlierSettings, ContentTags
 
 logger = logging.getLogger(__name__)
 
+# ── Engagement Weights ──
+# Saves and shares indicate high intent; likes are low-effort.
+ENGAGEMENT_WEIGHTS = {
+    "saves": 4,
+    "shares": 3,
+    "comments": 2,
+    "likes": 1,
+    "views": 0.5,
+}
+
+
+def calculate_weighted_engagement(likes: int, comments: int,
+                                  saves: int, shares: int,
+                                  views: int = 0) -> float:
+    """Weighted engagement score — intent-heavy actions count more."""
+    return (
+        likes * ENGAGEMENT_WEIGHTS["likes"] +
+        comments * ENGAGEMENT_WEIGHTS["comments"] +
+        saves * ENGAGEMENT_WEIGHTS["saves"] +
+        shares * ENGAGEMENT_WEIGHTS["shares"] +
+        views * ENGAGEMENT_WEIGHTS["views"]
+    )
+
+
+def get_primary_driver(likes: int, comments: int,
+                       saves: int, shares: int,
+                       views: int = 0) -> str:
+    """Return the engagement type contributing most weighted value."""
+    contributions = {
+        "likes": likes * ENGAGEMENT_WEIGHTS["likes"],
+        "comments": comments * ENGAGEMENT_WEIGHTS["comments"],
+        "saves": saves * ENGAGEMENT_WEIGHTS["saves"],
+        "shares": shares * ENGAGEMENT_WEIGHTS["shares"],
+        "views": views * ENGAGEMENT_WEIGHTS["views"],
+    }
+    return max(contributions, key=contributions.get)
+
 
 @dataclass
 class CompetitorBaseline:
@@ -56,6 +93,8 @@ class OutlierPost:
     engagement_multiplier: float  # how many X above mean
     std_devs_above: float         # how many sigma above mean
     outlier_score: float          # composite ranking score
+    weighted_engagement: float = 0.0
+    primary_engagement_driver: str = ""
     content_tags: List[str] = field(default_factory=list)
 
 
@@ -132,7 +171,7 @@ class OutlierDetector:
         ).isoformat()
 
         rows = conn.execute("""
-            SELECT likes, comments, saves, shares
+            SELECT likes, comments, saves, shares, views
             FROM competitor_posts
             WHERE competitor_handle = ?
               AND brand_profile = ?
@@ -152,7 +191,8 @@ class OutlierDetector:
             comms = row["comments"] or 0
             saves = row["saves"] or 0
             shares = row["shares"] or 0
-            total = likes + comms + saves + shares
+            views = row["views"] or 0
+            total = calculate_weighted_engagement(likes, comms, saves, shares, views)
             engagements.append(total)
             likes_list.append(likes)
             comments_list.append(comms)
@@ -192,18 +232,22 @@ class OutlierDetector:
             comms = row["comments"] or 0
             saves = row["saves"] or 0
             shares = row["shares"] or 0
+            views = row["views"] or 0
             total_engagement = likes + comms + saves + shares
+            weighted_eng = calculate_weighted_engagement(
+                likes, comms, saves, shares, views
+            )
 
             # Skip if baseline mean is 0 (avoid division by zero)
             if baseline.mean_engagement == 0:
                 continue
 
-            engagement_multiplier = total_engagement / baseline.mean_engagement
+            engagement_multiplier = weighted_eng / baseline.mean_engagement
 
-            # Calculate standard deviations above mean
+            # Calculate standard deviations above mean (using weighted)
             if baseline.std_engagement > 0:
                 std_devs_above = (
-                    (total_engagement - baseline.mean_engagement) /
+                    (weighted_eng - baseline.mean_engagement) /
                     baseline.std_engagement
                 )
             else:
@@ -250,6 +294,10 @@ class OutlierDetector:
                 engagement_multiplier=round(engagement_multiplier, 2),
                 std_devs_above=round(std_devs_above, 2),
                 outlier_score=round(outlier_score, 2),
+                weighted_engagement=round(weighted_eng, 2),
+                primary_engagement_driver=get_primary_driver(
+                    likes, comms, saves, shares, views
+                ),
                 content_tags=content_tags,
             ))
 
@@ -313,7 +361,8 @@ class OutlierDetector:
         # Reset all outlier flags for this profile
         conn.execute("""
             UPDATE competitor_posts
-            SET is_outlier = 0, outlier_score = NULL, content_tags = NULL
+            SET is_outlier = 0, outlier_score = NULL, content_tags = NULL,
+                weighted_engagement_score = NULL, primary_engagement_driver = NULL
             WHERE brand_profile = ?
         """, (self.profile.profile_name,))
 
@@ -323,12 +372,16 @@ class OutlierDetector:
                 UPDATE competitor_posts
                 SET is_outlier = 1,
                     outlier_score = ?,
-                    content_tags = ?
+                    content_tags = ?,
+                    weighted_engagement_score = ?,
+                    primary_engagement_driver = ?
                 WHERE post_id = ?
                   AND brand_profile = ?
             """, (
                 outlier.outlier_score,
                 json.dumps(outlier.content_tags),
+                outlier.weighted_engagement,
+                outlier.primary_engagement_driver,
                 outlier.post_id,
                 self.profile.profile_name,
             ))

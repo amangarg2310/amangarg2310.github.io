@@ -44,7 +44,9 @@ class ReportGenerator:
     def generate_report(self, analysis: Dict,
                         outliers: List[OutlierPost],
                         baselines: Dict[str, CompetitorBaseline],
-                        run_stats: Dict) -> str:
+                        run_stats: Dict,
+                        audio_insights: Optional[Dict] = None,
+                        series_data: Optional[List] = None) -> str:
         """
         Build the full HTML email report.
 
@@ -53,6 +55,8 @@ class ReportGenerator:
             outliers: Outlier posts (sorted by score).
             baselines: Per-competitor baselines.
             run_stats: Collection run statistics.
+            audio_insights: Trending audio data from AudioTracker.
+            series_data: Detected content series from SeriesDetector.
 
         Returns:
             Complete HTML string ready to send.
@@ -63,10 +67,17 @@ class ReportGenerator:
 
         if outliers:
             sections.append(self._section_top_outliers(outliers[:5], baselines))
+            sections.append(self._section_weighted_breakdown(outliers[:5]))
 
         patterns = analysis.get("weekly_patterns", {})
         if patterns and any(patterns.values()):
             sections.append(self._section_patterns(patterns))
+
+        if audio_insights and audio_insights.get("trending_audio"):
+            sections.append(self._section_audio_insights(audio_insights))
+
+        if series_data:
+            sections.append(self._section_series(series_data))
 
         adaptations = analysis.get("brand_adaptations", [])
         if adaptations:
@@ -507,6 +518,149 @@ class ReportGenerator:
                 </tr>
                 {"".join(rows)}
             </table>
+        </div>"""
+
+    def _section_weighted_breakdown(self, outliers: List[OutlierPost]) -> str:
+        """Show what's actually driving engagement for top outliers."""
+        rows = []
+        for o in outliers:
+            driver = getattr(o, "primary_engagement_driver", "") or "likes"
+            weighted = getattr(o, "weighted_engagement", 0)
+            driver_label = driver.capitalize()
+            driver_color = {
+                "saves": COLORS["success"],
+                "shares": COLORS["accent"],
+                "comments": COLORS["warning"],
+                "views": COLORS["muted"],
+            }.get(driver, COLORS["primary"])
+
+            rows.append(f"""
+            <tr>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           font-size:13px;">
+                    @{o.competitor_handle}
+                </td>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           text-align:center; font-size:13px;">
+                    {weighted:,.0f}
+                </td>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           text-align:center;">
+                    <span style="background:{driver_color}; color:#fff; font-size:11px;
+                                 padding:2px 8px; border-radius:4px;">
+                        {driver_label}
+                    </span>
+                </td>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           text-align:center; font-size:13px;">
+                    {o.engagement_multiplier}x
+                </td>
+            </tr>""")
+
+        return f"""
+        <div style="padding:0 24px 24px;">
+            <h2 style="color:{COLORS['primary']}; font-size:16px; margin:0 0 8px;
+                       text-transform:uppercase; letter-spacing:1px;">
+                Engagement Drivers
+            </h2>
+            <p style="font-size:12px; color:{COLORS['muted']}; margin:0 0 12px;">
+                Weighted scoring: saves (4x) &gt; shares (3x) &gt; comments (2x) &gt; likes (1x) &gt; views (0.5x)
+            </p>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;
+                          color:{COLORS['text']};">
+                <tr style="background:{COLORS['light_bg']};">
+                    <th style="padding:8px 12px; text-align:left; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Post</th>
+                    <th style="padding:8px 12px; text-align:center; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Weighted</th>
+                    <th style="padding:8px 12px; text-align:center; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Top Driver</th>
+                    <th style="padding:8px 12px; text-align:center; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Multiplier</th>
+                </tr>
+                {"".join(rows)}
+            </table>
+        </div>"""
+
+    def _section_audio_insights(self, audio_insights: Dict) -> str:
+        """Show trending audio detected across outlier posts."""
+        trending = audio_insights.get("trending_audio", [])
+        rows = []
+        for audio in trending[:5]:
+            name = audio.get("audio_name", "Unknown")
+            count = audio.get("outlier_count", 0)
+            handles = ", ".join(f"@{h}" for h in audio.get("used_by", [])[:3])
+            rows.append(f"""
+            <tr>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           font-size:13px; font-weight:500;">
+                    {name}
+                </td>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           text-align:center; font-size:13px;">
+                    {count} outlier{"s" if count != 1 else ""}
+                </td>
+                <td style="padding:8px 12px; border-bottom:1px solid {COLORS['border']};
+                           font-size:12px; color:{COLORS['muted']};">
+                    {handles}
+                </td>
+            </tr>""")
+
+        return f"""
+        <div style="padding:0 24px 24px;">
+            <h2 style="color:{COLORS['primary']}; font-size:16px; margin:0 0 16px;
+                       text-transform:uppercase; letter-spacing:1px;">
+                Trending Audio
+            </h2>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;
+                          color:{COLORS['text']};">
+                <tr style="background:{COLORS['light_bg']};">
+                    <th style="padding:8px 12px; text-align:left; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Audio</th>
+                    <th style="padding:8px 12px; text-align:center; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Appearances</th>
+                    <th style="padding:8px 12px; text-align:left; font-size:11px;
+                               color:{COLORS['muted']}; text-transform:uppercase;">Used By</th>
+                </tr>
+                {"".join(rows)}
+            </table>
+        </div>"""
+
+    def _section_series(self, series_data: list) -> str:
+        """Show detected content series/franchises."""
+        cards = []
+        for s in series_data[:4]:
+            name = s.get("series_name", "Unnamed Series")
+            post_count = s.get("post_count", 0)
+            replicability = s.get("replicability_score", 0)
+            handle = s.get("competitor_handle", "")
+            rep_color = COLORS["success"] if replicability >= 7 else COLORS["warning"]
+
+            cards.append(f"""
+            <div style="border:1px solid {COLORS['border']}; border-radius:8px;
+                        padding:12px 16px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="color:{COLORS['primary']}; font-size:14px;">
+                            {name}
+                        </strong>
+                        <span style="color:{COLORS['muted']}; font-size:12px; margin-left:8px;">
+                            @{handle} &bull; {post_count} posts
+                        </span>
+                    </div>
+                    <span style="color:{rep_color}; font-size:13px; font-weight:600;">
+                        Replicability: {replicability}/10
+                    </span>
+                </div>
+            </div>""")
+
+        return f"""
+        <div style="padding:0 24px 24px;">
+            <h2 style="color:{COLORS['primary']}; font-size:16px; margin:0 0 16px;
+                       text-transform:uppercase; letter-spacing:1px;">
+                Content Series Detected
+            </h2>
+            {"".join(cards)}
         </div>"""
 
     def _section_budget_notice(self, notice: str) -> str:
