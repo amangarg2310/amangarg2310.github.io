@@ -23,18 +23,21 @@
         }
 
         .settings-back {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
-            color: var(--signal-text-dim);
+            color: var(--signal-text-secondary);
             text-decoration: none;
             font-size: 13px;
-            font-weight: 500;
-            transition: color 0.2s;
+            font-weight: 600;
+            padding: 6px 14px 6px 10px;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
         }
 
         .settings-back:hover {
             color: var(--signal-cyan);
+            background: rgba(0, 217, 255, 0.08);
         }
 
         .settings-topbar-title {
