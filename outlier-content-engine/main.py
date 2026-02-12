@@ -19,6 +19,7 @@ Usage:
 import argparse
 import json
 import logging
+import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
@@ -144,9 +145,19 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 self.follower_count = None  # Verticals don't have a single follower count
                 self.description = None
 
-            def get_own_handle(self, platform):
-                """Return None - verticals don't have own channels."""
-                return None
+            def get_own_handle(self, platform="instagram"):
+                """Read own-brand handle from the config table."""
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(str(config.DB_PATH))
+                    row = conn.execute(
+                        "SELECT value FROM config WHERE key = ?",
+                        (f"own_brand_{platform}",)
+                    ).fetchone()
+                    conn.close()
+                    return row[0] if row and row[0] else None
+                except Exception:
+                    return None
 
             def get_outlier_thresholds(self):
                 """Return default outlier detection settings."""
@@ -177,7 +188,10 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 return results
 
             def get_voice_prompt(self):
-                """Return empty voice prompt for verticals."""
+                """Return voice prompt for verticals."""
+                own_handle = self.get_own_handle("instagram")
+                if own_handle:
+                    return f"You are a content strategist for @{own_handle}, analyzing the {self.vertical} competitive landscape."
                 return f"Analyzing content for the {self.vertical} vertical."
 
         profile = MockProfile(
@@ -360,28 +374,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     else:
         logger.info("Skipping collection (--skip-collect)")
 
-    # ── 3d. Content Tagging Phase ──
-    logger.info("")
-    logger.info("--- CONTENT TAGGING PHASE ---")
-    try:
-        from content_tagger import ContentTagger
-        tagger = ContentTagger()
-        tag_results = tagger.tag_all_posts(batch_size=10)
-
-        if tag_results["tagged_count"] > 0:
-            logger.info(
-                f"  Tagged {tag_results['tagged_count']} posts with content patterns"
-            )
-        elif tag_results["already_tagged"] == "all":
-            logger.info("  All posts already have content tags")
-
-        if tag_results["errors"]:
-            logger.warning(
-                f"  {len(tag_results['errors'])} tagging errors occurred"
-            )
-    except Exception as e:
-        logger.warning(f"  Content tagging failed: {e}")
-        logger.info("  Continuing without tags...")
+    # (Content tagging is now consolidated into the Analysis phase via analyzer.py)
 
     # ── 4. Detection Phase ──
     logger.info("")
@@ -436,6 +429,20 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     own_handle = profile.get_own_handle("instagram")
 
     if own_handle:
+        # Auto-collect own-brand posts if not skipping collection
+        if not skip_collect:
+            try:
+                logger.info(f"  Collecting own-brand posts for @{own_handle}...")
+                collector = create_collector()
+                own_posts = collector.collect(own_handle)
+                if own_posts:
+                    new_own = store_own_posts(own_posts, profile.profile_name)
+                    logger.info(f"  Stored {new_own} new own-brand posts for @{own_handle}")
+                else:
+                    logger.info(f"  No new own-brand posts found for @{own_handle}")
+            except Exception as e:
+                logger.warning(f"  Own-brand collection failed: {e}")
+
         va = VoiceAnalyzer(profile)
 
         # Only re-analyze if we collected new own posts or no analysis exists
@@ -462,7 +469,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
             "No own-channel handle configured. Skipping voice analysis."
         )
         logger.info(
-            "Tip: Add own_channel.instagram to your profile YAML."
+            "Tip: Set your brand handle in Setup > Your Brand Instagram Handle."
         )
 
     # ── 8. Analysis Phase ──
@@ -484,6 +491,30 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         f"Analysis complete: {len(outlier_analyses)} analyses, "
         f"{len(adaptations)} brand adaptations"
     )
+
+    # Store per-post AI analysis in database
+    if outlier_analyses:
+        try:
+            conn = sqlite3.connect(str(config.DB_PATH))
+            stored_count = 0
+            for post_analysis in outlier_analyses:
+                post_id = post_analysis.get("post_id")
+                if not post_id:
+                    continue
+                ai_json = json.dumps(post_analysis)
+                # Also store content_tags from the AI analysis
+                tags_json = json.dumps(post_analysis.get("content_tags", []))
+                conn.execute("""
+                    UPDATE competitor_posts
+                    SET ai_analysis = ?, content_tags = ?
+                    WHERE post_id = ? AND brand_profile = ?
+                """, (ai_json, tags_json, post_id, profile.profile_name))
+                stored_count += 1
+            conn.commit()
+            conn.close()
+            logger.info(f"  Stored AI analysis for {stored_count} posts")
+        except Exception as e:
+            logger.warning(f"  Failed to store AI analysis: {e}")
 
     # ── 9. Report Phase ──
     logger.info("")

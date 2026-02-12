@@ -75,7 +75,7 @@ class PatternAnalyzer:
                    caption, media_type, media_url, posted_at, likes, comments,
                    saves, shares, views, outlier_score, content_tags,
                    weighted_engagement_score, primary_engagement_driver,
-                   audio_id, audio_name
+                   audio_id, audio_name, ai_analysis
             FROM competitor_posts
             WHERE brand_profile = ? AND is_outlier = 1
             ORDER BY outlier_score DESC
@@ -112,7 +112,38 @@ class PatternAnalyzer:
         }
 
     def _analyze_single_post(self, post) -> Dict:
-        """Deep analysis of a single outlier post — WHY it performed."""
+        """Deep analysis of a single outlier post — WHY it performed.
+
+        If the post has a rich AI analysis stored (from the GPT-4 pipeline),
+        it formats that data into the expected insight structure. Otherwise,
+        falls back to the template-based heuristic analysis.
+        """
+        # Check for rich AI analysis first
+        ai_raw = post['ai_analysis'] if 'ai_analysis' in post.keys() else None
+        if ai_raw:
+            try:
+                ai = json.loads(ai_raw) if isinstance(ai_raw, str) else ai_raw
+                brief = ai.get("brand_creative_brief", {})
+                return {
+                    "why_it_worked": [ai.get("why_it_worked", "")],
+                    "hook_analysis": {
+                        "type": ai.get("hook_type", ""),
+                        "text": "",
+                        "explanation": ai.get("hook_breakdown", ""),
+                    },
+                    "visual_strategy": ai.get("visual_strategy", ""),
+                    "messaging_style": ai.get("messaging_breakdown", ""),
+                    "engagement_breakdown": {},
+                    "actionable_lesson": ai.get("replicability_notes", ""),
+                    "emotional_trigger": ai.get("emotional_trigger", ""),
+                    "content_pattern": ai.get("content_pattern", ""),
+                    "one_line_summary": ai.get("one_line_summary", ""),
+                    "brand_creative_brief": brief,
+                    "source": "ai",
+                }
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                pass  # Fall through to template-based analysis
+
         caption = post['caption'] or ""
         likes = post['likes'] or 0
         comments = post['comments'] or 0
@@ -129,6 +160,7 @@ class PatternAnalyzer:
             "messaging_style": "",
             "engagement_breakdown": {},
             "actionable_lesson": "",
+            "source": "template",
         }
 
         # Hook Analysis

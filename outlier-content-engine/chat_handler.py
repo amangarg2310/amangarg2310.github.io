@@ -33,43 +33,56 @@ class ChatHandler:
         - type: "text", "category_card", "category_list", "error"
         - data: Optional structured data for UI components
         - actions: Optional list of quick action buttons
+        - _handled: Boolean flag indicating ChatHandler recognized this command
         """
-        message = message.lower().strip()
+        message_lower = message.lower().strip()
 
         # Category list commands
-        if any(cmd in message for cmd in ["show categories", "list categories", "show collections", "my categories"]):
-            return self._handle_list_categories()
+        if any(cmd in message_lower for cmd in ["show categories", "list categories", "show collections", "my categories"]):
+            result = self._handle_list_categories()
+            result['_handled'] = True
+            return result
 
         # Show specific category
-        match = re.search(r'show\s+([a-zA-Z0-9_\s]+)', message)
+        match = re.search(r'show\s+([a-zA-Z0-9_\s]+)', message_lower)
         if match:
             category_name = match.group(1).strip()
-            return self._handle_show_category(category_name)
+            result = self._handle_show_category(category_name)
+            result['_handled'] = True
+            return result
 
         # Add brands command: "add @nike @adidas to streetwear"
-        add_match = re.search(r'add\s+([@\w\s,]+?)\s+to\s+([a-zA-Z0-9_\s]+)', message)
+        add_match = re.search(r'add\s+([@\w\s,]+?)\s+to\s+([a-zA-Z0-9_\s]+)', message_lower)
         if add_match:
             handles_str = add_match.group(1)
             category_name = add_match.group(2).strip()
-            return self._handle_add_brands(handles_str, category_name)
+            result = self._handle_add_brands(handles_str, category_name)
+            result['_handled'] = True
+            return result
 
         # Remove brands command: "remove @nike from streetwear"
-        remove_match = re.search(r'remove\s+([@\w\s,]+?)\s+from\s+([a-zA-Z0-9_\s]+)', message)
+        remove_match = re.search(r'remove\s+([@\w\s,]+?)\s+from\s+([a-zA-Z0-9_\s]+)', message_lower)
         if remove_match:
             handles_str = remove_match.group(1)
             category_name = remove_match.group(2).strip()
-            return self._handle_remove_brands(handles_str, category_name)
+            result = self._handle_remove_brands(handles_str, category_name)
+            result['_handled'] = True
+            return result
 
         # If message is just a category name, show that category
         verticals = self.vm.list_verticals()
         for vertical in verticals:
-            if vertical.lower() == message:
-                return self._handle_show_category(vertical)
+            if vertical.lower() == message_lower:
+                result = self._handle_show_category(vertical)
+                result['_handled'] = True
+                return result
 
-        # Default: conversational response
+        # Not a recognized command — let the caller decide how to handle
+        # (e.g., fall through to ScoutAgent or fallback responses)
         return {
-            "response": f"I can help you manage your categories and analyze competitors. Try:\n• 'show categories' to see all collections\n• 'show {current_vertical or 'streetwear'}' to view a specific category\n• 'add @brand to category' to add brands\n• 'remove @brand from category' to remove brands",
-            "type": "text"
+            "response": "",
+            "type": "text",
+            "_handled": False
         }
 
     def _handle_list_categories(self) -> Dict:

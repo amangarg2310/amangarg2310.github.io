@@ -393,6 +393,32 @@ h1, h2, h3, h4, h5, h6 {
     opacity: 1;
 }
 
+.signal-chat-footer {
+    padding: 0 24px 16px;
+    flex-shrink: 0;
+}
+
+.signal-create-category-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--signal-cyan);
+    background: transparent;
+    border: 1px dashed var(--signal-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.signal-create-category-btn:hover {
+    background: rgba(0, 212, 255, 0.08);
+    border-color: var(--signal-cyan);
+}
+
 /* ========================================
    CONTENT HEADER
    ======================================== */
@@ -420,7 +446,23 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.03em;
 }
 
-/* Count badge removed - post count shown in chat subtitle */
+/* Settings gear button */
+.signal-settings-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: var(--signal-text-dim);
+    text-decoration: none;
+    transition: color 0.2s, background 0.2s;
+}
+
+.signal-settings-btn:hover {
+    color: var(--signal-text-primary);
+    background: var(--signal-bg-tertiary);
+}
 
 /* ========================================
    FILTER PILLS
@@ -437,6 +479,7 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     align-items: center;
     gap: 12px;
+    align-self: flex-start; /* Ensure all filter groups align to the top */
 }
 
 .signal-filter-label {
@@ -493,6 +536,45 @@ h1, h2, h3, h4, h5, h6 {
     color: #000;
     border-color: var(--signal-cyan);
     font-weight: 600;
+}
+
+/* Brand pill with remove mode on long-press */
+.signal-pill.brand-pill {
+    position: relative;
+    user-select: none;
+}
+
+.signal-pill.brand-pill.removing {
+    background: var(--signal-error);
+    border-color: var(--signal-error);
+    color: #fff;
+    animation: pulse-remove 0.3s ease;
+}
+
+@keyframes pulse-remove {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* Chat reset button */
+.signal-chat-reset {
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--signal-border);
+    border-radius: 8px;
+    color: var(--signal-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.signal-chat-reset:hover {
+    background: var(--signal-bg-tertiary);
+    border-color: var(--signal-cyan);
+    color: var(--signal-cyan);
 }
 
 /* ========================================
@@ -822,6 +904,145 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--signal-text-dim);
     font-size: 15px;
     max-width: 400px;
+    margin-bottom: 24px;
+}
+
+.signal-empty-cta {
+    display: inline-block;
+    padding: 12px 24px;
+    background: var(--signal-cyan);
+    color: #000;
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.signal-empty-cta:hover {
+    opacity: 0.9;
+}
+
+/* Create category modal */
+.signal-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+.signal-modal-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+.signal-modal {
+    background: var(--signal-bg);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+}
+.signal-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--signal-border-light);
+}
+.signal-modal-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--signal-text-primary);
+}
+.signal-modal-close {
+    background: none;
+    border: none;
+    color: var(--signal-text-secondary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.signal-modal-close:hover {
+    color: var(--signal-text-primary);
+}
+.signal-modal-form {
+    padding: 24px;
+}
+.signal-form-group {
+    margin-bottom: 20px;
+}
+.signal-form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--signal-text-secondary);
+    margin-bottom: 8px;
+}
+.signal-form-optional {
+    font-weight: 400;
+    text-transform: none;
+    color: var(--signal-text-dim);
+}
+.signal-form-input,
+.signal-form-textarea {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--signal-text-primary);
+    background: var(--signal-bg-secondary);
+    border: 1px solid var(--signal-border-light);
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+.signal-form-textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+.signal-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--signal-border-light);
+}
+.signal-btn-outline {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--signal-text-secondary);
+    background: transparent;
+    border: 1px solid var(--signal-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.signal-btn-outline:hover {
+    color: var(--signal-text-primary);
+    border-color: var(--signal-text-dim);
+}
+.signal-btn-primary {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #000;
+    background: var(--signal-cyan);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.signal-btn-primary:hover {
+    opacity: 0.9;
 }
 
 /* ========================================
@@ -855,4 +1076,480 @@ h1, h2, h3, h4, h5, h6 {
         flex-direction: column;
         gap: 16px;
     }
+}
+
+/* Competitive Set Dropdown */
+.signal-vertical-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+
+.signal-vertical-dropdown-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    min-width: 180px;
+    justify-content: space-between;
+}
+
+.signal-vertical-current {
+    flex: 1;
+    text-align: left;
+}
+
+.signal-dropdown-arrow {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.signal-vertical-dropdown-menu.open + .signal-vertical-dropdown-btn .signal-dropdown-arrow,
+.signal-vertical-dropdown-btn:hover .signal-dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.signal-vertical-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 200px;
+    background: var(--signal-bg-secondary);
+    border: 1px solid var(--signal-border);
+    border-radius: 8px;
+    padding: 4px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.signal-vertical-dropdown-menu.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.signal-vertical-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    gap: 12px;
+}
+
+.signal-vertical-option:hover {
+    background: var(--signal-bg-tertiary);
+}
+
+.signal-vertical-option.active {
+    background: rgba(0, 191, 255, 0.1);
+}
+
+.signal-vertical-name {
+    flex: 1;
+    color: var(--signal-text);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.signal-vertical-option:hover .signal-vertical-name {
+    color: var(--signal-cyan);
+}
+
+.signal-vertical-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s ease;
+    color: var(--signal-text-secondary);
+}
+
+.signal-vertical-option:hover .signal-vertical-delete {
+    opacity: 1;
+}
+
+.signal-vertical-delete:hover {
+    background: rgba(255, 71, 87, 0.15);
+    color: #ff4757;
+}
+
+/* ── Timeframe Context Subtitle ── */
+.signal-timeframe-context {
+    font-size: 11px;
+    color: var(--signal-text-secondary);
+    opacity: 0.7;
+    font-weight: 400;
+}
+
+/* ── Expandable Insight Section ── */
+.signal-expand-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0 0;
+    margin-top: 12px;
+    border-top: 1px solid var(--signal-border-light);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--signal-cyan);
+    transition: color 0.15s ease;
+    user-select: none;
+}
+
+.signal-expand-trigger:hover {
+    color: #4ecdc4;
+}
+
+.signal-expand-trigger svg {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.signal-expand-trigger.open svg {
+    transform: rotate(180deg);
+}
+
+.signal-expand-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.25s ease,
+                padding 0.25s ease;
+    opacity: 0;
+    padding: 0;
+}
+
+.signal-expand-panel.open {
+    max-height: 2000px;
+    opacity: 1;
+    padding: 14px 0 4px;
+}
+
+.signal-insight-summary {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--signal-text);
+    line-height: 1.5;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--signal-border-light);
+}
+
+.signal-insight-section {
+    margin-bottom: 12px;
+}
+
+.signal-insight-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--signal-text-secondary);
+    margin-bottom: 4px;
+}
+
+.signal-insight-text {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--signal-text);
+    opacity: 0.9;
+}
+
+.signal-insight-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--signal-cyan);
+    background: rgba(0, 206, 209, 0.08);
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 206, 209, 0.15);
+}
+
+.signal-insight-quote {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--signal-cyan);
+    font-style: italic;
+    padding-left: 10px;
+    border-left: 2px solid rgba(0, 206, 209, 0.3);
+}
+
+.signal-insight-caption {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--signal-text);
+    opacity: 0.85;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--signal-border-light);
+    white-space: pre-wrap;
+}
+
+/* Creative Brief Divider + Header */
+.signal-brief-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--signal-cyan), transparent);
+    opacity: 0.3;
+    margin: 16px 0;
+}
+
+.signal-brief-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--signal-cyan);
+    margin-bottom: 14px;
+    letter-spacing: 0.02em;
+}
+
+.signal-brief-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--signal-border-light);
+}
+
+.signal-brief-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--signal-text);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.signal-brief-score {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--signal-cyan);
+}
+
+/* ── Content Pattern Cluster Cards ── */
+.signal-cluster-card {
+    border-color: rgba(167, 139, 250, 0.25);
+}
+
+.signal-cluster-card:hover {
+    border-color: rgba(167, 139, 250, 0.5);
+    box-shadow: 0 4px 20px rgba(167, 139, 250, 0.12);
+}
+
+.signal-cluster-card.signal-cluster-active {
+    border-color: rgba(167, 139, 250, 0.7);
+    background: rgba(167, 139, 250, 0.06);
+}
+
+.signal-cluster-filter-hint {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--signal-tag-purple);
+    opacity: 0.6;
+    margin-top: 8px;
+    transition: opacity 0.15s ease;
+}
+
+.signal-cluster-card:hover .signal-cluster-filter-hint {
+    opacity: 1;
+}
+
+/* ── Brand Baselines (Benchmarking) ── */
+.signal-benchmark-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--signal-bg-surface);
+    border: 1px solid var(--signal-border);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--signal-text-primary);
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.signal-benchmark-trigger:hover {
+    border-color: rgba(0, 217, 255, 0.3);
+}
+
+.signal-benchmark-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--signal-text-dim);
+    margin-left: auto;
+}
+
+.signal-benchmark-chevron {
+    transition: transform 0.2s ease;
+    color: var(--signal-text-dim);
+    flex-shrink: 0;
+}
+
+.signal-benchmark-trigger.open .signal-benchmark-chevron {
+    transform: rotate(180deg);
+}
+
+.signal-benchmark-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease,
+                margin 0.2s ease;
+    opacity: 0;
+    margin-top: 0;
+}
+
+.signal-benchmark-panel.open {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 10px;
+}
+
+.signal-benchmark-header-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 0.6fr;
+    gap: 6px;
+    padding: 6px 10px;
+    margin-bottom: 2px;
+}
+
+.signal-benchmark-col-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--signal-text-dim);
+    opacity: 0.7;
+}
+
+.signal-benchmark-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 0.6fr;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    transition: background 0.1s ease;
+}
+
+.signal-benchmark-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.signal-benchmark-handle {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--signal-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.signal-benchmark-outlier-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #000;
+    background: var(--signal-cyan);
+    border-radius: 9px;
+    flex-shrink: 0;
+}
+
+.signal-benchmark-val {
+    font-size: 12px;
+    color: var(--signal-text-dim);
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+}
+
+.signal-benchmark-posts {
+    color: var(--signal-text-secondary);
+    opacity: 0.7;
+}
+
+.signal-benchmark-footnote {
+    font-size: 10px;
+    color: var(--signal-text-dim);
+    opacity: 0.5;
+    padding: 8px 10px 2px;
+    border-top: 1px solid var(--signal-border-light);
+    margin-top: 4px;
+}
+
+/* New Category link in dropdown */
+.signal-new-category-link {
+    border-top: 1px solid var(--signal-border-light);
+    margin-top: 4px;
+    padding-top: 8px !important;
+    text-decoration: none;
+}
+
+.signal-new-category-link:hover {
+    background: rgba(0, 212, 255, 0.08);
+}
+
+/* Empty State */
+.signal-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 32px;
+    text-align: center;
+    color: var(--signal-text-secondary);
+    background: var(--signal-bg-secondary);
+    border-radius: 16px;
+    margin: 32px 24px;
+}
+
+.signal-empty-state svg {
+    margin-bottom: 24px;
+    opacity: 0.6;
+}
+
+.signal-empty-state h3 {
+    margin: 0 0 12px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--signal-text);
+}
+
+.signal-empty-state p {
+    margin: 0;
+    font-size: 14px;
+    max-width: 400px;
+    line-height: 1.6;
 }

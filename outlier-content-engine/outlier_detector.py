@@ -142,57 +142,94 @@ class OutlierDetector:
 
     def detect(self) -> Tuple[List[OutlierPost], Dict[str, CompetitorBaseline]]:
         """
-        Run outlier detection across all competitors.
+        Run dual-window outlier detection across all competitors.
+
+        Computes outliers for both 30-day and 3-month windows, flags each
+        post with which window(s) it qualifies in, and returns the union.
 
         Returns:
-            Tuple of (list of outlier posts sorted by score, dict of baselines)
+            Tuple of (list of outlier posts sorted by score, dict of baselines from 30d window)
         """
-        logger.info("Running outlier detection...")
+        logger.info("Running dual-window outlier detection (30d + 3mo)...")
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
 
+        # Detect outliers for both windows
+        outliers_30d, baselines_30d = self._detect_for_window(conn, lookback_days=30)
+        outliers_3mo, baselines_3mo = self._detect_for_window(conn, lookback_days=90)
+
+        logger.info(f"  30d window: {len(outliers_30d)} outliers")
+        logger.info(f"  3mo window: {len(outliers_3mo)} outliers")
+
+        # Build per-post window map: post_id -> set of windows
+        post_windows = {}
+        for o in outliers_30d:
+            post_windows.setdefault(o.post_id, set()).add("30d")
+        for o in outliers_3mo:
+            post_windows.setdefault(o.post_id, set()).add("3mo")
+
+        # Merge into a single list (use the higher score if in both windows)
+        merged = {}
+        for o in outliers_30d + outliers_3mo:
+            if o.post_id not in merged or o.outlier_score > merged[o.post_id].outlier_score:
+                merged[o.post_id] = o
+
+        all_outliers = sorted(merged.values(), key=lambda x: x.outlier_score, reverse=True)
+
+        # Update DB with outlier flags and window info
+        self._update_outlier_flags_dual(conn, all_outliers, post_windows)
+
+        conn.close()
+        logger.info(f"Total unique outliers: {len(all_outliers)}")
+        return all_outliers, baselines_30d
+
+    def _detect_for_window(self, conn: sqlite3.Connection,
+                           lookback_days: int) -> Tuple[List[OutlierPost], Dict[str, CompetitorBaseline]]:
+        """
+        Run outlier detection for a specific lookback window.
+
+        Returns:
+            Tuple of (outlier list, baselines dict) for this window.
+        """
         baselines = {}
         all_outliers = []
 
         competitors = self.profile.get_competitor_handles("instagram")
-        for comp in competitors:
+        # Also include TikTok competitors
+        tt_competitors = self.profile.get_competitor_handles("tiktok")
+        # Build a combined set, deduplicating by handle
+        seen_handles = set()
+        combined = []
+        for comp in competitors + tt_competitors:
+            if comp["handle"] not in seen_handles:
+                combined.append(comp)
+                seen_handles.add(comp["handle"])
+
+        for comp in combined:
             handle = comp["handle"]
             name = comp["name"]
 
-            baseline = self._compute_baseline(conn, handle, name)
+            baseline = self._compute_baseline(conn, handle, name,
+                                              lookback_days=lookback_days)
             if baseline is None:
-                logger.warning(
-                    f"  Skipping @{handle}: not enough data for baseline "
-                    f"(need {self.thresholds.lookback_days} days of posts)"
-                )
                 continue
 
             baselines[handle] = baseline
-            outliers = self._find_outliers(conn, handle, name, baseline)
+            outliers = self._find_outliers(conn, handle, name, baseline,
+                                          lookback_days=lookback_days)
             all_outliers.extend(outliers)
 
-            logger.info(
-                f"  @{handle}: {baseline.post_count} posts, "
-                f"mean engagement {baseline.mean_engagement:.0f}, "
-                f"found {len(outliers)} outliers"
-            )
-
-        # Sort by outlier score descending
         all_outliers.sort(key=lambda x: x.outlier_score, reverse=True)
-
-        # Update the database with outlier flags
-        self._update_outlier_flags(conn, all_outliers)
-
-        conn.close()
-        logger.info(f"Total outliers found: {len(all_outliers)}")
         return all_outliers, baselines
 
     def _compute_baseline(self, conn: sqlite3.Connection,
-                          handle: str, name: str) -> Optional[CompetitorBaseline]:
-        """Calculate engagement baseline for a competitor."""
+                          handle: str, name: str,
+                          lookback_days: int = None) -> Optional[CompetitorBaseline]:
+        """Calculate engagement baseline for a competitor within a lookback window."""
+        days = lookback_days or self.thresholds.lookback_days
         cutoff = (
             datetime.now(timezone.utc) -
-            timedelta(days=self.thresholds.lookback_days)
+            timedelta(days=days)
         ).isoformat()
 
         rows = conn.execute("""
@@ -242,8 +279,15 @@ class OutlierDetector:
 
     def _find_outliers(self, conn: sqlite3.Connection,
                        handle: str, name: str,
-                       baseline: CompetitorBaseline) -> List[OutlierPost]:
-        """Identify outlier posts for a single competitor."""
+                       baseline: CompetitorBaseline,
+                       lookback_days: int = None) -> List[OutlierPost]:
+        """Identify outlier posts for a single competitor within a lookback window."""
+        days = lookback_days or self.thresholds.lookback_days
+        cutoff = (
+            datetime.now(timezone.utc) -
+            timedelta(days=days)
+        ).isoformat()
+
         rows = conn.execute("""
             SELECT post_id, competitor_handle, competitor_name, platform,
                    caption, media_type, media_url, posted_at,
@@ -252,8 +296,9 @@ class OutlierDetector:
             WHERE competitor_handle = ?
               AND brand_profile = ?
               AND COALESCE(is_own_channel, 0) = 0
+              AND collected_at >= ?
             ORDER BY collected_at DESC
-        """, (handle, self.profile.profile_name)).fetchall()
+        """, (handle, self.profile.profile_name, cutoff)).fetchall()
 
         outliers = []
 
@@ -392,24 +437,43 @@ class OutlierDetector:
 
     def _update_outlier_flags(self, conn: sqlite3.Connection,
                               outliers: List[OutlierPost]) -> None:
-        """Update the database with outlier flags and scores."""
+        """Update the database with outlier flags and scores (legacy single-window)."""
+        self._update_outlier_flags_dual(
+            conn, outliers,
+            {o.post_id: {"30d"} for o in outliers}
+        )
+
+    def _update_outlier_flags_dual(self, conn: sqlite3.Connection,
+                                   outliers: List[OutlierPost],
+                                   post_windows: Dict[str, set]) -> None:
+        """Update the database with outlier flags, scores, and timeframe windows."""
         # Reset all outlier flags for this profile
         conn.execute("""
             UPDATE competitor_posts
             SET is_outlier = 0, outlier_score = NULL, content_tags = NULL,
-                weighted_engagement_score = NULL, primary_engagement_driver = NULL
+                weighted_engagement_score = NULL, primary_engagement_driver = NULL,
+                outlier_timeframe = NULL
             WHERE brand_profile = ?
         """, (self.profile.profile_name,))
 
         # Set flags for detected outliers
         for outlier in outliers:
+            windows = post_windows.get(outlier.post_id, set())
+            if "30d" in windows and "3mo" in windows:
+                timeframe = "both"
+            elif "30d" in windows:
+                timeframe = "30d"
+            else:
+                timeframe = "3mo"
+
             conn.execute("""
                 UPDATE competitor_posts
                 SET is_outlier = 1,
                     outlier_score = ?,
                     content_tags = ?,
                     weighted_engagement_score = ?,
-                    primary_engagement_driver = ?
+                    primary_engagement_driver = ?,
+                    outlier_timeframe = ?
                 WHERE post_id = ?
                   AND brand_profile = ?
             """, (
@@ -417,6 +481,7 @@ class OutlierDetector:
                 json.dumps(outlier.content_tags),
                 outlier.weighted_engagement,
                 outlier.primary_engagement_driver,
+                timeframe,
                 outlier.post_id,
                 self.profile.profile_name,
             ))

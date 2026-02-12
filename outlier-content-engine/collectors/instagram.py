@@ -109,6 +109,8 @@ def migrate_database(db_path=None):
         "is_trending_audio": "INTEGER DEFAULT 0",
         "weighted_engagement_score": "REAL",
         "primary_engagement_driver": "TEXT",
+        "outlier_timeframe": "TEXT",
+        "ai_analysis": "TEXT",
     }
 
     for col_name, col_type in new_columns.items():

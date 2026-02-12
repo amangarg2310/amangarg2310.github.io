@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>Signal AI - Outlier Content</title>
+    <title>Scout AI - Outliers Identified</title>
     <link rel="stylesheet" href="/static/signal-ai.css">
 </head>
 <body>
@@ -16,13 +16,50 @@
         <div class="signal-chat-header">
             <div class="signal-brand">
                 <div class="signal-brand-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                    <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+                        <!-- Beagle head -->
+                        <ellipse cx="24" cy="22" rx="10" ry="11" fill="#D4A574"/>
+                        <!-- Left ear -->
+                        <ellipse cx="16" cy="18" rx="4" ry="9" fill="#8B5A3C" transform="rotate(-20 16 18)"/>
+                        <!-- Right ear -->
+                        <ellipse cx="32" cy="18" rx="4" ry="9" fill="#8B5A3C" transform="rotate(20 32 18)"/>
+                        <!-- White muzzle -->
+                        <ellipse cx="24" cy="26" rx="6" ry="5" fill="#FFF"/>
+                        <!-- Nose -->
+                        <ellipse cx="24" cy="28" rx="2" ry="1.5" fill="#000"/>
+                        <!-- Left eye -->
+                        <circle cx="20" cy="21" r="2" fill="#000"/>
+                        <circle cx="20.5" cy="20.5" r="0.8" fill="#FFF"/>
+                        <!-- Right eye -->
+                        <circle cx="28" cy="21" r="2" fill="#000"/>
+                        <circle cx="28.5" cy="20.5" r="0.8" fill="#FFF"/>
+                        <!-- Magnifying glass handle -->
+                        <line x1="34" y1="32" x2="40" y2="38" stroke="#8B5A3C" stroke-width="2" stroke-linecap="round"/>
+                        <!-- Magnifying glass circle -->
+                        <circle cx="30" cy="28" r="6" fill="none" stroke="#4A90E2" stroke-width="2"/>
+                        <circle cx="30" cy="28" r="5" fill="#E3F2FD" opacity="0.3"/>
                     </svg>
                 </div>
-                <span class="signal-brand-name">Signal AI</span>
+                <span class="signal-brand-name">Scout AI</span>
             </div>
-            <p class="signal-chat-subtitle">Outlier Content · {{ outliers|length if outliers else 0 }} posts</p>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <p class="signal-chat-subtitle">Outliers Identified: {{ outliers|length if outliers else 0 }} posts
+                    <span class="signal-timeframe-context">
+                        {% if selected_timeframe == '3mo' %}
+                            — scored vs each brand's 3-month baseline
+                        {% else %}
+                            — scored vs each brand's 30-day baseline
+                        {% endif %}
+                    </span>
+                </p>
+                <button class="signal-chat-reset" onclick="resetChat()" title="Reset conversation">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    </svg>
+                    Reset
+                </button>
+            </div>
         </div>
 
         <!-- Chat Messages -->
@@ -57,6 +94,46 @@
                         {% endfor %}
                     </div>
                     <div class="signal-message-time">Active competitors</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Brand Baselines (Competitor Benchmarking) -->
+            {% if brand_baselines %}
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-benchmark-trigger" onclick="toggleBenchmarks(this)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><rect x="2" y="10" width="4" height="12"/><rect x="10" y="4" width="4" height="18"/><rect x="18" y="8" width="4" height="14"/></svg>
+                        <span>Brand Baselines</span>
+                        <span class="signal-benchmark-count">{{ brand_baselines|length }} brands</span>
+                        <svg class="signal-benchmark-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                    <div class="signal-benchmark-panel">
+                        <div class="signal-benchmark-header-row">
+                            <span class="signal-benchmark-col-label">Brand</span>
+                            <span class="signal-benchmark-col-label">Avg Likes</span>
+                            <span class="signal-benchmark-col-label">Avg Comments</span>
+                            <span class="signal-benchmark-col-label">Posts</span>
+                        </div>
+                        {% for bl in brand_baselines %}
+                        <div class="signal-benchmark-row">
+                            <span class="signal-benchmark-handle">
+                                @{{ bl.competitor_handle }}
+                                {% if bl.outlier_count %}
+                                <span class="signal-benchmark-outlier-badge">{{ bl.outlier_count }}</span>
+                                {% endif %}
+                            </span>
+                            <span class="signal-benchmark-val">{{ "{:,.0f}".format(bl.mean_likes) }}</span>
+                            <span class="signal-benchmark-val">{{ "{:,.0f}".format(bl.mean_comments) }}</span>
+                            <span class="signal-benchmark-val signal-benchmark-posts">{{ bl.post_count }}</span>
+                        </div>
+                        {% endfor %}
+                        <div class="signal-benchmark-footnote">
+                            Averages based on {{ selected_timeframe or '30d' }} window
+                        </div>
+                    </div>
+                    <div class="signal-message-time">Competitor benchmarks</div>
                 </div>
             </div>
             {% endif %}
@@ -132,7 +209,62 @@
                     </div>
                     {% endfor %}
 
+                    <!-- Content Pattern Clusters -->
+                    {% if pattern_clusters %}
+                    {% for cluster in pattern_clusters[:6] %}
+                    <div class="signal-insight-card signal-cluster-card" onclick="filterByCluster({{ cluster.pattern_name|tojson }})" style="cursor:pointer">
+                        <div class="signal-insight-header">
+                            <span class="signal-insight-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="9" x2="9" y2="11"/><line x1="18" y1="9" x2="15" y2="11"/><line x1="6" y1="15" x2="9" y2="13"/><line x1="18" y1="15" x2="15" y2="13"/></svg>
+                            </span>
+                            <span class="signal-insight-label">CLUSTER</span>
+                            <span class="signal-insight-metric">{{ cluster.count }} posts</span>
+                        </div>
+                        <div class="signal-insight-title">{{ cluster.pattern_name }}</div>
+                        <div class="signal-insight-desc">
+                            {{ cluster.count }} posts across
+                            {% for handle in cluster.brands[:3] %}@{{ handle }}{% if not loop.last %}, {% endif %}{% endfor %}{% if cluster.brands|length > 3 %} +{{ cluster.brands|length - 3 }} more{% endif %}
+                            used this pattern.
+                            Avg score: {{ cluster.avg_score }}
+                        </div>
+                        <div class="signal-cluster-filter-hint">Click to filter grid</div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+
                     <div class="signal-message-time">{{ insights.outlier_count }} outliers analyzed</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Standalone Content Clusters (when AI analysis exists but no template insights) -->
+            {% if pattern_clusters and (not insights or not insights.has_insights) %}
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        I found <strong>{{ pattern_clusters|length }} content pattern clusters</strong> across your outlier posts.
+                    </div>
+                    {% for cluster in pattern_clusters[:6] %}
+                    <div class="signal-insight-card signal-cluster-card" onclick="filterByCluster({{ cluster.pattern_name|tojson }})" style="cursor:pointer">
+                        <div class="signal-insight-header">
+                            <span class="signal-insight-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="9" x2="9" y2="11"/><line x1="18" y1="9" x2="15" y2="11"/><line x1="6" y1="15" x2="9" y2="13"/><line x1="18" y1="15" x2="15" y2="13"/></svg>
+                            </span>
+                            <span class="signal-insight-label">CLUSTER</span>
+                            <span class="signal-insight-metric">{{ cluster.count }} posts</span>
+                        </div>
+                        <div class="signal-insight-title">{{ cluster.pattern_name }}</div>
+                        <div class="signal-insight-desc">
+                            {{ cluster.count }} posts across
+                            {% for handle in cluster.brands[:3] %}@{{ handle }}{% if not loop.last %}, {% endif %}{% endfor %}{% if cluster.brands|length > 3 %} +{{ cluster.brands|length - 3 }} more{% endif %}
+                            used this pattern.
+                            Avg score: {{ cluster.avg_score }}
+                        </div>
+                        <div class="signal-cluster-filter-hint">Click to filter grid</div>
+                    </div>
+                    {% endfor %}
+                    <div class="signal-message-time">{{ pattern_clusters|length }} clusters found</div>
                 </div>
             </div>
             {% endif %}
@@ -148,6 +280,16 @@
                 autocomplete="off"
             >
         </div>
+        <!-- Manual create category option (always visible) -->
+        <div class="signal-chat-footer">
+            <button type="button" class="signal-create-category-btn" onclick="openCreateModal()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Create category
+            </button>
+        </div>
     </div>
 
     <!-- ========== RIGHT PANEL: CONTENT ========== -->
@@ -155,11 +297,62 @@
         <!-- Content Header -->
         <div class="signal-content-header">
             <div class="signal-title-row">
-                <h1 class="signal-content-title">Outlier Content</h1>
+                <h1 class="signal-content-title">Outliers Identified:</h1>
+                <a href="{{ url_for('setup_page') }}" class="signal-settings-btn" title="Settings &amp; API keys">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                    </svg>
+                </a>
             </div>
 
             <!-- Filter Pills -->
             <div class="signal-filters">
+                <!-- Competitive Sets Dropdown -->
+                {% if saved_verticals %}
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">COMPETITIVE SET</span>
+                    <div class="signal-filter-pills">
+                        <div class="signal-vertical-dropdown-container">
+                            <button class="signal-pill signal-vertical-dropdown-btn" onclick="toggleVerticalDropdown()">
+                                <span class="signal-vertical-current">
+                                    {% if vertical_name %}{{ vertical_name }}{% else %}Select a competitive set...{% endif %}
+                                </span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="signal-dropdown-arrow">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                            <div class="signal-vertical-dropdown-menu" id="verticalDropdownMenu">
+                                {% for vertical in saved_verticals %}
+                                <div class="signal-vertical-option {% if vertical == vertical_name %}active{% endif %}">
+                                    <span class="signal-vertical-name" onclick="loadVertical('{{ vertical }}')">{{ vertical }}</span>
+                                    <button class="signal-vertical-delete" onclick="deleteVertical('{{ vertical }}', event)" title="Delete competitive set">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                                        </svg>
+                                    </button>
+                                </div>
+                                {% endfor %}
+                                <!-- New Category: open create modal -->
+                                <button type="button" class="signal-vertical-option signal-new-category-link" onclick="event.stopPropagation(); openCreateModal();">
+                                    <span class="signal-vertical-name" style="color: var(--signal-cyan); font-size: 12px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align: -1px; margin-right: 4px;">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        New Category
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+
                 <!-- Brands Filter (with manage link) -->
                 {% if competitive_set %}
                 <div class="signal-filter-group">
@@ -177,8 +370,9 @@
                         {% for brand in competitive_set %}
                             {% set handle = brand.instagram_handle or brand.tiktok_handle or '' %}
                             {% if handle %}
-                            <button class="signal-pill {% if selected_competitor == handle %}active{% endif %}"
-                                    onclick="applyFilter('competitor', '{{ handle }}')">
+                            <button class="signal-pill brand-pill {% if selected_competitor == handle %}active{% endif %}"
+                                    data-handle="{{ handle }}"
+                                    onclick="handleBrandClick(event, '{{ handle }}')">
                                 @{{ handle }}
                             </button>
                             {% endif %}
@@ -216,16 +410,10 @@
                 <div class="signal-filter-group">
                     <span class="signal-filter-label">TIMEFRAME</span>
                     <div class="signal-filter-pills">
-                        <button class="signal-pill {% if not selected_timeframe %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '')">All</button>
-                        <button class="signal-pill {% if selected_timeframe == '30d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '30d')">30d</button>
-                        <button class="signal-pill {% if selected_timeframe == '90d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '90d')">3mo</button>
-                        <button class="signal-pill {% if selected_timeframe == '180d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '180d')">6mo</button>
-                        <button class="signal-pill {% if selected_timeframe == '365d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '365d')">1yr</button>
+                        <button class="signal-pill {% if selected_timeframe == '30d' or not selected_timeframe %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '30d')">30 Days</button>
+                        <button class="signal-pill {% if selected_timeframe == '3mo' %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '3mo')">3 Months</button>
                     </div>
                 </div>
 
@@ -250,7 +438,9 @@
         <div class="signal-grid">
             {% if outliers %}
                 {% for post in outliers %}
-                <a href="{{ post.post_url }}" target="_blank" rel="noopener noreferrer" class="signal-card-link">
+                <a href="{{ post.post_url }}" target="_blank" rel="noopener noreferrer" class="signal-card-link"
+                   data-postid="{{ post.post_id }}"
+                   data-pattern="{{ post.ai_analysis.content_pattern if post.ai_analysis and post.ai_analysis.content_pattern else '' }}">
                     <div class="signal-card" style="animation-delay: {{ loop.index0 * 0.05 }}s">
                         <!-- Card Media -->
                     <div class="signal-card-media">
@@ -391,12 +581,131 @@
                             </div>
                             {% endif %}
                         </div>
+
+                        <!-- Expandable AI Analysis Section -->
+                        {% if post.ai_analysis %}
+                        {% set ai = post.ai_analysis %}
+                        <div class="signal-expand-trigger" onclick="event.preventDefault(); event.stopPropagation(); toggleInsight(this)">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            <span>Deep Insight</span>
+                        </div>
+                        <div class="signal-expand-panel" onclick="event.preventDefault(); event.stopPropagation();">
+                            {% if ai.one_line_summary %}
+                            <div class="signal-insight-summary">{{ ai.one_line_summary }}</div>
+                            {% endif %}
+
+                            {% if ai.hook_breakdown %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Hook</div>
+                                <div class="signal-insight-text">{{ ai.hook_breakdown }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if ai.why_it_worked %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Why it worked</div>
+                                <div class="signal-insight-text">{{ ai.why_it_worked }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if ai.emotional_trigger %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Emotional trigger</div>
+                                <div class="signal-insight-text">{{ ai.emotional_trigger }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if ai.content_pattern %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Pattern</div>
+                                <div class="signal-insight-tag">{{ ai.content_pattern }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if ai.visual_strategy %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Visual strategy</div>
+                                <div class="signal-insight-text">{{ ai.visual_strategy }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if ai.brand_creative_brief %}
+                            {% set brief = ai.brand_creative_brief %}
+                            <div class="signal-brief-divider"></div>
+                            <div class="signal-brief-header">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                Your Creative Brief
+                            </div>
+
+                            {% if brief.one_line_summary %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Concept</div>
+                                <div class="signal-insight-text">{{ brief.one_line_summary }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if brief.hook_line %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Hook line</div>
+                                <div class="signal-insight-quote">"{{ brief.hook_line }}"</div>
+                            </div>
+                            {% endif %}
+
+                            {% if brief.suggested_caption %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Suggested caption</div>
+                                <div class="signal-insight-caption">{{ brief.suggested_caption }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if brief.visual_concept %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Visual direction</div>
+                                <div class="signal-insight-text">{{ brief.visual_concept }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if brief.what_to_replicate %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Replicate</div>
+                                <div class="signal-insight-text">{{ brief.what_to_replicate }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if brief.what_to_avoid %}
+                            <div class="signal-insight-section">
+                                <div class="signal-insight-label">Avoid</div>
+                                <div class="signal-insight-text">{{ brief.what_to_avoid }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if brief.format %}
+                            <div class="signal-brief-meta">
+                                <span class="signal-brief-tag">{{ brief.format }}</span>
+                                {% if brief.brand_fit_score %}
+                                <span class="signal-brief-score">Fit: {{ brief.brand_fit_score }}/10</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                     </div>
                 </a>
                 {% endfor %}
+            {% elif not saved_verticals %}
+                <!-- No categories yet: prompt to create first competitive set -->
+                <div class="signal-empty">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                    <h3>Create your first competitive set</h3>
+                    <p>Add a category (e.g. Streetwear, Beauty) and the brands you want to track. Then run an analysis to find outlier posts.</p>
+                    <button type="button" class="signal-empty-cta" onclick="openCreateModal()">Create category</button>
+                </div>
             {% else %}
-                <!-- Empty State -->
+                <!-- Empty State: has categories but no outliers yet -->
                 <div class="signal-empty">
                     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -408,9 +717,59 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Create Category modal (all create flows stay on /signal) -->
+    <div class="signal-modal-overlay" id="createCategoryModal" role="dialog" aria-modal="true" aria-label="Create category">
+        <div class="signal-modal">
+            <div class="signal-modal-header">
+                <h3 class="signal-modal-title">Create category</h3>
+                <button type="button" class="signal-modal-close" onclick="closeCreateModal()" aria-label="Close">&times;</button>
+            </div>
+            <form method="POST" action="{{ url_for('create_vertical') }}" class="signal-modal-form">
+                <div class="signal-form-group">
+                    <label class="signal-form-label">Category name</label>
+                    <input type="text" name="vertical_name" class="signal-form-input" required
+                           placeholder="e.g. Streetwear, Beauty, Gaming">
+                </div>
+                <div class="signal-form-group">
+                    <label class="signal-form-label">Description <span class="signal-form-optional">(optional)</span></label>
+                    <input type="text" name="description" class="signal-form-input"
+                           placeholder="e.g. Premium streetwear brands">
+                </div>
+                <div class="signal-form-group">
+                    <label class="signal-form-label">Brand handles</label>
+                    <textarea name="bulk_handles" class="signal-form-textarea" rows="5"
+                              placeholder="@supremenewyork&#10;@stussy&#10;@palaceskateboards&#10;One per line. Add @handle | tiktok for TikTok only."></textarea>
+                </div>
+                <div class="signal-modal-actions">
+                    <button type="button" class="signal-btn-outline" onclick="closeCreateModal()">Cancel</button>
+                    <button type="submit" class="signal-btn-primary">Create &amp; start tracking</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
+// Create category modal
+function openCreateModal() {
+    document.querySelectorAll('.signal-vertical-dropdown-menu').forEach(m => m.classList.remove('open'));
+    document.getElementById('createCategoryModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeCreateModal() {
+    document.getElementById('createCategoryModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('createCategoryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCreateModal();
+});
+// Open modal when arriving with ?create=1 (e.g. from archived /verticals/create or after setup)
+if (new URLSearchParams(window.location.search).get('create') === '1') {
+    openCreateModal();
+    history.replaceState({}, '', window.location.pathname + (window.location.hash || ''));
+}
+
 // Image fallback chain: proxy -> Instagram embed thumbnail -> gradient
 function handleImageError(img, gradientName) {
     const platform = img.dataset.platform;
@@ -430,6 +789,65 @@ function handleImageError(img, gradientName) {
     if (fallback) {
         fallback.style.display = 'flex';
     }
+}
+
+// Expand/collapse insight panel on post cards
+function toggleInsight(trigger) {
+    const panel = trigger.nextElementSibling;
+    const isOpen = trigger.classList.contains('open');
+    // Close any other open panels
+    document.querySelectorAll('.signal-expand-trigger.open').forEach(t => {
+        if (t !== trigger) {
+            t.classList.remove('open');
+            t.nextElementSibling.classList.remove('open');
+        }
+    });
+    trigger.classList.toggle('open', !isOpen);
+    panel.classList.toggle('open', !isOpen);
+}
+
+// Toggle benchmarks panel
+function toggleBenchmarks(trigger) {
+    const panel = trigger.nextElementSibling;
+    const isOpen = trigger.classList.contains('open');
+    trigger.classList.toggle('open', !isOpen);
+    panel.classList.toggle('open', !isOpen);
+}
+
+// Filter post grid by content pattern cluster
+let activeClusterFilter = null;
+function filterByCluster(patternName) {
+    const cards = document.querySelectorAll('.signal-card-link');
+    const clusterCards = document.querySelectorAll('.signal-cluster-card');
+
+    // Toggle off if clicking the same cluster
+    if (activeClusterFilter === patternName) {
+        activeClusterFilter = null;
+        cards.forEach(card => { card.style.display = ''; });
+        clusterCards.forEach(c => c.classList.remove('signal-cluster-active'));
+        return;
+    }
+
+    activeClusterFilter = patternName;
+
+    // Highlight active cluster card
+    clusterCards.forEach(c => {
+        if (c.querySelector('.signal-insight-title').textContent.trim() === patternName) {
+            c.classList.add('signal-cluster-active');
+        } else {
+            c.classList.remove('signal-cluster-active');
+        }
+    });
+
+    // Show/hide post cards
+    cards.forEach(card => {
+        const cardPattern = card.getAttribute('data-pattern') || '';
+        if (cardPattern === patternName) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
 }
 
 // Filter handling
@@ -475,11 +893,31 @@ async function sendChatMessage(message) {
             addCategoryList(data.response, data.data);
         } else if (data.response) {
             addChatMessage(data.response, false);
+        } else {
+            addChatMessage("I'm not sure how to help with that. Try asking me to 'suggest brands' for a category, or type 'help' to see what I can do!", false);
         }
     } catch (error) {
         console.error('Chat error:', error);
-        addChatMessage('Sorry, there was an error processing your message.', false);
+        addChatMessage("Hmm, something went wrong. Here are some things you can try:\n• 'suggest streetwear brands' — get brand ideas\n• 'show categories' — see your collections\n• 'help' — see all commands", false);
     }
+}
+
+function formatChatText(text) {
+    // Convert markdown-style formatting to HTML for chat bubbles
+    let html = text
+        // Escape HTML first
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // Bold: **text**
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Inline code: `text`
+        .replace(/`([^`]+)`/g, '<code style="background:rgba(0,255,255,0.1);padding:1px 5px;border-radius:3px;font-size:0.9em;">$1</code>')
+        // Bullet points: • or - at start of line
+        .replace(/^[•\-]\s+(.+)$/gm, '<div style="padding-left:12px;position:relative;margin:2px 0;"><span style="position:absolute;left:0;">•</span> $1</div>')
+        // Newlines to breaks
+        .replace(/\n/g, '<br>');
+    return html;
 }
 
 function addChatMessage(text, isUser) {
@@ -501,12 +939,14 @@ function addChatMessage(text, isUser) {
 
     const bubble = document.createElement('div');
     bubble.className = 'signal-message-bubble';
-    bubble.textContent = text;
 
     if (isUser) {
+        bubble.textContent = text;
         bubble.style.background = 'var(--signal-cyan-dim)';
         bubble.style.border = '1px solid var(--signal-cyan)';
         bubble.style.color = 'var(--signal-text-primary)';
+    } else {
+        bubble.innerHTML = formatChatText(text);
     }
 
     const timeDiv = document.createElement('div');
@@ -661,6 +1101,145 @@ function addCategoryList(text, categories) {
 const messagesContainer = document.getElementById('chatMessages');
 if (messagesContainer) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Long-press handling for brand pills
+let pressTimer = null;
+let isLongPress = false;
+
+function handleBrandClick(event, handle) {
+    // Prevent action if it was a long press
+    if (isLongPress) {
+        isLongPress = false;
+        return;
+    }
+    // Normal click - apply filter
+    applyFilter('competitor', handle);
+}
+
+// Setup long-press handlers for all brand pills
+document.addEventListener('DOMContentLoaded', () => {
+    const brandPills = document.querySelectorAll('.brand-pill');
+
+    brandPills.forEach(pill => {
+        const handle = pill.dataset.handle;
+
+        // Mouse events
+        pill.addEventListener('mousedown', (e) => {
+            startPress(pill, handle);
+            e.preventDefault(); // Prevent text selection
+        });
+
+        pill.addEventListener('mouseup', () => {
+            cancelPress(pill);
+        });
+
+        pill.addEventListener('mouseleave', () => {
+            cancelPress(pill);
+        });
+
+        // Touch events for mobile
+        pill.addEventListener('touchstart', (e) => {
+            startPress(pill, handle);
+        });
+
+        pill.addEventListener('touchend', () => {
+            cancelPress(pill);
+        });
+
+        pill.addEventListener('touchcancel', () => {
+            cancelPress(pill);
+        });
+    });
+});
+
+function startPress(pill, handle) {
+    pressTimer = setTimeout(() => {
+        isLongPress = true;
+        showBrandReplaceUI(pill, handle);
+    }, 500); // 500ms for long press
+}
+
+function cancelPress(pill) {
+    if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+    }
+    pill.classList.remove('removing');
+}
+
+function showBrandReplaceUI(pill, currentHandle) {
+    // Add removing state
+    pill.classList.add('removing');
+
+    // Show a simple prompt to enter new handle
+    const newHandle = prompt(`Replace @${currentHandle} with:\n\nEnter Instagram or TikTok handle (without @):`);
+
+    pill.classList.remove('removing');
+
+    if (newHandle && newHandle.trim() && newHandle.trim() !== currentHandle) {
+        // Redirect to manage page or update via API
+        // For now, redirect to vertical edit page where they can manage brands
+        window.location.href = `/verticals/{{ vertical_name }}/edit`;
+    }
+}
+
+// Chat reset function
+function resetChat() {
+    // Navigate to empty state - clears all brands, chat, and posts
+    window.location.href = window.location.pathname + '?empty=true';
+}
+
+// Toggle vertical dropdown menu
+function toggleVerticalDropdown() {
+    const menu = document.getElementById('verticalDropdownMenu');
+    const isOpen = menu.classList.contains('open');
+
+    // Close all other dropdowns first
+    document.querySelectorAll('.signal-vertical-dropdown-menu').forEach(m => m.classList.remove('open'));
+
+    // Toggle this dropdown
+    if (!isOpen) {
+        menu.classList.add('open');
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const container = event.target.closest('.signal-vertical-dropdown-container');
+    if (!container) {
+        document.querySelectorAll('.signal-vertical-dropdown-menu').forEach(m => m.classList.remove('open'));
+    }
+});
+
+// Load competitive set (vertical)
+function loadVertical(verticalName) {
+    if (verticalName) {
+        window.location.href = `/api/load_vertical/${encodeURIComponent(verticalName)}`;
+    }
+}
+
+// Delete competitive set
+function deleteVertical(verticalName, event) {
+    event.stopPropagation(); // Prevent dropdown from closing
+
+    if (!confirm(`Delete "${verticalName}"?\n\nThis will permanently remove this competitive set and all associated data. This action cannot be undone.`)) {
+        return;
+    }
+
+    // Create form and submit
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/verticals/delete';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'vertical_name';
+    input.value = verticalName;
+
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 

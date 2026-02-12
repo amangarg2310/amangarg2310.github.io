@@ -57,6 +57,7 @@ def get_api_key(service: str) -> str:
 
     # Fall back to environment variables
     env_map = {
+        'apify': 'APIFY_API_TOKEN',
         'rapidapi': 'RAPIDAPI_KEY',
         'openai': 'OPENAI_API_KEY',
         'tiktok': 'TIKTOK_RAPIDAPI_KEY',

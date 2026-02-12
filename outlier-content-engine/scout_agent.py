@@ -1,460 +1,598 @@
 """
 Scout - Conversational AI agent for the Outlier Content Engine.
 
-Scout helps users set up verticals, add brands, and run analyses through
-natural conversation instead of traditional forms.
+Uses OpenAI function calling (tools) so GPT handles natural language
+understanding while real actions (create category, add brands, etc.)
+are executed by VerticalManager.
+
+Falls back gracefully when OpenAI is unavailable.
 """
 
-import os
 import json
-import re
+import logging
+import subprocess
+import sys
+import threading
 from typing import Dict, List, Optional, Tuple
+
 from openai import OpenAI
+
 import config
 from vertical_manager import VerticalManager
 
+logger = logging.getLogger(__name__)
+
+# ── Tool Definitions (OpenAI function-calling schema) ──────────────────────
+
+TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_category",
+            "description": (
+                "Create a new competitive-set category to track brands. "
+                "Call this when the user wants to start tracking a new group "
+                "of brands (e.g. 'Streetwear', 'Beauty', 'Gaming')."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Category name, e.g. 'Streetwear' or 'DTC Beauty'.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional short description of the category.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_brands",
+            "description": (
+                "Add one or more brand handles to a category. "
+                "Accepts Instagram and TikTok handles. "
+                "If the category does not exist yet it will be created automatically. "
+                "IMPORTANT: Extract @handles from ANY text format the user provides — "
+                "handles may be embedded in descriptions, notes, bullet points, etc. "
+                "Strip the @ prefix before passing handles."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category_name": {
+                        "type": "string",
+                        "description": "The category to add brands to.",
+                    },
+                    "instagram_handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of Instagram handles (without @). "
+                            "Extract from any text format the user provides."
+                        ),
+                    },
+                    "tiktok_handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of TikTok handles (without @) if the user "
+                            "explicitly marks them as TikTok. Defaults to empty."
+                        ),
+                    },
+                },
+                "required": ["category_name", "instagram_handles"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_brands",
+            "description": "Remove one or more brands from a category.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category_name": {
+                        "type": "string",
+                        "description": "The category to remove brands from.",
+                    },
+                    "handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Instagram handles to remove (without @).",
+                    },
+                },
+                "required": ["category_name", "handles"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_categories",
+            "description": (
+                "List all existing categories with their brand counts. "
+                "Call this when the user asks to see their categories, "
+                "collections, or what they are tracking."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_category",
+            "description": (
+                "Show details of a specific category including all its brands."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Category name to show details for.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_analysis",
+            "description": (
+                "Run the outlier detection analysis pipeline for a category. "
+                "This collects recent posts and finds viral content."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category_name": {
+                        "type": "string",
+                        "description": "The category to analyze.",
+                    },
+                },
+                "required": ["category_name"],
+            },
+        },
+    },
+]
+
+
+# ── ScoutAgent ──────────────────────────────────────────────────────────────
+
 class ScoutAgent:
-    """Conversational AI agent for vertical management."""
+    """Conversational AI agent using OpenAI function calling."""
 
     def __init__(self):
-        """Initialize Scout with OpenAI client."""
-        api_key = config.get_api_key('openai')
-        if not api_key:
-            raise ValueError("OpenAI API key not configured")
-
-        self.client = OpenAI(api_key=api_key)
+        """Initialize Scout with OpenAI client (optional — works without it)."""
+        api_key = config.get_api_key("openai")
+        self.client = None
+        if api_key:
+            try:
+                self.client = OpenAI(api_key=api_key)
+            except Exception:
+                pass  # Will return None so dashboard falls back
         self.model = "gpt-4o-mini"
         self.vm = VerticalManager()
 
-    def get_system_prompt(self, context: Dict) -> str:
-        """Generate system prompt based on current context."""
-        base_prompt = """You are Scout, a helpful AI assistant for the Outlier Content Engine - a platform that finds viral social media content by detecting statistical outliers in engagement metrics.
+    # ── System Prompt ───────────────────────────────────────────────────
 
-Your personality:
-- Friendly, energetic, and knowledgeable about social media trends
-- Help users discover what content is breaking through the noise
-- Use casual, conversational tone (avoid corporate jargon)
-- Occasional relevant emoji (don't overdo it)
-- ALWAYS guide users step-by-step - don't assume they know what to do next
-- Be proactive: explain what you're doing and what comes next
+    def _build_system_prompt(self, context: Dict) -> str:
+        """Build the system prompt with live state injected."""
 
-Your capabilities:
-1. Help users create categories to track (like "Streetwear" or "Sneaker Brands" or "Tech Gadgets")
-2. Add Instagram and TikTok brand handles to track
-3. Run analyses to find viral outlier content
-4. Explain insights and next steps
+        # Gather current state
+        verticals = self.vm.list_verticals()
+        active = context.get("active_vertical")
 
-Key concepts:
-- Category = A group of related brands you want to track (e.g., "Streetwear", "Gaming Brands", "DTC Beauty")
-- Brands = Instagram/TikTok accounts to monitor in that category
-- Outliers = Posts with exceptional engagement (2x+ the norm)
+        state_lines = []
+        if verticals:
+            state_lines.append(f"Existing categories: {', '.join(verticals)}")
+            if active:
+                v = self.vm.get_vertical(active)
+                if v:
+                    handles = [
+                        f"@{b.instagram_handle}" for b in v.brands if b.instagram_handle
+                    ]
+                    state_lines.append(
+                        f"Active category: {v.name} ({len(v.brands)} brands: "
+                        f"{', '.join(handles[:8])}{'...' if len(handles) > 8 else ''})"
+                    )
+        else:
+            state_lines.append("No categories created yet.")
+
+        state_block = "\n".join(state_lines)
+
+        return f"""You are Scout, a friendly AI assistant for the Outlier Content Engine — a platform that finds viral social media posts by detecting statistical outliers in engagement.
+
+PERSONALITY:
+- Casual, energetic, knowledgeable about social media
+- Concise responses (2-4 sentences when possible)
+- Occasional emoji, but don't overdo it
+- Always end with a clear next step or question
+
+CURRENT STATE:
+{state_block}
+
+CRITICAL RULES FOR HANDLE EXTRACTION:
+- Users often paste messy text with @handles embedded in descriptions, notes, or bullet points.
+  Example: "@aimeleondore — aspirational aesthetic @kith — content ops @stussy — nostalgia OG"
+  You MUST extract every @handle from such text regardless of surrounding text.
+- When calling add_brands, strip the @ prefix from handles.
+- If the user provides handles and a category name in the SAME message, call add_brands immediately — do NOT ask for confirmation.
+- If the user provides handles but no category name, ask which category they belong to. If they previously mentioned a category in the conversation, use that one.
+- If a category doesn't exist yet, add_brands will auto-create it. No need to call create_category first.
+
+TERMINOLOGY:
+- Say "category" or "collection" instead of "vertical"
+- "Outliers" = posts with 2x+ normal engagement
+
+WHAT YOU CAN DO (use the provided tools):
+1. create_category — create a new competitive set
+2. add_brands — add Instagram/TikTok handles to a category (auto-creates if needed)
+3. remove_brands — remove handles from a category
+4. list_categories — show all categories
+5. show_category — show brands in a specific category
+6. run_analysis — scan posts and find outlier content
 
 IMPORTANT:
-- Use "category" or "collection" instead of "vertical" when talking to users
-- Use real brand examples (Nike, Supreme, PlayStation, Glossier, etc.)
-- Always end your responses with a clear next step or question to guide the user forward
-
-Current state:
+- NEVER output raw JSON to the user
+- When you successfully add brands, summarize what you added and suggest "say 'analyze' to find viral posts"
+- If the user seems confused, offer specific examples they can try
 """
 
-        # Add context about existing verticals
-        verticals = self.vm.list_verticals()
-        if verticals:
-            base_prompt += f"- Existing verticals: {', '.join(verticals)}\n"
-            if context.get('active_vertical'):
-                vertical = self.vm.get_vertical(context['active_vertical'])
-                if vertical:
-                    base_prompt += f"- Active vertical: {vertical.name} ({len(vertical.brands)} brands)\n"
+    # ── Tool Handlers ───────────────────────────────────────────────────
+
+    def _handle_create_category(self, args: Dict) -> str:
+        """Create a new category. Returns a result summary for GPT."""
+        name = args.get("name", "").strip()
+        description = args.get("description", "").strip() or None
+
+        if not name:
+            return json.dumps({"ok": False, "error": "Category name is required."})
+
+        created = self.vm.create_vertical(name, description)
+        if created:
+            return json.dumps({"ok": True, "message": f"Category '{name}' created."})
         else:
-            base_prompt += "- No verticals created yet\n"
-
-        # Add API key status
-        rapidapi_key = config.get_api_key('rapidapi')
-        openai_key = config.get_api_key('openai')
-        base_prompt += f"- RapidAPI configured: {'Yes' if rapidapi_key else 'No'}\n"
-        base_prompt += f"- OpenAI configured: {'Yes' if openai_key else 'No'}\n"
-
-        base_prompt += """
-Instructions:
-- Be concise but helpful
-- When user wants to create a vertical, ask for the name and brands
-- Parse brand handles from natural language (e.g., "@nike on tiktok" = TikTok handle)
-- Support formats: @handle, @ig_handle | @tt_handle, @handle | tiktok
-- Confirm actions before executing
-- Guide users on next steps
-- If API keys are missing, help them set up first
-- NEVER output JSON to the user - always use natural, friendly language
-- Focus on conversational responses, not technical output
-"""
-
-        return base_prompt
-
-    def parse_brands_from_text(self, text: str) -> List[Dict[str, Optional[str]]]:
-        """
-        Parse brand handles from natural language.
-
-        Examples:
-        - "@nike" -> [{"instagram": "nike", "tiktok": None}]
-        - "@nike on tiktok" -> [{"instagram": None, "tiktok": "nike"}]
-        - "@supreme @stussy" -> [{"instagram": "supreme"}, {"instagram": "stussy"}]
-        - "@nike | @nikestyle" -> [{"instagram": "nike", "tiktok": "nikestyle"}]
-        """
-        brands = []
-
-        # Pattern 1: @handle | @handle (both platforms)
-        pipe_pattern = r'@(\w+)\s*\|\s*@(\w+)'
-        for match in re.finditer(pipe_pattern, text):
-            brands.append({
-                "instagram": match.group(1),
-                "tiktok": match.group(2)
+            return json.dumps({
+                "ok": True,
+                "message": f"Category '{name}' already exists (reusing it).",
             })
 
-        # Pattern 2: @handle | tiktok (TikTok only)
-        tiktok_only_pattern = r'@(\w+)\s*\|\s*tiktok'
-        for match in re.finditer(tiktok_only_pattern, text):
-            brands.append({
-                "instagram": None,
-                "tiktok": match.group(1)
-            })
+    def _handle_add_brands(self, args: Dict, context: Dict) -> str:
+        """Add brands to a category (auto-creating it if necessary)."""
+        category_name = args.get("category_name", "").strip()
+        ig_handles = args.get("instagram_handles", [])
+        tt_handles = args.get("tiktok_handles", [])
 
-        # Pattern 3: @handle on/for tiktok
-        natural_tiktok_pattern = r'@(\w+)\s+(?:on|for|via)\s+tiktok'
-        for match in re.finditer(natural_tiktok_pattern, text, re.IGNORECASE):
-            brands.append({
-                "instagram": None,
-                "tiktok": match.group(1)
-            })
+        if not category_name:
+            return json.dumps({"ok": False, "error": "Category name is required."})
 
-        # Pattern 4: @handle on/for instagram
-        natural_instagram_pattern = r'@(\w+)\s+(?:on|for|via)\s+instagram'
-        for match in re.finditer(natural_instagram_pattern, text, re.IGNORECASE):
-            brands.append({
-                "instagram": match.group(1),
-                "tiktok": None
-            })
+        if not ig_handles and not tt_handles:
+            return json.dumps({"ok": False, "error": "No handles provided."})
 
-        # Pattern 5: Simple @handle (assume Instagram)
-        # Exclude already matched handles
-        matched_handles = {b.get('instagram') or b.get('tiktok') for b in brands}
-        simple_pattern = r'@(\w+)'
-        for match in re.finditer(simple_pattern, text):
-            handle = match.group(1)
-            if handle not in matched_handles and handle.lower() not in ['tiktok', 'instagram', 'ig', 'tt']:
-                brands.append({
-                    "instagram": handle,
-                    "tiktok": None
-                })
-                matched_handles.add(handle)
+        # Auto-create category if it doesn't exist
+        existing = self.vm.list_verticals()
+        actual_name = None
+        for v in existing:
+            if v.lower() == category_name.lower():
+                actual_name = v
+                break
 
-        return brands
+        if not actual_name:
+            self.vm.create_vertical(category_name)
+            actual_name = category_name
 
-    def detect_intent(self, message: str, context: Dict) -> Dict:
-        """
-        Detect user intent from message.
-
-        Returns dict with 'intent' and extracted entities.
-        """
-        message_lower = message.lower()
-
-        # Intent: Save API key
-        if any(word in message_lower for word in ['api key', 'rapidapi', 'openai']):
-            if message.startswith('sk-'):
-                return {"intent": "save_api_key", "service": "openai", "key": message}
-            elif len(message) > 30 and not message.startswith('sk-'):
-                return {"intent": "save_api_key", "service": "rapidapi", "key": message}
-
-        # Intent: Create vertical
-        if any(phrase in message_lower for phrase in ['create vertical', 'new vertical', 'track', 'monitor', 'watch']):
-            # Extract vertical name
-            vertical_patterns = [
-                r'create\s+(?:a\s+)?(?:vertical\s+)?(?:for\s+|called\s+)?["\']?(\w+(?:\s+\w+)?)["\']?',
-                r'track\s+(\w+(?:\s+\w+)?)\s+brands',
-                r'monitor\s+(\w+(?:\s+\w+)?)',
-            ]
-            for pattern in vertical_patterns:
-                match = re.search(pattern, message_lower)
-                if match:
-                    return {"intent": "create_vertical", "name": match.group(1).title()}
-
-        # Intent: Add brands
-        if '@' in message or any(phrase in message_lower for phrase in ['add brand', 'add handle', 'track @']):
-            brands = self.parse_brands_from_text(message)
-            if brands:
-                return {
-                    "intent": "add_brands",
-                    "brands": brands,
-                    "vertical": context.get('active_vertical') or context.get('pending_vertical')
-                }
-
-        # Intent: Run analysis
-        if any(phrase in message_lower for phrase in ['run analysis', 'analyze', 'find outliers', 'check content', 'scan']):
-            return {
-                "intent": "run_analysis",
-                "vertical": context.get('active_vertical')
-            }
-
-        # Intent: List verticals
-        if any(phrase in message_lower for phrase in ['list vertical', 'show vertical', 'what vertical', 'my vertical']):
-            return {"intent": "list_verticals"}
-
-        # Intent: Help
-        if any(word in message_lower for word in ['help', 'what can you do', 'commands']):
-            return {"intent": "help"}
-
-        # Default: conversational
-        return {"intent": "chat"}
-
-    def execute_action(self, intent_data: Dict, context: Dict) -> Tuple[str, Dict]:
-        """
-        Execute detected intent and return response + updated context.
-
-        Returns (response_text, updated_context)
-        """
-        intent = intent_data.get('intent')
-
-        # Handle API key saving
-        if intent == 'save_api_key':
-            service = intent_data['service']
-            key = intent_data['key']
-            # Save to database
-            import sqlite3
-            from datetime import datetime, timezone
-
-            conn = sqlite3.connect(str(config.DB_PATH))
-            now = datetime.now(timezone.utc).isoformat()
-            conn.execute("""
-                INSERT OR REPLACE INTO api_credentials (service, api_key, updated_at)
-                VALUES (?, ?, ?)
-            """, (service, key, now))
-            conn.commit()
-            conn.close()
-
-            if service == 'rapidapi':
-                return ("Got your RapidAPI key! Now I need your OpenAI API key (starts with sk-) to power my AI analysis.", context)
-            else:
-                return ("Perfect! All set up. What vertical would you like to track first?", context)
-
-        # Handle vertical creation
-        if intent == 'create_vertical':
-            name = intent_data['name']
-            if self.vm.create_vertical(name):
-                context['pending_vertical'] = name
-                context['active_vertical'] = name
-                return (f"Nice! I've set up **{name}** for you.\n\nNow let's add some brands to track. Just drop their Instagram or TikTok handles:\n• Simple: `@supreme @nike @stussy`\n• TikTok only: `@handle | tiktok`\n• Both platforms: `@supreme_insta | @supreme_tiktok`\n\nWhat brands should I start tracking?", context)
-            else:
-                return (f"Looks like you already have **{name}** set up! Want to:\n• Add more brands to it\n• Create a different category\n• See what you're already tracking\n\nWhat works for you?", context)
-
-        # Handle adding brands
-        if intent == 'add_brands':
-            vertical_name = intent_data.get('vertical')
-            brands = intent_data.get('brands', [])
-
-            if not vertical_name:
-                return ("Which vertical should I add these brands to? Or should I create a new one?", context)
-
-            added = 0
-            skipped = 0
-            brand_list = []
-
-            for brand in brands:
-                ig = brand.get('instagram')
-                tt = brand.get('tiktok')
-
-                try:
-                    if self.vm.add_brand(vertical_name, instagram_handle=ig, tiktok_handle=tt):
-                        added += 1
-                        platforms = []
-                        if ig:
-                            platforms.append(f"IG @{ig}")
-                        if tt:
-                            platforms.append(f"TT @{tt}")
-                        brand_list.append(" + ".join(platforms))
-                    else:
-                        skipped += 1
-                except Exception:
-                    skipped += 1
-
-            response = f"Added {added} brand{'s' if added != 1 else ''} to **{vertical_name}**!\n"
-            for b in brand_list[:5]:  # Show first 5
-                response += f"• {b}\n"
-            if len(brand_list) > 5:
-                response += f"• ...and {len(brand_list) - 5} more\n"
-
-            if skipped > 0:
-                response += f"\n({skipped} already in there)\n"
-
-            response += "\n**Ready to find some viral posts?** Just say **'analyze'** and I'll scan these brands to find what's popping off right now!"
-
-            return (response, context)
-
-        # Handle run analysis
-        if intent == 'run_analysis':
-            vertical = intent_data.get('vertical')
-            if not vertical:
-                verticals = self.vm.list_verticals()
-                if len(verticals) == 1:
-                    vertical = verticals[0]
-                else:
-                    return ("Which category should I analyze?", context)
-
-            # Trigger the actual analysis
-            import subprocess
-            import sys
-
+        # Add Instagram handles
+        added = []
+        skipped = []
+        for handle in ig_handles:
+            handle = handle.strip().lstrip("@")
+            if not handle:
+                continue
             try:
-                # Run the engine in the background for this vertical
-                # Note: main.py expects --profile flag (YAML config system)
-                # We pass the vertical name as profile name
-                cmd = [sys.executable, "main.py", "--profile", vertical, "--no-email"]
+                if self.vm.add_brand(actual_name, instagram_handle=handle):
+                    added.append(f"@{handle}")
+                else:
+                    skipped.append(f"@{handle}")
+            except Exception:
+                skipped.append(f"@{handle}")
 
-                def _run_analysis():
-                    try:
-                        result = subprocess.run(
-                            cmd,
-                            cwd=str(config.PROJECT_ROOT),
-                            capture_output=True,
-                            text=True,
-                            timeout=300
-                        )
+        # Add TikTok-only handles
+        for handle in tt_handles:
+            handle = handle.strip().lstrip("@")
+            if not handle:
+                continue
+            try:
+                if self.vm.add_brand(actual_name, tiktok_handle=handle):
+                    added.append(f"@{handle} (TikTok)")
+                else:
+                    skipped.append(f"@{handle} (TikTok)")
+            except Exception:
+                skipped.append(f"@{handle} (TikTok)")
 
-                        # Log the result for debugging
-                        import logging
-                        logger = logging.getLogger(__name__)
+        self.vm.update_vertical_timestamp(actual_name)
+        total = self.vm.get_brand_count(actual_name)
 
-                        if result.returncode != 0:
-                            logger.error(f"Analysis failed with code {result.returncode}")
-                            logger.error(f"STDOUT: {result.stdout}")
-                            logger.error(f"STDERR: {result.stderr}")
+        # Update context so subsequent messages know the active category
+        context["active_vertical"] = actual_name
 
-                            # Store error in context for user feedback
-                            context['analysis_error'] = result.stderr or "Analysis process failed"
-                        else:
-                            logger.info(f"Analysis completed successfully for {vertical}")
-                            logger.info(f"Output: {result.stdout}")
-                            context['analysis_success'] = True
+        return json.dumps({
+            "ok": True,
+            "category": actual_name,
+            "added": added,
+            "skipped": skipped,
+            "total_brands": total,
+        })
 
-                    except subprocess.TimeoutExpired:
-                        import logging
-                        logging.error(f"Analysis timed out after 5 minutes")
-                        context['analysis_error'] = "Analysis took too long and timed out"
-                    except Exception as e:
-                        import logging
-                        logging.error(f"Analysis failed: {e}")
-                        context['analysis_error'] = str(e)
+    def _handle_remove_brands(self, args: Dict) -> str:
+        """Remove brands from a category."""
+        category_name = args.get("category_name", "").strip()
+        handles = args.get("handles", [])
 
-                import threading
-                thread = threading.Thread(target=_run_analysis, daemon=True)
-                thread.start()
+        if not category_name or not handles:
+            return json.dumps({"ok": False, "error": "Category and handles required."})
 
-                # Mark that analysis has started
-                context['analysis_started'] = True
+        actual_name = None
+        for v in self.vm.list_verticals():
+            if v.lower() == category_name.lower():
+                actual_name = v
+                break
 
-                return (f"Let's go! Running analysis on **{vertical}** right now.\n\n**Here's what's happening:**\n• Pulling recent posts from all your brands\n• Crunching engagement numbers (likes, comments, shares, saves)\n• Finding the outliers (posts doing 2x+ better than usual)\n• Ranking the top performers\n\n**Takes about a minute.** Then check the **Outliers** page to see what's crushing it!", context)
-            except Exception as e:
-                return (f"Oops, couldn't start the analysis: {str(e)}\n\nTry running it from the Dashboard instead!", context)
+        if not actual_name:
+            return json.dumps({"ok": False, "error": f"Category '{category_name}' not found."})
 
-        # Handle list verticals
-        if intent == 'list_verticals':
-            verticals = self.vm.list_verticals()
-            if not verticals:
-                return ("You haven't set up any categories yet!\n\n**Let's get started:**\nJust tell me what you want to track - like 'track streetwear brands' or 'track gaming brands' or 'track beauty brands'\n\nWhat sounds good?", context)
+        removed = []
+        not_found = []
+        for handle in handles:
+            handle = handle.strip().lstrip("@")
+            if self.vm.remove_brand(actual_name, instagram_handle=handle):
+                removed.append(f"@{handle}")
+            else:
+                not_found.append(f"@{handle}")
 
-            response = "Here's what you're tracking:\n\n"
-            for v_name in verticals:
-                vertical = self.vm.get_vertical(v_name)
-                if vertical:
-                    response += f"• **{v_name}** - {len(vertical.brands)} brand{'s' if len(vertical.brands) != 1 else ''}\n"
+        self.vm.update_vertical_timestamp(actual_name)
+        total = self.vm.get_brand_count(actual_name)
 
-            response += "\n**What next?**\n• Add more brands: 'add @supreme @nike to [category]'\n• Find viral posts: 'analyze [category]'\n• New category: 'track [new thing] brands'\n\nWhat do you want to do?"
+        return json.dumps({
+            "ok": True,
+            "category": actual_name,
+            "removed": removed,
+            "not_found": not_found,
+            "total_brands": total,
+        })
 
-            return (response, context)
+    def _handle_list_categories(self) -> str:
+        """List all categories with brand counts."""
+        verticals = self.vm.list_verticals()
+        if not verticals:
+            return json.dumps({"categories": [], "message": "No categories yet."})
 
-        # Handle help
-        if intent == 'help':
-            return ("""Hey! I'm **Scout** - I help you find viral social media posts. 🔍
+        cats = []
+        for v_name in verticals:
+            v = self.vm.get_vertical(v_name)
+            brands_count = len(v.brands) if v else 0
+            handles_preview = []
+            if v:
+                handles_preview = [
+                    f"@{b.instagram_handle}" for b in v.brands[:5] if b.instagram_handle
+                ]
+            cats.append({
+                "name": v_name,
+                "brand_count": brands_count,
+                "sample_handles": handles_preview,
+            })
 
-**What I do:** I track brands you care about and tell you which of their posts are absolutely crushing it (doing 2x+ better than their usual engagement).
+        return json.dumps({"categories": cats})
 
-**How it works:**
+    def _handle_show_category(self, args: Dict) -> str:
+        """Show details for a specific category."""
+        name = args.get("name", "").strip()
 
-**1. Pick a category**
-Tell me what you want to track - like "track streetwear brands" or "track gaming brands"
+        actual_name = None
+        for v in self.vm.list_verticals():
+            if v.lower() == name.lower():
+                actual_name = v
+                break
 
-**2. Add brands**
-Just drop some handles:
-• Simple: `@supreme @nike @stussy`
-• TikTok: `@handle on tiktok`
-• Both: `@nike_ig | @nike_tt`
+        if not actual_name:
+            return json.dumps({"ok": False, "error": f"Category '{name}' not found."})
 
-**3. Find what's viral**
-Say "analyze" and I'll:
-• Pull recent posts from your brands
-• Crunch the engagement numbers
-• Show you what's popping off
+        v = self.vm.get_vertical(actual_name)
+        if not v:
+            return json.dumps({"ok": False, "error": f"Could not load '{actual_name}'."})
 
-**4. Check the results**
-Head to the Outliers page to see the winners!
+        handles = []
+        for b in v.brands:
+            entry = {}
+            if b.instagram_handle:
+                entry["instagram"] = f"@{b.instagram_handle}"
+            if b.tiktok_handle:
+                entry["tiktok"] = f"@{b.tiktok_handle}"
+            if b.brand_name:
+                entry["name"] = b.brand_name
+            handles.append(entry)
 
-**Try it:** "track streetwear brands" or "track sneaker brands"
+        return json.dumps({
+            "ok": True,
+            "category": actual_name,
+            "description": v.description,
+            "brand_count": len(v.brands),
+            "brands": handles,
+        })
 
-What do you want to track first?""", context)
+    def _handle_run_analysis(self, args: Dict, context: Dict) -> str:
+        """Trigger the analysis pipeline in a background thread."""
+        category_name = args.get("category_name", "").strip()
 
-        # Default: Let OpenAI handle it
-        return (None, context)
+        actual_name = None
+        for v in self.vm.list_verticals():
+            if v.lower() == category_name.lower():
+                actual_name = v
+                break
 
-    def chat(self, message: str, context: Dict) -> Tuple[str, Dict]:
+        if not actual_name:
+            return json.dumps({"ok": False, "error": f"Category '{category_name}' not found."})
+
+        brand_count = self.vm.get_brand_count(actual_name)
+        if brand_count == 0:
+            return json.dumps({
+                "ok": False,
+                "error": f"Category '{actual_name}' has no brands. Add some first.",
+            })
+
+        cmd = [sys.executable, "main.py", "--profile", actual_name, "--no-email"]
+
+        def _run():
+            try:
+                subprocess.run(
+                    cmd,
+                    cwd=str(config.PROJECT_ROOT),
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+            except Exception as exc:
+                logger.error(f"Analysis failed: {exc}")
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        context["analysis_started"] = True
+
+        return json.dumps({
+            "ok": True,
+            "category": actual_name,
+            "brand_count": brand_count,
+            "message": "Analysis started in the background.",
+        })
+
+    # ── Dispatch a tool call ────────────────────────────────────────────
+
+    def _dispatch_tool(self, name: str, args: Dict, context: Dict) -> str:
+        """Route a tool call to the appropriate handler. Returns JSON string."""
+        if name == "create_category":
+            return self._handle_create_category(args)
+        elif name == "add_brands":
+            return self._handle_add_brands(args, context)
+        elif name == "remove_brands":
+            return self._handle_remove_brands(args)
+        elif name == "list_categories":
+            return self._handle_list_categories()
+        elif name == "show_category":
+            return self._handle_show_category(args)
+        elif name == "run_analysis":
+            return self._handle_run_analysis(args, context)
+        else:
+            return json.dumps({"error": f"Unknown tool: {name}"})
+
+    # ── Main chat method ────────────────────────────────────────────────
+
+    def chat(self, message: str, context: Dict) -> Tuple[Optional[str], Dict]:
         """
-        Process user message and return Scout's response.
+        Process a user message and return Scout's response.
 
-        Args:
-            message: User's message text
-            context: Conversation context (active_vertical, chat_history, etc.)
+        Uses OpenAI function calling: GPT decides which tools to invoke,
+        we execute them, feed results back, and GPT writes the final reply.
 
         Returns:
-            (response_text, updated_context)
+            (response_text or None, updated_context)
+            None means the caller should use its own fallback.
         """
-        # First, try rule-based intent detection
-        intent_data = self.detect_intent(message, context)
+        if not self.client:
+            return (None, context)
 
-        # Execute action if we have a clear intent
-        if intent_data['intent'] != 'chat':
-            response, new_context = self.execute_action(intent_data, context)
-            if response:
-                return (response, new_context)
-
-        # Fall back to OpenAI for conversational responses
+        # Build messages
         messages = [
-            {"role": "system", "content": self.get_system_prompt(context)}
+            {"role": "system", "content": self._build_system_prompt(context)},
         ]
 
-        # Add chat history
-        if 'chat_history' in context:
-            messages.extend(context['chat_history'][-6:])  # Last 6 messages for context
+        # Append conversation history (last 10 messages = 5 turns)
+        history = context.get("chat_history", [])
+        messages.extend(history[-10:])
 
-        # Add current user message
+        # Current user message
         messages.append({"role": "user", "content": message})
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=500
+            # ── Function-calling loop (max 3 rounds to prevent runaway) ──
+            for _ in range(3):
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=TOOL_DEFINITIONS,
+                    tool_choice="auto",
+                    temperature=0.6,
+                    max_tokens=600,
+                )
+
+                choice = response.choices[0]
+
+                # If GPT wants to call tools, execute them and loop
+                if choice.finish_reason == "tool_calls" or choice.message.tool_calls:
+                    # Append the assistant message (contains tool_calls)
+                    messages.append(choice.message)
+
+                    for tool_call in choice.message.tool_calls:
+                        fn_name = tool_call.function.name
+                        try:
+                            fn_args = json.loads(tool_call.function.arguments)
+                        except json.JSONDecodeError:
+                            fn_args = {}
+
+                        logger.info(f"Tool call: {fn_name}({fn_args})")
+
+                        result = self._dispatch_tool(fn_name, fn_args, context)
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result,
+                        })
+
+                    # Continue the loop — GPT will see tool results and decide
+                    # whether to call more tools or produce a final text reply.
+                    continue
+
+                # GPT produced a final text response
+                assistant_text = choice.message.content or ""
+
+                # Sanitize: if GPT accidentally returns raw JSON, hide it
+                stripped = assistant_text.strip()
+                if stripped.startswith("{") or stripped.startswith("[{"):
+                    assistant_text = (
+                        "I've updated your collection! "
+                        "Type 'show categories' to see your current setup, "
+                        "or say 'analyze' to find viral posts."
+                    )
+
+                # Persist conversation history
+                if "chat_history" not in context:
+                    context["chat_history"] = []
+                context["chat_history"].append({"role": "user", "content": message})
+                context["chat_history"].append(
+                    {"role": "assistant", "content": assistant_text}
+                )
+
+                # Trim history to last 20 entries (10 turns)
+                if len(context["chat_history"]) > 20:
+                    context["chat_history"] = context["chat_history"][-20:]
+
+                return (assistant_text, context)
+
+            # Exhausted loop iterations — shouldn't happen normally
+            return (
+                "I ran into a hiccup processing that. Could you try rephrasing?",
+                context,
             )
 
-            assistant_message = response.choices[0].message.content
-
-            # Filter out JSON responses - if OpenAI returns JSON, give a friendly fallback
-            if assistant_message and (assistant_message.strip().startswith('{') or assistant_message.strip().startswith('["{')):
-                assistant_message = "I'm not quite sure what you mean. Could you rephrase that? Try things like:\n• 'track [category] brands'\n• 'add @brand1 @brand2'\n• 'analyze'\n• 'help'"
-
-            # Update chat history
-            if 'chat_history' not in context:
-                context['chat_history'] = []
-            context['chat_history'].append({"role": "user", "content": message})
-            context['chat_history'].append({"role": "assistant", "content": assistant_message})
-
-            return (assistant_message, context)
-
-        except Exception as e:
-            return (f"Oops, something went wrong: {str(e)}", context)
+        except Exception as exc:
+            logger.warning(f"OpenAI call failed: {exc}")
+            return (None, context)

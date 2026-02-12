@@ -48,12 +48,17 @@ class VerticalManager:
     def list_verticals(self) -> List[str]:
         """Return list of all vertical names."""
         conn = self._get_conn()
-        rows = conn.execute("""
-            SELECT name FROM verticals
-            ORDER BY updated_at DESC
-        """).fetchall()
-        conn.close()
-        return [row['name'] for row in rows]
+        try:
+            rows = conn.execute("""
+                SELECT name FROM verticals
+                ORDER BY updated_at DESC
+            """).fetchall()
+            return [row['name'] for row in rows]
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet — return empty list
+            return []
+        finally:
+            conn.close()
 
     def get_vertical(self, name: str) -> Optional[Vertical]:
         """Load a vertical with all its brands."""

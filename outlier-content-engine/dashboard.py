@@ -135,7 +135,7 @@ def needs_setup():
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('rapidapi', 'openai')"
+            "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('apify', 'openai')"
         ).fetchone()
         conn.close()
         return row['cnt'] < 2  # Need both keys
@@ -274,7 +274,7 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
                    caption, media_type, media_url, post_url, posted_at, likes, comments,
                    saves, shares, views, outlier_score, content_tags,
                    weighted_engagement_score, primary_engagement_driver,
-                   audio_id, audio_name
+                   audio_id, audio_name, ai_analysis
             FROM competitor_posts
             WHERE brand_profile = ? AND is_outlier = 1
         """
@@ -288,16 +288,16 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             query += " AND platform = ?"
             params.append(platform)
 
-        # Timeframe filter using SQL datetime functions
+        # Timeframe filter: query by pre-computed outlier_timeframe window
         if timeframe:
-            timeframe_map = {
-                "30d": "datetime('now', '-30 days')",
-                "90d": "datetime('now', '-90 days')",
-                "180d": "datetime('now', '-180 days')",
-                "365d": "datetime('now', '-365 days')",
+            timeframe_window_map = {
+                "30d": ("30d", "both"),
+                "3mo": ("3mo", "both"),
             }
-            if timeframe in timeframe_map:
-                query += f" AND posted_at >= {timeframe_map[timeframe]}"
+            if timeframe in timeframe_window_map:
+                w1, w2 = timeframe_window_map[timeframe]
+                query += " AND outlier_timeframe IN (?, ?)"
+                params.extend([w1, w2])
 
         if tag:
             query += " AND content_tags LIKE ?"
@@ -354,6 +354,15 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             has_shares = shares > 0 or row["shares"] is not None
             has_views = views > 0 or row["views"] is not None
 
+            # Parse AI analysis if available
+            ai_analysis = None
+            try:
+                ai_raw = row["ai_analysis"]
+                if ai_raw:
+                    ai_analysis = json.loads(ai_raw)
+            except (json.JSONDecodeError, TypeError, IndexError, KeyError):
+                pass
+
             outliers.append({
                 "post_id": row["post_id"],
                 "competitor_name": row["competitor_name"],
@@ -380,12 +389,104 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
                 "has_saves": has_saves,
                 "has_shares": has_shares,
                 "has_views": has_views,
+                "ai_analysis": ai_analysis,
             })
 
         return outliers
     except Exception as e:
         logger.error(f"Error fetching outliers: {e}")
         return []
+
+
+def get_competitor_baselines(vertical_name=None, timeframe="30d"):
+    """Compute per-brand baseline engagement metrics for the active vertical.
+
+    Returns a list of dicts sorted by mean_engagement descending:
+        [{handle, name, post_count, mean_likes, mean_comments,
+          mean_engagement, outlier_count}]
+    """
+    if not config.DB_PATH.exists():
+        return []
+
+    brand_profile = vertical_name or get_active_vertical_name() or get_active_profile_name()
+
+    # Map timeframe to lookback days
+    days_map = {"30d": 30, "3mo": 90}
+    lookback = days_map.get(timeframe, 30)
+
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT competitor_handle,
+                   competitor_name,
+                   COUNT(*) as post_count,
+                   ROUND(AVG(COALESCE(likes, 0))) as mean_likes,
+                   ROUND(AVG(COALESCE(comments, 0))) as mean_comments,
+                   ROUND(AVG(
+                       COALESCE(likes, 0) + COALESCE(comments, 0) +
+                       COALESCE(saves, 0) + COALESCE(shares, 0)
+                   )) as mean_engagement,
+                   SUM(CASE WHEN is_outlier = 1 THEN 1 ELSE 0 END) as outlier_count
+            FROM competitor_posts
+            WHERE brand_profile = ?
+              AND COALESCE(is_own_channel, 0) = 0
+              AND collected_at >= datetime('now', ?)
+            GROUP BY competitor_handle
+            ORDER BY mean_engagement DESC
+        """, (brand_profile, f'-{lookback} days')).fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error fetching baselines: {e}")
+        return []
+
+
+def build_pattern_clusters(outliers):
+    """Group outlier posts by their AI-identified content_pattern.
+
+    Returns a list of cluster dicts sorted by count descending:
+        [{pattern_name, count, brands, post_ids, avg_score}]
+    Only includes clusters with 2+ posts.
+    """
+    clusters = {}
+    for post in outliers:
+        ai = post.get("ai_analysis")
+        if not ai or not isinstance(ai, dict):
+            continue
+        pattern = ai.get("content_pattern")
+        if not pattern:
+            continue
+
+        if pattern not in clusters:
+            clusters[pattern] = {
+                "pattern_name": pattern,
+                "count": 0,
+                "brands": set(),
+                "post_ids": [],
+                "total_score": 0.0,
+            }
+
+        c = clusters[pattern]
+        c["count"] += 1
+        c["brands"].add(post.get("competitor_handle", ""))
+        c["post_ids"].append(post.get("post_id", ""))
+        c["total_score"] += post.get("outlier_score", 0)
+
+    # Filter to clusters with 2+ posts, compute avg, convert brands to list
+    result = []
+    for c in clusters.values():
+        if c["count"] >= 2:
+            result.append({
+                "pattern_name": c["pattern_name"],
+                "count": c["count"],
+                "brands": sorted(c["brands"]),
+                "post_ids": c["post_ids"],
+                "avg_score": round(c["total_score"] / c["count"], 2),
+            })
+
+    result.sort(key=lambda x: x["count"], reverse=True)
+    return result
 
 
 def get_voice_analysis():
@@ -467,65 +568,8 @@ def inject_globals():
 
 @app.route("/")
 def index():
-    """Dashboard home page - redirects to Signal AI interface."""
-    # Check if setup is needed
-    if needs_setup():
-        return redirect(url_for('setup_page'))
-
-    # Check if we have any verticals
-    verticals = get_available_verticals()
-    if not verticals:
-        return redirect(url_for('vertical_create_page'))
-
-    # Redirect to the new Signal AI interface
+    """Dashboard home page - always goes to Signal AI interface."""
     return redirect(url_for('signal_page'))
-
-
-@app.route("/competitors")
-def competitors_page():
-    """Competitor management page."""
-    profile = get_profile()
-    return render_template("competitors.html",
-                           active_page="competitors",
-                           profile=profile)
-
-
-@app.route("/voice")
-def voice_page():
-    """Brand voice editor page."""
-    profile = get_profile()
-    voice_analysis, own_top_posts = get_voice_analysis()
-    return render_template("voice.html",
-                           active_page="voice",
-                           profile=profile,
-                           voice_analysis=voice_analysis,
-                           own_top_posts=own_top_posts)
-
-
-@app.route("/outliers")
-def outliers_page():
-    """Outlier posts viewer."""
-    profile = get_profile()
-    vertical_name = get_active_vertical_name()
-    competitor = request.args.get("competitor", "")
-    platform = request.args.get("platform", "")
-    sort_by = request.args.get("sort", "score")
-    timeframe = request.args.get("timeframe", "")
-
-    outliers = get_outlier_posts(competitor=competitor or None,
-                                 platform=platform or None,
-                                 sort_by=sort_by,
-                                 vertical_name=vertical_name,
-                                 timeframe=timeframe or None)
-
-    return render_template("outliers.html",
-                           active_page="outliers",
-                           profile=profile,
-                           outliers=outliers,
-                           selected_competitor=competitor,
-                           selected_platform=platform,
-                           selected_timeframe=timeframe,
-                           sort_by=sort_by)
 
 
 @app.route("/signal")
@@ -538,78 +582,71 @@ def signal_page():
     competitor = request.args.get("competitor", "")
     platform = request.args.get("platform", "")
     sort_by = request.args.get("sort", "score")
-    timeframe = request.args.get("timeframe", "")
+    timeframe = request.args.get("timeframe", "") or "30d"  # Default to 30d window
     tag = request.args.get("tag", "")
 
-    # Get vertical name for queries
-    vertical_name = get_active_vertical_name()
+    # Check if user wants empty state (after reset)
+    empty_state = request.args.get("empty", "").lower() == "true"
 
-    # Get outlier posts using vertical name
-    outliers = get_outlier_posts(competitor=competitor or None,
-                                 platform=platform or None,
-                                 sort_by=sort_by,
-                                 vertical_name=vertical_name,
-                                 timeframe=timeframe or None,
-                                 tag=tag or None)
+    # Get vertical name for queries (unless empty state)
+    vertical_name = None if empty_state else get_active_vertical_name()
 
-    # Generate insights from pattern analyzer
-    insights = generate_insights_for_vertical(vertical_name) if vertical_name else None
+    # Get outlier posts using vertical name (skip if empty state)
+    if empty_state:
+        outliers = []
+        insights = None
+        pattern_clusters = []
+        brand_baselines = []
+    else:
+        outliers = get_outlier_posts(competitor=competitor or None,
+                                     platform=platform or None,
+                                     sort_by=sort_by,
+                                     vertical_name=vertical_name,
+                                     timeframe=timeframe,
+                                     tag=tag or None)
+        # Generate insights from pattern analyzer
+        insights = generate_insights_for_vertical(vertical_name) if vertical_name else None
+        # Build content pattern clusters from AI analysis
+        pattern_clusters = build_pattern_clusters(outliers)
+        # Compute per-brand baselines
+        brand_baselines = get_competitor_baselines(vertical_name, timeframe)
 
-    # Get competitive set for context display
+    # Get competitive set for context display (empty if empty state)
     competitive_set = []
-    if vertical_name:
+    if vertical_name and not empty_state:
         vm = VerticalManager()
         vertical = vm.get_vertical(vertical_name)
         if vertical:
             competitive_set = vertical.brands
 
+    # Get list of all saved verticals for dropdown (always show, even in empty state)
+    vm = VerticalManager()
+    saved_verticals = vm.list_verticals()
+
     return render_template("signal.html",
                            profile=profile,
                            outliers=outliers,
                            insights=insights,
+                           pattern_clusters=pattern_clusters,
+                           brand_baselines=brand_baselines,
                            competitive_set=competitive_set,
                            vertical_name=vertical_name,
+                           saved_verticals=saved_verticals,
+                           empty_state=empty_state,
                            selected_competitor=competitor,
                            selected_platform=platform,
                            selected_timeframe=timeframe,
                            sort_by=sort_by)
 
 
-@app.route("/reports")
-def reports_page():
-    """Reports viewer page."""
-    viewing = request.args.get("view")
-    return render_template("reports.html",
-                           active_page="reports",
-                           reports=get_report_files(),
-                           viewing_report=viewing)
-
-
-@app.route("/settings")
-def settings_page():
-    """Settings page — thresholds, content tags."""
-    profile = get_profile()
-    return render_template("settings.html",
-                           active_page="settings",
-                           profile=profile,
-                           settings=profile.outlier_settings,
-                           content_tags=profile.content_tags,
-                           posts_per_competitor=config.DEFAULT_POSTS_PER_COMPETITOR)
+@app.route("/api/load_vertical/<vertical_name>")
+def load_vertical(vertical_name):
+    """Load a competitive set (vertical) and redirect to signal page."""
+    app._active_vertical = vertical_name
+    return redirect(url_for("signal_page"))
 
 
 # ── Routes: Actions ──
-
-@app.route("/switch-profile", methods=["POST"])
-def switch_profile():
-    """Switch the active brand profile."""
-    profile_name = request.form.get("profile", "").strip()
-    if profile_name and profile_name in get_available_profiles():
-        app._active_profile = profile_name
-        flash(f"Switched to profile: {profile_name}", "success")
-    else:
-        flash(f"Profile '{profile_name}' not found.", "danger")
-    return redirect(url_for("index"))
-
 
 @app.route("/switch-vertical", methods=["POST"])
 def switch_vertical():
@@ -622,143 +659,6 @@ def switch_vertical():
     else:
         flash(f"Vertical '{vertical_name}' not found.", "danger")
     return redirect(url_for("index"))
-
-
-@app.route("/competitors/add", methods=["POST"])
-def add_competitor():
-    """Add a new competitor to the active profile."""
-    name = request.form.get("name", "").strip()
-    instagram = request.form.get("instagram", "").strip().lstrip("@")
-    tiktok = request.form.get("tiktok", "").strip().lstrip("@")
-    facebook = request.form.get("facebook", "").strip().lstrip("@")
-
-    if not name:
-        flash("Please enter a brand name.", "warning")
-        return redirect(url_for("competitors_page"))
-
-    if not instagram and not tiktok and not facebook:
-        flash("Please enter at least one social media handle.", "warning")
-        return redirect(url_for("competitors_page"))
-
-    data = get_profile_data()
-
-    # Check for duplicate
-    existing_names = [c["name"].lower() for c in data.get("competitors", [])]
-    if name.lower() in existing_names:
-        flash(f"'{name}' is already in your competitor list.", "warning")
-        return redirect(url_for("competitors_page"))
-
-    handles = {}
-    if instagram:
-        handles["instagram"] = instagram
-    if tiktok:
-        handles["tiktok"] = tiktok
-    if facebook:
-        handles["facebook"] = facebook
-
-    data.setdefault("competitors", []).append({
-        "name": name,
-        "handles": handles,
-    })
-
-    save_profile_data(data)
-    flash(f"Added {name} to your competitor list.", "success")
-    return redirect(url_for("competitors_page"))
-
-
-@app.route("/competitors/remove", methods=["POST"])
-def remove_competitor():
-    """Remove a competitor from the active profile."""
-    name = request.form.get("name", "").strip()
-    data = get_profile_data()
-
-    original_count = len(data.get("competitors", []))
-    data["competitors"] = [
-        c for c in data.get("competitors", [])
-        if c["name"] != name
-    ]
-
-    if len(data["competitors"]) < original_count:
-        save_profile_data(data)
-        flash(f"Removed {name} from your competitor list.", "success")
-    else:
-        flash(f"Could not find '{name}' in competitor list.", "warning")
-
-    return redirect(url_for("competitors_page"))
-
-
-@app.route("/voice/save", methods=["POST"])
-def save_voice():
-    """Save brand voice settings."""
-    data = get_profile_data()
-
-    # Update brand info
-    data["brand"]["name"] = request.form.get("brand_name", "").strip()
-    data["brand"]["vertical"] = request.form.get("vertical", "").strip()
-    data["brand"]["tagline"] = request.form.get("tagline", "").strip()
-    data["brand"]["description"] = request.form.get("description", "").strip()
-
-    # Update voice
-    data["voice"]["tone"] = request.form.get("tone", "").strip()
-    data["voice"]["language_style"] = request.form.get("language_style", "").strip()
-
-    # Update themes (multi-value)
-    themes = request.form.getlist("themes")
-    data["voice"]["themes"] = [t for t in themes if t.strip()]
-
-    # Update avoids
-    avoids = request.form.getlist("avoids")
-    data["voice"]["avoids"] = [a for a in avoids if a.strip()]
-
-    # Update example captions
-    captions = request.form.getlist("example_captions")
-    data["voice"]["example_captions"] = [c for c in captions if c.strip()]
-
-    # Update own channel handle
-    own_ig = request.form.get("own_instagram", "").strip().lstrip("@")
-    if own_ig:
-        data.setdefault("brand", {}).setdefault("own_channel", {})
-        data["brand"]["own_channel"]["instagram"] = own_ig
-    elif "own_channel" in data.get("brand", {}):
-        data["brand"]["own_channel"]["instagram"] = ""
-
-    save_profile_data(data)
-    flash("Brand voice updated successfully.", "success")
-    return redirect(url_for("voice_page"))
-
-
-@app.route("/settings/save", methods=["POST"])
-def save_settings():
-    """Save outlier detection and content tag settings."""
-    data = get_profile_data()
-
-    # Outlier settings
-    data.setdefault("outlier_settings", {})
-    data["outlier_settings"]["engagement_multiplier"] = float(
-        request.form.get("engagement_multiplier", 2.0))
-    data["outlier_settings"]["std_dev_threshold"] = float(
-        request.form.get("std_dev_threshold", 1.5))
-    data["outlier_settings"]["lookback_days"] = int(
-        request.form.get("lookback_days", 30))
-    data["outlier_settings"]["top_outliers_to_analyze"] = int(
-        request.form.get("top_outliers_to_analyze", 10))
-    data["outlier_settings"]["top_outliers_to_rewrite"] = int(
-        request.form.get("top_outliers_to_rewrite", 5))
-
-    # Content tags
-    data.setdefault("content_tags", {})
-    themes = request.form.getlist("themes")
-    data["content_tags"]["themes"] = [t for t in themes if t.strip()]
-
-    hook_types = request.form.getlist("hook_types")
-    data["content_tags"]["hook_types"] = [h for h in hook_types if h.strip()]
-
-    formats = request.form.getlist("formats")
-    data["content_tags"]["formats"] = [f for f in formats if f.strip()]
-
-    save_profile_data(data)
-    flash("Settings saved successfully.", "success")
-    return redirect(url_for("settings_page"))
 
 
 @app.route("/run", methods=["POST"])
@@ -792,12 +692,6 @@ def run_engine():
 
 # ── Routes: Reports ──
 
-@app.route("/reports/view/<filename>")
-def view_report(filename):
-    """View a report (redirect to reports page with preview)."""
-    return redirect(url_for("reports_page", view=filename))
-
-
 @app.route("/reports/raw/<filename>")
 def raw_report(filename):
     """Serve raw HTML report for iframe embed."""
@@ -815,7 +709,7 @@ def download_report(filename):
     if filepath.exists() and filepath.suffix == ".html":
         return send_file(filepath, as_attachment=True)
     flash("Report file not found.", "danger")
-    return redirect(url_for("reports_page"))
+    return redirect(url_for("signal_page"))
 
 
 ALLOWED_IMAGE_DOMAINS = {
@@ -886,8 +780,8 @@ def setup_page():
 
     # Check if API keys already exist
     conn = get_db()
-    rapidapi_key = conn.execute(
-        "SELECT api_key FROM api_credentials WHERE service = 'rapidapi'"
+    apify_token = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'apify'"
     ).fetchone()
     openai_key = conn.execute(
         "SELECT api_key FROM api_credentials WHERE service = 'openai'"
@@ -900,15 +794,22 @@ def setup_page():
     emails = conn.execute(
         "SELECT email FROM email_subscriptions WHERE vertical_name IS NULL"
     ).fetchall()
+
+    # Get own brand handle from config table
+    own_brand_row = conn.execute(
+        "SELECT value FROM config WHERE key = 'own_brand_instagram'"
+    ).fetchone()
     conn.close()
 
     team_emails = ', '.join([e['email'] for e in emails]) if emails else ''
+    own_brand_instagram = own_brand_row['value'] if own_brand_row else ''
 
     return render_template('setup.html',
-                           rapidapi_key=rapidapi_key['api_key'] if rapidapi_key else '',
+                           apify_token=apify_token['api_key'] if apify_token else '',
                            openai_key=openai_key['api_key'] if openai_key else '',
                            tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
-                           team_emails=team_emails)
+                           team_emails=team_emails,
+                           own_brand_instagram=own_brand_instagram)
 
 
 @app.route("/setup/save", methods=["POST"])
@@ -916,13 +817,14 @@ def save_setup():
     """Save API keys and team settings to database."""
     from datetime import datetime, timezone
 
-    rapidapi_key = request.form.get('rapidapi_key', '').strip()
+    apify_token = request.form.get('apify_token', '').strip()
     openai_key = request.form.get('openai_key', '').strip()
     tiktok_key = request.form.get('tiktok_key', '').strip()
     team_emails = request.form.get('team_emails', '').strip()
+    own_brand_instagram = request.form.get('own_brand_instagram', '').strip().lstrip('@')
 
-    if not rapidapi_key or not openai_key:
-        flash("RapidAPI and OpenAI keys are required", "danger")
+    if not apify_token or not openai_key:
+        flash("Apify token and OpenAI key are required", "danger")
         return redirect(url_for('setup_page'))
 
     conn = get_db()
@@ -930,7 +832,7 @@ def save_setup():
 
     try:
         # Save API keys (upsert)
-        for service, key in [('rapidapi', rapidapi_key), ('openai', openai_key)]:
+        for service, key in [('apify', apify_token), ('openai', openai_key)]:
             if key:
                 conn.execute("""
                     INSERT INTO api_credentials (service, api_key, created_at, updated_at)
@@ -956,9 +858,17 @@ def save_setup():
                         VALUES (NULL, ?, ?)
                     """, (email, now))
 
+        # Save own-brand handle in config table
+        if own_brand_instagram:
+            conn.execute("""
+                INSERT INTO config (key, value)
+                VALUES ('own_brand_instagram', ?)
+                ON CONFLICT(key) DO UPDATE SET value = ?
+            """, (own_brand_instagram, own_brand_instagram))
+
         conn.commit()
         flash("Setup complete! Now create your first vertical.", "success")
-        return redirect(url_for('vertical_create_page'))
+        return redirect(url_for('signal_page', create='1'))
 
     except Exception as e:
         conn.rollback()
@@ -970,34 +880,14 @@ def save_setup():
 
 @app.route("/verticals")
 def verticals_list():
-    """Show all verticals with brand counts."""
-    from vertical_manager import VerticalManager
-
-    vm = VerticalManager()
-    verticals = []
-
-    for name in vm.list_verticals():
-        vertical = vm.get_vertical(name)
-        if vertical:
-            verticals.append({
-                'name': name,
-                'description': vertical.description,
-                'brand_count': len(vertical.brands),
-                'brands': vertical.brands,
-                'updated_at': vertical.updated_at
-            })
-
-    return render_template('verticals_list.html',
-                         verticals=verticals,
-                         active_page='categories',
-                         available_verticals=get_available_verticals(),
-                         active_vertical=get_active_vertical_name())
+    """Redirect to Signal page (verticals list is now archived)."""
+    return redirect(url_for('signal_page'))
 
 
 @app.route("/verticals/create")
 def vertical_create_page():
-    """Show vertical creation form."""
-    return render_template('vertical_create.html')
+    """Archived: redirect to Signal; category creation is done via modal on /signal."""
+    return redirect(url_for('signal_page', create='1'))
 
 
 @app.route("/verticals/create", methods=["POST"])
@@ -1138,20 +1028,27 @@ def delete_vertical():
     else:
         flash(f"Vertical not found", "warning")
 
-    return redirect(url_for('index'))
+    return redirect(url_for('signal_page', empty='true'))
 
 
 # ── Chat Routes (Scout AI Assistant) ──
 
 @app.route("/chat")
 def chat_page():
-    """Chat interface with Scout AI assistant."""
-    return render_template("chat.html", active_page="chat")
+    """Redirect to Signal page (chat is embedded in Signal)."""
+    return redirect(url_for('signal_page'))
 
 
 @app.route("/chat/message", methods=["POST"])
 def chat_message():
-    """Process chat message from user and return Scout's response."""
+    """Process chat message from user and return Scout's response.
+
+    Flow:
+    1. Try ChatHandler for fast local commands (show categories, help).
+    2. Otherwise send to ScoutAgent which uses OpenAI function-calling
+       to understand intent, extract entities, and execute real actions.
+    3. If ScoutAgent is unavailable (no API key), use local fallback.
+    """
     from scout_agent import ScoutAgent
     from chat_handler import ChatHandler
     from flask import session, jsonify
@@ -1163,54 +1060,226 @@ def chat_message():
         if not message:
             return jsonify({"error": "Empty message"}), 400
 
-        # Try ChatHandler first for category management commands
+        # ── Fast-path: ChatHandler for simple structured commands ──
         chat_handler = ChatHandler()
         current_vertical = get_active_vertical_name()
         result = chat_handler.process_message(message, current_vertical)
 
-        # If ChatHandler handled it (not default text response), use that
-        if result.get('type') != 'text' or 'categories' in message.lower() or 'show' in message.lower() or 'add' in message.lower() or 'remove' in message.lower():
+        if result.get('type') in ('category_card', 'category_list', 'success', 'error'):
+            return jsonify(result)
+        if result.get('_handled'):
             return jsonify(result)
 
-        # Otherwise, fall back to Scout agent for analysis/insights
-        scout = ScoutAgent()
-
-        # Get conversation context from session
+        # ── Main path: ScoutAgent (OpenAI function-calling) ──
         if 'chat_context' not in session:
             session['chat_context'] = {
                 'active_vertical': current_vertical,
-                'chat_history': []
+                'chat_history': [],
             }
 
         context = session['chat_context']
+        context['active_vertical'] = current_vertical
 
-        # Process message with Scout
-        response, updated_context = scout.chat(message, context)
+        try:
+            scout = ScoutAgent()
+            response, updated_context = scout.chat(message, context)
 
-        # Check if this triggered an analysis
-        analysis_started = updated_context.get('analysis_started', False)
+            if response:
+                analysis_started = updated_context.get('analysis_started', False)
 
-        # Update session context
-        session['chat_context'] = updated_context
-        session.modified = True
+                # If Scout's tools changed the active vertical, sync the app state
+                new_vertical = updated_context.get('active_vertical')
+                if new_vertical and new_vertical != current_vertical:
+                    app._active_vertical = new_vertical
 
+                # Persist the full context (including chat_history) in session
+                session['chat_context'] = updated_context
+                session.modified = True
+
+                return jsonify({
+                    "response": response,
+                    "type": "text",
+                    "analysis_started": analysis_started,
+                    "context": {
+                        "active_vertical": updated_context.get('active_vertical'),
+                    }
+                })
+
+        except Exception as scout_err:
+            logger.warning(f"Scout agent unavailable: {scout_err}")
+
+        # ── Fallback: local responses when AI is unavailable ──
+        fallback = _get_fallback_response(message, current_vertical)
         return jsonify({
-            "response": response,
-            "type": "text",
-            "analysis_started": analysis_started,
-            "context": {
-                "active_vertical": updated_context.get('active_vertical'),
-                "pending_vertical": updated_context.get('pending_vertical')
-            }
+            "response": fallback,
+            "type": "text"
         })
 
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
         return jsonify({
-            "response": f"Oops, something went wrong: {str(e)}",
+            "response": "Sorry, I hit an unexpected error. Try one of these instead:\n"
+                        "• Type 'help' to see what I can do\n"
+                        "• Type 'show categories' to see your collections\n"
+                        "• Add brands with 'add @nike @adidas to streetwear'",
             "type": "error",
             "error": str(e)
         }), 500
+
+
+def _get_fallback_response(message: str, current_vertical: str = None) -> str:
+    """Generate a helpful response when the AI agent is unavailable."""
+    msg = message.lower()
+
+    # Brand suggestion / recommendation queries
+    if any(word in msg for word in ['suggest', 'recommend', 'what brands', 'which brands', 'who should',
+                                     'ideas for', 'examples', 'good brands']):
+        # Detect category hints from the message
+        category_hints = {
+            'streetwear': (
+                "Great question! Here are some streetwear brands to consider tracking:\n\n"
+                "**High tier:** @nike, @adidas, @jordan, @newbalance\n"
+                "**Mid tier:** @stussy, @supremenewyork, @palaceskateboards, @bape_us\n"
+                "**Up-and-coming:** @corteiz, @broken.planet, @trapstar, @represent\n\n"
+                "Want me to add any of these? Just say something like:\n"
+                "'add @nike @stussy @corteiz to Streetwear'"
+            ),
+            'sneaker': (
+                "Here are some sneaker brands worth tracking:\n\n"
+                "**Major players:** @nike, @adidas, @newbalance, @jordan\n"
+                "**Mid tier:** @asics, @puma, @reebok, @saucony\n"
+                "**Boutique/Hype:** @salaboratory, @hokaoneone, @onrunning\n\n"
+                "Want me to add some? Just say:\n"
+                "'add @nike @newbalance @hokaoneone to Sneakers'"
+            ),
+            'beauty': (
+                "Here are some beauty brands to track:\n\n"
+                "**Major:** @fentybeauty, @maccosmetics, @nyxcosmetics, @maybelline\n"
+                "**DTC/Indie:** @glossier, @milkmakeup, @kosas, @rfrfrfrf\n"
+                "**Skincare:** @theordinary, @cerave, @drunk_elephant, @tatcha\n\n"
+                "Want me to add any? Just say:\n"
+                "'add @glossier @fentybeauty to Beauty'"
+            ),
+            'gaming': (
+                "Here are some gaming brands to track:\n\n"
+                "**Console/Platform:** @playstation, @xbox, @nintendoamerica\n"
+                "**Studios:** @epicgames, @riotgames, @valorant, @callofduty\n"
+                "**Gear/Peripheral:** @razer, @logitechg, @steelseries\n\n"
+                "Want me to add any? Just say:\n"
+                "'add @playstation @xbox to Gaming'"
+            ),
+            'fitness': (
+                "Here are some fitness brands to track:\n\n"
+                "**Apparel:** @gymshark, @lululemon, @niketraining, @alphaleteathletics\n"
+                "**Supplements:** @gorilla.mind, @transparentlabs, @ghost_lifestyle\n"
+                "**Equipment:** @roguefitness, @hyperice, @whoop\n\n"
+                "Want me to add any? Just say:\n"
+                "'add @gymshark @lululemon to Fitness'"
+            ),
+            'fashion': (
+                "Here are some fashion brands to track:\n\n"
+                "**Luxury:** @gucci, @louisvuitton, @balenciaga, @prada\n"
+                "**Contemporary:** @zara, @hm, @uniqlo, @cos\n"
+                "**Emerging:** @jacquemus, @ganni, @coperni, @ambush_official\n\n"
+                "Want me to add any? Just say:\n"
+                "'add @gucci @jacquemus to Fashion'"
+            ),
+            'food': (
+                "Here are some food & beverage brands to track:\n\n"
+                "**Fast food:** @chipotle, @mcdonalds, @wendys, @tacobell\n"
+                "**Beverage:** @redbull, @liquid_death, @poppi, @olipop\n"
+                "**DTC Food:** @magicspoon, @drinkolipop, @midday_squares\n\n"
+                "Want me to add any? Just say:\n"
+                "'add @chipotle @liquid_death to Food & Bev'"
+            ),
+            'tech': (
+                "Here are some tech brands to track:\n\n"
+                "**Big tech:** @apple, @samsung, @google\n"
+                "**Startups/DTC:** @nothing.tech, @analogue, @teenage_engineering\n"
+                "**SaaS/Tools:** @figma, @notion, @linear_app\n\n"
+                "Want me to add any? Just say:\n"
+                "'add @apple @nothing.tech to Tech'"
+            ),
+        }
+
+        for keyword, response in category_hints.items():
+            if keyword in msg:
+                return response
+
+        # Generic brand suggestion response
+        return (
+            "I'd love to help you find brands to track! To give better suggestions, "
+            "tell me what category or industry you're interested in. For example:\n\n"
+            "• 'suggest streetwear brands'\n"
+            "• 'what beauty brands should I track?'\n"
+            "• 'recommend gaming brands'\n"
+            "• 'good fitness brands to monitor'\n\n"
+            "Or if you already know the handles, just add them directly:\n"
+            "'add @brand1 @brand2 to [category name]'"
+        )
+
+    # Analysis / insights questions
+    if any(word in msg for word in ['analyze', 'analysis', 'run', 'scan', 'find outliers', 'viral']):
+        if current_vertical:
+            return (
+                f"To run an analysis on **{current_vertical}**, you can:\n\n"
+                f"1. Make sure you have brands added to the collection\n"
+                f"2. Say 'analyze' or 'run analysis'\n"
+                f"3. I'll scan all the posts and find the outliers!\n\n"
+                f"Want me to run an analysis on {current_vertical} now?"
+            )
+        return (
+            "To run an analysis, you first need a competitive set with brands to track.\n\n"
+            "**Quick start:**\n"
+            "1. Select or create a competitive set from the dropdown above\n"
+            "2. Add brands: 'add @nike @adidas to Streetwear'\n"
+            "3. Then say 'analyze' to find viral content!"
+        )
+
+    # How-to / getting started questions
+    if any(word in msg for word in ['how', 'what do', 'what can', 'get started', 'tutorial', 'guide']):
+        return (
+            "Here's how to get the most out of Scout AI:\n\n"
+            "**1. Create a competitive set** - Group brands you want to compare "
+            "(e.g., 'Streetwear' with Nike, Supreme, Stussy)\n\n"
+            "**2. Add brands to track** - Drop in handles like:\n"
+            "   'add @nike @supremenewyork @stussy to Streetwear'\n\n"
+            "**3. Run an analysis** - Say 'analyze' and I'll find posts that are "
+            "performing 2x+ better than normal\n\n"
+            "**4. Browse outliers** - Check the post cards on the right to see "
+            "what content is crushing it!\n\n"
+            "**Try it:** Ask me to suggest brands for a category you're interested in!"
+        )
+
+    # Help
+    if any(word in msg for word in ['help', 'commands']):
+        return (
+            "Here's what I can help with:\n\n"
+            "**Manage collections:**\n"
+            "• 'show categories' - see all your collections\n"
+            "• 'add @nike @adidas to Streetwear' - add brands\n"
+            "• 'remove @nike from Streetwear' - remove brands\n\n"
+            "**Get suggestions:**\n"
+            "• 'suggest streetwear brands' - get brand recommendations\n"
+            "• 'what beauty brands should I track?' - industry ideas\n\n"
+            "**Analyze content:**\n"
+            "• 'analyze' - run analysis on current collection\n"
+            "• 'find outliers' - same thing!\n\n"
+            "What would you like to do?"
+        )
+
+    # Default conversational response
+    vertical_hint = f" You're currently viewing **{current_vertical}**." if current_vertical else ""
+    return (
+        f"I'm here to help you find viral content!{vertical_hint}\n\n"
+        "Here are some things you can try:\n"
+        "• **'suggest streetwear brands'** - get brand recommendations\n"
+        "• **'show categories'** - view your collections\n"
+        "• **'add @nike @adidas to Streetwear'** - track brands\n"
+        "• **'analyze'** - find outlier posts\n"
+        "• **'help'** - see all commands\n\n"
+        "What would you like to do?"
+    )
 
 
 @app.route("/analysis/status")
@@ -1269,6 +1338,20 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
+
+    # Run database migrations to ensure all tables exist
+    try:
+        from collectors.instagram import migrate_database
+        migrate_database()
+    except Exception as e:
+        logging.warning(f"Migration check (posts): {e}")
+
+    try:
+        from database_migrations import run_vertical_migrations
+        run_vertical_migrations()
+    except Exception as e:
+        logging.warning(f"Migration check (verticals): {e}")
+
     print(f"\n  Outlier Content Engine Dashboard")
     print(f"  Running at: http://localhost:{args.port}")
     print(f"  Active profile: {config.ACTIVE_PROFILE}\n")

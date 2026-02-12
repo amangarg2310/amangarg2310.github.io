@@ -14,15 +14,15 @@
     </div>
 
     <form method="POST" action="{{ url_for('save_setup') }}">
-        <!-- RapidAPI Key -->
+        <!-- Apify API Token -->
         <div class="form-group">
-            <label class="form-label">RapidAPI Key *</label>
-            <input type="text" name="rapidapi_key" class="form-input"
-                   value="{{ rapidapi_key or '' }}" required
-                   placeholder="Your RapidAPI key">
+            <label class="form-label">Apify API Token *</label>
+            <input type="text" name="apify_token" class="form-input"
+                   value="{{ apify_token or '' }}" required
+                   placeholder="apify_api_...">
             <div class="form-hint">
                 Used for Instagram and TikTok data collection.
-                <a href="https://rapidapi.com" target="_blank" style="color:var(--accent)">Get your key here →</a>
+                <a href="https://console.apify.com/account/integrations" target="_blank" style="color:var(--accent)">Get your token here →</a>
             </div>
         </div>
 
@@ -40,12 +40,28 @@
 
         <!-- TikTok Key (Optional) -->
         <div class="form-group">
-            <label class="form-label">TikTok RapidAPI Key <span class="text-muted">(optional)</span></label>
+            <label class="form-label">TikTok API Key <span class="text-muted">(optional)</span></label>
             <input type="text" name="tiktok_key" class="form-input"
                    value="{{ tiktok_key or '' }}"
-                   placeholder="Leave blank to use same as Instagram">
+                   placeholder="Leave blank to use same Apify token for TikTok">
             <div class="form-hint">
-                Separate key for TikTok if different from Instagram RapidAPI key
+                Separate key for TikTok if using a different data source than Apify
+            </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:28px 0;padding-top:28px"></div>
+
+        <!-- Your Brand -->
+        <div class="card-title" style="margin-bottom:4px">Your Brand</div>
+        <div class="card-subtitle" style="margin-bottom:20px">Used for voice analysis and personalized content briefs</div>
+
+        <div class="form-group">
+            <label class="form-label">Your Brand's Instagram Handle</label>
+            <input type="text" name="own_brand_instagram" class="form-input"
+                   value="{{ own_brand_instagram or '' }}"
+                   placeholder="@yourbrand">
+            <div class="form-hint">
+                We'll analyze your top posts to learn your brand voice, then tailor all content suggestions to match your tone and style.
             </div>
         </div>
 
@@ -82,11 +98,11 @@
     </div>
 
     <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">
-        <p style="margin-bottom:14px"><strong style="color:var(--text)">RapidAPI (Instagram + TikTok):</strong></p>
+        <p style="margin-bottom:14px"><strong style="color:var(--text)">Apify (Instagram + TikTok):</strong></p>
         <ol style="padding-left:20px;margin-bottom:20px">
-            <li>Sign up at <a href="https://rapidapi.com" target="_blank" style="color:var(--accent)">rapidapi.com</a></li>
-            <li>Search for "Instagram Scraper API 2" and subscribe (free tier available)</li>
-            <li>Find your key in the code examples section (X-RapidAPI-Key)</li>
+            <li>Sign up at <a href="https://apify.com" target="_blank" style="color:var(--accent)">apify.com</a></li>
+            <li>Go to <a href="https://console.apify.com/account/integrations" target="_blank" style="color:var(--accent)">Settings → Integrations</a></li>
+            <li>Copy your Personal API token</li>
         </ol>
 
         <p style="margin-bottom:14px"><strong style="color:var(--text)">OpenAI (AI Analysis):</strong></p>

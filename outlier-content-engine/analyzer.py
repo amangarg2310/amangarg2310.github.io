@@ -119,8 +119,7 @@ class ContentAnalyzer:
         """Build the system prompt dynamically from the brand profile."""
         voice_prompt = self.profile.get_voice_prompt()
         brand = self.profile.name
-        vertical = self.profile.vertical
-        n_rewrite = self.profile.outlier_settings.top_outliers_to_rewrite
+        vertical = getattr(self.profile, 'vertical', 'content')
 
         # Build learned voice section
         learned_voice_section = ""
@@ -143,8 +142,8 @@ Signature moves: {', '.join(vd.get('signature_moves', []))}
 Caption length preference: {vd.get('caption_length', 'N/A')}
 Punctuation: {vd.get('punctuation_habits', 'N/A')}
 
-IMPORTANT: When rewriting content, match these real voice patterns precisely.
-The output should be indistinguishable from the brand's own writing."""
+CRITICAL: When writing brand_creative_brief captions, match these patterns exactly.
+The output must be indistinguishable from the brand's own writing."""
 
         # Build real caption examples section
         real_examples_section = ""
@@ -154,8 +153,7 @@ The output should be indistinguishable from the brand's own writing."""
             )
             real_examples_section = f"""
 
-REAL TOP-PERFORMING CAPTIONS from {brand}'s own Instagram (use these as
-primary style reference — these outperformed {brand}'s average):
+REAL TOP-PERFORMING CAPTIONS from {brand}'s own Instagram (primary style reference):
 {captions_list}"""
 
         # Build audio context section
@@ -170,8 +168,7 @@ primary style reference — these outperformed {brand}'s average):
             audio_section = f"""
 
 TRENDING AUDIO across competitor outliers:
-{audio_list}
-Consider suggesting trending audio in your content recommendations."""
+{audio_list}"""
 
         # Build series context section
         series_section = ""
@@ -186,24 +183,24 @@ Consider suggesting trending audio in your content recommendations."""
             series_section = f"""
 
 DETECTED CONTENT SERIES (recurring formats that consistently perform):
-{series_list}
-Consider suggesting similar recurring format ideas for {brand}."""
+{series_list}"""
 
         # Scale-aware section
         scale_section = ""
         if self.profile.follower_count:
             fc = self.profile.follower_count
             if fc < 10000:
-                scale_note = "This is a growing account. Focus on community-building, engagement-driving content. Suggest content that encourages saves and shares."
+                scale_note = "Growing account. Prioritize saves/shares content, community-building, and engagement bait."
             elif fc < 100000:
-                scale_note = "This is a mid-size account. Balance reach content with community engagement. Suggest a mix of viral formats and brand-building."
+                scale_note = "Mid-size account. Mix viral formats with brand-building. Carousel education + Reel trends."
             else:
-                scale_note = "This is a large account. Focus on brand authority and cultural relevance. Suggest premium formats."
+                scale_note = "Large account. Focus on brand authority, cultural moments, premium formats."
             scale_section = f"""
 
 SCALE CONTEXT: {brand} has ~{fc:,} followers. {scale_note}"""
 
-        return f"""You are a {vertical} content strategist and brand voice specialist for {brand}.
+        return f"""You are an elite social media content strategist specializing in {vertical}.
+You analyze competitor outlier posts with forensic precision and create actionable content briefs.
 
 {voice_prompt}
 {learned_voice_section}
@@ -214,32 +211,32 @@ SCALE CONTEXT: {brand} has ~{fc:,} followers. {scale_note}"""
 
 ---
 
-TASK: Analyze competitor outlier posts and provide deep, actionable insights.
+YOUR JOB: For each outlier post, produce TWO things:
+(A) A deep, ultra-specific analysis of WHY it outperformed — no generic filler.
+(B) A brand creative brief that tells {brand}'s content team exactly what to post.
 
-PART 1 — DEEP OUTLIER ANALYSIS
-For each outlier post, provide a thorough breakdown:
-1. **Hook analysis**: What was the opening hook? (question, curiosity gap, shock, educational, story)
-   - Why did this specific hook stop the scroll?
-2. **Visual strategy**: What made the visual/video format work?
-   - For video: What likely happened in the first 3 seconds?
-   - For images: What visual techniques are used? (composition, text overlay, lifestyle vs product)
-3. **Messaging breakdown**: What is the caption doing?
-   - Tone, length, CTA usage, storytelling technique
-4. **Emotional trigger**: What emotion does this content activate? (aspiration, FOMO, belonging, humor, curiosity)
-5. **Engagement driver**: Why did the PRIMARY metric spike? (saves = valuable, shares = relatable, comments = opinion-provoking)
-6. **Content pattern/framework**: Name the repeatable framework (e.g., "Before/After", "Hot Take", "Educational Carousel")
-7. **Replicability for {brand}**: Score 1-10, with specific notes on what {brand} should adapt
+ANALYSIS RULES — be ruthlessly specific:
+- Reference the ACTUAL caption text, numbers, and metrics. Don't say "the caption was engaging" — say what made it engaging and quote the specific line.
+- Name the exact psychological trigger: loss aversion, social proof, identity signaling, aspiration gap, controversy, nostalgia, etc.
+- For the engagement driver: explain the specific mechanic. If comments spiked, what question or opinion prompt drove them? If saves spiked, what was worth bookmarking?
+- The "content_pattern" must be a named, repeatable framework someone could use (e.g. "Myth-Bust Carousel", "POV Reel", "Drop Countdown", "Hot Take Thread").
+- Avoid these filler phrases: "resonates with the audience", "drives engagement", "creates connection". Be concrete.
 
-PART 2 — {brand.upper()} CONTENT ADAPTATION
-Take the top {n_rewrite} outlier concepts and create ready-to-execute content briefs:
-- Rewrite the caption in {brand}'s authentic voice (match the learned voice patterns exactly)
-- Visual direction: Describe exactly what the image/video should look like
-- Format: Reel, carousel, static, story?
-- Hook suggestion: Write the specific opening line or first-frame concept
-- CTA: What action should the audience take?
-- What to keep from the original vs what to change for {brand}
-- Brand fit score (1-10) with reasoning
-- Best posting time and day
+CREATIVE BRIEF RULES:
+- The suggested_caption MUST be written in {brand}'s voice (use the learned voice profile above).
+- visual_concept: Describe the exact shot list, color palette, text overlay, and composition. A designer should be able to create from this alone.
+- hook_line: The exact first line of the caption or the text on the first frame of the video/carousel.
+- why_this_works_for_us: Explain the strategic fit — why {brand} should post this specific concept and not something else.
+- what_to_replicate: The transferable principle (not "copy this post" but the underlying mechanic).
+- what_to_avoid: What from the original does NOT fit {brand} and should be dropped or changed.
+
+CONTENT TAGS (consolidated — replaces separate tagging step):
+For each post, assign 3-6 structured tags from these categories:
+- format: video, carousel, image, reel, story
+- hook: question, stat, tutorial, before-after, behind-scenes, testimonial, announcement, challenge, hot-take, pov, listicle
+- theme: product-launch, collaboration, lifestyle, community, seasonal, education, entertainment, culture, nostalgia, controversy
+- caption: short, medium, long, storytelling, call-to-action, minimal
+- visual: minimal, vibrant, dark, professional, candid, aesthetic, ugc-style
 
 ALWAYS respond with valid JSON matching this exact schema:
 {{
@@ -247,33 +244,31 @@ ALWAYS respond with valid JSON matching this exact schema:
     {{
       "post_id": "...",
       "competitor": "...",
-      "hook_type": "question|curiosity_gap|shock|educational|story|statement",
-      "hook_breakdown": "Why this hook works and how it stops the scroll",
-      "visual_strategy": "Specific visual techniques that make this work",
-      "messaging_breakdown": "Caption analysis: tone, structure, CTA, storytelling",
-      "emotional_trigger": "The core emotion this activates",
-      "why_it_worked": "Comprehensive explanation of why this outperformed",
-      "content_pattern": "Named framework (e.g. 'Educational Carousel', 'Hot Take')",
-      "primary_driver_explanation": "Why the top engagement metric spiked",
-      "replicable_for_brand": true,
+      "content_tags": ["format:reel", "hook:hot-take", "theme:culture", "caption:short", "visual:candid"],
+      "one_line_summary": "A single punchy sentence describing what this post IS and why it worked.",
+      "hook_type": "question|curiosity_gap|shock|educational|story|statement|hot_take|pov",
+      "hook_breakdown": "Exact analysis of the hook: quote the specific text or describe the first 3 seconds. Explain the psychology.",
+      "visual_strategy": "Shot-by-shot or frame-by-frame: what the viewer sees and why it works. Reference composition, pacing, text overlays, colors.",
+      "messaging_breakdown": "Line-by-line caption analysis: what each part does, tone shifts, CTA placement, storytelling arc.",
+      "emotional_trigger": "The specific psychological mechanism (e.g. 'identity signaling — viewers share to show they are in-the-know')",
+      "why_it_worked": "The REAL reason this outperformed, connecting metrics to content choices. Reference actual numbers.",
+      "content_pattern": "Named repeatable framework (e.g. 'Myth-Bust Carousel', 'Hot Take Thread')",
+      "primary_driver_explanation": "Why THIS specific metric (saves/shares/comments/likes) spiked. What content mechanic drove it.",
       "replicability_score": 8,
-      "replicability_notes": "What {brand} should adapt and what to avoid"
-    }}
-  ],
-  "brand_adaptations": [
-    {{
-      "original_post_id": "...",
-      "original_competitor": "...",
-      "adapted_caption": "...",
-      "hook_suggestion": "Specific opening line or first-frame concept",
-      "visual_direction": "Detailed description of what the visual should look like",
-      "format_suggestion": "reel|carousel|static|story",
-      "cta": "Specific call-to-action for the audience",
-      "what_to_keep": "...",
-      "what_to_change": "...",
-      "brand_fit_score": 8,
-      "brand_fit_reasoning": "Why this score",
-      "best_posting_time": "..."
+      "replicability_notes": "What transfers to {brand} and what doesn't. Be specific.",
+      "brand_creative_brief": {{
+        "one_line_summary": "What {brand} should post, in one sentence.",
+        "suggested_caption": "Full caption written in {brand}'s voice. Match the learned voice patterns exactly.",
+        "visual_concept": "Detailed visual direction: shot list, color palette, text overlays, composition. A designer can execute from this.",
+        "format": "reel|carousel|static|story",
+        "hook_line": "The exact opening line or first-frame text.",
+        "cta": "Specific call-to-action.",
+        "why_this_works_for_us": "Strategic reasoning for why {brand} should post this.",
+        "what_to_replicate": "The transferable principle from the original.",
+        "what_to_avoid": "What to drop or change from the original for {brand}.",
+        "brand_fit_score": 8,
+        "suggested_audio": "Audio suggestion if applicable, or null"
+      }}
     }}
   ],
   "weekly_patterns": {{
@@ -285,12 +280,12 @@ ALWAYS respond with valid JSON matching this exact schema:
   "content_calendar_suggestions": [
     {{
       "day": "Monday",
-      "content_type": "...",
-      "concept": "...",
+      "content_type": "reel|carousel|static|story",
+      "concept": "One-sentence concept",
       "hook": "Opening line or visual hook",
-      "caption_draft": "...",
+      "caption_draft": "Full draft caption in {brand}'s voice",
       "visual_direction": "What the post should look like",
-      "reference_outlier": "..."
+      "reference_outlier": "post_id this is inspired by"
     }}
   ]
 }}"""

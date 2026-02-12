@@ -65,6 +65,12 @@ def run_vertical_migrations(db_path=None):
             FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE SET NULL
         );
 
+        -- General app configuration (key-value store)
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+
         -- Index for faster vertical lookups
         CREATE INDEX IF NOT EXISTS idx_vertical_brands_vertical
             ON vertical_brands(vertical_name);
