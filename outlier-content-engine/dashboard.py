@@ -25,6 +25,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
 import yaml
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -40,6 +41,60 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "outlier-engine-dev-key")
 logger = logging.getLogger(__name__)
 
 
+# ── Template Filters ──
+
+@app.template_filter('timeago')
+def timeago_filter(timestamp_str):
+    """Convert timestamp to relative time (e.g., '3 days ago')."""
+    if not timestamp_str:
+        return ""
+
+    try:
+        # Parse timestamp (handles both ISO format and SQLite datetime format)
+        if isinstance(timestamp_str, str):
+            # Try parsing with timezone info first
+            try:
+                post_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            except:
+                # Fallback to assuming UTC if no timezone
+                post_time = datetime.fromisoformat(timestamp_str).replace(tzinfo=timezone.utc)
+        else:
+            post_time = timestamp_str
+
+        # Ensure post_time has timezone info
+        if post_time.tzinfo is None:
+            post_time = post_time.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        diff = now - post_time
+
+        seconds = diff.total_seconds()
+
+        if seconds < 60:
+            return "just now"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f"{minutes}m ago"
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            return f"{hours}h ago"
+        elif seconds < 604800:  # 7 days
+            days = int(seconds / 86400)
+            return f"{days}d ago"
+        elif seconds < 2592000:  # 30 days
+            weeks = int(seconds / 604800)
+            return f"{weeks}w ago"
+        elif seconds < 31536000:  # 365 days
+            months = int(seconds / 2592000)
+            return f"{months}mo ago"
+        else:
+            years = int(seconds / 31536000)
+            return f"{years}y ago"
+    except Exception as e:
+        logger.debug(f"Error parsing timestamp '{timestamp_str}': {e}")
+        return ""
+
+
 # ── Helpers ──
 
 def get_available_profiles():
@@ -49,6 +104,43 @@ def get_available_profiles():
         if f.stem != "_template":
             profiles.append(f.stem)
     return sorted(profiles)
+
+
+def get_available_verticals():
+    """List all available vertical names."""
+    from vertical_manager import VerticalManager
+    vm = VerticalManager()
+    return vm.list_verticals()
+
+
+def get_active_vertical_name():
+    """Get the active vertical name from session or first available."""
+    if hasattr(app, '_active_vertical') and app._active_vertical:
+        return app._active_vertical
+
+    # Get first vertical if exists
+    verticals = get_available_verticals()
+    if verticals:
+        app._active_vertical = verticals[0]
+        return verticals[0]
+
+    return None
+
+
+def needs_setup():
+    """Check if API keys are configured."""
+    if not config.DB_PATH.exists():
+        return True
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('rapidapi', 'openai')"
+        ).fetchone()
+        conn.close()
+        return row['cnt'] < 2  # Need both keys
+    except Exception:
+        return True  # Database not ready
 
 
 def get_active_profile_name():
@@ -165,30 +257,47 @@ def get_recent_runs(limit=10):
         return []
 
 
-def get_outlier_posts(competitor=None, sort_by="score"):
+def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_name=None, timeframe=None):
     """Fetch outlier posts from the database."""
     if not config.DB_PATH.exists():
         return []
 
-    profile_name = get_active_profile_name()
+    # CRITICAL FIX: Use vertical_name if provided, otherwise fall back to profile_name
+    # The database stores data by vertical (e.g., 'Streetwear'), not by profile (e.g., 'heritage')
+    brand_profile = vertical_name or get_active_vertical_name() or get_active_profile_name()
 
     try:
         conn = get_db()
 
         query = """
             SELECT post_id, competitor_name, competitor_handle, platform,
-                   caption, media_type, media_url, posted_at, likes, comments,
+                   caption, media_type, media_url, post_url, posted_at, likes, comments,
                    saves, shares, views, outlier_score, content_tags,
                    weighted_engagement_score, primary_engagement_driver,
                    audio_id, audio_name
             FROM competitor_posts
             WHERE brand_profile = ? AND is_outlier = 1
         """
-        params = [profile_name]
+        params = [brand_profile]
 
         if competitor:
             query += " AND competitor_handle = ?"
             params.append(competitor)
+
+        if platform:
+            query += " AND platform = ?"
+            params.append(platform)
+
+        # Timeframe filter using SQL datetime functions
+        if timeframe:
+            timeframe_map = {
+                "30d": "datetime('now', '-30 days')",
+                "90d": "datetime('now', '-90 days')",
+                "180d": "datetime('now', '-180 days')",
+                "365d": "datetime('now', '-365 days')",
+            }
+            if timeframe in timeframe_map:
+                query += f" AND posted_at >= {timeframe_map[timeframe]}"
 
         sort_map = {
             "score": "outlier_score DESC",
@@ -345,6 +454,8 @@ def inject_globals():
     return {
         "active_profile": get_active_profile_name(),
         "available_profiles": get_available_profiles(),
+        "active_vertical": get_active_vertical_name(),
+        "available_verticals": get_available_verticals(),
     }
 
 
@@ -352,18 +463,18 @@ def inject_globals():
 
 @app.route("/")
 def index():
-    """Dashboard home page."""
-    try:
-        profile = get_profile()
-    except Exception as e:
-        flash(f"Could not load profile: {e}", "danger")
-        profile = None
+    """Dashboard home page - redirects to Signal AI interface."""
+    # Check if setup is needed
+    if needs_setup():
+        return redirect(url_for('setup_page'))
 
-    return render_template("index.html",
-                           active_page="home",
-                           profile=profile,
-                           stats=get_dashboard_stats(),
-                           recent_runs=get_recent_runs())
+    # Check if we have any verticals
+    verticals = get_available_verticals()
+    if not verticals:
+        return redirect(url_for('vertical_create_page'))
+
+    # Redirect to the new Signal AI interface
+    return redirect(url_for('signal_page'))
 
 
 @app.route("/competitors")
@@ -391,16 +502,70 @@ def voice_page():
 def outliers_page():
     """Outlier posts viewer."""
     profile = get_profile()
+    vertical_name = get_active_vertical_name()
     competitor = request.args.get("competitor", "")
+    platform = request.args.get("platform", "")
     sort_by = request.args.get("sort", "score")
+    timeframe = request.args.get("timeframe", "")
 
-    outliers = get_outlier_posts(competitor=competitor or None, sort_by=sort_by)
+    outliers = get_outlier_posts(competitor=competitor or None,
+                                 platform=platform or None,
+                                 sort_by=sort_by,
+                                 vertical_name=vertical_name,
+                                 timeframe=timeframe or None)
 
     return render_template("outliers.html",
                            active_page="outliers",
                            profile=profile,
                            outliers=outliers,
                            selected_competitor=competitor,
+                           selected_platform=platform,
+                           selected_timeframe=timeframe,
+                           sort_by=sort_by)
+
+
+@app.route("/signal")
+def signal_page():
+    """Signal AI - Conversational outlier viewer with insights."""
+    from insight_generator import generate_insights_for_vertical
+    from vertical_manager import VerticalManager
+
+    profile = get_profile()
+    competitor = request.args.get("competitor", "")
+    platform = request.args.get("platform", "")
+    sort_by = request.args.get("sort", "score")
+    timeframe = request.args.get("timeframe", "")
+
+    # Get vertical name for queries
+    vertical_name = get_active_vertical_name()
+
+    # Get outlier posts using vertical name (CRITICAL FIX)
+    outliers = get_outlier_posts(competitor=competitor or None,
+                                 platform=platform or None,
+                                 sort_by=sort_by,
+                                 vertical_name=vertical_name,
+                                 timeframe=timeframe or None)
+
+    # Generate insights from pattern analyzer
+    insights = generate_insights_for_vertical(vertical_name) if vertical_name else None
+
+    # Get competitive set for context display
+    competitive_set = []
+    if vertical_name:
+        vm = VerticalManager()
+        vertical = vm.get_vertical(vertical_name)
+        if vertical:
+            competitive_set = vertical.brands
+
+    return render_template("signal.html",
+                           profile=profile,
+                           outliers=outliers,
+                           insights=insights,
+                           competitive_set=competitive_set,
+                           vertical_name=vertical_name,
+                           selected_competitor=competitor,
+                           selected_platform=platform,
+                           selected_timeframe=timeframe,
                            sort_by=sort_by)
 
 
@@ -437,6 +602,19 @@ def switch_profile():
         flash(f"Switched to profile: {profile_name}", "success")
     else:
         flash(f"Profile '{profile_name}' not found.", "danger")
+    return redirect(url_for("index"))
+
+
+@app.route("/switch-vertical", methods=["POST"])
+def switch_vertical():
+    """Switch the active vertical."""
+    vertical_name = request.form.get("vertical", "").strip()
+    verticals = get_available_verticals()
+    if vertical_name and vertical_name in verticals:
+        app._active_vertical = vertical_name
+        flash(f"Switched to vertical: {vertical_name}", "success")
+    else:
+        flash(f"Vertical '{vertical_name}' not found.", "danger")
     return redirect(url_for("index"))
 
 
@@ -632,6 +810,414 @@ def download_report(filename):
         return send_file(filepath, as_attachment=True)
     flash("Report file not found.", "danger")
     return redirect(url_for("reports_page"))
+
+
+@app.route("/proxy-image")
+def proxy_image():
+    """Proxy external images to bypass CORS restrictions."""
+    image_url = request.args.get('url')
+    if not image_url:
+        return "No URL provided", 400
+
+    try:
+        # Fetch the image from the external URL
+        response = requests.get(image_url, timeout=10, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+
+        if response.status_code == 200:
+            # Determine content type from response headers
+            content_type = response.headers.get('Content-Type', 'image/jpeg')
+            return Response(response.content, mimetype=content_type)
+        else:
+            return "Failed to fetch image", response.status_code
+    except Exception as e:
+        logger.error(f"Error proxying image: {e}")
+        return "Error fetching image", 500
+
+
+# ── Vertical Management Routes ──
+
+@app.route("/setup")
+def setup_page():
+    """One-time setup page for API keys and team settings."""
+    from database_migrations import run_vertical_migrations
+    run_vertical_migrations()  # Ensure tables exist
+
+    # Check if API keys already exist
+    conn = get_db()
+    rapidapi_key = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'rapidapi'"
+    ).fetchone()
+    openai_key = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'openai'"
+    ).fetchone()
+    tiktok_key = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'tiktok'"
+    ).fetchone()
+
+    # Get team emails
+    emails = conn.execute(
+        "SELECT email FROM email_subscriptions WHERE vertical_name IS NULL"
+    ).fetchall()
+    conn.close()
+
+    team_emails = ', '.join([e['email'] for e in emails]) if emails else ''
+
+    return render_template('setup.html',
+                           rapidapi_key=rapidapi_key['api_key'] if rapidapi_key else '',
+                           openai_key=openai_key['api_key'] if openai_key else '',
+                           tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
+                           team_emails=team_emails)
+
+
+@app.route("/setup/save", methods=["POST"])
+def save_setup():
+    """Save API keys and team settings to database."""
+    from datetime import datetime, timezone
+
+    rapidapi_key = request.form.get('rapidapi_key', '').strip()
+    openai_key = request.form.get('openai_key', '').strip()
+    tiktok_key = request.form.get('tiktok_key', '').strip()
+    team_emails = request.form.get('team_emails', '').strip()
+
+    if not rapidapi_key or not openai_key:
+        flash("RapidAPI and OpenAI keys are required", "danger")
+        return redirect(url_for('setup_page'))
+
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+        # Save API keys (upsert)
+        for service, key in [('rapidapi', rapidapi_key), ('openai', openai_key)]:
+            if key:
+                conn.execute("""
+                    INSERT INTO api_credentials (service, api_key, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(service) DO UPDATE SET api_key = ?, updated_at = ?
+                """, (service, key, now, now, key, now))
+
+        if tiktok_key:
+            conn.execute("""
+                INSERT INTO api_credentials (service, api_key, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(service) DO UPDATE SET api_key = ?, updated_at = ?
+            """, ('tiktok', tiktok_key, now, now, tiktok_key, now))
+
+        # Save team emails (clear existing, then insert new)
+        conn.execute("DELETE FROM email_subscriptions WHERE vertical_name IS NULL")
+        if team_emails:
+            for email in team_emails.split(','):
+                email = email.strip()
+                if email:
+                    conn.execute("""
+                        INSERT INTO email_subscriptions (vertical_name, email, created_at)
+                        VALUES (NULL, ?, ?)
+                    """, (email, now))
+
+        conn.commit()
+        flash("Setup complete! Now create your first vertical.", "success")
+        return redirect(url_for('vertical_create_page'))
+
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error saving setup: {e}", "danger")
+        return redirect(url_for('setup_page'))
+    finally:
+        conn.close()
+
+
+@app.route("/verticals")
+def verticals_list():
+    """Show all verticals with brand counts."""
+    from vertical_manager import VerticalManager
+
+    vm = VerticalManager()
+    verticals = []
+
+    for name in vm.list_verticals():
+        vertical = vm.get_vertical(name)
+        if vertical:
+            verticals.append({
+                'name': name,
+                'description': vertical.description,
+                'brand_count': len(vertical.brands),
+                'brands': vertical.brands,
+                'updated_at': vertical.updated_at
+            })
+
+    return render_template('verticals_list.html',
+                         verticals=verticals,
+                         active_page='categories',
+                         available_verticals=get_available_verticals(),
+                         active_vertical=get_active_vertical_name())
+
+
+@app.route("/verticals/create")
+def vertical_create_page():
+    """Show vertical creation form."""
+    return render_template('vertical_create.html')
+
+
+@app.route("/verticals/create", methods=["POST"])
+def create_vertical():
+    """Create a new vertical with brands."""
+    from vertical_manager import VerticalManager
+
+    vertical_name = request.form.get('vertical_name', '').strip()
+    description = request.form.get('description', '').strip()
+    bulk_handles = request.form.get('bulk_handles', '').strip()
+
+    if not vertical_name:
+        flash("Vertical name is required", "danger")
+        return redirect(url_for('vertical_create_page'))
+
+    vm = VerticalManager()
+
+    # Create vertical
+    if not vm.create_vertical(vertical_name, description):
+        flash(f"Vertical '{vertical_name}' already exists", "warning")
+        return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+    # Add brands
+    result = {'added': 0, 'skipped': 0}
+    if bulk_handles:
+        result = vm.bulk_add_brands(vertical_name, bulk_handles)
+
+    if result['added'] == 0:
+        flash("Vertical created but no brands added. Add brands below.", "warning")
+        return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+    flash(f"Created '{vertical_name}' with {result['added']} brands", "success")
+
+    # Set as active vertical
+    app._active_vertical = vertical_name
+
+    return redirect(url_for('index'))
+
+
+@app.route("/verticals/<name>/edit")
+def vertical_edit_page(name):
+    """Show vertical edit form."""
+    from vertical_manager import VerticalManager
+
+    vm = VerticalManager()
+    vertical = vm.get_vertical(name)
+
+    if not vertical:
+        flash(f"Vertical '{name}' not found", "danger")
+        return redirect(url_for('index'))
+
+    return render_template('vertical_edit.html', vertical=vertical)
+
+
+@app.route("/verticals/brand/add", methods=["POST"])
+def add_brand_to_vertical():
+    """Add a single brand to a vertical."""
+    from vertical_manager import VerticalManager
+
+    vertical_name = request.form.get('vertical_name')
+    instagram_handle = request.form.get('instagram_handle', '').strip()
+    tiktok_handle = request.form.get('tiktok_handle', '').strip()
+
+    # Require at least one handle
+    if not instagram_handle and not tiktok_handle:
+        flash("At least one social media handle is required (Instagram or TikTok)", "danger")
+        return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+    vm = VerticalManager()
+    # Use Instagram handle as primary identifier, or TikTok if no Instagram
+    primary_handle = instagram_handle or tiktok_handle
+    if vm.add_brand(vertical_name, instagram_handle=instagram_handle or None, tiktok_handle=tiktok_handle or None):
+        platforms = []
+        if instagram_handle:
+            platforms.append(f"IG: @{instagram_handle.lstrip('@')}")
+        if tiktok_handle:
+            platforms.append(f"TT: @{tiktok_handle.lstrip('@')}")
+        flash(f"Added {' + '.join(platforms)}", "success")
+    else:
+        flash(f"Brand is already in this vertical", "warning")
+
+    return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+
+@app.route("/verticals/brand/bulk-add", methods=["POST"])
+def bulk_add_brands():
+    """Add multiple brands to a vertical."""
+    from vertical_manager import VerticalManager
+
+    vertical_name = request.form.get('vertical_name')
+    bulk_handles = request.form.get('bulk_handles', '').strip()
+
+    if not bulk_handles:
+        flash("No handles provided", "warning")
+        return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+    vm = VerticalManager()
+    result = vm.bulk_add_brands(vertical_name, bulk_handles)
+
+    if result['added'] > 0:
+        flash(f"Added {result['added']} brands", "success")
+    if result['skipped'] > 0:
+        flash(f"Skipped {result['skipped']} (already exist)", "warning")
+
+    return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+
+@app.route("/verticals/brand/remove", methods=["POST"])
+def remove_brand_from_vertical():
+    """Remove a brand from a vertical."""
+    from vertical_manager import VerticalManager
+
+    vertical_name = request.form.get('vertical_name')
+    instagram_handle = request.form.get('instagram_handle')
+
+    vm = VerticalManager()
+    if vm.remove_brand(vertical_name, instagram_handle):
+        flash(f"Removed @{instagram_handle.lstrip('@')}", "success")
+    else:
+        flash(f"Brand not found", "warning")
+
+    return redirect(url_for('vertical_edit_page', name=vertical_name))
+
+
+@app.route("/verticals/delete", methods=["POST"])
+def delete_vertical():
+    """Delete a vertical."""
+    from vertical_manager import VerticalManager
+
+    vertical_name = request.form.get('vertical_name')
+
+    vm = VerticalManager()
+    if vm.delete_vertical(vertical_name):
+        flash(f"Deleted vertical '{vertical_name}'", "success")
+        # Clear active vertical if it was deleted
+        if hasattr(app, '_active_vertical') and app._active_vertical == vertical_name:
+            app._active_vertical = None
+    else:
+        flash(f"Vertical not found", "warning")
+
+    return redirect(url_for('index'))
+
+
+# ── Chat Routes (Scout AI Assistant) ──
+
+@app.route("/chat")
+def chat_page():
+    """Chat interface with Scout AI assistant."""
+    return render_template("chat.html", active_page="chat")
+
+
+@app.route("/chat/message", methods=["POST"])
+def chat_message():
+    """Process chat message from user and return Scout's response."""
+    from scout_agent import ScoutAgent
+    from chat_handler import ChatHandler
+    from flask import session, jsonify
+
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+
+        if not message:
+            return jsonify({"error": "Empty message"}), 400
+
+        # Try ChatHandler first for category management commands
+        chat_handler = ChatHandler()
+        current_vertical = get_active_vertical_name()
+        result = chat_handler.process_message(message, current_vertical)
+
+        # If ChatHandler handled it (not default text response), use that
+        if result.get('type') != 'text' or 'categories' in message.lower() or 'show' in message.lower() or 'add' in message.lower() or 'remove' in message.lower():
+            return jsonify(result)
+
+        # Otherwise, fall back to Scout agent for analysis/insights
+        scout = ScoutAgent()
+
+        # Get conversation context from session
+        if 'chat_context' not in session:
+            session['chat_context'] = {
+                'active_vertical': current_vertical,
+                'chat_history': []
+            }
+
+        context = session['chat_context']
+
+        # Process message with Scout
+        response, updated_context = scout.chat(message, context)
+
+        # Check if this triggered an analysis
+        analysis_started = updated_context.get('analysis_started', False)
+
+        # Update session context
+        session['chat_context'] = updated_context
+        session.modified = True
+
+        return jsonify({
+            "response": response,
+            "type": "text",
+            "analysis_started": analysis_started,
+            "context": {
+                "active_vertical": updated_context.get('active_vertical'),
+                "pending_vertical": updated_context.get('pending_vertical')
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Chat error: {e}", exc_info=True)
+        return jsonify({
+            "response": f"Oops, something went wrong: {str(e)}",
+            "type": "error",
+            "error": str(e)
+        }), 500
+
+
+@app.route("/analysis/status")
+def analysis_status():
+    """Check if analysis is currently running and return recent results."""
+    from flask import jsonify
+    import psutil
+    import sqlite3
+
+    # Check if main.py process is running
+    running = False
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            cmdline = proc.info.get('cmdline', [])
+            if cmdline and 'main.py' in ' '.join(cmdline):
+                running = True
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    # Get count of recent outliers found (last hour)
+    outliers_count = 0
+    last_analysis_time = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.row_factory = sqlite3.Row
+
+        # Count outliers from the last analysis
+        result = conn.execute("""
+            SELECT COUNT(*) as count, MAX(collected_at) as last_time
+            FROM competitor_posts
+            WHERE is_outlier = 1
+        """).fetchone()
+
+        if result:
+            outliers_count = result['count']
+            last_analysis_time = result['last_time']
+
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error getting analysis status from database: {e}")
+
+    return jsonify({
+        "running": running,
+        "outliers_count": outliers_count,
+        "last_analysis_time": last_analysis_time
+    })
 
 
 # ── Entry Point ──

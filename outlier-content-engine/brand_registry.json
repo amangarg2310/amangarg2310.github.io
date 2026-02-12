@@ -1,0 +1,149 @@
+{
+  "_comment": "Brand name to official handle mappings for discovery feature",
+  "_version": "1.0",
+  "brands": {
+    "nike": {
+      "official_name": "Nike",
+      "instagram": {
+        "handle": "nike",
+        "follower_count": 306000000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "nike",
+        "follower_count": 5600000,
+        "verified": true
+      },
+      "alternatives": ["nikesportswear", "nikerunning", "nikesb"]
+    },
+    "adidas": {
+      "official_name": "Adidas",
+      "instagram": {
+        "handle": "adidas",
+        "follower_count": 29800000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "adidas",
+        "follower_count": 4200000,
+        "verified": true
+      },
+      "alternatives": ["adidasoriginals", "adidasbasketball"]
+    },
+    "supreme": {
+      "official_name": "Supreme",
+      "instagram": {
+        "handle": "supremenewyork",
+        "follower_count": 17100000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "supremenewyork",
+        "follower_count": 150000,
+        "verified": false
+      },
+      "alternatives": ["supreme"],
+      "notes": "Common mistake: @supreme is not the official account"
+    },
+    "stussy": {
+      "official_name": "Stüssy",
+      "instagram": {
+        "handle": "stussy",
+        "follower_count": 4900000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "stussy",
+        "follower_count": 285000,
+        "verified": true
+      },
+      "alternatives": []
+    },
+    "fearofgod": {
+      "official_name": "Fear of God",
+      "instagram": {
+        "handle": "fearofgod",
+        "follower_count": 2300000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official TikTok presence"
+      },
+      "alternatives": ["fearofgodessentials"]
+    },
+    "essentials": {
+      "official_name": "Essentials",
+      "instagram": {
+        "handle": "essentials",
+        "follower_count": 3100000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official TikTok presence"
+      },
+      "alternatives": ["fearofgodessentials"]
+    },
+    "off-white": {
+      "official_name": "Off-White",
+      "instagram": {
+        "handle": "off____white",
+        "follower_count": 14600000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "off____white",
+        "follower_count": 890000,
+        "verified": true
+      },
+      "alternatives": ["offwhite", "off_white"]
+    },
+    "bape": {
+      "official_name": "A Bathing Ape",
+      "instagram": {
+        "handle": "bape",
+        "follower_count": 5600000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "bape_official",
+        "follower_count": 420000,
+        "verified": true
+      },
+      "alternatives": ["bapeofficial", "abathingape"]
+    },
+    "palace": {
+      "official_name": "Palace",
+      "instagram": {
+        "handle": "palaceskateboards",
+        "follower_count": 2800000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false
+      },
+      "alternatives": ["palace"]
+    },
+    "carhartt": {
+      "official_name": "Carhartt WIP",
+      "instagram": {
+        "handle": "carhartt_wip",
+        "follower_count": 2100000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "carhartt_wip",
+        "follower_count": 180000,
+        "verified": true
+      },
+      "alternatives": ["carhartt", "carharttwip"]
+    }
+  }
+}

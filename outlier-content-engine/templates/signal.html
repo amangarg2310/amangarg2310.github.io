@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>Signal AI - Outlier Content</title>
+    <link rel="stylesheet" href="/static/signal-ai.css">
+</head>
+<body>
+
+<div class="signal-split">
+    <!-- ========== LEFT PANEL: CHAT ========== -->
+    <div class="signal-chat-panel">
+        <!-- Chat Header -->
+        <div class="signal-chat-header">
+            <div class="signal-brand">
+                <div class="signal-brand-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                    </svg>
+                </div>
+                <span class="signal-brand-name">Signal AI</span>
+            </div>
+            <p class="signal-chat-subtitle">Outlier Content · {{ outliers|length if outliers else 0 }} posts</p>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="signal-messages" id="chatMessages">
+            <!-- Welcome Message -->
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        Welcome back. I've been monitoring your sector. Which brand or competitor set should we analyze today?
+                    </div>
+                    <div class="signal-message-time">Just now</div>
+                </div>
+            </div>
+
+            <!-- Competitive Set Display -->
+            {% if competitive_set %}
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        Currently tracking {{ competitive_set|length }} brands in {{ vertical_name }}:
+                        {% for brand in competitive_set %}
+                            {%- if brand.instagram_handle -%}
+                                @{{ brand.instagram_handle }}
+                            {%- elif brand.tiktok_handle -%}
+                                @{{ brand.tiktok_handle }}
+                            {%- elif brand.brand_name -%}
+                                {{ brand.brand_name }}
+                            {%- endif -%}
+                            {%- if not loop.last %}, {% endif -%}
+                        {% endfor %}
+                    </div>
+                    <div class="signal-message-time">Active competitors</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Analysis Summary (if insights exist) -->
+            {% if insights and insights.has_insights %}
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        {{ insights.summary }}
+                    </div>
+
+                    <!-- Pattern Cards -->
+                    {% for pattern in insights.patterns[:2] %}
+                    <div class="signal-insight-card">
+                        <div class="signal-insight-header">
+                            <span class="signal-insight-icon">📊</span>
+                            <span class="signal-insight-label">PATTERN</span>
+                            <span class="signal-insight-metric">{{ pattern.metric }}</span>
+                        </div>
+                        <div class="signal-insight-title">{{ pattern.name }}</div>
+                        <div class="signal-insight-desc">{{ pattern.description }}</div>
+                        <a href="#" class="signal-insight-link" onclick="filterByPattern('{{ pattern.name }}'); return false;">
+                            View related posts →
+                        </a>
+                    </div>
+                    {% endfor %}
+
+                    <!-- Franchise Cards -->
+                    {% for franchise in insights.franchises[:1] %}
+                    <div class="signal-insight-card">
+                        <div class="signal-insight-header">
+                            <span class="signal-insight-icon">🎬</span>
+                            <span class="signal-insight-label">FRANCHISE</span>
+                            <span class="signal-insight-metric">{{ franchise.retention_score }}</span>
+                        </div>
+                        <div class="signal-insight-title">{{ franchise.name }}</div>
+                        <div class="signal-insight-desc">{{ franchise.description }}</div>
+                        <a href="#" class="signal-insight-link">View related posts →</a>
+                    </div>
+                    {% endfor %}
+
+                    <div class="signal-message-time">{{ insights.outlier_count }} outliers analyzed</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Chat Input -->
+        <div class="signal-chat-input-area">
+            <input
+                type="text"
+                class="signal-chat-input"
+                id="chatInput"
+                placeholder="Ask about your competitors..."
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    <!-- ========== RIGHT PANEL: CONTENT ========== -->
+    <div class="signal-content-panel">
+        <!-- Content Header -->
+        <div class="signal-content-header">
+            <div class="signal-title-row">
+                <h1 class="signal-content-title">Outlier Content</h1>
+            </div>
+
+            <!-- Filter Pills -->
+            <div class="signal-filters">
+                <!-- Platform Filter -->
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">PLATFORM</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill {% if not selected_platform %}active{% endif %}"
+                                onclick="applyFilter('platform', '')">All</button>
+                        <button class="signal-pill {% if selected_platform == 'instagram' %}active{% endif %}"
+                                onclick="applyFilter('platform', 'instagram')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                <circle cx="12" cy="12" r="5"/>
+                                <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/>
+                            </svg>
+                            Instagram
+                        </button>
+                        <button class="signal-pill {% if selected_platform == 'tiktok' %}active{% endif %}"
+                                onclick="applyFilter('platform', 'tiktok')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/>
+                            </svg>
+                            TikTok
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Timeframe Filter -->
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">TIMEFRAME</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill {% if not selected_timeframe %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '')">All time</button>
+                        <button class="signal-pill {% if selected_timeframe == '30d' %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '30d')">Last 30 days</button>
+                        <button class="signal-pill {% if selected_timeframe == '90d' %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '90d')">Last 3 months</button>
+                        <button class="signal-pill {% if selected_timeframe == '180d' %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '180d')">Last 6 months</button>
+                        <button class="signal-pill {% if selected_timeframe == '365d' %}active{% endif %}"
+                                onclick="applyFilter('timeframe', '365d')">Last year</button>
+                    </div>
+                </div>
+
+                <!-- Sort Filter -->
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">SORT BY</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill {% if sort_by == 'score' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'score')">Score</button>
+                        <button class="signal-pill {% if sort_by == 'saves' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'saves')">Saves</button>
+                        <button class="signal-pill {% if sort_by == 'shares' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'shares')">Shares</button>
+                        <button class="signal-pill {% if sort_by == 'date' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'date')">Recent</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Grid -->
+        <div class="signal-grid">
+            {% if outliers %}
+                {% for post in outliers %}
+                <a href="{{ post.post_url }}" target="_blank" rel="noopener noreferrer" class="signal-card-link">
+                    <div class="signal-card" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+                        <!-- Card Media -->
+                    <div class="signal-card-media">
+                        <!-- Post Image/Video -->
+                        {% if post.media_url %}
+                            {% if post.media_type == 'video' %}
+                            <video src="/proxy-image?url={{ post.media_url|urlencode }}" muted loop playsinline
+                                   onmouseover="this.play()" onmouseout="this.pause()"
+                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"></video>
+                            <div class="signal-gradient-purple" style="display:none;"></div>
+                            {% else %}
+                            <img src="/proxy-image?url={{ post.media_url|urlencode }}" alt="{{ post.competitor_name }} post" loading="lazy"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                            <div class="signal-gradient-{{ ['purple', 'green', 'orange', 'pink', 'teal'][loop.index0 % 5] }}" style="display:none;"></div>
+                            {% endif %}
+                        {% else %}
+                            <!-- Gradient Fallback -->
+                            {% set gradients = ['signal-gradient-purple', 'signal-gradient-green', 'signal-gradient-orange', 'signal-gradient-pink', 'signal-gradient-teal'] %}
+                            <div class="{{ gradients[loop.index0 % 5] }}"></div>
+                        {% endif %}
+
+                        <!-- Platform Badge (Top-Left) -->
+                        <div class="signal-platform-badge">
+                            {% if post.platform == 'tiktok' %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/>
+                            </svg>
+                            {% else %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                <circle cx="12" cy="12" r="5"/>
+                                <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/>
+                            </svg>
+                            {% endif %}
+                            @{{ post.competitor_handle }}
+                        </div>
+
+                        <!-- Date Badge (Below Platform Badge) -->
+                        {% if post.posted_at %}
+                        <div class="signal-date-badge">
+                            {{ post.posted_at|timeago }}
+                        </div>
+                        {% endif %}
+
+                        <!-- Category Tags (Top-Right) -->
+                        {% if post.content_tags %}
+                        <div class="signal-tags">
+                            {% for tag in post.content_tags[:3] %}
+                            <span class="signal-tag signal-tag-{{ loop.index0 % 5 }}">{{ tag }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Score Ring (Bottom-Right) -->
+                        <div class="signal-score-ring">
+                            {% set pct = post.engagement_score_pct %}
+                            {% set circ = 251.2 %}
+                            {% set offset = circ - (circ * pct / 100) %}
+                            {% if pct >= 90 %}{% set ring_class = "cyan" %}
+                            {% elif pct >= 75 %}{% set ring_class = "green" %}
+                            {% elif pct >= 50 %}{% set ring_class = "yellow" %}
+                            {% else %}{% set ring_class = "dim" %}{% endif %}
+
+                            <svg viewBox="0 0 88 88" class="signal-score-svg">
+                                <circle class="signal-score-bg" cx="44" cy="44" r="40"/>
+                                <circle class="signal-score-fg {{ ring_class }}" cx="44" cy="44" r="40"
+                                        stroke-dasharray="{{ circ }}"
+                                        stroke-dashoffset="{{ offset }}"/>
+                            </svg>
+                            <span class="signal-score-value">{{ pct }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="signal-card-body">
+                        <!-- Caption -->
+                        {% if post.caption %}
+                        <p class="signal-card-caption">"{{ post.caption[:150] }}{% if post.caption|length > 150 %}...{% endif %}"</p>
+                        {% else %}
+                        <p class="signal-card-caption" style="opacity: 0.5;">(No caption)</p>
+                        {% endif %}
+
+                        <!-- Stats -->
+                        <div class="signal-card-stats">
+                            <div class="signal-stat">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+                                </svg>
+                                {{ "{:,}".format(post.likes) if post.likes else '0' }}
+                            </div>
+                            <div class="signal-stat">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                                {{ "{:,}".format(post.comments) if post.comments else '0' }}
+                            </div>
+                            {% if post.saves %}
+                            <div class="signal-stat">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+                                </svg>
+                                {{ "{:,}".format(post.saves) }}
+                            </div>
+                            {% endif %}
+                            {% if post.shares %}
+                            <div class="signal-stat">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>
+                                    <polyline points="16 6 12 2 8 6"/>
+                                    <line x1="12" y1="2" x2="12" y2="15"/>
+                                </svg>
+                                {{ "{:,}".format(post.shares) }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    </div>
+                </a>
+                {% endfor %}
+            {% else %}
+                <!-- Empty State -->
+                <div class="signal-empty">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                    <h3>No outlier posts found</h3>
+                    <p>Run an analysis to find viral content from your competitors.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Filter handling
+function applyFilter(key, value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set(key, value);
+    window.location.href = url.toString();
+}
+
+// Pattern filtering
+function filterByPattern(patternName) {
+    console.log('Filtering by pattern:', patternName);
+    // TODO: Implement pattern-based filtering
+}
+
+// Chat input handling
+const chatInput = document.getElementById('chatInput');
+if (chatInput) {
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && chatInput.value.trim()) {
+            sendChatMessage(chatInput.value.trim());
+            chatInput.value = '';
+        }
+    });
+}
+
+async function sendChatMessage(message) {
+    // Add user message first
+    addChatMessage(message, true);
+
+    try {
+        const response = await fetch('/chat/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+
+        const data = await response.json();
+
+        // Handle different response types
+        if (data.type === 'category_card') {
+            addCategoryCard(data.response, data.data, data.actions);
+        } else if (data.type === 'category_list') {
+            addCategoryList(data.response, data.data);
+        } else if (data.response) {
+            addChatMessage(data.response, false);
+        }
+    } catch (error) {
+        console.error('Chat error:', error);
+        addChatMessage('Sorry, there was an error processing your message.', false);
+    }
+}
+
+function addChatMessage(text, isUser) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = isUser ? 'signal-message signal-message-user' : 'signal-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'signal-avatar';
+    avatar.textContent = isUser ? 'U' : 'S';
+
+    if (isUser) {
+        avatar.style.background = 'var(--signal-cyan)';
+        avatar.style.color = '#000';
+    }
+
+    const content = document.createElement('div');
+    content.className = 'signal-message-content';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'signal-message-bubble';
+    bubble.textContent = text;
+
+    if (isUser) {
+        bubble.style.background = 'var(--signal-cyan-dim)';
+        bubble.style.border = '1px solid var(--signal-cyan)';
+        bubble.style.color = 'var(--signal-text-primary)';
+    }
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'signal-message-time';
+    timeDiv.textContent = 'Just now';
+
+    content.appendChild(bubble);
+    content.appendChild(timeDiv);
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addCategoryCard(text, data, actions) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'signal-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'signal-avatar';
+    avatar.textContent = 'S';
+
+    const content = document.createElement('div');
+    content.className = 'signal-message-content';
+
+    // Text bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'signal-message-bubble';
+    bubble.textContent = text;
+    content.appendChild(bubble);
+
+    // Category card
+    const card = document.createElement('div');
+    card.className = 'signal-insight-card';
+    card.style.marginTop = '12px';
+
+    const header = document.createElement('div');
+    header.className = 'signal-insight-header';
+    header.innerHTML = `
+        <span class="signal-insight-icon">📁</span>
+        <span class="signal-insight-label">COLLECTION</span>
+        <span class="signal-insight-metric">${data.brand_count} brand${data.brand_count !== 1 ? 's' : ''}</span>
+    `;
+    card.appendChild(header);
+
+    const title = document.createElement('div');
+    title.className = 'signal-insight-title';
+    title.textContent = data.name;
+    card.appendChild(title);
+
+    const brandsDiv = document.createElement('div');
+    brandsDiv.className = 'signal-insight-desc';
+    brandsDiv.style.display = 'flex';
+    brandsDiv.style.flexWrap = 'wrap';
+    brandsDiv.style.gap = '8px';
+    brandsDiv.style.marginTop = '12px';
+
+    data.brands.forEach(handle => {
+        const brandTag = document.createElement('span');
+        brandTag.style.cssText = 'background: var(--signal-bg-tertiary); color: var(--signal-text-secondary); padding: 4px 10px; border-radius: 6px; font-size: 12px;';
+        brandTag.textContent = handle;
+        brandsDiv.appendChild(brandTag);
+    });
+    card.appendChild(brandsDiv);
+
+    // Action buttons
+    if (actions && actions.length > 0) {
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 12px;';
+
+        actions.forEach(action => {
+            const btn = document.createElement('button');
+            btn.className = 'signal-pill';
+            btn.textContent = action.label;
+            btn.onclick = () => {
+                if (action.action === 'run_analysis') {
+                    sendChatMessage(`run analysis for ${action.category}`);
+                } else if (action.action === 'add_brands') {
+                    chatInput.value = `add @brand to ${action.category}`;
+                    chatInput.focus();
+                }
+            };
+            actionsDiv.appendChild(btn);
+        });
+
+        card.appendChild(actionsDiv);
+    }
+
+    content.appendChild(card);
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'signal-message-time';
+    timeDiv.textContent = 'Just now';
+    content.appendChild(timeDiv);
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addCategoryList(text, categories) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'signal-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'signal-avatar';
+    avatar.textContent = 'S';
+
+    const content = document.createElement('div');
+    content.className = 'signal-message-content';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'signal-message-bubble';
+    bubble.textContent = text;
+    content.appendChild(bubble);
+
+    // Category list
+    categories.forEach(cat => {
+        const catCard = document.createElement('div');
+        catCard.className = 'signal-insight-card';
+        catCard.style.marginTop = '12px';
+        catCard.style.cursor = 'pointer';
+        catCard.onclick = () => sendChatMessage(`show ${cat.name}`);
+
+        const header = document.createElement('div');
+        header.className = 'signal-insight-header';
+        header.innerHTML = `
+            <span class="signal-insight-icon">📁</span>
+            <span class="signal-insight-label">${cat.name.toUpperCase()}</span>
+            <span class="signal-insight-metric">${cat.brand_count} brand${cat.brand_count !== 1 ? 's' : ''}</span>
+        `;
+        catCard.appendChild(header);
+
+        content.appendChild(catCard);
+    });
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'signal-message-time';
+    timeDiv.textContent = 'Just now';
+    content.appendChild(timeDiv);
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Auto-scroll messages
+const messagesContainer = document.getElementById('chatMessages');
+if (messagesContainer) {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+</script>
+
+</body>
+</html>

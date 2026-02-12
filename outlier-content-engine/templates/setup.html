@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Setup{% endblock %}
+{% block page_title %}One-Time Setup{% endblock %}
+{% block page_subtitle %}Configure API keys and team settings — you only need to do this once{% endblock %}
+
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">API Keys</div>
+            <div class="card-subtitle">Required for data collection and AI analysis</div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('save_setup') }}">
+        <!-- RapidAPI Key -->
+        <div class="form-group">
+            <label class="form-label">RapidAPI Key *</label>
+            <input type="text" name="rapidapi_key" class="form-input"
+                   value="{{ rapidapi_key or '' }}" required
+                   placeholder="Your RapidAPI key">
+            <div class="form-hint">
+                Used for Instagram and TikTok data collection.
+                <a href="https://rapidapi.com" target="_blank" style="color:var(--accent)">Get your key here →</a>
+            </div>
+        </div>
+
+        <!-- OpenAI Key -->
+        <div class="form-group">
+            <label class="form-label">OpenAI API Key *</label>
+            <input type="text" name="openai_key" class="form-input"
+                   value="{{ openai_key or '' }}" required
+                   placeholder="sk-...">
+            <div class="form-hint">
+                Used for AI content analysis.
+                <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent)">Get your key here →</a>
+            </div>
+        </div>
+
+        <!-- TikTok Key (Optional) -->
+        <div class="form-group">
+            <label class="form-label">TikTok RapidAPI Key <span class="text-muted">(optional)</span></label>
+            <input type="text" name="tiktok_key" class="form-input"
+                   value="{{ tiktok_key or '' }}"
+                   placeholder="Leave blank to use same as Instagram">
+            <div class="form-hint">
+                Separate key for TikTok if different from Instagram RapidAPI key
+            </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:28px 0;padding-top:28px"></div>
+
+        <!-- Team Emails -->
+        <div class="form-group">
+            <label class="form-label">Team Email Distribution</label>
+            <input type="text" name="team_emails" class="form-input"
+                   value="{{ team_emails or '' }}"
+                   placeholder="you@startup.com, teammate@startup.com">
+            <div class="form-hint">
+                Comma-separated emails for weekly reports (optional, can be added later)
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save & Continue
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Help Card -->
+<div class="card" style="border-left:3px solid var(--accent)">
+    <div class="card-header">
+        <div class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="display:inline;margin-right:8px"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Getting Your API Keys
+        </div>
+    </div>
+
+    <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">
+        <p style="margin-bottom:14px"><strong style="color:var(--text)">RapidAPI (Instagram + TikTok):</strong></p>
+        <ol style="padding-left:20px;margin-bottom:20px">
+            <li>Sign up at <a href="https://rapidapi.com" target="_blank" style="color:var(--accent)">rapidapi.com</a></li>
+            <li>Search for "Instagram Scraper API 2" and subscribe (free tier available)</li>
+            <li>Find your key in the code examples section (X-RapidAPI-Key)</li>
+        </ol>
+
+        <p style="margin-bottom:14px"><strong style="color:var(--text)">OpenAI (AI Analysis):</strong></p>
+        <ol style="padding-left:20px">
+            <li>Sign up at <a href="https://platform.openai.com" target="_blank" style="color:var(--accent)">platform.openai.com</a></li>
+            <li>Add payment method ($5 minimum)</li>
+            <li>Go to API Keys → Create new secret key</li>
+        </ol>
+    </div>
+</div>
+
+{% endblock %}

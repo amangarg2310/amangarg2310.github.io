@@ -175,13 +175,209 @@ class RapidAPITikTokCollector(BaseCollector):
         return posts
 
 
-def create_tiktok_collector(source: str = "rapidapi") -> BaseCollector:
-    """Create a TikTok collector instance."""
-    api_key = getattr(config, 'TIKTOK_RAPIDAPI_KEY', None) or config.RAPIDAPI_KEY
+class ApifyTikTokCollector(BaseCollector):
+    """Collects TikTok posts via Apify TikTok Scraper actor."""
 
-    if source == "rapidapi":
+    ACTOR_ID = "clockworks~tiktok-scraper"  # Apify's TikTok scraper
+
+    def __init__(self, api_token: str):
+        if not api_token:
+            raise ValueError(
+                "APIFY_API_TOKEN is required. Get one at https://apify.com"
+            )
+        self.api_token = api_token
+        self.base_url = "https://api.apify.com/v2"
+
+    def health_check(self) -> bool:
+        """Verify Apify API access."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/acts/{self.ACTOR_ID}",
+                params={"token": self.api_token},
+                timeout=10,
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def collect_posts(self, handle: str, competitor_name: str,
+                      count: int = 12) -> List[CollectedPost]:
+        """Fetch recent TikTok posts for a handle using Apify."""
+        logger.info(f"  TikTok @{handle}: starting Apify collection...")
+
+        # Start actor run
+        run_input = {
+            "profiles": [handle],
+            "resultsPerPage": min(count, 50),
+            "shouldDownloadVideos": False,
+            "shouldDownloadCovers": False,
+            "shouldDownloadSubtitles": False,
+        }
+
+        try:
+            # Trigger actor run
+            response = requests.post(
+                f"{self.base_url}/acts/{self.ACTOR_ID}/runs",
+                params={"token": self.api_token},
+                json=run_input,
+                timeout=30,
+            )
+
+            if response.status_code not in (200, 201):
+                logger.error(
+                    f"Failed to start Apify actor: {response.status_code} "
+                    f"{response.text[:200]}"
+                )
+                return []
+
+            run_data = response.json()
+            run_id = run_data["data"]["id"]
+            logger.info(f"  TikTok @{handle}: Apify run started (ID: {run_id})")
+
+            # Wait for run to complete
+            max_wait = 180  # 3 minutes
+            wait_interval = 5
+            elapsed = 0
+
+            while elapsed < max_wait:
+                time.sleep(wait_interval)
+                elapsed += wait_interval
+
+                status_response = requests.get(
+                    f"{self.base_url}/actor-runs/{run_id}",
+                    params={"token": self.api_token},
+                    timeout=10,
+                )
+
+                if status_response.status_code != 200:
+                    logger.error(f"Failed to check run status: {status_response.status_code}")
+                    return []
+
+                run_info = status_response.json()["data"]
+                status = run_info["status"]
+
+                if status == "SUCCEEDED":
+                    logger.info(f"  TikTok @{handle}: Apify run completed")
+                    break
+                elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
+                    logger.error(f"  TikTok @{handle}: Apify run {status}")
+                    return []
+
+            else:
+                logger.error(f"  TikTok @{handle}: Apify run timeout")
+                return []
+
+            # Fetch results from dataset
+            dataset_id = run_info["defaultDatasetId"]
+            results_response = requests.get(
+                f"{self.base_url}/datasets/{dataset_id}/items",
+                params={"token": self.api_token},
+                timeout=30,
+            )
+
+            if results_response.status_code != 200:
+                logger.error(
+                    f"Failed to fetch dataset: {results_response.status_code}"
+                )
+                return []
+
+            items = results_response.json()
+            posts = self._parse_apify_posts(items, handle, competitor_name, count)
+
+            logger.info(
+                f"  TikTok @{handle}: collected {len(posts)} posts"
+            )
+            return posts
+
+        except Exception as e:
+            logger.error(f"Error collecting TikTok posts via Apify: {e}")
+            return []
+
+    def _parse_apify_posts(self, items: List[dict], handle: str,
+                          competitor_name: str,
+                          limit: int) -> List[CollectedPost]:
+        """Parse Apify TikTok response into CollectedPost objects."""
+        posts = []
+
+        for item in items[:limit]:
+            try:
+                post_id = str(item.get("id", ""))
+                if not post_id:
+                    continue
+
+                # Parse timestamp (Apify returns Unix timestamp, not ISO)
+                posted_at = None
+                create_time = item.get("createTime")
+                if create_time:
+                    try:
+                        posted_at = datetime.fromtimestamp(
+                            int(create_time), tz=timezone.utc
+                        )
+                    except (ValueError, TypeError):
+                        pass
+
+                # Extract audio info
+                music = item.get("musicMeta", {}) or {}
+                audio_id = str(music.get("musicId", "")) if music.get("musicId") else None
+                audio_name = music.get("musicName")
+
+                # Stats are at root level in Apify response
+                likes = item.get("diggCount", 0) or 0
+                comments = item.get("commentCount", 0) or 0
+                shares = item.get("shareCount", 0) or 0
+                views = item.get("playCount", 0) or 0
+                saves = item.get("collectCount", 0) or 0
+
+                # Get cover image
+                video_meta = item.get("videoMeta", {}) or {}
+                media_url = video_meta.get("coverUrl") or video_meta.get("originalCoverUrl")
+
+                posts.append(CollectedPost(
+                    post_id=post_id,
+                    competitor_name=competitor_name,
+                    competitor_handle=handle,
+                    platform="tiktok",
+                    post_url=item.get("webVideoUrl", f"https://www.tiktok.com/@{handle}/video/{post_id}"),
+                    media_type="video",
+                    caption=item.get("text", ""),
+                    likes=likes,
+                    comments=comments,
+                    shares=shares,
+                    views=views,
+                    saves=saves,
+                    posted_at=posted_at,
+                    media_url=media_url,
+                    hashtags=[
+                        tag.get("name", "")
+                        for tag in item.get("hashtags", [])
+                    ],
+                    follower_count=item.get("authorMeta", {}).get("fans"),
+                    audio_id=audio_id,
+                    audio_name=audio_name,
+                ))
+
+            except Exception as e:
+                logger.error(f"Error parsing Apify TikTok post: {e}")
+                continue
+
+        return posts
+
+
+def create_tiktok_collector(source: str = None) -> BaseCollector:
+    """Create a TikTok collector instance."""
+    # Get collection source from database/config if not specified
+    if source is None:
+        source = config.COLLECTION_SOURCE
+
+    if source == "apify":
+        api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+        if not api_token:
+            raise ValueError("APIFY_API_TOKEN not set")
+        return ApifyTikTokCollector(api_token=api_token)
+    elif source == "rapidapi":
+        api_key = config.get_api_key('tiktok') or config.get_api_key('rapidapi')
         return RapidAPITikTokCollector(api_key=api_key)
     else:
         raise ValueError(
-            f"Unknown TikTok collection source: '{source}'. Use 'rapidapi'."
+            f"Unknown TikTok collection source: '{source}'. Use 'apify' or 'rapidapi'."
         )

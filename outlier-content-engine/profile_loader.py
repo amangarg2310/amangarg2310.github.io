@@ -1,11 +1,12 @@
 """
-Profile Loader — loads and validates brand profiles from YAML.
+Profile Loader — loads and validates brand profiles from YAML or database.
 
 Every module in the engine references the BrandProfile returned here.
 To switch brands, change ACTIVE_PROFILE in .env and restart.
 """
 
 import yaml
+import sqlite3
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from pathlib import Path
@@ -117,12 +118,105 @@ REQUIRED_BRAND_FIELDS = ["name", "vertical"]
 REQUIRED_VOICE_FIELDS = ["tone", "language_style", "themes", "avoids", "example_captions"]
 
 
-def load_profile(profile_name: Optional[str] = None) -> BrandProfile:
+def load_profile_from_database(vertical_name: str) -> Optional[BrandProfile]:
     """
-    Load a brand profile from YAML.
+    Load a brand profile from the verticals database.
 
     Args:
-        profile_name: Name of the profile (without .yaml).
+        vertical_name: Name of the vertical in the database.
+
+    Returns:
+        BrandProfile dataclass built from vertical data, or None if not found.
+    """
+    if not config.DB_PATH.exists():
+        return None
+
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.row_factory = sqlite3.Row
+
+        # Get vertical metadata
+        vertical_row = conn.execute(
+            "SELECT name, description FROM verticals WHERE name = ?",
+            (vertical_name,)
+        ).fetchone()
+
+        if not vertical_row:
+            conn.close()
+            return None
+
+        # Get brands for this vertical
+        brand_rows = conn.execute("""
+            SELECT brand_name, instagram_handle, tiktok_handle
+            FROM vertical_brands
+            WHERE vertical_name = ?
+        """, (vertical_name,)).fetchall()
+
+        conn.close()
+
+        if not brand_rows:
+            return None
+
+        # Build competitor configs
+        competitors = []
+        for brand in brand_rows:
+            handles = {}
+            if brand['instagram_handle']:
+                handles['instagram'] = brand['instagram_handle']
+            if brand['tiktok_handle']:
+                handles['tiktok'] = brand['tiktok_handle']
+
+            # Use Instagram handle as name if brand_name is not set
+            name = brand['brand_name'] or brand['instagram_handle'] or brand['tiktok_handle']
+            competitors.append(CompetitorConfig(name=name, handles=handles))
+
+        # Create minimal voice config (Scout doesn't need this, but outlier detection does)
+        voice = VoiceConfig(
+            tone="engaging",
+            language_style="casual",
+            themes=["social media", "viral content"],
+            avoids=["spam", "clickbait"],
+            example_captions=[]
+        )
+
+        # Create default content tags
+        content_tags = ContentTags(
+            themes=["trending", "viral", "engaging"],
+            hook_types=["question", "shock", "curiosity"],
+            formats=["reel", "carousel", "story"]
+        )
+
+        # Use default outlier settings
+        outlier_settings = OutlierSettings()
+
+        # Build and return profile
+        return BrandProfile(
+            name=vertical_name,
+            vertical=vertical_name,
+            tagline=vertical_row['description'] or f"{vertical_name} brands",
+            description=vertical_row['description'] or f"Tracking {vertical_name} competitors",
+            voice=voice,
+            competitors=competitors,
+            content_tags=content_tags,
+            outlier_settings=outlier_settings,
+            profile_name=vertical_name.lower().replace(" ", "_"),
+            own_channel={},
+            follower_count=None,
+            team_size="solo"
+        )
+
+    except Exception as e:
+        import logging
+        logging.error(f"Error loading profile from database: {e}")
+        return None
+
+
+def load_profile(profile_name: Optional[str] = None) -> BrandProfile:
+    """
+    Load a brand profile from database first, fall back to YAML.
+
+    Args:
+        profile_name: Name of the profile/vertical.
                       Defaults to ACTIVE_PROFILE from .env.
 
     Returns:
@@ -130,19 +224,25 @@ def load_profile(profile_name: Optional[str] = None) -> BrandProfile:
 
     Raises:
         ProfileValidationError: If the profile is missing or invalid.
-        FileNotFoundError: If the YAML file doesn't exist.
+        FileNotFoundError: If neither database nor YAML file found.
     """
     if profile_name is None:
         profile_name = config.ACTIVE_PROFILE
 
+    # Try loading from database first (new vertical system)
+    db_profile = load_profile_from_database(profile_name)
+    if db_profile:
+        return db_profile
+
+    # Fall back to YAML (legacy system)
     yaml_path = config.PROFILES_DIR / f"{profile_name}.yaml"
 
     if not yaml_path.exists():
         available = [f.stem for f in config.PROFILES_DIR.glob("*.yaml") if f.stem != "_template"]
         raise FileNotFoundError(
-            f"Profile '{profile_name}' not found at {yaml_path}\n"
-            f"Available profiles: {available}\n"
-            f"Create one by copying profiles/_template.yaml"
+            f"Profile '{profile_name}' not found in database or YAML at {yaml_path}\n"
+            f"Available YAML profiles: {available}\n"
+            f"To create a new profile, use Scout in the dashboard or copy profiles/_template.yaml"
         )
 
     with open(yaml_path, "r") as f:

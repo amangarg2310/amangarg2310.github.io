@@ -8,13 +8,30 @@
 <!-- Filter Bar -->
 <div class="filter-bar">
     <div class="filter-group">
+        <span class="filter-label">Platform</span>
+        <div class="filter-pills" id="platform-pills">
+            <button class="pill {% if not selected_platform %}active{% endif %}"
+                    onclick="applyFilter('platform', '')">All</button>
+            <button class="pill {% if selected_platform == 'instagram' %}active{% endif %}"
+                    onclick="applyFilter('platform', 'instagram')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+                Instagram
+            </button>
+            <button class="pill {% if selected_platform == 'tiktok' %}active{% endif %}"
+                    onclick="applyFilter('platform', 'tiktok')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+                TikTok
+            </button>
+        </div>
+    </div>
+    <div class="filter-group">
         <span class="filter-label">Competitor</span>
         <div class="filter-pills" id="competitor-pills">
-            <button class="filter-pill {% if not selected_competitor %}active{% endif %}"
+            <button class="pill {% if not selected_competitor %}active{% endif %}"
                     onclick="applyFilter('competitor', '')">All</button>
             {% for comp in profile.competitors %}
             {% set comp_handle = comp.handles.get('instagram', comp.handles.get('tiktok', '')) %}
-            <button class="filter-pill {% if selected_competitor == comp_handle %}active{% endif %}"
+            <button class="pill {% if selected_competitor == comp_handle %}active{% endif %}"
                     onclick="applyFilter('competitor', '{{ comp_handle }}')">
                 {{ comp.name }}
             </button>
@@ -24,17 +41,17 @@
     <div class="filter-group">
         <span class="filter-label">Sort</span>
         <div class="filter-pills" id="sort-pills">
-            <button class="filter-pill {% if sort_by == 'score' %}active{% endif %}"
+            <button class="pill {% if sort_by == 'score' %}active{% endif %}"
                     onclick="applyFilter('sort', 'score')">Score</button>
-            <button class="filter-pill {% if sort_by == 'comments' %}active{% endif %}"
+            <button class="pill {% if sort_by == 'comments' %}active{% endif %}"
                     onclick="applyFilter('sort', 'comments')">Comments</button>
-            <button class="filter-pill {% if sort_by == 'saves' %}active{% endif %}"
+            <button class="pill {% if sort_by == 'saves' %}active{% endif %}"
                     onclick="applyFilter('sort', 'saves')">Saves</button>
-            <button class="filter-pill {% if sort_by == 'shares' %}active{% endif %}"
+            <button class="pill {% if sort_by == 'shares' %}active{% endif %}"
                     onclick="applyFilter('sort', 'shares')">Shares</button>
-            <button class="filter-pill {% if sort_by == 'weighted' %}active{% endif %}"
+            <button class="pill {% if sort_by == 'weighted' %}active{% endif %}"
                     onclick="applyFilter('sort', 'weighted')">Weighted</button>
-            <button class="filter-pill {% if sort_by == 'date' %}active{% endif %}"
+            <button class="pill {% if sort_by == 'date' %}active{% endif %}"
                     onclick="applyFilter('sort', 'date')">Recent</button>
         </div>
     </div>
@@ -62,60 +79,69 @@
 
 <div class="outlier-grid">
     {% for post in outliers %}
-    {% set grad_class = "grad-" ~ ((loop.index0 % 5) + 1) %}
     <div class="outlier-card" style="animation-delay: {{ loop.index0 * 0.04 }}s">
-        <!-- Gradient Header -->
-        <div class="outlier-card-header {{ grad_class }}">
-            <div class="header-top">
-                <span class="handle-pill">
-                    {% if post.platform == 'tiktok' %}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
-                    {% else %}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
-                    {% endif %}
-                    @{{ post.competitor_handle }}
-                </span>
-                {% if post.content_tags %}
-                <span class="franchise-tag">{{ post.content_tags[0] }}</span>
+        <!-- Card Media Container with Overlays -->
+        <div class="card-media">
+            <!-- Actual Post Image/Video -->
+            {% if post.media_url %}
+                {% if post.media_type == 'video' %}
+                <video src="{{ post.media_url }}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>
+                {% else %}
+                <img src="{{ post.media_url }}" alt="{{ post.competitor_name }} post" loading="lazy">
                 {% endif %}
+            {% else %}
+                <!-- Fallback gradient if no media -->
+                {% set grad_class = "grad-" ~ (loop.index0 % 5) %}
+                <div class="gradient-fallback {{ grad_class }}"></div>
+            {% endif %}
+
+            <!-- Platform Badge Overlay (Top-Left) -->
+            <div class="platform-badge {% if post.platform == 'instagram' %}badge-instagram{% else %}badge-tiktok{% endif %}">
+                {% if post.platform == 'tiktok' %}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+                {% else %}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+                {% endif %}
+                @{{ post.competitor_handle }}
             </div>
-            <div class="header-meta">
-                <span class="competitor-label">{{ post.competitor_name }}</span>
-                {% if post.posted_at %}
-                <span class="post-date">{{ post.posted_at[:10] }}</span>
-                {% endif %}
+
+            <!-- Category Tags Overlay (Top-Right) -->
+            {% if post.content_tags %}
+            <div class="category-tags">
+                {% for tag in post.content_tags[:3] %}
+                <span class="tag-pill tag-{{ loop.index0 % 5 }}">{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Engagement Score Ring (Bottom-Right) -->
+            <div class="eng-score" style="position:absolute;bottom:12px;right:12px;z-index:2;">
+                {% set pct = post.engagement_score_pct %}
+                {% set circ = 251.2 %}
+                {% set offset = circ - (circ * pct / 100) %}
+                {% if pct >= 90 %}{% set ring_class = "ring-cyan" %}
+                {% elif pct >= 75 %}{% set ring_class = "ring-green" %}
+                {% elif pct >= 50 %}{% set ring_class = "ring-yellow" %}
+                {% else %}{% set ring_class = "ring-muted" %}{% endif %}
+                <svg viewBox="0 0 88 88" class="score-svg">
+                    <circle class="bg-ring" cx="44" cy="44" r="40"/>
+                    <circle class="fg-ring {{ ring_class }}" cx="44" cy="44" r="40"
+                            stroke-dasharray="{{ circ }}"
+                            stroke-dashoffset="{{ offset }}"
+                            style="animation: scoreRing 1s ease-out {{ loop.index0 * 0.08 }}s both"/>
+                </svg>
+                <span class="score-val">{{ pct }}</span>
             </div>
         </div>
 
         <!-- Card Body -->
         <div class="outlier-card-body">
-            <!-- Caption + Score Row -->
-            <div class="caption-score-row">
-                <div class="caption-area">
-                    {% if post.caption %}
-                    <p class="card-caption">"{{ post.caption[:180] }}{% if post.caption|length > 180 %}...{% endif %}"</p>
-                    {% else %}
-                    <p class="card-caption text-muted">(No caption)</p>
-                    {% endif %}
-                </div>
-                <div class="eng-score">
-                    {% set pct = post.engagement_score_pct %}
-                    {% set circ = 251.2 %}
-                    {% set offset = circ - (circ * pct / 100) %}
-                    {% if pct >= 90 %}{% set ring_class = "ring-cyan" %}
-                    {% elif pct >= 75 %}{% set ring_class = "ring-green" %}
-                    {% elif pct >= 50 %}{% set ring_class = "ring-yellow" %}
-                    {% else %}{% set ring_class = "ring-muted" %}{% endif %}
-                    <svg viewBox="0 0 88 88" class="score-svg">
-                        <circle class="bg-ring" cx="44" cy="44" r="40"/>
-                        <circle class="fg-ring {{ ring_class }}" cx="44" cy="44" r="40"
-                                stroke-dasharray="{{ circ }}"
-                                stroke-dashoffset="{{ offset }}"
-                                style="animation: scoreRing 1s ease-out {{ loop.index0 * 0.08 }}s both"/>
-                    </svg>
-                    <span class="score-val">{{ pct }}</span>
-                </div>
-            </div>
+            <!-- Caption -->
+            {% if post.caption %}
+            <p class="outlier-caption">"{{ post.caption[:180] }}{% if post.caption|length > 180 %}...{% endif %}"</p>
+            {% else %}
+            <p class="outlier-caption text-muted">(No caption)</p>
+            {% endif %}
 
             <!-- Audio Tag -->
             {% if post.audio_name %}

@@ -464,8 +464,11 @@ class ApifyInstagramCollector(BaseCollector):
         logger.info(f"  Fetching posts for @{handle} via Apify...")
 
         run_input = {
-            "username": [handle],
+            "directUrls": [f"https://www.instagram.com/{handle}/"],
+            "resultsType": "posts",
             "resultsLimit": count,
+            "searchType": "user",
+            "searchLimit": 1
         }
 
         try:
@@ -606,7 +609,9 @@ def create_collector(source: Optional[str] = None) -> BaseCollector:
     source = source or config.COLLECTION_SOURCE
 
     if source == "rapidapi":
-        return RapidAPIInstagramCollector(api_key=config.RAPIDAPI_KEY)
+        # Use get_api_key to check database first, then fall back to env var
+        api_key = config.get_api_key('rapidapi')
+        return RapidAPIInstagramCollector(api_key=api_key)
     elif source == "apify":
         return ApifyInstagramCollector(api_token=config.APIFY_API_TOKEN)
     else:

@@ -1,0 +1,728 @@
+/*
+ * Signal AI Design System
+ * Dark, modern UI for content intelligence platform
+ */
+
+/* ========================================
+   COLOR SYSTEM
+   ======================================== */
+
+:root {
+    /* Background Colors - Deep Navy/Dark Blue */
+    --signal-bg-primary: #0a0e1f;
+    --signal-bg-secondary: #0f1629;
+    --signal-bg-tertiary: #141b2e;
+    --signal-bg-surface: #1a2235;
+
+    /* Accent & Brand Colors */
+    --signal-cyan: #00d9ff;
+    --signal-cyan-dim: rgba(0, 217, 255, 0.1);
+    --signal-blue: #0ea5e9;
+
+    /* Text Colors */
+    --signal-text-primary: #ffffff;
+    --signal-text-secondary: #cbd5e1;
+    --signal-text-dim: #64748b;
+    --signal-text-muted: #475569;
+
+    /* Border Colors */
+    --signal-border: rgba(148, 163, 184, 0.1);
+    --signal-border-light: rgba(148, 163, 184, 0.05);
+
+    /* Post Card Gradient Colors */
+    --signal-purple: linear-gradient(135deg, #a855f7, #8b5cf6);
+    --signal-green: linear-gradient(135deg, #10b981, #059669);
+    --signal-orange: linear-gradient(135deg, #f97316, #ea580c);
+    --signal-pink: linear-gradient(135deg, #ec4899, #db2777);
+    --signal-teal: linear-gradient(135deg, #14b8a6, #0d9488);
+    --signal-yellow: linear-gradient(135deg, #eab308, #ca8a04);
+
+    /* Tag Colors */
+    --signal-tag-cyan: #00ccff;
+    --signal-tag-purple: #a855f7;
+    --signal-tag-orange: #fb923c;
+    --signal-tag-pink: #ec4899;
+    --signal-tag-green: #10b981;
+
+    /* Status Colors */
+    --signal-success: #10b981;
+    --signal-warning: #f59e0b;
+    --signal-error: #ef4444;
+}
+
+/* ========================================
+   TYPOGRAPHY
+   ======================================== */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--signal-bg-primary);
+    color: var(--signal-text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--signal-text-primary);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+/* ========================================
+   SPLIT-SCREEN LAYOUT
+   ======================================== */
+
+.signal-split {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    height: 100vh;
+    background: var(--signal-bg-primary);
+    overflow: hidden;
+}
+
+/* Chat Panel (Left) */
+.signal-chat-panel {
+    background: var(--signal-bg-primary);
+    border-right: 1px solid var(--signal-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Content Panel (Right) */
+.signal-content-panel {
+    background: var(--signal-bg-secondary);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ========================================
+   CHAT COMPONENTS
+   ======================================== */
+
+/* Chat Header */
+.signal-chat-header {
+    padding: 24px;
+    border-bottom: 1px solid var(--signal-border);
+}
+
+.signal-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.signal-brand-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--signal-cyan), var(--signal-blue));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 217, 255, 0.25);
+}
+
+.signal-brand-name {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--signal-text-primary);
+}
+
+.signal-chat-subtitle {
+    font-size: 13px;
+    color: var(--signal-text-dim);
+    margin-left: 48px;
+}
+
+/* Chat Messages Area */
+.signal-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Scrollbar Styling */
+.signal-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.signal-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.signal-messages::-webkit-scrollbar-thumb {
+    background: var(--signal-border);
+    border-radius: 10px;
+}
+
+.signal-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.3);
+}
+
+/* Chat Message */
+.signal-message {
+    display: flex;
+    gap: 12px;
+    animation: messageSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes messageSlide {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.signal-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--signal-cyan), var(--signal-blue));
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 217, 255, 0.2);
+}
+
+.signal-message-content {
+    flex: 1;
+}
+
+.signal-message-bubble {
+    background: var(--signal-bg-tertiary);
+    padding: 14px 18px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--signal-text-secondary);
+    border: 1px solid var(--signal-border-light);
+}
+
+.signal-message-time {
+    font-size: 11px;
+    color: var(--signal-text-dim);
+    margin-top: 6px;
+    padding-left: 4px;
+}
+
+/* ========================================
+   INSIGHT CARDS
+   ======================================== */
+
+.signal-insight-card {
+    background: var(--signal-bg-surface);
+    border: 1px solid var(--signal-border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-top: 12px;
+    transition: all 0.2s ease;
+}
+
+.signal-insight-card:hover {
+    border-color: rgba(0, 217, 255, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 217, 255, 0.1);
+}
+
+.signal-insight-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.signal-insight-icon {
+    font-size: 18px;
+}
+
+.signal-insight-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--signal-text-dim);
+}
+
+.signal-insight-metric {
+    background: var(--signal-cyan);
+    color: #000;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.signal-insight-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--signal-text-primary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.signal-insight-desc {
+    font-size: 13px;
+    color: var(--signal-text-dim);
+    line-height: 1.6;
+    margin-bottom: 14px;
+}
+
+.signal-insight-link {
+    color: var(--signal-cyan);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: gap 0.2s ease;
+}
+
+.signal-insight-link:hover {
+    gap: 8px;
+}
+
+/* ========================================
+   CHAT INPUT
+   ======================================== */
+
+.signal-chat-input-area {
+    padding: 20px 24px;
+    border-top: 1px solid var(--signal-border);
+    background: var(--signal-bg-primary);
+    flex-shrink: 0;
+}
+
+.signal-chat-input {
+    width: 100%;
+    background: var(--signal-bg-tertiary);
+    border: 1px solid var(--signal-border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    color: var(--signal-text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.signal-chat-input:focus {
+    outline: none;
+    border-color: var(--signal-cyan);
+    box-shadow: 0 0 0 3px var(--signal-cyan-dim);
+}
+
+.signal-chat-input::placeholder {
+    color: var(--signal-text-muted);
+    opacity: 1;
+}
+
+/* ========================================
+   CONTENT HEADER
+   ======================================== */
+
+.signal-content-header {
+    padding: 32px 40px;
+    position: sticky;
+    top: 0;
+    background: var(--signal-bg-secondary);
+    z-index: 10;
+    border-bottom: 1px solid var(--signal-border);
+}
+
+.signal-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.signal-content-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--signal-text-primary);
+    letter-spacing: -0.03em;
+}
+
+/* Count badge removed - post count shown in chat subtitle */
+
+/* ========================================
+   FILTER PILLS
+   ======================================== */
+
+.signal-filters {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+}
+
+.signal-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.signal-filter-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: var(--signal-text-muted);
+    text-transform: uppercase;
+}
+
+.signal-filter-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.signal-pill {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--signal-border);
+    background: transparent;
+    color: var(--signal-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.signal-pill:hover:not(.active) {
+    border-color: var(--signal-cyan);
+    color: var(--signal-cyan);
+}
+
+.signal-pill.active {
+    background: var(--signal-cyan);
+    color: #000;
+    border-color: var(--signal-cyan);
+    font-weight: 600;
+}
+
+/* ========================================
+   POST GRID
+   ======================================== */
+
+.signal-grid {
+    padding: 32px 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+/* Post Card Link Wrapper */
+.signal-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease;
+}
+
+.signal-card-link:hover {
+    transform: translateY(-2px);
+}
+
+/* Post Card */
+.signal-card {
+    background: var(--signal-bg-surface);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--signal-border-light);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: cardFadeIn 0.5s ease-out backwards;
+}
+
+@keyframes cardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.signal-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(0, 217, 255, 0.1);
+}
+
+/* Card Media */
+.signal-card-media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/5;
+    overflow: hidden;
+    background: var(--signal-bg-tertiary);
+}
+
+.signal-card-media img,
+.signal-card-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Gradient Fallbacks for Posts without Media */
+.signal-gradient-purple,
+.signal-gradient-green,
+.signal-gradient-orange,
+.signal-gradient-pink,
+.signal-gradient-teal {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.signal-gradient-purple { background: var(--signal-purple); }
+.signal-gradient-green { background: var(--signal-green); }
+.signal-gradient-orange { background: var(--signal-orange); }
+.signal-gradient-pink { background: var(--signal-pink); }
+.signal-gradient-teal { background: var(--signal-teal); }
+
+/* Platform Badge (Top-Left Overlay) */
+.signal-platform-badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    background: rgba(10, 14, 31, 0.85);
+    backdrop-filter: blur(12px);
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    z-index: 2;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.signal-platform-badge svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Date Badge (Below Platform Badge) */
+.signal-date-badge {
+    position: absolute;
+    top: 54px;
+    left: 14px;
+    padding: 5px 12px;
+    border-radius: 12px;
+    background: rgba(10, 14, 31, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    z-index: 2;
+}
+
+/* Tag Pills (Top-Right Overlay) */
+.signal-tags {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 2;
+}
+
+.signal-tag {
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.signal-tag-0 { background: var(--signal-tag-cyan); color: #000; }
+.signal-tag-1 { background: var(--signal-tag-purple); color: #fff; }
+.signal-tag-2 { background: var(--signal-tag-orange); color: #000; }
+.signal-tag-3 { background: var(--signal-tag-pink); color: #fff; }
+.signal-tag-4 { background: var(--signal-tag-green); color: #000; }
+
+/* Score Ring (Bottom-Right Overlay) */
+.signal-score-ring {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    width: 64px;
+    height: 64px;
+    z-index: 2;
+}
+
+.signal-score-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.signal-score-bg {
+    fill: none;
+    stroke: rgba(10, 14, 31, 0.7);
+    stroke-width: 4;
+}
+
+.signal-score-fg {
+    fill: none;
+    stroke-width: 4;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease-out;
+}
+
+.signal-score-fg.cyan { stroke: var(--signal-cyan); }
+.signal-score-fg.green { stroke: var(--signal-success); }
+.signal-score-fg.yellow { stroke: var(--signal-warning); }
+.signal-score-fg.dim { stroke: var(--signal-text-muted); }
+
+.signal-score-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Card Body */
+.signal-card-body {
+    padding: 18px;
+}
+
+.signal-card-caption {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--signal-text-secondary);
+    margin-bottom: 16px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.signal-card-stats {
+    display: flex;
+    gap: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--signal-border-light);
+}
+
+.signal-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--signal-text-dim);
+}
+
+.signal-stat svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+}
+
+/* ========================================
+   EMPTY STATE
+   ======================================== */
+
+.signal-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 120px 40px;
+    text-align: center;
+    min-height: 50vh;
+}
+
+.signal-empty svg {
+    margin-bottom: 24px;
+    opacity: 0.3;
+}
+
+.signal-empty h3 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--signal-text-primary);
+}
+
+.signal-empty p {
+    color: var(--signal-text-dim);
+    font-size: 15px;
+    max-width: 400px;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 1024px) {
+    .signal-split {
+        grid-template-columns: 1fr;
+        grid-template-rows: 50vh 1fr;
+    }
+
+    .signal-chat-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--signal-border);
+    }
+
+    .signal-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        padding: 24px;
+    }
+}
+
+@media (max-width: 768px) {
+    .signal-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .signal-filters {
+        flex-direction: column;
+        gap: 16px;
+    }
+}

@@ -45,11 +45,13 @@ class ContentAnalyzer:
     def _get_client(self) -> OpenAI:
         """Lazy-initialize the OpenAI client."""
         if self.client is None:
-            if not config.OPENAI_API_KEY:
+            # Try database first, then environment variable
+            api_key = config.get_api_key('openai') or config.OPENAI_API_KEY
+            if not api_key:
                 raise ValueError(
-                    "OPENAI_API_KEY is not set. Add it to your .env file."
+                    "OPENAI_API_KEY is not set. Add it to your .env file or database."
                 )
-            self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+            self.client = OpenAI(api_key=api_key)
         return self.client
 
     def analyze(self, outliers: List[OutlierPost],

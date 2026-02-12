@@ -25,10 +25,12 @@ from datetime import datetime, timezone
 
 import config
 from profile_loader import load_profile, ProfileValidationError
+from vertical_manager import VerticalManager
 from collectors.instagram import (
     init_database, migrate_database, create_collector,
     store_posts, store_own_posts,
 )
+from collectors.tiktok import create_tiktok_collector
 from outlier_detector import OutlierDetector
 from analyzer import ContentAnalyzer
 from reporter import ReportGenerator
@@ -55,6 +57,11 @@ def parse_args():
         help="Brand profile name (overrides ACTIVE_PROFILE in .env)",
     )
     parser.add_argument(
+        "--vertical", "-v",
+        default=None,
+        help="Vertical name from database (e.g., Streetwear, Beauty). Overrides --profile.",
+    )
+    parser.add_argument(
         "--skip-collect",
         action="store_true",
         help="Skip data collection, run analysis on existing data",
@@ -67,35 +74,135 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_pipeline(profile_name=None, skip_collect=False, no_email=False):
+def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False):
     """
     Run the full outlier detection pipeline.
 
     Can be called from CLI (main()) or from the dashboard.
+    Args:
+        profile_name: YAML profile name (legacy)
+        vertical_name: Database vertical name (new system, takes priority)
+        skip_collect: Skip data collection phase
+        no_email: Save report locally instead of emailing
     Returns a dict with pipeline results.
     """
     logger = logging.getLogger("engine")
     start_time = time.time()
 
-    # ── 1. Load Brand Profile ──
-    profile_name = profile_name or config.ACTIVE_PROFILE
     logger.info("=" * 60)
     logger.info("OUTLIER CONTENT ENGINE")
     logger.info("=" * 60)
 
-    try:
-        profile = load_profile(profile_name)
-    except (FileNotFoundError, ProfileValidationError) as e:
-        logger.error(f"Failed to load profile: {e}")
-        return {"error": str(e)}
+    # ── 1. Load Competitors (Database Vertical or YAML Profile) ──
+    ig_competitors = []
+    tt_competitors = []
+    vertical_display_name = ""
+    profile_id = None  # Used for storing posts in database
+    profile = None  # Profile object (real or mock)
 
-    logger.info(f"Running for: {profile.name} ({profile.vertical})")
-    ig_competitors = profile.get_competitor_handles("instagram")
-    tt_competitors = profile.get_competitor_handles("tiktok")
-    logger.info(
-        f"Monitoring {len(ig_competitors)} Instagram + "
-        f"{len(tt_competitors)} TikTok competitors"
-    )
+    if vertical_name:
+        # NEW: Load from database vertical
+        vm = VerticalManager()
+        vertical = vm.get_vertical(vertical_name)
+
+        if not vertical:
+            logger.error(f"Vertical '{vertical_name}' not found in database")
+            return {"error": f"Vertical '{vertical_name}' not found"}
+
+        logger.info(f"Running for vertical: {vertical.name}")
+        vertical_display_name = vertical.name
+        profile_id = vertical.name  # Use vertical name as profile_id
+
+        # Build competitor lists from vertical brands
+        for brand in vertical.brands:
+            if brand.instagram_handle:
+                ig_competitors.append({
+                    "name": brand.brand_name or brand.instagram_handle,
+                    "handle": brand.instagram_handle
+                })
+            if brand.tiktok_handle:
+                tt_competitors.append({
+                    "name": brand.brand_name or brand.tiktok_handle,
+                    "handle": brand.tiktok_handle
+                })
+
+        logger.info(
+            f"Monitoring {len(ig_competitors)} Instagram + "
+            f"{len(tt_competitors)} TikTok brands"
+        )
+
+        # Create a minimal mock profile for compatibility with downstream code
+        from profile_loader import OutlierSettings, ContentTags
+
+        class MockProfile:
+            def __init__(self, name, vertical, profile_name):
+                self.name = name
+                self.vertical = vertical
+                self.profile_name = profile_name
+                self._vm = VerticalManager()
+                self.outlier_settings = OutlierSettings()  # Direct property access
+                self.follower_count = None  # Verticals don't have a single follower count
+                self.description = None
+
+            def get_own_handle(self, platform):
+                """Return None - verticals don't have own channels."""
+                return None
+
+            def get_outlier_thresholds(self):
+                """Return default outlier detection settings."""
+                return self.outlier_settings
+
+            def get_content_tags(self):
+                """Return empty content tags."""
+                return ContentTags(themes=[], hook_types=[], formats=[])
+
+            def get_competitor_handles(self, platform="instagram"):
+                """Load competitors from database vertical."""
+                vertical_obj = self._vm.get_vertical(self.vertical)
+                if not vertical_obj:
+                    return []
+
+                results = []
+                for brand in vertical_obj.brands:
+                    if platform == "instagram" and brand.instagram_handle:
+                        results.append({
+                            "name": brand.brand_name or brand.instagram_handle,
+                            "handle": brand.instagram_handle
+                        })
+                    elif platform == "tiktok" and brand.tiktok_handle:
+                        results.append({
+                            "name": brand.brand_name or brand.tiktok_handle,
+                            "handle": brand.tiktok_handle
+                        })
+                return results
+
+            def get_voice_prompt(self):
+                """Return empty voice prompt for verticals."""
+                return f"Analyzing content for the {self.vertical} vertical."
+
+        profile = MockProfile(
+            name=vertical.name,
+            vertical=vertical.name,
+            profile_name=vertical.name
+        )
+    else:
+        # LEGACY: Load from YAML profile
+        profile_name = profile_name or config.ACTIVE_PROFILE
+        try:
+            profile = load_profile(profile_name)
+        except (FileNotFoundError, ProfileValidationError) as e:
+            logger.error(f"Failed to load profile: {e}")
+            return {"error": str(e)}
+
+        logger.info(f"Running for: {profile.name} ({profile.vertical})")
+        vertical_display_name = profile.name
+        profile_id = profile.profile_name  # Use YAML profile name as profile_id
+        ig_competitors = profile.get_competitor_handles("instagram")
+        tt_competitors = profile.get_competitor_handles("tiktok")
+        logger.info(
+            f"Monitoring {len(ig_competitors)} Instagram + "
+            f"{len(tt_competitors)} TikTok competitors"
+        )
 
     # ── 2. Initialize Database ──
     init_database()
@@ -142,7 +249,7 @@ def run_pipeline(profile_name=None, skip_collect=False, no_email=False):
                         competitor_name=name,
                         count=config.DEFAULT_POSTS_PER_COMPETITOR,
                     )
-                    new_count = store_posts(posts, profile.profile_name)
+                    new_count = store_posts(posts, profile_id)
                     run_stats["posts_collected"] += len(posts)
                     run_stats["posts_new"] += new_count
                     run_stats["competitors_collected"] += 1
@@ -252,6 +359,29 @@ def run_pipeline(profile_name=None, skip_collect=False, no_email=False):
 
     else:
         logger.info("Skipping collection (--skip-collect)")
+
+    # ── 3d. Content Tagging Phase ──
+    logger.info("")
+    logger.info("--- CONTENT TAGGING PHASE ---")
+    try:
+        from content_tagger import ContentTagger
+        tagger = ContentTagger()
+        tag_results = tagger.tag_all_posts(batch_size=10)
+
+        if tag_results["tagged_count"] > 0:
+            logger.info(
+                f"  Tagged {tag_results['tagged_count']} posts with content patterns"
+            )
+        elif tag_results["already_tagged"] == "all":
+            logger.info("  All posts already have content tags")
+
+        if tag_results["errors"]:
+            logger.warning(
+                f"  {len(tag_results['errors'])} tagging errors occurred"
+            )
+    except Exception as e:
+        logger.warning(f"  Content tagging failed: {e}")
+        logger.info("  Continuing without tags...")
 
     # ── 4. Detection Phase ──
     logger.info("")
@@ -411,6 +541,7 @@ def main():
     args = parse_args()
     result = run_pipeline(
         profile_name=args.profile,
+        vertical_name=args.vertical,
         skip_collect=args.skip_collect,
         no_email=args.no_email,
     )

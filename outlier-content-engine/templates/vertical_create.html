@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Create Category{% endblock %}
+{% block page_title %}Create New Category{% endblock %}
+{% block page_subtitle %}Set up a category to track competitor content{% endblock %}
+
+{% block content %}
+
+<form method="POST" action="{{ url_for('create_vertical') }}">
+    <!-- Category Name -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Category Name</div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">What are you tracking?</label>
+            <input type="text" name="vertical_name" class="form-input" required
+                   placeholder="e.g., Streetwear, Luxury Fashion, Coffee Brands"
+                   style="max-width:500px">
+            <div class="form-hint">
+                Give this category a clear name - you'll select it from a dropdown later
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Description <span class="text-muted">(optional)</span></label>
+            <input type="text" name="description" class="form-input"
+                   placeholder="e.g., Premium streetwear brands focused on cultural heritage"
+                   style="max-width:500px">
+        </div>
+    </div>
+
+    <!-- Add Brands -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Add Brands to Track</div>
+                <div class="card-subtitle">At least one Instagram handle required</div>
+            </div>
+        </div>
+
+        <!-- Quick Add -->
+        <div class="form-group">
+            <label class="form-label">Quick Add</label>
+            <div class="flex gap-8" style="max-width:600px">
+                <input type="text" id="quick-handle" class="form-input"
+                       placeholder="@supremenewyork" style="flex:1">
+                <button type="button" class="btn btn-outline" onclick="quickAddHandle()">
+                    + Add
+                </button>
+            </div>
+            <div class="form-hint">Add brands one at a time</div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:20px 0"></div>
+
+        <!-- Bulk Add -->
+        <div class="form-group">
+            <label class="form-label">Or Bulk Paste</label>
+            <textarea name="bulk_handles" class="form-textarea" rows="8"
+                      placeholder="@supremenewyork
+@stussy
+@palaceskateboards
+@carharttwip
+@bape
+
+One handle per line. The @ is optional.
+For TikTok: @handle | tiktok
+For both: @handle | @tiktokhandle" style="max-width:600px"></textarea>
+            <div class="form-hint">
+                Paste multiple handles at once (one per line). Formats supported:<br>
+                • <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;font-size:11px">@instagram_handle</code> - Instagram only<br>
+                • <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;font-size:11px">@handle | tiktok</code> - TikTok only<br>
+                • <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;font-size:11px">@instagram | @tiktok</code> - Both platforms
+            </div>
+        </div>
+
+        <!-- Preview List -->
+        <div id="brands-preview" class="mt-24" style="display:none">
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">
+                Brands to Add
+            </div>
+            <div class="tag-list" id="brands-tags"></div>
+        </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="form-actions">
+        <a href="{{ url_for('index') }}" class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Create & Start Tracking
+        </button>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function quickAddHandle() {
+    const input = document.getElementById('quick-handle');
+    const value = input.value.trim();
+
+    if (!value) return;
+
+    // Add to bulk textarea
+    const textarea = document.querySelector('textarea[name="bulk_handles"]');
+    const current = textarea.value.trim();
+    textarea.value = current ? current + '\n' + value : value;
+
+    // Update preview
+    updatePreview();
+
+    // Clear input
+    input.value = '';
+}
+
+function updatePreview() {
+    const textarea = document.querySelector('textarea[name="bulk_handles"]');
+    const text = textarea.value.trim();
+
+    if (!text) {
+        document.getElementById('brands-preview').style.display = 'none';
+        return;
+    }
+
+    const handles = text.split('\n').filter(line => line.trim());
+    const container = document.getElementById('brands-tags');
+    const preview = document.getElementById('brands-preview');
+
+    container.innerHTML = '';
+    handles.forEach(handle => {
+        const cleaned = handle.trim().replace('@', '');
+        if (cleaned) {
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.textContent = '@' + cleaned;
+            container.appendChild(tag);
+        }
+    });
+
+    preview.style.display = handles.length > 0 ? 'block' : 'none';
+}
+
+// Update preview on textarea change
+document.querySelector('textarea[name="bulk_handles"]').addEventListener('input', updatePreview);
+
+// Allow Enter key in quick add
+document.getElementById('quick-handle').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        quickAddHandle();
+    }
+});
+
+// Initial preview
+updatePreview();
+</script>
+{% endblock %}
