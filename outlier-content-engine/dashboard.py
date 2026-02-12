@@ -795,21 +795,26 @@ def setup_page():
         "SELECT email FROM email_subscriptions WHERE vertical_name IS NULL"
     ).fetchall()
 
-    # Get own brand handle from config table
-    own_brand_row = conn.execute(
+    # Get own brand handles from config table
+    own_brand_ig_row = conn.execute(
         "SELECT value FROM config WHERE key = 'own_brand_instagram'"
+    ).fetchone()
+    own_brand_tt_row = conn.execute(
+        "SELECT value FROM config WHERE key = 'own_brand_tiktok'"
     ).fetchone()
     conn.close()
 
     team_emails = ', '.join([e['email'] for e in emails]) if emails else ''
-    own_brand_instagram = own_brand_row['value'] if own_brand_row else ''
+    own_brand_instagram = own_brand_ig_row['value'] if own_brand_ig_row else ''
+    own_brand_tiktok = own_brand_tt_row['value'] if own_brand_tt_row else ''
 
     return render_template('setup.html',
                            apify_token=apify_token['api_key'] if apify_token else '',
                            openai_key=openai_key['api_key'] if openai_key else '',
                            tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
                            team_emails=team_emails,
-                           own_brand_instagram=own_brand_instagram)
+                           own_brand_instagram=own_brand_instagram,
+                           own_brand_tiktok=own_brand_tiktok)
 
 
 @app.route("/setup/save", methods=["POST"])
@@ -822,6 +827,7 @@ def save_setup():
     tiktok_key = request.form.get('tiktok_key', '').strip()
     team_emails = request.form.get('team_emails', '').strip()
     own_brand_instagram = request.form.get('own_brand_instagram', '').strip().lstrip('@')
+    own_brand_tiktok = request.form.get('own_brand_tiktok', '').strip().lstrip('@')
 
     if not apify_token or not openai_key:
         flash("Apify token and OpenAI key are required", "danger")
@@ -858,16 +864,18 @@ def save_setup():
                         VALUES (NULL, ?, ?)
                     """, (email, now))
 
-        # Save own-brand handle in config table
-        if own_brand_instagram:
-            conn.execute("""
-                INSERT INTO config (key, value)
-                VALUES ('own_brand_instagram', ?)
-                ON CONFLICT(key) DO UPDATE SET value = ?
-            """, (own_brand_instagram, own_brand_instagram))
+        # Save own-brand handles in config table
+        for cfg_key, cfg_val in [('own_brand_instagram', own_brand_instagram),
+                                  ('own_brand_tiktok', own_brand_tiktok)]:
+            if cfg_val:
+                conn.execute("""
+                    INSERT INTO config (key, value)
+                    VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = ?
+                """, (cfg_key, cfg_val, cfg_val))
 
         conn.commit()
-        flash("Setup complete! Now create your first vertical.", "success")
+        flash("Settings saved.", "success")
         return redirect(url_for('signal_page', create='1'))
 
     except Exception as e:
@@ -1071,6 +1079,10 @@ def chat_message():
             return jsonify(result)
 
         # ── Main path: ScoutAgent (OpenAI function-calling) ──
+        # BYOK: prefer per-request key from header, fall back to DB/env
+        byok_openai = request.headers.get('X-OpenAI-Key', '').strip() or None
+        admin_mode = request.headers.get('X-Admin-Mode', '').strip() == '1'
+
         if 'chat_context' not in session:
             session['chat_context'] = {
                 'active_vertical': current_vertical,
@@ -1079,9 +1091,10 @@ def chat_message():
 
         context = session['chat_context']
         context['active_vertical'] = current_vertical
+        context['admin_mode'] = admin_mode
 
         try:
-            scout = ScoutAgent()
+            scout = ScoutAgent(openai_key=byok_openai)
             response, updated_context = scout.chat(message, context)
 
             if response:

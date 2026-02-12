@@ -104,5 +104,10 @@ EMAIL_RECIPIENTS = [
     r.strip() for r in os.getenv("EMAIL_RECIPIENTS", "").split(",") if r.strip()
 ]
 
+# ── Analysis Rate Limiting ──
+ANALYSIS_COOLDOWN_MINUTES = int(os.getenv("ANALYSIS_COOLDOWN_MINUTES", "60"))  # Min wait between runs per category
+DAILY_RUN_CAP = int(os.getenv("DAILY_RUN_CAP", "3"))  # Max analysis runs per day
+ADMIN_MODE = os.getenv("ADMIN_MODE", "").lower() in ("1", "true", "yes")  # Bypass rate limits
+
 # ── Logging ──
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

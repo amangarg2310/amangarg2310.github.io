@@ -171,9 +171,14 @@ TOOL_DEFINITIONS = [
 class ScoutAgent:
     """Conversational AI agent using OpenAI function calling."""
 
-    def __init__(self):
-        """Initialize Scout with OpenAI client (optional — works without it)."""
-        api_key = config.get_api_key("openai")
+    def __init__(self, openai_key: str = None):
+        """Initialize Scout with OpenAI client.
+
+        Args:
+            openai_key: Per-request BYOK key (from browser localStorage).
+                        Falls back to database/env key if not provided.
+        """
+        api_key = openai_key or config.get_api_key("openai")
         self.client = None
         if api_key:
             try:
@@ -430,7 +435,15 @@ IMPORTANT:
         })
 
     def _handle_run_analysis(self, args: Dict, context: Dict) -> str:
-        """Trigger the analysis pipeline in a background thread."""
+        """Trigger the analysis pipeline in a background thread.
+
+        Enforces rate limits unless admin mode is active:
+        - Per-category cooldown (default 60 min)
+        - Daily run cap (default 3/day)
+        """
+        import sqlite3
+        from datetime import datetime, timezone, timedelta
+
         category_name = args.get("category_name", "").strip()
 
         actual_name = None
@@ -449,6 +462,64 @@ IMPORTANT:
                 "error": f"Category '{actual_name}' has no brands. Add some first.",
             })
 
+        # ── Rate limiting (skip if admin mode) ──
+        is_admin = context.get("admin_mode", False) or config.ADMIN_MODE
+        if not is_admin:
+            try:
+                conn = sqlite3.connect(str(config.DB_PATH))
+
+                # Check per-category cooldown via verticals.updated_at
+                row = conn.execute(
+                    "SELECT updated_at FROM verticals WHERE name = ?",
+                    (actual_name,)
+                ).fetchone()
+                if row and row[0]:
+                    try:
+                        last_run = datetime.fromisoformat(row[0])
+                        cooldown = timedelta(minutes=config.ANALYSIS_COOLDOWN_MINUTES)
+                        now = datetime.now(timezone.utc)
+                        if last_run.tzinfo is None:
+                            last_run = last_run.replace(tzinfo=timezone.utc)
+                        if now - last_run < cooldown:
+                            mins_left = int((cooldown - (now - last_run)).total_seconds() / 60) + 1
+                            conn.close()
+                            return json.dumps({
+                                "ok": False,
+                                "error": (
+                                    f"Cooldown active — please wait ~{mins_left} min before "
+                                    f"running analysis on '{actual_name}' again."
+                                ),
+                            })
+                    except (ValueError, TypeError):
+                        pass  # Malformed date, skip check
+
+                # Check daily run cap
+                today_key = f"runs_today_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                cap_row = conn.execute(
+                    "SELECT value FROM config WHERE key = ?", (today_key,)
+                ).fetchone()
+                runs_today = int(cap_row[0]) if cap_row else 0
+
+                if runs_today >= config.DAILY_RUN_CAP:
+                    conn.close()
+                    return json.dumps({
+                        "ok": False,
+                        "error": (
+                            f"Daily limit reached ({config.DAILY_RUN_CAP} runs/day). "
+                            f"Try again tomorrow, or ask an admin to increase the cap."
+                        ),
+                    })
+
+                # Increment daily counter
+                conn.execute("""
+                    INSERT INTO config (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = ?
+                """, (today_key, str(runs_today + 1), str(runs_today + 1)))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                logger.warning(f"Rate-limit check failed (proceeding anyway): {exc}")
+
         cmd = [sys.executable, "main.py", "--profile", actual_name, "--no-email"]
 
         def _run():
@@ -465,6 +536,9 @@ IMPORTANT:
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
+
+        # Update the vertical timestamp (used for cooldown tracking)
+        self.vm.update_vertical_timestamp(actual_name)
         context["analysis_started"] = True
 
         return json.dumps({

@@ -1,117 +1,169 @@
-{% extends "base.html" %}
-{% block title %}Setup{% endblock %}
-{% block page_title %}One-Time Setup{% endblock %}
-{% block page_subtitle %}Configure API keys and team settings — you only need to do this once{% endblock %}
+{% extends "base_minimal.html" %}
+{% block title %}Settings{% endblock %}
+{% block topbar_title %}API Keys & Brand{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Configure API keys, your brand, and team settings{% endblock %}
 
 {% block content %}
 
-<div class="card">
-    <div class="card-header">
-        <div>
-            <div class="card-title">API Keys</div>
-            <div class="card-subtitle">Required for data collection and AI analysis</div>
-        </div>
-    </div>
+<div class="settings-card">
+    <div class="settings-card-title">API Keys</div>
+    <div class="settings-card-subtitle">Required for data collection and AI analysis</div>
 
-    <form method="POST" action="{{ url_for('save_setup') }}">
+    <form id="setupForm" method="POST" action="{{ url_for('save_setup') }}">
         <!-- Apify API Token -->
-        <div class="form-group">
-            <label class="form-label">Apify API Token *</label>
-            <input type="text" name="apify_token" class="form-input"
+        <div class="settings-form-group">
+            <label class="settings-label">Apify API Token *</label>
+            <input type="text" name="apify_token" id="apifyToken" class="settings-input"
                    value="{{ apify_token or '' }}" required
                    placeholder="apify_api_...">
-            <div class="form-hint">
+            <div class="settings-hint">
                 Used for Instagram and TikTok data collection.
-                <a href="https://console.apify.com/account/integrations" target="_blank" style="color:var(--accent)">Get your token here →</a>
+                <a href="https://console.apify.com/account/integrations" target="_blank">Get your token here &rarr;</a>
             </div>
         </div>
 
         <!-- OpenAI Key -->
-        <div class="form-group">
-            <label class="form-label">OpenAI API Key *</label>
-            <input type="text" name="openai_key" class="form-input"
+        <div class="settings-form-group">
+            <label class="settings-label">OpenAI API Key *</label>
+            <input type="text" name="openai_key" id="openaiKey" class="settings-input"
                    value="{{ openai_key or '' }}" required
                    placeholder="sk-...">
-            <div class="form-hint">
+            <div class="settings-hint">
                 Used for AI content analysis.
-                <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent)">Get your key here →</a>
+                <a href="https://platform.openai.com/api-keys" target="_blank">Get your key here &rarr;</a>
             </div>
         </div>
 
         <!-- TikTok Key (Optional) -->
-        <div class="form-group">
-            <label class="form-label">TikTok API Key <span class="text-muted">(optional)</span></label>
-            <input type="text" name="tiktok_key" class="form-input"
+        <div class="settings-form-group">
+            <label class="settings-label">TikTok API Key <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="tiktok_key" id="tiktokKey" class="settings-input"
                    value="{{ tiktok_key or '' }}"
                    placeholder="Leave blank to use same Apify token for TikTok">
-            <div class="form-hint">
+            <div class="settings-hint">
                 Separate key for TikTok if using a different data source than Apify
             </div>
         </div>
 
-        <div style="border-top:1px solid var(--border);margin:28px 0;padding-top:28px"></div>
+        <hr class="settings-divider">
 
         <!-- Your Brand -->
-        <div class="card-title" style="margin-bottom:4px">Your Brand</div>
-        <div class="card-subtitle" style="margin-bottom:20px">Used for voice analysis and personalized content briefs</div>
+        <div class="settings-card-title">Your Brand</div>
+        <div class="settings-card-subtitle">Used for voice analysis and personalized content briefs</div>
 
-        <div class="form-group">
-            <label class="form-label">Your Brand's Instagram Handle</label>
-            <input type="text" name="own_brand_instagram" class="form-input"
+        <div class="settings-form-group">
+            <label class="settings-label">Your Brand's Instagram Handle</label>
+            <input type="text" name="own_brand_instagram" id="ownBrandIg" class="settings-input"
                    value="{{ own_brand_instagram or '' }}"
                    placeholder="@yourbrand">
-            <div class="form-hint">
-                We'll analyze your top posts to learn your brand voice, then tailor all content suggestions to match your tone and style.
+            <div class="settings-hint">
+                We'll analyze your top posts to learn your brand voice, then tailor content suggestions to match your tone and style.
             </div>
         </div>
 
-        <div style="border-top:1px solid var(--border);margin:28px 0;padding-top:28px"></div>
+        <div class="settings-form-group">
+            <label class="settings-label">Your Brand's TikTok Handle <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="own_brand_tiktok" id="ownBrandTt" class="settings-input"
+                   value="{{ own_brand_tiktok or '' }}"
+                   placeholder="@yourbrand">
+            <div class="settings-hint">
+                TikTok handle for your brand, used alongside Instagram for voice analysis.
+            </div>
+        </div>
+
+        <hr class="settings-divider">
 
         <!-- Team Emails -->
-        <div class="form-group">
-            <label class="form-label">Team Email Distribution</label>
-            <input type="text" name="team_emails" class="form-input"
+        <div class="settings-form-group">
+            <label class="settings-label">Team Email Distribution</label>
+            <input type="text" name="team_emails" class="settings-input"
                    value="{{ team_emails or '' }}"
                    placeholder="you@startup.com, teammate@startup.com">
-            <div class="form-hint">
+            <div class="settings-hint">
                 Comma-separated emails for weekly reports (optional, can be added later)
             </div>
         </div>
 
         <!-- Save Button -->
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
+        <div class="settings-actions">
+            <button type="submit" class="settings-btn-primary">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                Save & Continue
+                Save Settings
             </button>
         </div>
     </form>
 </div>
 
 <!-- Help Card -->
-<div class="card" style="border-left:3px solid var(--accent)">
-    <div class="card-header">
-        <div class="card-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="display:inline;margin-right:8px"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Getting Your API Keys
-        </div>
+<div class="settings-card settings-card-accent">
+    <div class="settings-card-title" style="display:flex;align-items:center;gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Getting Your API Keys
     </div>
 
-    <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">
-        <p style="margin-bottom:14px"><strong style="color:var(--text)">Apify (Instagram + TikTok):</strong></p>
+    <div style="font-size:12px;color:var(--signal-text-dim);line-height:1.7;margin-top:16px">
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">Apify (Instagram + TikTok):</strong></p>
         <ol style="padding-left:20px;margin-bottom:20px">
-            <li>Sign up at <a href="https://apify.com" target="_blank" style="color:var(--accent)">apify.com</a></li>
-            <li>Go to <a href="https://console.apify.com/account/integrations" target="_blank" style="color:var(--accent)">Settings → Integrations</a></li>
+            <li>Sign up at <a href="https://apify.com" target="_blank" style="color:var(--signal-cyan)">apify.com</a></li>
+            <li>Go to <a href="https://console.apify.com/account/integrations" target="_blank" style="color:var(--signal-cyan)">Settings &rarr; Integrations</a></li>
             <li>Copy your Personal API token</li>
         </ol>
 
-        <p style="margin-bottom:14px"><strong style="color:var(--text)">OpenAI (AI Analysis):</strong></p>
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">OpenAI (AI Analysis):</strong></p>
         <ol style="padding-left:20px">
-            <li>Sign up at <a href="https://platform.openai.com" target="_blank" style="color:var(--accent)">platform.openai.com</a></li>
+            <li>Sign up at <a href="https://platform.openai.com" target="_blank" style="color:var(--signal-cyan)">platform.openai.com</a></li>
             <li>Add payment method ($5 minimum)</li>
-            <li>Go to API Keys → Create new secret key</li>
+            <li>Go to API Keys &rarr; Create new secret key</li>
         </ol>
     </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── BYOK: Store keys in localStorage so each browser has its own ──
+const STORAGE_KEYS = {
+    apify: 'scout_apify_token',
+    openai: 'scout_openai_key',
+    tiktok: 'scout_tiktok_key',
+    ownBrandIg: 'scout_own_brand_ig',
+    ownBrandTt: 'scout_own_brand_tt',
+};
+
+// On page load: fill inputs from localStorage if server had no value
+document.addEventListener('DOMContentLoaded', () => {
+    const fields = {
+        apifyToken: STORAGE_KEYS.apify,
+        openaiKey: STORAGE_KEYS.openai,
+        tiktokKey: STORAGE_KEYS.tiktok,
+        ownBrandIg: STORAGE_KEYS.ownBrandIg,
+        ownBrandTt: STORAGE_KEYS.ownBrandTt,
+    };
+
+    Object.entries(fields).forEach(([inputId, storageKey]) => {
+        const el = document.getElementById(inputId);
+        if (el && !el.value) {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) el.value = saved;
+        }
+    });
+});
+
+// On form submit: save keys to localStorage
+document.getElementById('setupForm').addEventListener('submit', () => {
+    const apify = document.getElementById('apifyToken');
+    const openai = document.getElementById('openaiKey');
+    const tiktok = document.getElementById('tiktokKey');
+    const ownIg = document.getElementById('ownBrandIg');
+    const ownTt = document.getElementById('ownBrandTt');
+
+    if (apify && apify.value) localStorage.setItem(STORAGE_KEYS.apify, apify.value.trim());
+    if (openai && openai.value) localStorage.setItem(STORAGE_KEYS.openai, openai.value.trim());
+    if (tiktok && tiktok.value) localStorage.setItem(STORAGE_KEYS.tiktok, tiktok.value.trim());
+    if (ownIg && ownIg.value) localStorage.setItem(STORAGE_KEYS.ownBrandIg, ownIg.value.trim());
+    if (ownTt && ownTt.value) localStorage.setItem(STORAGE_KEYS.ownBrandTt, ownTt.value.trim());
+});
+</script>
 {% endblock %}
