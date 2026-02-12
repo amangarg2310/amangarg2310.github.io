@@ -633,6 +633,7 @@ def signal_page():
                            vertical_name=vertical_name,
                            saved_verticals=saved_verticals,
                            empty_state=empty_state,
+                           needs_setup=needs_setup(),
                            selected_competitor=competitor,
                            selected_platform=platform,
                            selected_timeframe=timeframe,

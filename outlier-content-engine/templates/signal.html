@@ -64,16 +64,60 @@
 
         <!-- Chat Messages -->
         <div class="signal-messages" id="chatMessages">
-            <!-- Welcome Message -->
+            <!-- Welcome / Onboarding Message -->
+            {% if needs_setup %}
             <div class="signal-message">
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
                     <div class="signal-message-bubble">
-                        Welcome back. I've been monitoring your sector. Which brand or competitor set should we analyze today?
+                        Hey! Welcome to Scout AI. I find viral social media posts by tracking your competitors.
+                        <br><br>
+                        To get started, I need two API keys:
+                        <br><strong>1.</strong> <strong>Apify</strong> — for collecting Instagram/TikTok posts
+                        <br><strong>2.</strong> <strong>OpenAI</strong> — for AI-powered content analysis
+                        <br><br>
+                        It takes about 2 minutes to set up.
                     </div>
                     <div class="signal-message-time">Just now</div>
                 </div>
             </div>
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-onboarding-cta">
+                        <a href="{{ url_for('setup_page') }}" class="signal-setup-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                            Set up API keys
+                        </a>
+                        <span class="signal-onboarding-hint">Free tiers available for both services</span>
+                    </div>
+                </div>
+            </div>
+            {% elif not saved_verticals %}
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        You're all set up! Now let's create your first competitor category.
+                        <br><br>
+                        Tell me a category (e.g. "Streetwear" or "DTC Beauty") and the brands you want to track, or click the button below.
+                    </div>
+                    <div class="signal-message-time">Just now</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        Welcome back. Which brand or competitor set should we analyze today?
+                    </div>
+                    <div class="signal-message-time">Just now</div>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Competitive Set Display -->
             {% if competitive_set %}
