@@ -35,17 +35,6 @@
             </div>
         </div>
 
-        <!-- TikTok Key (Optional) -->
-        <div class="settings-form-group">
-            <label class="settings-label">TikTok API Key <span class="settings-text-muted">(optional)</span></label>
-            <input type="text" name="tiktok_key" id="tiktokKey" class="settings-input"
-                   value="{{ tiktok_key or '' }}"
-                   placeholder="Leave blank to use same Apify token for TikTok">
-            <div class="settings-hint">
-                Separate key for TikTok if using a different data source than Apify
-            </div>
-        </div>
-
         <hr class="settings-divider">
 
         <!-- Your Brand -->
@@ -127,7 +116,6 @@
 const STORAGE_KEYS = {
     apify: 'scout_apify_token',
     openai: 'scout_openai_key',
-    tiktok: 'scout_tiktok_key',
     ownBrandIg: 'scout_own_brand_ig',
     ownBrandTt: 'scout_own_brand_tt',
 };
@@ -137,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const fields = {
         apifyToken: STORAGE_KEYS.apify,
         openaiKey: STORAGE_KEYS.openai,
-        tiktokKey: STORAGE_KEYS.tiktok,
         ownBrandIg: STORAGE_KEYS.ownBrandIg,
         ownBrandTt: STORAGE_KEYS.ownBrandTt,
     };
@@ -155,13 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
 document.getElementById('setupForm').addEventListener('submit', () => {
     const apify = document.getElementById('apifyToken');
     const openai = document.getElementById('openaiKey');
-    const tiktok = document.getElementById('tiktokKey');
     const ownIg = document.getElementById('ownBrandIg');
     const ownTt = document.getElementById('ownBrandTt');
 
     if (apify && apify.value) localStorage.setItem(STORAGE_KEYS.apify, apify.value.trim());
     if (openai && openai.value) localStorage.setItem(STORAGE_KEYS.openai, openai.value.trim());
-    if (tiktok && tiktok.value) localStorage.setItem(STORAGE_KEYS.tiktok, tiktok.value.trim());
     if (ownIg && ownIg.value) localStorage.setItem(STORAGE_KEYS.ownBrandIg, ownIg.value.trim());
     if (ownTt && ownTt.value) localStorage.setItem(STORAGE_KEYS.ownBrandTt, ownTt.value.trim());
 });
