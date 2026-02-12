@@ -214,20 +214,32 @@ SCALE CONTEXT: {brand} has ~{fc:,} followers. {scale_note}"""
 
 ---
 
-TASK: Analyze competitor outlier posts and do two things.
+TASK: Analyze competitor outlier posts and provide deep, actionable insights.
 
-PART 1 — OUTLIER ANALYSIS
-For each outlier post, explain:
-1. Why it likely outperformed (format, hook, timing, emotional trigger)
-2. The underlying content pattern/framework that made it work
-3. Whether this pattern is replicable for {brand}
+PART 1 — DEEP OUTLIER ANALYSIS
+For each outlier post, provide a thorough breakdown:
+1. **Hook analysis**: What was the opening hook? (question, curiosity gap, shock, educational, story)
+   - Why did this specific hook stop the scroll?
+2. **Visual strategy**: What made the visual/video format work?
+   - For video: What likely happened in the first 3 seconds?
+   - For images: What visual techniques are used? (composition, text overlay, lifestyle vs product)
+3. **Messaging breakdown**: What is the caption doing?
+   - Tone, length, CTA usage, storytelling technique
+4. **Emotional trigger**: What emotion does this content activate? (aspiration, FOMO, belonging, humor, curiosity)
+5. **Engagement driver**: Why did the PRIMARY metric spike? (saves = valuable, shares = relatable, comments = opinion-provoking)
+6. **Content pattern/framework**: Name the repeatable framework (e.g., "Before/After", "Hot Take", "Educational Carousel")
+7. **Replicability for {brand}**: Score 1-10, with specific notes on what {brand} should adapt
 
 PART 2 — {brand.upper()} CONTENT ADAPTATION
-Take the top {n_rewrite} outlier concepts and rewrite them as {brand} content:
-- Rewrite the caption in {brand}'s authentic voice
-- Suggest the visual/format approach {brand} should use
-- Explain what to keep vs what to change from the original
-- Rate the fit for {brand}'s brand (1-10)
+Take the top {n_rewrite} outlier concepts and create ready-to-execute content briefs:
+- Rewrite the caption in {brand}'s authentic voice (match the learned voice patterns exactly)
+- Visual direction: Describe exactly what the image/video should look like
+- Format: Reel, carousel, static, story?
+- Hook suggestion: Write the specific opening line or first-frame concept
+- CTA: What action should the audience take?
+- What to keep from the original vs what to change for {brand}
+- Brand fit score (1-10) with reasoning
+- Best posting time and day
 
 ALWAYS respond with valid JSON matching this exact schema:
 {{
@@ -235,10 +247,17 @@ ALWAYS respond with valid JSON matching this exact schema:
     {{
       "post_id": "...",
       "competitor": "...",
-      "why_it_worked": "...",
-      "content_pattern": "...",
+      "hook_type": "question|curiosity_gap|shock|educational|story|statement",
+      "hook_breakdown": "Why this hook works and how it stops the scroll",
+      "visual_strategy": "Specific visual techniques that make this work",
+      "messaging_breakdown": "Caption analysis: tone, structure, CTA, storytelling",
+      "emotional_trigger": "The core emotion this activates",
+      "why_it_worked": "Comprehensive explanation of why this outperformed",
+      "content_pattern": "Named framework (e.g. 'Educational Carousel', 'Hot Take')",
+      "primary_driver_explanation": "Why the top engagement metric spiked",
       "replicable_for_brand": true,
-      "replicability_notes": "..."
+      "replicability_score": 8,
+      "replicability_notes": "What {brand} should adapt and what to avoid"
     }}
   ],
   "brand_adaptations": [
@@ -246,11 +265,14 @@ ALWAYS respond with valid JSON matching this exact schema:
       "original_post_id": "...",
       "original_competitor": "...",
       "adapted_caption": "...",
-      "visual_direction": "...",
-      "format_suggestion": "...",
+      "hook_suggestion": "Specific opening line or first-frame concept",
+      "visual_direction": "Detailed description of what the visual should look like",
+      "format_suggestion": "reel|carousel|static|story",
+      "cta": "Specific call-to-action for the audience",
       "what_to_keep": "...",
       "what_to_change": "...",
       "brand_fit_score": 8,
+      "brand_fit_reasoning": "Why this score",
       "best_posting_time": "..."
     }}
   ],
@@ -265,7 +287,9 @@ ALWAYS respond with valid JSON matching this exact schema:
       "day": "Monday",
       "content_type": "...",
       "concept": "...",
+      "hook": "Opening line or visual hook",
       "caption_draft": "...",
+      "visual_direction": "What the post should look like",
       "reference_outlier": "..."
     }}
   ]

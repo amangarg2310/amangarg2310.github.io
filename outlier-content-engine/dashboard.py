@@ -36,7 +36,7 @@ import config
 from profile_loader import load_profile
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "outlier-engine-dev-key")
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(32).hex()
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +257,7 @@ def get_recent_runs(limit=10):
         return []
 
 
-def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_name=None, timeframe=None):
+def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_name=None, timeframe=None, tag=None):
     """Fetch outlier posts from the database."""
     if not config.DB_PATH.exists():
         return []
@@ -298,6 +298,10 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             }
             if timeframe in timeframe_map:
                 query += f" AND posted_at >= {timeframe_map[timeframe]}"
+
+        if tag:
+            query += " AND content_tags LIKE ?"
+            params.append(f'%"{tag}"%')
 
         sort_map = {
             "score": "outlier_score DESC",
@@ -535,16 +539,18 @@ def signal_page():
     platform = request.args.get("platform", "")
     sort_by = request.args.get("sort", "score")
     timeframe = request.args.get("timeframe", "")
+    tag = request.args.get("tag", "")
 
     # Get vertical name for queries
     vertical_name = get_active_vertical_name()
 
-    # Get outlier posts using vertical name (CRITICAL FIX)
+    # Get outlier posts using vertical name
     outliers = get_outlier_posts(competitor=competitor or None,
                                  platform=platform or None,
                                  sort_by=sort_by,
                                  vertical_name=vertical_name,
-                                 timeframe=timeframe or None)
+                                 timeframe=timeframe or None,
+                                 tag=tag or None)
 
     # Generate insights from pattern analyzer
     insights = generate_insights_for_vertical(vertical_name) if vertical_name else None
@@ -812,23 +818,57 @@ def download_report(filename):
     return redirect(url_for("reports_page"))
 
 
+ALLOWED_IMAGE_DOMAINS = {
+    "instagram.com", "cdninstagram.com", "fbcdn.net",
+    "scontent.cdninstagram.com",
+    "tiktokcdn.com", "tiktok.com",
+    "p16-sign.tiktokcdn-us.com", "p16-sign-sg.tiktokcdn.com",
+    "p16-sign-va.tiktokcdn.com", "p77-sign.tiktokcdn.com",
+    "muscdn.com",
+}
+
+
+def _is_allowed_image_url(url: str) -> bool:
+    """Check if a URL's domain is in the allowlist (prevents SSRF)."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        if parsed.scheme not in ("http", "https"):
+            return False
+        for allowed in ALLOWED_IMAGE_DOMAINS:
+            if hostname == allowed or hostname.endswith("." + allowed):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 @app.route("/proxy-image")
 def proxy_image():
-    """Proxy external images to bypass CORS restrictions."""
+    """Proxy external images to bypass CORS restrictions.
+
+    Only allows requests to known social media CDN domains to prevent SSRF.
+    """
     image_url = request.args.get('url')
     if not image_url:
         return "No URL provided", 400
 
+    if not _is_allowed_image_url(image_url):
+        return "Domain not allowed", 403
+
     try:
-        # Fetch the image from the external URL
         response = requests.get(image_url, timeout=10, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        }, allow_redirects=True)
 
         if response.status_code == 200:
-            # Determine content type from response headers
             content_type = response.headers.get('Content-Type', 'image/jpeg')
-            return Response(response.content, mimetype=content_type)
+            if not content_type.startswith(('image/', 'video/')):
+                return "Not a media file", 400
+            resp = Response(response.content, mimetype=content_type)
+            resp.headers['Cache-Control'] = 'public, max-age=86400'
+            return resp
         else:
             return "Failed to fetch image", response.status_code
     except Exception as e:

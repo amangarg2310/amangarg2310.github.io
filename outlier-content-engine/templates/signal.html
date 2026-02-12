@@ -71,32 +71,64 @@
                     </div>
 
                     <!-- Pattern Cards -->
-                    {% for pattern in insights.patterns[:2] %}
+                    {% for pattern in insights.patterns[:3] %}
                     <div class="signal-insight-card">
                         <div class="signal-insight-header">
-                            <span class="signal-insight-icon">📊</span>
-                            <span class="signal-insight-label">PATTERN</span>
+                            <span class="signal-insight-icon">
+                                {% if pattern.pattern_type == 'driver' %}
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                                {% elif pattern.pattern_type == 'format' %}
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="8" y1="2" x2="8" y2="22"/></svg>
+                                {% else %}
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                {% endif %}
+                            </span>
+                            <span class="signal-insight-label">{{ pattern.pattern_type|upper }}</span>
                             <span class="signal-insight-metric">{{ pattern.metric }}</span>
                         </div>
                         <div class="signal-insight-title">{{ pattern.name }}</div>
                         <div class="signal-insight-desc">{{ pattern.description }}</div>
-                        <a href="#" class="signal-insight-link" onclick="filterByPattern('{{ pattern.name }}'); return false;">
-                            View related posts →
-                        </a>
+                        {% if pattern.actionable_takeaway %}
+                        <div class="signal-insight-action">{{ pattern.actionable_takeaway }}</div>
+                        {% endif %}
                     </div>
                     {% endfor %}
+
+                    <!-- Recommendations -->
+                    {% if insights.recommendations %}
+                    <div class="signal-insight-card signal-rec-card">
+                        <div class="signal-insight-header">
+                            <span class="signal-insight-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            </span>
+                            <span class="signal-insight-label">WHAT TO DO NEXT</span>
+                        </div>
+                        {% for rec in insights.recommendations[:2] %}
+                        <div class="signal-rec-item">
+                            <div class="signal-insight-title">{{ rec.title }}</div>
+                            <div class="signal-insight-desc">{{ rec.description }}</div>
+                            <ul class="signal-rec-actions">
+                                {% for action in rec.actions[:3] %}
+                                <li>{{ action }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
 
                     <!-- Franchise Cards -->
                     {% for franchise in insights.franchises[:1] %}
                     <div class="signal-insight-card">
                         <div class="signal-insight-header">
-                            <span class="signal-insight-icon">🎬</span>
+                            <span class="signal-insight-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                            </span>
                             <span class="signal-insight-label">FRANCHISE</span>
                             <span class="signal-insight-metric">{{ franchise.retention_score }}</span>
                         </div>
                         <div class="signal-insight-title">{{ franchise.name }}</div>
                         <div class="signal-insight-desc">{{ franchise.description }}</div>
-                        <a href="#" class="signal-insight-link">View related posts →</a>
                     </div>
                     {% endfor %}
 
@@ -128,6 +160,33 @@
 
             <!-- Filter Pills -->
             <div class="signal-filters">
+                <!-- Brands Filter (with manage link) -->
+                {% if competitive_set %}
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">BRANDS
+                        <a href="/verticals/{{ vertical_name }}/edit" class="signal-filter-manage" title="Manage brands">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </a>
+                    </span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill {% if not selected_competitor %}active{% endif %}"
+                                onclick="applyFilter('competitor', '')">All ({{ competitive_set|length }})</button>
+                        {% for brand in competitive_set %}
+                            {% set handle = brand.instagram_handle or brand.tiktok_handle or '' %}
+                            {% if handle %}
+                            <button class="signal-pill {% if selected_competitor == handle %}active{% endif %}"
+                                    onclick="applyFilter('competitor', '{{ handle }}')">
+                                @{{ handle }}
+                            </button>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Platform Filter -->
                 <div class="signal-filter-group">
                     <span class="signal-filter-label">PLATFORM</span>
@@ -141,14 +200,14 @@
                                 <circle cx="12" cy="12" r="5"/>
                                 <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/>
                             </svg>
-                            Instagram
+                            IG
                         </button>
                         <button class="signal-pill {% if selected_platform == 'tiktok' %}active{% endif %}"
                                 onclick="applyFilter('platform', 'tiktok')">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/>
                             </svg>
-                            TikTok
+                            TT
                         </button>
                     </div>
                 </div>
@@ -158,21 +217,21 @@
                     <span class="signal-filter-label">TIMEFRAME</span>
                     <div class="signal-filter-pills">
                         <button class="signal-pill {% if not selected_timeframe %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '')">All time</button>
+                                onclick="applyFilter('timeframe', '')">All</button>
                         <button class="signal-pill {% if selected_timeframe == '30d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '30d')">Last 30 days</button>
+                                onclick="applyFilter('timeframe', '30d')">30d</button>
                         <button class="signal-pill {% if selected_timeframe == '90d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '90d')">Last 3 months</button>
+                                onclick="applyFilter('timeframe', '90d')">3mo</button>
                         <button class="signal-pill {% if selected_timeframe == '180d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '180d')">Last 6 months</button>
+                                onclick="applyFilter('timeframe', '180d')">6mo</button>
                         <button class="signal-pill {% if selected_timeframe == '365d' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '365d')">Last year</button>
+                                onclick="applyFilter('timeframe', '365d')">1yr</button>
                     </div>
                 </div>
 
                 <!-- Sort Filter -->
                 <div class="signal-filter-group">
-                    <span class="signal-filter-label">SORT BY</span>
+                    <span class="signal-filter-label">SORT</span>
                     <div class="signal-filter-pills">
                         <button class="signal-pill {% if sort_by == 'score' %}active{% endif %}"
                                 onclick="applyFilter('sort', 'score')">Score</button>
@@ -195,23 +254,37 @@
                     <div class="signal-card" style="animation-delay: {{ loop.index0 * 0.05 }}s">
                         <!-- Card Media -->
                     <div class="signal-card-media">
-                        <!-- Post Image/Video -->
+                        <!-- Post Image/Video with smart fallback chain -->
+                        {% set grad_name = ['purple', 'green', 'orange', 'pink', 'teal'][loop.index0 % 5] %}
                         {% if post.media_url %}
-                            {% if post.media_type == 'video' %}
-                            <video src="/proxy-image?url={{ post.media_url|urlencode }}" muted loop playsinline
-                                   onmouseover="this.play()" onmouseout="this.pause()"
-                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"></video>
-                            <div class="signal-gradient-purple" style="display:none;"></div>
+                            {% if post.media_type == 'video' and post.platform == 'tiktok' %}
+                            <img src="/proxy-image?url={{ post.media_url|urlencode }}" alt="{{ post.competitor_name }} post" loading="lazy"
+                                 data-platform="{{ post.platform }}" data-postid="{{ post.post_id }}" data-handle="{{ post.competitor_handle }}"
+                                 onerror="handleImageError(this, '{{ grad_name }}')">
                             {% else %}
                             <img src="/proxy-image?url={{ post.media_url|urlencode }}" alt="{{ post.competitor_name }} post" loading="lazy"
-                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                            <div class="signal-gradient-{{ ['purple', 'green', 'orange', 'pink', 'teal'][loop.index0 % 5] }}" style="display:none;"></div>
+                                 data-platform="{{ post.platform }}" data-postid="{{ post.post_id }}" data-handle="{{ post.competitor_handle }}"
+                                 onerror="handleImageError(this, '{{ grad_name }}')">
                             {% endif %}
                         {% else %}
-                            <!-- Gradient Fallback -->
-                            {% set gradients = ['signal-gradient-purple', 'signal-gradient-green', 'signal-gradient-orange', 'signal-gradient-pink', 'signal-gradient-teal'] %}
-                            <div class="{{ gradients[loop.index0 % 5] }}"></div>
+                            <img src="https://www.instagram.com/p/{{ post.post_id }}/media/?size=l" alt="{{ post.competitor_name }} post" loading="lazy"
+                                 data-platform="{{ post.platform }}" data-postid="{{ post.post_id }}" data-handle="{{ post.competitor_handle }}"
+                                 onerror="handleImageError(this, '{{ grad_name }}')"
+                                 style="{% if post.platform == 'tiktok' %}display:none{% endif %}">
+                            {% if post.platform == 'tiktok' %}
+                            <div class="signal-gradient-{{ grad_name }}"></div>
+                            {% endif %}
                         {% endif %}
+                        <!-- Gradient fallback (hidden until needed) -->
+                        <div class="signal-gradient-{{ grad_name }} signal-fallback-gradient" style="display:none;">
+                            <div class="signal-fallback-info">
+                                <span class="signal-fallback-handle">@{{ post.competitor_handle }}</span>
+                                <span class="signal-fallback-type">{{ post.media_type|upper }}</span>
+                                {% if post.likes %}
+                                <span class="signal-fallback-stat">{{ "{:,}".format(post.likes) }} likes</span>
+                                {% endif %}
+                            </div>
+                        </div>
 
                         <!-- Platform Badge (Top-Left) -->
                         <div class="signal-platform-badge">
@@ -267,6 +340,17 @@
 
                     <!-- Card Body -->
                     <div class="signal-card-body">
+                        <!-- Per-Post Insight: Why It Worked -->
+                        {% if insights and insights.post_insights and post.post_id in insights.post_insights %}
+                        {% set pi = insights.post_insights[post.post_id] %}
+                        {% if pi.why_it_worked %}
+                        <div class="signal-card-insight">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <span>{{ pi.why_it_worked[0][:120] }}{% if pi.why_it_worked[0]|length > 120 %}...{% endif %}</span>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+
                         <!-- Caption -->
                         {% if post.caption %}
                         <p class="signal-card-caption">"{{ post.caption[:150] }}{% if post.caption|length > 150 %}...{% endif %}"</p>
@@ -327,6 +411,27 @@
 </div>
 
 <script>
+// Image fallback chain: proxy -> Instagram embed thumbnail -> gradient
+function handleImageError(img, gradientName) {
+    const platform = img.dataset.platform;
+    const postId = img.dataset.postid;
+    const retryAttempt = parseInt(img.dataset.retry || '0');
+
+    if (retryAttempt === 0 && platform === 'instagram' && postId) {
+        // Try Instagram's public embed media endpoint
+        img.dataset.retry = '1';
+        img.src = `https://www.instagram.com/p/${postId}/media/?size=l`;
+        return;
+    }
+
+    // All retries exhausted — show gradient fallback
+    img.style.display = 'none';
+    const fallback = img.closest('.signal-card-media').querySelector('.signal-fallback-gradient');
+    if (fallback) {
+        fallback.style.display = 'flex';
+    }
+}
+
 // Filter handling
 function applyFilter(key, value) {
     const url = new URL(window.location.href);
@@ -336,8 +441,7 @@ function applyFilter(key, value) {
 
 // Pattern filtering
 function filterByPattern(patternName) {
-    console.log('Filtering by pattern:', patternName);
-    // TODO: Implement pattern-based filtering
+    applyFilter('tag', patternName);
 }
 
 // Chat input handling

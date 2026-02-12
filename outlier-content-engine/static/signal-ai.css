@@ -299,6 +299,61 @@ h1, h2, h3, h4, h5, h6 {
     gap: 8px;
 }
 
+/* Actionable takeaway on pattern cards */
+.signal-insight-action {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--signal-success);
+    background: rgba(16, 185, 129, 0.08);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 3px solid var(--signal-success);
+    margin-top: 8px;
+}
+
+/* Recommendation cards */
+.signal-rec-card {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.signal-rec-item {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--signal-border-light);
+}
+
+.signal-rec-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.signal-rec-actions {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+}
+
+.signal-rec-actions li {
+    font-size: 12px;
+    color: var(--signal-text-secondary);
+    padding: 4px 0 4px 18px;
+    position: relative;
+    line-height: 1.5;
+}
+
+.signal-rec-actions li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--signal-success);
+    opacity: 0.6;
+}
+
 /* ========================================
    CHAT INPUT
    ======================================== */
@@ -373,8 +428,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .signal-filters {
     display: flex;
-    gap: 40px;
+    gap: 24px;
     flex-wrap: wrap;
+    row-gap: 16px;
 }
 
 .signal-filter-group {
@@ -389,12 +445,27 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: 1.2px;
     color: var(--signal-text-muted);
     text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.signal-filter-manage {
+    color: var(--signal-text-muted);
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.signal-filter-manage:hover {
+    color: var(--signal-cyan);
+    opacity: 1;
 }
 
 .signal-filter-pills {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
+    max-width: 600px;
 }
 
 .signal-pill {
@@ -509,6 +580,45 @@ h1, h2, h3, h4, h5, h6 {
 .signal-gradient-orange { background: var(--signal-orange); }
 .signal-gradient-pink { background: var(--signal-pink); }
 .signal-gradient-teal { background: var(--signal-teal); }
+
+/* Fallback gradient with post info overlay */
+.signal-fallback-gradient {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.signal-fallback-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 20px;
+    text-align: center;
+}
+
+.signal-fallback-handle {
+    font-size: 16px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.signal-fallback-type {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 12px;
+    border-radius: 4px;
+}
+
+.signal-fallback-stat {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 600;
+}
 
 /* Platform Badge (Top-Left Overlay) */
 .signal-platform-badge {
@@ -627,6 +737,26 @@ h1, h2, h3, h4, h5, h6 {
 /* Card Body */
 .signal-card-body {
     padding: 18px;
+}
+
+/* Per-post insight (why it worked) */
+.signal-card-insight {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    background: var(--signal-cyan-dim);
+    border-radius: 8px;
+    border-left: 3px solid var(--signal-cyan);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--signal-text-secondary);
+}
+
+.signal-card-insight svg {
+    flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .signal-card-caption {
