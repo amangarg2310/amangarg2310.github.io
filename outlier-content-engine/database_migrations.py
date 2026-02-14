@@ -186,6 +186,45 @@ def seed_api_keys_from_env(db_path=None):
     logger.info("API key seeding complete")
 
 
+def add_archived_column_to_posts(db_path=None):
+    """
+    Add archived column to competitor_posts table for soft delete functionality.
+    Safe to call multiple times.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    logger.info("Adding archived column to competitor_posts...")
+
+    try:
+        # Try to add the column
+        conn.execute("""
+            ALTER TABLE competitor_posts
+            ADD COLUMN archived INTEGER DEFAULT 0
+        """)
+        conn.commit()
+        logger.info("  Added archived column")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            logger.info("  archived column already exists, skipping")
+        else:
+            raise
+
+    # Create index for faster filtering
+    try:
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_posts_archived
+            ON competitor_posts(archived)
+        """)
+        conn.commit()
+        logger.info("  Created index on archived column")
+    except Exception as e:
+        logger.warning(f"  Failed to create index: {e}")
+
+    conn.close()
+    logger.info("archived column migration complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)

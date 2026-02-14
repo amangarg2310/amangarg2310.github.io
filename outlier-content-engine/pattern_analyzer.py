@@ -77,7 +77,7 @@ class PatternAnalyzer:
                    weighted_engagement_score, primary_engagement_driver,
                    audio_id, audio_name, ai_analysis
             FROM competitor_posts
-            WHERE brand_profile = ? AND is_outlier = 1
+            WHERE brand_profile = ? AND is_outlier = 1 AND COALESCE(archived, 0) = 0
             ORDER BY outlier_score DESC
         """, (self.vertical_name,)).fetchall()
 

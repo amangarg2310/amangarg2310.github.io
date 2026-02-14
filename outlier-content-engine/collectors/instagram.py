@@ -111,6 +111,7 @@ def migrate_database(db_path=None):
         "primary_engagement_driver": "TEXT",
         "outlier_timeframe": "TEXT",
         "ai_analysis": "TEXT",
+        "archived": "INTEGER DEFAULT 0",
     }
 
     for col_name, col_type in new_columns.items():

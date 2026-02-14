@@ -276,7 +276,7 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
                    weighted_engagement_score, primary_engagement_driver,
                    audio_id, audio_name, ai_analysis
             FROM competitor_posts
-            WHERE brand_profile = ? AND is_outlier = 1
+            WHERE brand_profile = ? AND is_outlier = 1 AND COALESCE(archived, 0) = 0
         """
         params = [brand_profile]
 
@@ -432,6 +432,7 @@ def get_competitor_baselines(vertical_name=None, timeframe="30d"):
             FROM competitor_posts
             WHERE brand_profile = ?
               AND COALESCE(is_own_channel, 0) = 0
+              AND COALESCE(archived, 0) = 0
               AND collected_at >= datetime('now', ?)
             GROUP BY competitor_handle
             ORDER BY mean_engagement DESC

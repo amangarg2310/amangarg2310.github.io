@@ -156,14 +156,35 @@ class VerticalManager:
             tiktok_handle = tiktok_handle.lstrip('@')
 
         try:
+            # Check if this brand has archived posts in this vertical (from previous removal)
+            handle_to_check = instagram_handle or tiktok_handle
+            archived_count = conn.execute("""
+                SELECT COUNT(*) FROM competitor_posts
+                WHERE brand_profile = ? AND competitor_handle = ? AND archived = 1
+            """, (vertical_name, handle_to_check)).fetchone()[0]
+
+            # Unarchive existing posts if found (instant re-add!)
+            if archived_count > 0:
+                conn.execute("""
+                    UPDATE competitor_posts
+                    SET archived = 0
+                    WHERE brand_profile = ? AND competitor_handle = ?
+                """, (vertical_name, handle_to_check))
+                logger.info(f"Unarchived {archived_count} posts for @{handle_to_check} in {vertical_name}")
+
+            # Add brand to vertical
             conn.execute("""
                 INSERT INTO vertical_brands
                 (vertical_name, brand_name, instagram_handle, tiktok_handle, added_at)
                 VALUES (?, ?, ?, ?, ?)
             """, (vertical_name, brand_name, instagram_handle, tiktok_handle, now))
             conn.commit()
+
             handle_info = instagram_handle or tiktok_handle
-            logger.info(f"Added {handle_info} to {vertical_name}")
+            if archived_count > 0:
+                logger.info(f"Re-added {handle_info} to {vertical_name} (instant: unarchived {archived_count} cached posts)")
+            else:
+                logger.info(f"Added {handle_info} to {vertical_name}")
             return True
         except sqlite3.IntegrityError:
             logger.warning(f"Brand already in {vertical_name}")
@@ -172,10 +193,19 @@ class VerticalManager:
             conn.close()
 
     def remove_brand(self, vertical_name: str, instagram_handle: str) -> bool:
-        """Remove a brand from a vertical."""
+        """Remove a brand from a vertical (soft delete - archives posts for instant re-add)."""
         conn = self._get_conn()
         instagram_handle = instagram_handle.lstrip('@')
 
+        # Archive brand's posts from this vertical (soft delete)
+        conn.execute("""
+            UPDATE competitor_posts
+            SET archived = 1
+            WHERE brand_profile = ? AND competitor_handle = ?
+        """, (vertical_name, instagram_handle))
+        posts_archived = conn.total_changes
+
+        # Delete brand from vertical_brands table
         conn.execute("""
             DELETE FROM vertical_brands
             WHERE vertical_name = ? AND instagram_handle = ?
@@ -186,7 +216,7 @@ class VerticalManager:
         conn.close()
 
         if deleted:
-            logger.info(f"Removed @{instagram_handle} from {vertical_name}")
+            logger.info(f"Removed @{instagram_handle} from {vertical_name} ({posts_archived} posts archived)")
         return deleted
 
     def bulk_add_brands(self, vertical_name: str, handles_text: str) -> Dict:
