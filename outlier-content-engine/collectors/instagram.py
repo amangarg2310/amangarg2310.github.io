@@ -463,6 +463,8 @@ class ApifyInstagramCollector(BaseCollector):
     def collect_posts(self, handle: str, competitor_name: str,
                       count: int = 12) -> List[CollectedPost]:
         """Fetch recent posts via Apify actor."""
+        import time
+        start_time = time.time()
         logger.info(f"  Fetching posts for @{handle} via Apify...")
 
         run_input = {
@@ -475,6 +477,8 @@ class ApifyInstagramCollector(BaseCollector):
 
         try:
             # Start the actor run
+            logger.debug(f"  Starting Apify actor run for @{handle} (resultsLimit={count})...")
+            actor_start = time.time()
             resp = requests.post(
                 f"{self.BASE_URL}/acts/{self.ACTOR_ID}/runs",
                 params={"token": self.api_token},
@@ -484,26 +488,54 @@ class ApifyInstagramCollector(BaseCollector):
             resp.raise_for_status()
             run_data = resp.json().get("data", {})
             run_id = run_data.get("id")
+            actor_elapsed = time.time() - actor_start
+            logger.debug(f"  Actor run started in {actor_elapsed:.1f}s, run_id: {run_id}")
 
             if not run_id:
-                logger.error("  Failed to start Apify actor run")
+                logger.error(f"  Failed to start Apify actor run for @{handle}")
+                logger.error(f"  Response: {resp.text[:200]}")
                 return []
 
             # Wait for the run to complete
-            dataset_items = self._wait_for_results(run_id)
+            wait_start = time.time()
+            dataset_items = self._wait_for_results(run_id, handle)
+            wait_elapsed = time.time() - wait_start
+            logger.info(f"  Apify wait time for @{handle}: {wait_elapsed:.1f}s")
+
+            parse_start = time.time()
             posts = self._parse_apify_posts(dataset_items, handle,
                                             competitor_name, count)
-            logger.info(f"  Collected {len(posts)} posts from @{handle}")
+            parse_elapsed = time.time() - parse_start
+            total_elapsed = time.time() - start_time
+
+            logger.info(
+                f"  Collected {len(posts)} posts from @{handle} "
+                f"(total: {total_elapsed:.1f}s, wait: {wait_elapsed:.1f}s, parse: {parse_elapsed:.1f}s)"
+            )
             return posts
 
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                logger.error(f"  Apify authentication failed for @{handle}: Invalid API token")
+            elif e.response.status_code == 429:
+                logger.error(f"  Apify rate limit exceeded for @{handle}")
+            elif e.response.status_code == 404:
+                logger.error(f"  Apify actor not found or account does not exist: @{handle}")
+            else:
+                logger.error(f"  Apify HTTP error {e.response.status_code} for @{handle}: {e}")
+            return []
+        except requests.exceptions.Timeout:
+            logger.error(f"  Apify request timeout for @{handle} (30s)")
+            return []
         except Exception as e:
-            logger.error(f"  Apify collection failed for @{handle}: {e}")
+            logger.error(f"  Apify collection failed for @{handle}: {type(e).__name__}: {e}")
             return []
 
-    def _wait_for_results(self, run_id: str,
-                          timeout_seconds: int = 120) -> List[dict]:
+    def _wait_for_results(self, run_id: str, handle: str,
+                          timeout_seconds: int = 600) -> List[dict]:
         """Poll for actor run completion and return results."""
         start = time.time()
+        logger.info(f"  Waiting for Apify results for @{handle}... (max {timeout_seconds}s)")
 
         while time.time() - start < timeout_seconds:
             try:
@@ -517,17 +549,22 @@ class ApifyInstagramCollector(BaseCollector):
 
                 if status == "SUCCEEDED":
                     dataset_id = run_info.get("defaultDatasetId")
+                    logger.info(f"  Apify run succeeded for @{handle}, fetching dataset...")
                     return self._fetch_dataset(dataset_id)
                 elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
-                    logger.error(f"  Apify run {status}")
+                    error_msg = run_info.get("statusMessage", "No error details provided")
+                    logger.error(f"  Apify run {status} for @{handle}: {error_msg}")
                     return []
 
+                # Still running, wait and check again
+                elapsed = int(time.time() - start)
+                logger.debug(f"  Apify run for @{handle} still running... ({elapsed}s elapsed)")
                 time.sleep(5)
             except Exception as e:
-                logger.warning(f"  Error checking run status: {e}")
+                logger.warning(f"  Error checking run status for @{handle}: {e}")
                 time.sleep(5)
 
-        logger.error("  Apify run timed out")
+        logger.error(f"  Apify run timed out for @{handle} after {timeout_seconds}s")
         return []
 
     def _fetch_dataset(self, dataset_id: str) -> List[dict]:

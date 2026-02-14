@@ -199,7 +199,7 @@ def load_profile_from_database(vertical_name: str) -> Optional[BrandProfile]:
             competitors=competitors,
             content_tags=content_tags,
             outlier_settings=outlier_settings,
-            profile_name=vertical_name.lower().replace(" ", "_"),
+            profile_name=vertical_name,  # Keep original casing to match vertical name
             own_channel={},
             follower_count=None,
             team_size="solo"

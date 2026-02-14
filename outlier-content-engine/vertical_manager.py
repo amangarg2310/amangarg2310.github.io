@@ -124,13 +124,20 @@ class VerticalManager:
     def delete_vertical(self, name: str) -> bool:
         """Delete a vertical and all its brands."""
         conn = self._get_conn()
+
+        # Delete vertical metadata (CASCADE deletes brands via foreign key)
         conn.execute("DELETE FROM verticals WHERE name = ?", (name,))
         deleted = conn.total_changes > 0
+
+        # Delete all associated posts (no foreign key, so manual cleanup)
+        conn.execute("DELETE FROM competitor_posts WHERE brand_profile = ?", (name,))
+        posts_deleted = conn.total_changes
+
         conn.commit()
         conn.close()
 
         if deleted:
-            logger.info(f"Deleted vertical: {name}")
+            logger.info(f"Deleted vertical '{name}' and {posts_deleted} associated posts")
         return deleted
 
     def add_brand(self, vertical_name: str, instagram_handle: str = None,

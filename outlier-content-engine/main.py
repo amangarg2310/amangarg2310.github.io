@@ -75,7 +75,56 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False):
+def with_progress_tracking(func):
+    """
+    Decorator that wraps run_pipeline with complete progress tracking and error handling.
+
+    Ensures:
+    - Progress tracker is initialized
+    - progress.start() is called at the right time
+    - progress.complete() is called on success
+    - progress.error() is called on failure
+    - PID file cleanup is guaranteed in all scenarios
+    """
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        logger = logging.getLogger("engine")
+        progress = ProgressTracker()
+
+        try:
+            # Call the original function
+            result = func(*args, **kwargs, _progress=progress)
+
+            # If we got here without exception and result doesn't have an error, mark complete
+            if not result.get("error"):
+                progress.complete()
+            else:
+                # Function returned an error dict
+                progress.error(result["error"])
+
+            return result
+
+        except Exception as e:
+            # Unexpected exception occurred
+            logger.error(f"Pipeline failed with exception: {e}")
+            progress.error(str(e))
+            return {"error": str(e)}
+
+        finally:
+            # GUARANTEED cleanup: remove PID file no matter what
+            if progress.pid_file.exists():
+                try:
+                    progress.pid_file.unlink()
+                except Exception:
+                    pass  # Ignore cleanup errors
+
+    return wrapper
+
+
+@with_progress_tracking
+def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, _progress=None):
     """
     Run the full outlier detection pipeline.
 
@@ -221,6 +270,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     # ── 2. Initialize Database ──
     init_database()
     migrate_database()
+
+    # Start progress tracking
+    if _progress:
+        _progress.start(
+            total_brands_ig=len(ig_competitors),
+            total_brands_tt=len(tt_competitors),
+            is_cached=skip_collect
+        )
 
     # ── 3. Collection Phase ──
     run_stats = {

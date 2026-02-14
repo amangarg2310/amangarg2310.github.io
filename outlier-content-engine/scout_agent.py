@@ -148,18 +148,59 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "run_analysis",
             "description": (
-                "Run the outlier detection analysis pipeline for a category. "
-                "This collects recent posts and finds viral content."
+                "Run outlier detection analysis for a category. "
+                "Can analyze ALL brands in the category OR specific brands only. "
+                "Use brand_handles to filter which brands to collect/analyze."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "category_name": {
                         "type": "string",
-                        "description": "The category to analyze.",
+                        "description": "Category to analyze (e.g., 'Streetwear')",
+                    },
+                    "brand_handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "OPTIONAL: Specific Instagram handles to analyze. "
+                            "If omitted or empty, analyzes ALL brands in category. "
+                            "Extract from user's natural language. Examples: "
+                            "'analyze nike' → ['nike'], "
+                            "'kith and noah' → ['kith', 'noah'], "
+                            "'analyze everything' → omit this field"
+                        ),
                     },
                 },
                 "required": ["category_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "filter_view",
+            "description": (
+                "Filter the dashboard to show only specific brands from EXISTING data. "
+                "Use when user wants to VIEW, LOOK AT, SEE, or FILTER to specific brands "
+                "WITHOUT running a new analysis or collection. "
+                "This is instant and uses already-collected posts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brand_handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Brand handles to filter the view to. Examples: "
+                            "'show me nike' → ['nike'], "
+                            "'i only want to look at stussy' → ['stussy'], "
+                            "'filter to kith and noah' → ['kith', 'noah']"
+                        ),
+                    },
+                },
+                "required": ["brand_handles"],
             },
         },
     },
@@ -246,6 +287,67 @@ WHAT YOU CAN DO (use the provided tools):
 4. list_categories — show all categories
 5. show_category — show brands in a specific category
 6. run_analysis — scan posts and find outlier content
+7. filter_view — filter dashboard to specific brands (no analysis, instant)
+
+INTENT DISAMBIGUATION (CRITICAL):
+When user mentions a brand, determine their TRUE intent:
+
+1. ADDING BRANDS: "add [brand] to [category]"
+   → use add_brands tool
+
+2. RUNNING ANALYSIS: "analyze [brand]" or "run analysis on [brand]"
+   → use run_analysis with brand_handles=[brand]
+   → Triggers fresh collection (2-5 minutes)
+
+3. FILTERING VIEW: "show me [brand]" or "i only want to look at [brand]" or "filter to [brand]"
+   → use filter_view tool
+   → Instant, uses existing data, NO collection
+
+4. FULL CATEGORY: "analyze [category]" or "run analysis"
+   → use run_analysis with NO brand_handles
+
+CRITICAL PRE-ANALYSIS VALIDATION:
+Before calling run_analysis, you MUST check if the category has brands:
+1. If user mentions a category name (e.g., "streetwear", "analyze beauty"), first call show_category
+2. Check the brand_count in the response
+3. If brand_count == 0 or category is empty:
+   → DO NOT call run_analysis
+   → Instead respond: "This category is empty. What brands should I add to get started?"
+   → Suggest next step: "Try: add @brand1 @brand2 to [category]"
+   → Wait for user to add brands, then THEY will explicitly say "analyze"
+4. Only call run_analysis if brand_count > 0
+
+CRITICAL: If user says a brand "is already in [category]" and wants to see just that brand
+→ They want filter_view, NOT run_analysis
+→ "Brand already exists" should trigger filter_view, not full analysis
+
+BRAND-SPECIFIC ANALYSIS:
+When users request analysis, determine the SCOPE:
+
+1. SPECIFIC BRANDS: "analyze just nike" or "show me kith and noah"
+   → Extract brand handles and pass to run_analysis
+   → Example: run_analysis(category_name="Streetwear", brand_handles=["nike"])
+
+2. FULL CATEGORY: "analyze streetwear" or "run analysis"
+   → Omit brand_handles to analyze all brands
+   → Example: run_analysis(category_name="Streetwear")
+
+3. CONTEXT-AWARE: If user says "analyze it" or "run analysis" without specifics
+   → Check if they previously mentioned specific brands in chat history
+   → If yes, use those brands. If no, analyze full category.
+
+BRAND EXTRACTION RULES:
+- Strip @ symbols from handles
+- Handle informal phrasing: "just nike" → ["nike"]
+- Handle conjunctions: "nike and kith" → ["nike", "kith"]
+- Handle comparisons: "kith vs noah" → ["kith", "noah"]
+- Validate brands exist in the category before running analysis
+
+RESPONSE TEMPLATES:
+✓ Single brand: "Got it! I'll analyze just @saintwoods from Streetwear."
+✓ Multiple brands: "Perfect! Analyzing @nike and @kith from your Streetwear category."
+✓ Full category: "Running analysis on all 6 brands in Streetwear."
+✓ Brand not found: "Hmm, I don't see 'fakeband' in Streetwear. Did you mean one of these: @nike, @kith, @stussy?"
 
 IMPORTANT:
 - NEVER output raw JSON to the user
@@ -434,6 +536,58 @@ IMPORTANT:
             "brands": handles,
         })
 
+    def _should_skip_collection(self, vertical_name: str, brand_handles: list = None) -> bool:
+        """Check if posts were recently collected to enable fast cached re-analysis.
+
+        Returns True if ALL requested brands have posts collected within last 24 hours.
+        This enables instant re-analysis without slow Apify collection.
+        """
+        try:
+            import sqlite3
+            from datetime import datetime, timedelta
+
+            conn = sqlite3.connect(str(config.DB_PATH))
+            conn.row_factory = sqlite3.Row
+
+            # Get all brands for this vertical
+            vertical = self.vm.get_vertical(vertical_name)
+            if not vertical:
+                return False
+
+            # If specific brands requested, check only those
+            # Otherwise check all brands in vertical
+            if brand_handles:
+                handles_to_check = brand_handles
+            else:
+                handles_to_check = [b.instagram_handle for b in vertical.brands if b.instagram_handle]
+
+            if not handles_to_check:
+                return False
+
+            # Check if ALL brands have recent posts (within 24 hours)
+            cutoff_time = datetime.now() - timedelta(hours=24)
+            cutoff_str = cutoff_time.strftime('%Y-%m-%dT%H:%M:%S')
+
+            for handle in handles_to_check:
+                result = conn.execute("""
+                    SELECT COUNT(*) as count, MAX(collected_at) as last_collected
+                    FROM competitor_posts
+                    WHERE handle = ?
+                      AND collected_at >= ?
+                """, (handle, cutoff_str)).fetchone()
+
+                # If this brand has no recent posts, we need fresh collection
+                if not result or result['count'] == 0:
+                    conn.close()
+                    return False
+
+            conn.close()
+            return True  # All brands have recent data
+
+        except Exception as e:
+            logger.warning(f"Cache check failed: {e}")
+            return False  # On error, do fresh collection
+
     def _handle_run_analysis(self, args: Dict, context: Dict) -> str:
         """Trigger the analysis pipeline in a background thread.
 
@@ -461,6 +615,24 @@ IMPORTANT:
                 "ok": False,
                 "error": f"Category '{actual_name}' has no brands. Add some first.",
             })
+
+        # ── Brand-specific filtering (optional) ──
+        brand_handles = args.get("brand_handles")  # None, [], or ["nike", "kith"]
+
+        # Validate brands exist in category (if specified)
+        if brand_handles:
+            vertical = self.vm.get_vertical(actual_name)
+            available_handles = [b.instagram_handle for b in vertical.brands if b.instagram_handle]
+            invalid = [h for h in brand_handles if h not in available_handles]
+
+            if invalid:
+                return json.dumps({
+                    "ok": False,
+                    "error": (
+                        f"Brands not found in {actual_name}: {', '.join(invalid)}. "
+                        f"Available: {', '.join(available_handles)}"
+                    ),
+                })
 
         # ── Rate limiting (skip if admin mode) ──
         is_admin = context.get("admin_mode", False) or config.ADMIN_MODE
@@ -520,7 +692,17 @@ IMPORTANT:
             except Exception as exc:
                 logger.warning(f"Rate-limit check failed (proceeding anyway): {exc}")
 
+        # Check if posts were recently collected (within last 24 hours)
+        # If so, use --skip-collect for instant re-analysis
+        should_skip_collect = self._should_skip_collection(actual_name, brand_handles)
+
+        # Build CLI command with optional brand filtering
         cmd = [sys.executable, "main.py", "--profile", actual_name, "--no-email"]
+        if should_skip_collect:
+            cmd.append("--skip-collect")
+            logger.info("Using cached data (posts collected within last 24 hours)")
+        if brand_handles:
+            cmd.extend(["--brands", ",".join(brand_handles)])
 
         def _run():
             try:
@@ -529,7 +711,7 @@ IMPORTANT:
                     cwd=str(config.PROJECT_ROOT),
                     capture_output=True,
                     text=True,
-                    timeout=300,
+                    timeout=900,  # Increased from 300s to 900s (15 minutes)
                 )
             except Exception as exc:
                 logger.error(f"Analysis failed: {exc}")
@@ -541,11 +723,71 @@ IMPORTANT:
         self.vm.update_vertical_timestamp(actual_name)
         context["analysis_started"] = True
 
+        # Build response message based on scope
+        if brand_handles:
+            handles_str = ", ".join(f"@{h}" for h in brand_handles)
+            message = f"Analyzing {handles_str} from {actual_name}."
+            # Store selected brands in context for UI sync
+            context["selected_brands"] = brand_handles
+        else:
+            message = f"Analyzing all {brand_count} brands in {actual_name}."
+
         return json.dumps({
             "ok": True,
             "category": actual_name,
-            "brand_count": brand_count,
-            "message": "Analysis started in the background.",
+            "brand_count": len(brand_handles) if brand_handles else brand_count,
+            "message": message,
+            "selected_brands": brand_handles if brand_handles else None,
+        })
+
+    def _handle_filter_view(self, args: Dict, context: Dict) -> str:
+        """Filter dashboard to show specific brands without triggering analysis."""
+        brand_handles = args.get("brand_handles", [])
+
+        if not brand_handles:
+            return json.dumps({"ok": False, "error": "No brands specified for filtering."})
+
+        # Get active category from context
+        active_vertical = context.get("active_vertical")
+        if not active_vertical:
+            return json.dumps({
+                "ok": False,
+                "error": "No active category. Please select a category first."
+            })
+
+        # Validate brands exist in the category
+        vertical = self.vm.get_vertical(active_vertical)
+        if not vertical:
+            return json.dumps({"ok": False, "error": f"Category '{active_vertical}' not found."})
+
+        available_handles = [b.instagram_handle for b in vertical.brands if b.instagram_handle]
+        invalid = [h for h in brand_handles if h not in available_handles]
+
+        if invalid:
+            return json.dumps({
+                "ok": False,
+                "error": (
+                    f"Brands not found in {active_vertical}: {', '.join(invalid)}. "
+                    f"Available: {', '.join(available_handles)}"
+                ),
+            })
+
+        # Set filter context for frontend
+        context["filter_action"] = True
+        context["filter_brands"] = brand_handles
+
+        # Build response message
+        handles_str = ", ".join(f"@{h}" for h in brand_handles)
+        if len(brand_handles) == 1:
+            message = f"Showing posts from {handles_str} only."
+        else:
+            message = f"Filtering to {handles_str}."
+
+        return json.dumps({
+            "ok": True,
+            "action": "filter",
+            "brands": brand_handles,
+            "message": message,
         })
 
     # ── Dispatch a tool call ────────────────────────────────────────────

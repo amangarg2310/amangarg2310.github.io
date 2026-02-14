@@ -288,16 +288,17 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             query += " AND platform = ?"
             params.append(platform)
 
-        # Timeframe filter: query by pre-computed outlier_timeframe window
+        # Timeframe filter: filter by actual post date, not just outlier_timeframe window
+        # This ensures we only show posts from the selected time period
         if timeframe:
-            timeframe_window_map = {
-                "30d": ("30d", "both"),
-                "3mo": ("3mo", "both"),
+            timeframe_days_map = {
+                "30d": 30,
+                "3mo": 90,
             }
-            if timeframe in timeframe_window_map:
-                w1, w2 = timeframe_window_map[timeframe]
-                query += " AND outlier_timeframe IN (?, ?)"
-                params.extend([w1, w2])
+            if timeframe in timeframe_days_map:
+                days = timeframe_days_map[timeframe]
+                query += " AND posted_at >= datetime('now', ?)"
+                params.append(f'-{days} days')
 
         if tag:
             query += " AND content_tags LIKE ?"
@@ -330,11 +331,12 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
 
             score = row["outlier_score"] or 0
             weighted = row["weighted_engagement_score"] or 0
-            likes = row["likes"] or 0
-            comments = row["comments"] or 0
-            saves = row["saves"] or 0
-            shares = row["shares"] or 0
-            views = row["views"] or 0
+            # Treat -1 as missing data (Instagram hidden counts)
+            likes = row["likes"] if row["likes"] and row["likes"] > 0 else 0
+            comments = row["comments"] if row["comments"] and row["comments"] > 0 else 0
+            saves = row["saves"] if row["saves"] and row["saves"] > 0 else 0
+            shares = row["shares"] if row["shares"] and row["shares"] > 0 else 0
+            views = row["views"] if row["views"] and row["views"] > 0 else 0
             total_eng = likes + comments + saves + shares
 
             # Compute engagement score as 0-100 for the circular widget
@@ -440,6 +442,54 @@ def get_competitor_baselines(vertical_name=None, timeframe="30d"):
     except Exception as e:
         logger.error(f"Error fetching baselines: {e}")
         return []
+
+
+def get_analyzed_brands_with_data(vertical_name):
+    """Get list of brands from vertical that have actual posts/outliers in database.
+
+    This filters the vertical's brand list to show only brands that were analyzed
+    (i.e., have posts in the database), which is useful when user analyzes a subset.
+
+    Returns: List of Brand objects that have data in the database.
+    """
+    if not vertical_name:
+        return []
+
+    try:
+        from vertical_manager import VerticalManager
+        vm = VerticalManager()
+        vertical = vm.get_vertical(vertical_name)
+
+        if not vertical:
+            return []
+
+        # Query database to get handles that actually have posts
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT DISTINCT competitor_handle
+            FROM competitor_posts
+            WHERE brand_profile = ?
+        """, (vertical_name,)).fetchall()
+        conn.close()
+
+        # Build set of handles with data
+        handles_with_data = {row["competitor_handle"] for row in rows}
+
+        # Filter vertical brands to only include those with data
+        filtered_brands = [
+            brand for brand in vertical.brands
+            if (brand.instagram_handle in handles_with_data or
+                brand.tiktok_handle in handles_with_data)
+        ]
+
+        return filtered_brands
+    except Exception as e:
+        logger.error(f"Error getting analyzed brands: {e}")
+        # Fallback: return all brands from vertical
+        from vertical_manager import VerticalManager
+        vm = VerticalManager()
+        vertical = vm.get_vertical(vertical_name)
+        return vertical.brands if vertical else []
 
 
 def build_pattern_clusters(outliers):
@@ -588,6 +638,10 @@ def signal_page():
     # Check if user wants empty state (after reset)
     empty_state = request.args.get("empty", "").lower() == "true"
 
+    # Clear active vertical when returning to empty state
+    if empty_state and hasattr(app, '_active_vertical'):
+        app._active_vertical = None
+
     # Get vertical name for queries (unless empty state)
     vertical_name = None if empty_state else get_active_vertical_name()
 
@@ -612,12 +666,10 @@ def signal_page():
         brand_baselines = get_competitor_baselines(vertical_name, timeframe)
 
     # Get competitive set for context display (empty if empty state)
+    # Only show brands that actually have data in the database
     competitive_set = []
     if vertical_name and not empty_state:
-        vm = VerticalManager()
-        vertical = vm.get_vertical(vertical_name)
-        if vertical:
-            competitive_set = vertical.brands
+        competitive_set = get_analyzed_brands_with_data(vertical_name)
 
     # Get list of all saved verticals for dropdown (always show, even in empty state)
     vm = VerticalManager()
@@ -815,7 +867,8 @@ def setup_page():
                            tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
                            team_emails=team_emails,
                            own_brand_instagram=own_brand_instagram,
-                           own_brand_tiktok=own_brand_tiktok)
+                           own_brand_tiktok=own_brand_tiktok,
+                           vertical_name=get_active_vertical_name())
 
 
 @app.route("/setup/save", methods=["POST"])
@@ -1021,6 +1074,19 @@ def remove_brand_from_vertical():
     return redirect(url_for('vertical_edit_page', name=vertical_name))
 
 
+@app.route("/verticals/<vertical_name>/brands/remove", methods=["POST"])
+def remove_brand_from_set(vertical_name):
+    """Remove a brand from a vertical (called from Signal page)."""
+    from vertical_manager import VerticalManager
+
+    handle = request.form.get('handle', '').lstrip('@')
+
+    vm = VerticalManager()
+    vm.remove_brand(vertical_name, handle)
+
+    return redirect(url_for('signal_page'))
+
+
 @app.route("/verticals/delete", methods=["POST"])
 def delete_vertical():
     """Delete a vertical."""
@@ -1030,12 +1096,9 @@ def delete_vertical():
 
     vm = VerticalManager()
     if vm.delete_vertical(vertical_name):
-        flash(f"Deleted vertical '{vertical_name}'", "success")
         # Clear active vertical if it was deleted
         if hasattr(app, '_active_vertical') and app._active_vertical == vertical_name:
             app._active_vertical = None
-    else:
-        flash(f"Vertical not found", "warning")
 
     return redirect(url_for('signal_page', empty='true'))
 
@@ -1100,6 +1163,7 @@ def chat_message():
 
             if response:
                 analysis_started = updated_context.get('analysis_started', False)
+                selected_brands = updated_context.get('selected_brands')
 
                 # If Scout's tools changed the active vertical, sync the app state
                 new_vertical = updated_context.get('active_vertical')
@@ -1114,6 +1178,7 @@ def chat_message():
                     "response": response,
                     "type": "text",
                     "analysis_started": analysis_started,
+                    "selected_brands": selected_brands,
                     "context": {
                         "active_vertical": updated_context.get('active_vertical'),
                     }
@@ -1296,51 +1361,163 @@ def _get_fallback_response(message: str, current_vertical: str = None) -> str:
     )
 
 
+@app.route("/analysis/cancel", methods=["POST"])
+def cancel_analysis():
+    """Cancel the currently running analysis."""
+    import psutil
+    import signal
+
+    try:
+        # Find and kill main.py process
+        killed = False
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline', [])
+                cmdline_str = ' '.join(cmdline) if cmdline else ''
+                if cmdline and 'main.py' in cmdline_str:
+                    proc.send_signal(signal.SIGTERM)
+                    killed = True
+                    logger.info(f"Cancelled analysis process (PID: {proc.info['pid']})")
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        if killed:
+            return jsonify({"success": True, "message": "Analysis cancelled"})
+        else:
+            return jsonify({"success": False, "error": "No running analysis found"})
+
+    except Exception as e:
+        logger.error(f"Error cancelling analysis: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/analysis/status")
 def analysis_status():
-    """Check if analysis is currently running and return recent results."""
-    from flask import jsonify
-    import psutil
+    """Check if analysis is currently running and return detailed progress."""
+    from flask import jsonify, session
+    import json
+    import time
     import sqlite3
+    from pathlib import Path
 
-    # Check if main.py process is running
-    running = False
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    # Define progress file paths
+    progress_file = config.DATA_DIR / "analysis_progress.json"
+    pid_file = config.DATA_DIR / "analysis.pid"
+
+    response = {
+        "is_running": False,
+        "completed": False,
+        "error": None,
+        "progress": 0,
+        "message": "No analysis running.",
+        "time_elapsed": None,
+        "time_remaining": None,
+    }
+
+    # Check if PID file exists (more reliable than process scanning)
+    if pid_file.exists():
         try:
-            cmdline = proc.info.get('cmdline', [])
-            if cmdline and 'main.py' in ' '.join(cmdline):
-                running = True
-                break
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
+            with open(pid_file, 'r') as f:
+                pid = int(f.read().strip())
 
-    # Get count of recent outliers found (last hour)
-    outliers_count = 0
-    last_analysis_time = None
-    try:
-        conn = sqlite3.connect(str(config.DB_PATH))
-        conn.row_factory = sqlite3.Row
+            # Verify the process is still running
+            import psutil
+            try:
+                proc = psutil.Process(pid)
+                if proc.is_running():
+                    response["is_running"] = True
+                    session['analysis_was_running'] = True
+                    session.modified = True
+                else:
+                    # Process ended but PID file wasn't cleaned up
+                    pid_file.unlink()
+            except psutil.NoSuchProcess:
+                # Process ended, clean up PID file
+                pid_file.unlink()
+        except Exception as e:
+            logger.warning(f"Error reading PID file: {e}")
 
-        # Count outliers from the last analysis
-        result = conn.execute("""
-            SELECT COUNT(*) as count, MAX(collected_at) as last_time
-            FROM competitor_posts
-            WHERE is_outlier = 1
-        """).fetchone()
+    # Read progress data from JSON file
+    if progress_file.exists():
+        try:
+            with open(progress_file, 'r') as f:
+                progress_data = json.load(f)
 
-        if result:
-            outliers_count = result['count']
-            last_analysis_time = result['last_time']
+            status = progress_data.get("status", "unknown")
+            start_time = progress_data.get("start_time")
 
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error getting analysis status from database: {e}")
+            if status == "running" and response["is_running"]:
+                # Analysis is actively running
+                elapsed = time.time() - start_time if start_time else 0
+                response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+                response["progress"] = progress_data.get("progress_percent", 0)
+                response["message"] = progress_data.get("message", "Running analysis...")
 
-    return jsonify({
-        "running": running,
-        "outliers_count": outliers_count,
-        "last_analysis_time": last_analysis_time
-    })
+                # Calculate time remaining based on actual progress
+                progress_pct = progress_data.get("progress_percent", 0)
+                if progress_pct > 5:  # Only estimate after some progress
+                    estimated_total = (elapsed / progress_pct) * 100
+                    remaining = max(0, estimated_total - elapsed)
+                    response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
+                else:
+                    # Early stages, use cached vs fresh estimate
+                    is_cached = progress_data.get("is_cached", False)
+                    if is_cached:
+                        response["time_remaining"] = "30-60 seconds"
+                    else:
+                        total_brands = progress_data.get("total_brands_ig", 0) + progress_data.get("total_brands_tt", 0)
+                        # Estimate ~90s per 6 brands in parallel
+                        est_minutes = (total_brands / 6) * 1.5 + 2  # Add 2 min for analysis
+                        response["time_remaining"] = f"{int(est_minutes)} minutes"
+
+            elif status == "completed":
+                # Analysis finished
+                response["completed"] = True
+                response["progress"] = 100
+                response["message"] = progress_data.get("message", "Analysis complete!")
+
+                if start_time:
+                    end_time = progress_data.get("end_time", time.time())
+                    duration = end_time - start_time
+                    response["time_elapsed"] = f"{int(duration // 60)}m {int(duration % 60)}s"
+
+            elif status == "error":
+                # Analysis failed
+                response["completed"] = True
+                response["error"] = progress_data.get("error", "Unknown error occurred")
+                response["message"] = "Analysis failed"
+
+        except Exception as e:
+            logger.error(f"Error reading progress file: {e}")
+
+    # Fallback: check if analysis was running but now stopped (no progress file)
+    elif not response["is_running"] and session.get('analysis_was_running', False):
+        try:
+            conn = sqlite3.connect(str(config.DB_PATH))
+            conn.row_factory = sqlite3.Row
+            result = conn.execute("""
+                SELECT COUNT(*) as count
+                FROM competitor_posts
+                WHERE is_outlier = 1
+            """).fetchone()
+            outlier_count = result['count'] if result else 0
+            conn.close()
+
+            response["completed"] = True
+            response["progress"] = 100
+            if outlier_count > 0:
+                response["message"] = f"Analysis complete! Found {outlier_count} total outlier posts."
+            else:
+                response["message"] = "Analysis complete! No outliers detected."
+
+            # Clear the flag
+            session['analysis_was_running'] = False
+            session.modified = True
+        except Exception as e:
+            logger.error(f"Error checking completion: {e}")
+
+    return jsonify(response)
 
 
 # ── Entry Point ──

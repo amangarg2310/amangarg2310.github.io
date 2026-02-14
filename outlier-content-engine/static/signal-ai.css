@@ -975,7 +975,8 @@ h1, h2, h3, h4, h5, h6 {
     visibility: visible;
 }
 .signal-modal {
-    background: var(--signal-bg);
+    background: var(--signal-bg-secondary) !important;
+    border: 1px solid var(--signal-border);
     border-radius: 16px;
     width: 90%;
     max-width: 480px;
@@ -1214,6 +1215,41 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .signal-vertical-delete:hover {
+    background: rgba(255, 71, 87, 0.15);
+    color: #ff4757;
+}
+
+/* ── Brand Pill Delete Button ── */
+.brand-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.brand-pill-name {
+    flex: 1;
+}
+
+.brand-pill-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s ease;
+    color: var(--signal-text-secondary);
+}
+
+.brand-pill:hover .brand-pill-delete {
+    opacity: 1;
+}
+
+.brand-pill-delete:hover {
     background: rgba(255, 71, 87, 0.15);
     color: #ff4757;
 }
@@ -1586,4 +1622,226 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 14px;
     max-width: 400px;
     line-height: 1.6;
+}
+
+/* ── Custom Modals ── */
+.custom-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.custom-modal-content {
+    background: #1a1d23;  /* Solid dark background */
+    border: 1px solid var(--signal-border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-modal-content h3 {
+    margin: 0 0 12px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--signal-text);
+}
+
+.custom-modal-content p {
+    margin: 0 0 20px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--signal-text-secondary);
+}
+
+.custom-modal-input {
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 20px;
+    background: var(--signal-bg-tertiary);
+    border: 1px solid var(--signal-border);
+    border-radius: 6px;
+    color: var(--signal-text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.custom-modal-input:focus {
+    outline: none;
+    border-color: var(--signal-accent);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.custom-modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.custom-modal-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.custom-modal-btn-cancel {
+    background: transparent;
+    color: var(--signal-text-secondary);
+    border: 1px solid var(--signal-border);
+}
+
+.custom-modal-btn-cancel:hover {
+    background: var(--signal-bg-tertiary);
+    color: var(--signal-text-primary);
+}
+
+.custom-modal-btn-confirm {
+    background: var(--signal-accent);
+    color: white;
+}
+
+.custom-modal-btn-confirm:hover {
+    background: #5558d9;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+/* Analysis Loading Modal Styles */
+.analysis-loading-content {
+    min-width: 400px;
+    max-width: 500px;
+    background: var(--signal-bg-secondary) !important;
+    border: 1px solid var(--signal-border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Make X button visible and interactive on analysis loading modal */
+.analysis-loading-content .signal-modal-close {
+    background: rgba(20, 27, 46, 0.9) !important;
+    border: 1.5px solid var(--signal-cyan) !important;
+    border-radius: 8px !important;
+    width: 36px !important;
+    height: 36px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: var(--signal-cyan) !important;
+    font-size: 28px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+    transition: all 0.2s ease !important;
+}
+
+.analysis-loading-content .signal-modal-close:hover {
+    background: var(--signal-error) !important;
+    border-color: var(--signal-error) !important;
+    color: #fff !important;
+    transform: scale(1.1);
+}
+
+.analysis-loading-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.analysis-loading-header h3 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--signal-text);
+}
+
+.analysis-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--signal-border);
+    border-top-color: var(--signal-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.analysis-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--signal-border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 16px 0;
+}
+
+.analysis-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--signal-accent), #5558d9);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.5s ease;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.analysis-time-info {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 12px 0;
+}
+
+.analysis-time-detail,
+.analysis-time-estimate {
+    font-size: 13px;
+    color: var(--signal-text-secondary);
+    margin: 0;
+}
+
+.analysis-time-detail {
+    font-weight: 500;
+}
+
+.analysis-loading-tip {
+    font-size: 12px;
+    color: var(--signal-text-secondary);
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--signal-border);
 }

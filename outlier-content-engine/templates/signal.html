@@ -417,7 +417,15 @@
                             <button class="signal-pill brand-pill {% if selected_competitor == handle %}active{% endif %}"
                                     data-handle="{{ handle }}"
                                     onclick="handleBrandClick(event, '{{ handle }}')">
-                                @{{ handle }}
+                                <span class="brand-pill-name">@{{ handle }}</span>
+                                <button class="brand-pill-delete" onclick="deleteBrandFromSet('{{ handle }}', '{{ vertical_name }}', event)" title="Remove brand">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                    </svg>
+                                </button>
                             </button>
                             {% endif %}
                         {% endfor %}
@@ -942,6 +950,29 @@ async function sendChatMessage(message) {
 
         const data = await response.json();
 
+        // Handle analysis started - redirect with appropriate filter params
+        if (data.analysis_started) {
+            // Show the Scout's response first
+            if (data.response) {
+                addChatMessage(data.response, false);
+            }
+
+            // Build redirect URL with filter params to sync UI
+            let redirectUrl = '/signal?analysis_started=true';
+
+            // If specific brands selected, add competitor param (single brand only for now)
+            if (data.selected_brands && data.selected_brands.length === 1) {
+                redirectUrl += '&competitor=' + encodeURIComponent(data.selected_brands[0]);
+            }
+            // For multiple brands or full category, just trigger loading modal without competitor param
+
+            // Small delay to let user see the message, then redirect
+            setTimeout(() => {
+                window.location.href = redirectUrl;
+            }, 800);
+            return;
+        }
+
         // Handle different response types
         if (data.type === 'category_card') {
             addCategoryCard(data.response, data.data, data.actions);
@@ -1228,16 +1259,20 @@ function showBrandReplaceUI(pill, currentHandle) {
     // Add removing state
     pill.classList.add('removing');
 
-    // Show a simple prompt to enter new handle
-    const newHandle = prompt(`Replace @${currentHandle} with:\n\nEnter Instagram or TikTok handle (without @):`);
-
-    pill.classList.remove('removing');
-
-    if (newHandle && newHandle.trim() && newHandle.trim() !== currentHandle) {
-        // Redirect to manage page or update via API
-        // For now, redirect to vertical edit page where they can manage brands
-        window.location.href = `/verticals/{{ vertical_name }}/edit`;
-    }
+    // Show custom prompt to enter new handle
+    showCustomPrompt(
+        `Replace @${currentHandle}`,
+        'Enter Instagram or TikTok handle (without @):',
+        currentHandle,
+        (newHandle) => {
+            pill.classList.remove('removing');
+            if (newHandle.trim() !== currentHandle) {
+                // Redirect to manage page or update via API
+                // For now, redirect to vertical edit page where they can manage brands
+                window.location.href = `/verticals/{{ vertical_name }}/edit`;
+            }
+        }
+    );
 }
 
 // Chat reset function
@@ -1276,27 +1311,277 @@ function loadVertical(verticalName) {
 }
 
 // Delete competitive set
+function deleteBrandFromSet(handle, verticalName, event) {
+    event.stopPropagation(); // Prevent brand filter from applying
+
+    showCustomConfirm(
+        `Remove @${handle}?`,
+        `This will remove @${handle} from "${verticalName}" competitive set.`,
+        () => {
+            // Create form and submit to remove brand
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/verticals/${verticalName}/brands/remove`;
+
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'handle';
+            input.value = handle;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    );
+}
+
 function deleteVertical(verticalName, event) {
     event.stopPropagation(); // Prevent dropdown from closing
 
-    if (!confirm(`Delete "${verticalName}"?\n\nThis will permanently remove this competitive set and all associated data. This action cannot be undone.`)) {
-        return;
+    showCustomConfirm(
+        `Delete "${verticalName}"?`,
+        'This will permanently remove this competitive set and all associated data. This action cannot be undone.',
+        () => {
+            // Create form and submit
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/verticals/delete';
+
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'vertical_name';
+            input.value = verticalName;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    );
+}
+
+// ── Custom Modal Functions ──
+
+function showCustomConfirm(title, message, onConfirm) {
+    const modal = document.getElementById('customConfirmModal');
+    const titleEl = document.getElementById('confirmModalTitle');
+    const messageEl = document.getElementById('confirmModalMessage');
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    modal.style.display = 'flex';
+
+    const confirmBtn = document.getElementById('confirmModalConfirm');
+    const cancelBtn = document.getElementById('confirmModalCancel');
+
+    const handleConfirm = () => {
+        modal.style.display = 'none';
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        onConfirm();
+    };
+
+    const handleCancel = () => {
+        modal.style.display = 'none';
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+    };
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+}
+
+function showCustomPrompt(title, message, placeholder, onConfirm) {
+    const modal = document.getElementById('customPromptModal');
+    const titleEl = document.getElementById('promptModalTitle');
+    const messageEl = document.getElementById('promptModalMessage');
+    const inputEl = document.getElementById('promptModalInput');
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    inputEl.placeholder = placeholder;
+    inputEl.value = '';
+    modal.style.display = 'flex';
+
+    setTimeout(() => inputEl.focus(), 100);
+
+    const confirmBtn = document.getElementById('promptModalConfirm');
+    const cancelBtn = document.getElementById('promptModalCancel');
+
+    const handleConfirm = () => {
+        const value = inputEl.value.trim();
+        modal.style.display = 'none';
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        inputEl.removeEventListener('keypress', handleKeypress);
+        if (value) onConfirm(value);
+    };
+
+    const handleCancel = () => {
+        modal.style.display = 'none';
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        inputEl.removeEventListener('keypress', handleKeypress);
+    };
+
+    const handleKeypress = (e) => {
+        if (e.key === 'Enter') handleConfirm();
+        if (e.key === 'Escape') handleCancel();
+    };
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    inputEl.addEventListener('keypress', handleKeypress);
+}
+</script>
+
+<!-- Custom Modals -->
+<div id="customConfirmModal" class="custom-modal">
+    <div class="custom-modal-content">
+        <h3 id="confirmModalTitle">Confirm Action</h3>
+        <p id="confirmModalMessage">Are you sure?</p>
+        <div class="custom-modal-buttons">
+            <button id="confirmModalCancel" class="custom-modal-btn custom-modal-btn-cancel">Cancel</button>
+            <button id="confirmModalConfirm" class="custom-modal-btn custom-modal-btn-confirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="customPromptModal" class="custom-modal">
+    <div class="custom-modal-content">
+        <h3 id="promptModalTitle">Enter Value</h3>
+        <p id="promptModalMessage">Please enter a value:</p>
+        <input type="text" id="promptModalInput" class="custom-modal-input" />
+        <div class="custom-modal-buttons">
+            <button id="promptModalCancel" class="custom-modal-btn custom-modal-btn-cancel">Cancel</button>
+            <button id="promptModalConfirm" class="custom-modal-btn custom-modal-btn-confirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Loading Modal -->
+<div id="analysisLoadingModal" class="custom-modal">
+    <div class="custom-modal-content analysis-loading-content" style="position: relative;">
+        <button type="button" class="signal-modal-close" onclick="cancelAnalysis()" style="position: absolute; top: 20px; right: 20px; z-index: 10;">×</button>
+        <div class="analysis-loading-header">
+            <div class="analysis-spinner"></div>
+            <h3>Analyzing Content</h3>
+        </div>
+        <p id="analysisLoadingMessage">Collecting posts and analyzing engagement patterns...</p>
+        <div class="analysis-progress-bar">
+            <div id="analysisProgressFill" class="analysis-progress-fill"></div>
+        </div>
+        <div class="analysis-time-info">
+            <p id="analysisTimeElapsed" class="analysis-time-detail">Elapsed: 0m 0s</p>
+            <p id="analysisTimeEstimate" class="analysis-time-estimate">Remaining: 2-3 minutes</p>
+        </div>
+        <p class="analysis-loading-tip">Scout is working in the background. You'll see results automatically when ready.</p>
+        <div style="margin-top: 20px; text-align: center;">
+            <button onclick="cancelAnalysis()" class="custom-modal-btn custom-modal-btn-cancel" style="padding: 10px 24px;">
+                Cancel Analysis
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Analysis status polling
+let analysisPollingInterval = null;
+
+function showAnalysisLoading() {
+    const modal = document.getElementById('analysisLoadingModal');
+    modal.style.display = 'flex';
+
+    // Clear old outlier cards to prevent showing stale data
+    const outlierGrid = document.querySelector('.signal-grid');
+    if (outlierGrid) {
+        outlierGrid.innerHTML = '<div class="signal-empty" style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--signal-text-dim);">Analyzing content...</div>';
     }
 
-    // Create form and submit
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/verticals/delete';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'vertical_name';
-    input.value = verticalName;
-
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
+    // Start polling for analysis status
+    if (!analysisPollingInterval) {
+        analysisPollingInterval = setInterval(checkAnalysisStatus, 3000); // Poll every 3 seconds
+    }
 }
+
+function hideAnalysisLoading() {
+    const modal = document.getElementById('analysisLoadingModal');
+    modal.style.display = 'none';
+
+    // Stop polling
+    if (analysisPollingInterval) {
+        clearInterval(analysisPollingInterval);
+        analysisPollingInterval = null;
+    }
+}
+
+function checkAnalysisStatus() {
+    fetch('/analysis/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.is_running) {
+                // Update progress if available
+                const progressFill = document.getElementById('analysisProgressFill');
+                const messageEl = document.getElementById('analysisLoadingMessage');
+                const timeRemainingEl = document.getElementById('analysisTimeEstimate');
+                const timeElapsedEl = document.getElementById('analysisTimeElapsed');
+
+                if (data.progress !== undefined) {
+                    progressFill.style.width = data.progress + '%';
+                }
+
+                if (data.message) {
+                    messageEl.textContent = data.message;
+                }
+
+                if (data.time_remaining) {
+                    timeRemainingEl.textContent = 'Remaining: ' + data.time_remaining;
+                }
+
+                if (data.time_elapsed) {
+                    timeElapsedEl.textContent = 'Elapsed: ' + data.time_elapsed;
+                }
+            } else if (data.completed) {
+                // Analysis completed - refresh the page to show results
+                hideAnalysisLoading();
+                window.location.reload();
+            } else if (data.error) {
+                // Analysis failed
+                hideAnalysisLoading();
+                alert('Analysis failed: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error checking analysis status:', error);
+        });
+}
+
+// Cancel analysis function
+function cancelAnalysis() {
+    fetch('/analysis/cancel', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            hideAnalysisLoading();
+            if (data.success) {
+                // Refresh page to show current state
+                window.location.href = '/signal';
+            } else {
+                alert('Failed to cancel analysis: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error canceling analysis:', error);
+            alert('Failed to cancel analysis');
+        });
+}
+
+// Check if analysis was just started (from chat context)
+window.addEventListener('DOMContentLoaded', function() {
+    // If we detect analysis_started in the page context, show loading
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('analysis_started') === 'true') {
+        showAnalysisLoading();
+    }
+});
 </script>
 
 </body>

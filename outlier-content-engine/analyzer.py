@@ -13,7 +13,7 @@ import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from openai import OpenAI
 
@@ -81,12 +81,22 @@ class ContentAnalyzer:
         settings = self.profile.outlier_settings
         top_outliers = outliers[:settings.top_outliers_to_analyze]
 
+        # ── OPTIMIZATION: Skip Re-analysis ──
+        # Separate outliers into: (1) need analysis, (2) already analyzed
+        posts_needing_analysis, cached_analyses = self._partition_by_existing_analysis(top_outliers)
+
+        if not posts_needing_analysis:
+            logger.info(f"All {len(top_outliers)} outliers already analyzed - using cached AI analysis")
+            # Return cached results with empty weekly patterns and calendar
+            return self._build_cached_response(cached_analyses)
+
         logger.info(
-            f"Analyzing {len(top_outliers)} outliers with {config.OPENAI_MODEL}..."
+            f"Analyzing {len(posts_needing_analysis)}/{len(top_outliers)} outliers with {config.OPENAI_MODEL} "
+            f"({len(cached_analyses)} cached)..."
         )
 
         system_prompt = self._build_system_prompt()
-        user_prompt = self._build_user_prompt(top_outliers, baselines)
+        user_prompt = self._build_user_prompt(posts_needing_analysis, baselines)
 
         try:
             client = self._get_client()
@@ -105,7 +115,13 @@ class ContentAnalyzer:
             self._log_usage(response.usage, context="outlier_analysis")
 
             result = json.loads(response.choices[0].message.content)
-            logger.info("LLM analysis complete.")
+
+            # Merge cached analyses with new analyses
+            new_analyses = result.get("outlier_analysis", [])
+            combined_analyses = cached_analyses + new_analyses
+            result["outlier_analysis"] = combined_analyses
+
+            logger.info(f"LLM analysis complete ({len(new_analyses)} new, {len(cached_analyses)} cached).")
             return result
 
         except json.JSONDecodeError as e:
@@ -387,6 +403,55 @@ ALWAYS respond with valid JSON matching this exact schema:
             f"  Tokens used: {prompt_tokens} input + {completion_tokens} output "
             f"= {total_tokens} total (${estimated_cost:.4f})"
         )
+
+    def _partition_by_existing_analysis(self, outliers: List[OutlierPost]) -> Tuple[List[OutlierPost], List[Dict]]:
+        """
+        Separate outliers into posts needing analysis vs already analyzed.
+
+        Returns:
+            Tuple of (posts_needing_analysis, cached_analyses)
+        """
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
+
+        posts_needing_analysis = []
+        cached_analyses = []
+
+        for outlier in outliers:
+            row = conn.execute("""
+                SELECT ai_analysis
+                FROM competitor_posts
+                WHERE post_id = ? AND brand_profile = ?
+            """, (outlier.post_id, self.profile.profile_name)).fetchone()
+
+            if row and row["ai_analysis"]:
+                # Post already has analysis - use cached version
+                try:
+                    cached_analysis = json.loads(row["ai_analysis"])
+                    cached_analyses.append(cached_analysis)
+                except (json.JSONDecodeError, TypeError):
+                    # Malformed cache - re-analyze
+                    posts_needing_analysis.append(outlier)
+            else:
+                # No analysis yet - needs GPT-4 call
+                posts_needing_analysis.append(outlier)
+
+        conn.close()
+        return posts_needing_analysis, cached_analyses
+
+    def _build_cached_response(self, cached_analyses: List[Dict]) -> Dict:
+        """Build response using only cached analyses (no new GPT-4 call)."""
+        return {
+            "outlier_analysis": cached_analyses,
+            "brand_adaptations": [],  # Could extract from cached analyses if needed
+            "weekly_patterns": {
+                "best_content_types": [],
+                "best_posting_days": [],
+                "trending_themes": [],
+                "avoid": [],
+            },
+            "content_calendar_suggestions": [],
+        }
 
     def _empty_response(self) -> Dict:
         """Return an empty but structurally valid analysis response."""
