@@ -36,6 +36,7 @@ from outlier_detector import OutlierDetector
 from analyzer import ContentAnalyzer
 from reporter import ReportGenerator
 from voice_analyzer import VoiceAnalyzer
+from progress_tracker import ProgressTracker
 
 
 def setup_logging():
