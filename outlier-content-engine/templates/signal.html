@@ -4,10 +4,55 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>Scout AI - Outliers Identified</title>
+    <title>ScoutAI - Outliers Identified</title>
     <link rel="stylesheet" href="/static/signal-ai.css">
 </head>
 <body>
+
+<!-- Splash Screen (First Visit Only) -->
+<div id="splashScreen" class="splash-screen" style="display: none;">
+    <div class="splash-content">
+        <div class="splash-logo">
+            <svg width="120" height="120" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Radar circle background -->
+                <circle cx="32" cy="32" r="28" fill="url(#splashGradient)" opacity="0.15"/>
+                <circle cx="32" cy="32" r="22" stroke="url(#splashGradient)" stroke-width="1.5" opacity="0.3" fill="none"/>
+                <circle cx="32" cy="32" r="16" stroke="url(#splashGradient)" stroke-width="1.5" opacity="0.5" fill="none"/>
+
+                <!-- Radar sweep line -->
+                <line x1="32" y1="32" x2="52" y2="20" stroke="url(#splashGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+
+                <!-- Crosshair center -->
+                <circle cx="32" cy="32" r="4" fill="url(#splashGradient)"/>
+                <circle cx="32" cy="32" r="2" fill="#fff"/>
+
+                <!-- Discovery dots -->
+                <circle cx="42" cy="24" r="2.5" fill="#00d9ff" opacity="0.9">
+                    <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="24" cy="40" r="2.5" fill="#a855f7" opacity="0.9">
+                    <animate attributeName="opacity" values="1;0.4;1" dur="2.5s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="46" cy="38" r="2" fill="#00d9ff" opacity="0.7">
+                    <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3s" repeatCount="indefinite"/>
+                </circle>
+
+                <!-- Gradient definition -->
+                <defs>
+                    <linearGradient id="splashGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+            </svg>
+        </div>
+        <h1 class="splash-title">ScoutAI</h1>
+        <p class="splash-tagline">Discover What's Working in Social Media</p>
+        <div class="splash-loader">
+            <div class="splash-loader-bar"></div>
+        </div>
+    </div>
+</div>
 
 <div class="signal-split">
     <!-- ========== LEFT PANEL: CHAT ========== -->
@@ -16,31 +61,40 @@
         <div class="signal-chat-header">
             <div class="signal-brand">
                 <div class="signal-brand-icon">
-                    <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
-                        <!-- Beagle head -->
-                        <ellipse cx="24" cy="22" rx="10" ry="11" fill="#D4A574"/>
-                        <!-- Left ear -->
-                        <ellipse cx="16" cy="18" rx="4" ry="9" fill="#8B5A3C" transform="rotate(-20 16 18)"/>
-                        <!-- Right ear -->
-                        <ellipse cx="32" cy="18" rx="4" ry="9" fill="#8B5A3C" transform="rotate(20 32 18)"/>
-                        <!-- White muzzle -->
-                        <ellipse cx="24" cy="26" rx="6" ry="5" fill="#FFF"/>
-                        <!-- Nose -->
-                        <ellipse cx="24" cy="28" rx="2" ry="1.5" fill="#000"/>
-                        <!-- Left eye -->
-                        <circle cx="20" cy="21" r="2" fill="#000"/>
-                        <circle cx="20.5" cy="20.5" r="0.8" fill="#FFF"/>
-                        <!-- Right eye -->
-                        <circle cx="28" cy="21" r="2" fill="#000"/>
-                        <circle cx="28.5" cy="20.5" r="0.8" fill="#FFF"/>
-                        <!-- Magnifying glass handle -->
-                        <line x1="34" y1="32" x2="40" y2="38" stroke="#8B5A3C" stroke-width="2" stroke-linecap="round"/>
-                        <!-- Magnifying glass circle -->
-                        <circle cx="30" cy="28" r="6" fill="none" stroke="#4A90E2" stroke-width="2"/>
-                        <circle cx="30" cy="28" r="5" fill="#E3F2FD" opacity="0.3"/>
+                    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Radar circle background -->
+                        <circle cx="32" cy="32" r="28" fill="url(#scoutGradient)" opacity="0.15"/>
+                        <circle cx="32" cy="32" r="22" stroke="url(#scoutGradient)" stroke-width="1.5" opacity="0.3" fill="none"/>
+                        <circle cx="32" cy="32" r="16" stroke="url(#scoutGradient)" stroke-width="1.5" opacity="0.5" fill="none"/>
+
+                        <!-- Radar sweep line (animated feel) -->
+                        <line x1="32" y1="32" x2="52" y2="20" stroke="url(#scoutGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+
+                        <!-- Crosshair center -->
+                        <circle cx="32" cy="32" r="4" fill="url(#scoutGradient)"/>
+                        <circle cx="32" cy="32" r="2" fill="#fff"/>
+
+                        <!-- Discovery dots (content signals) -->
+                        <circle cx="42" cy="24" r="2.5" fill="#00d9ff" opacity="0.9">
+                            <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+                        </circle>
+                        <circle cx="24" cy="40" r="2.5" fill="#a855f7" opacity="0.9">
+                            <animate attributeName="opacity" values="1;0.4;1" dur="2.5s" repeatCount="indefinite"/>
+                        </circle>
+                        <circle cx="46" cy="38" r="2" fill="#00d9ff" opacity="0.7">
+                            <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3s" repeatCount="indefinite"/>
+                        </circle>
+
+                        <!-- Gradient definition -->
+                        <defs>
+                            <linearGradient id="scoutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
                     </svg>
                 </div>
-                <span class="signal-brand-name">Scout AI</span>
+                <span class="signal-brand-name">ScoutAI</span>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <p class="signal-chat-subtitle">Outliers Identified: {{ outliers|length if outliers else 0 }} posts
@@ -70,7 +124,7 @@
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
                     <div class="signal-message-bubble">
-                        Hey! Welcome to Scout AI. I find viral social media posts by tracking your competitors.
+                        Hey! Welcome to ScoutAI. I find viral social media posts by tracking your competitors.
                         <br><br>
                         To get started, I need two API keys:
                         <br><strong>1.</strong> <strong>Apify</strong> — for collecting Instagram/TikTok posts
@@ -1689,6 +1743,54 @@ window.addEventListener('DOMContentLoaded', function() {
         showAnalysisLoading();
     }
 });
+
+// ========================================
+// SPLASH SCREEN CONTROLLER
+// ========================================
+
+(function() {
+    const SPLASH_SHOWN_KEY = 'scoutai_splash_shown';
+    const SPLASH_DURATION = 2500; // 2.5 seconds
+
+    function shouldShowSplash() {
+        // Check if user came from browser back button
+        if (window.performance && window.performance.navigation.type === 2) {
+            return false; // Don't show on back button
+        }
+
+        // Check if we already showed the splash in this session
+        const splashShown = sessionStorage.getItem(SPLASH_SHOWN_KEY);
+        return !splashShown;
+    }
+
+    function showSplash() {
+        const splash = document.getElementById('splashScreen');
+        if (!splash) return;
+
+        // Show splash immediately
+        splash.style.display = 'flex';
+
+        // Mark as shown in session storage (persists only for this tab/session)
+        sessionStorage.setItem(SPLASH_SHOWN_KEY, 'true');
+
+        // Hide after duration
+        setTimeout(function() {
+            splash.classList.add('fade-out');
+
+            // Remove from DOM after animation completes
+            setTimeout(function() {
+                splash.style.display = 'none';
+            }, 600); // Match CSS transition duration
+        }, SPLASH_DURATION);
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        if (shouldShowSplash()) {
+            showSplash();
+        }
+    });
+})();
 </script>
 
 </body>

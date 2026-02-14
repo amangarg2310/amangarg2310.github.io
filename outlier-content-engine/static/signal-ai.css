@@ -116,21 +116,28 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .signal-brand-icon {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, var(--signal-cyan), var(--signal-blue));
-    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 217, 255, 0.25);
+    transition: transform 0.3s ease;
+}
+
+.signal-brand-icon:hover {
+    transform: scale(1.05);
 }
 
 .signal-brand-name {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    letter-spacing: -0.03em;
-    color: var(--signal-text-primary);
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, var(--signal-cyan), #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .signal-chat-subtitle {
@@ -1907,4 +1914,140 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--signal-border);
+}
+
+/* ========================================
+   SPLASH SCREEN
+   ======================================== */
+
+.splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #0a0e1f 0%, #141b2e 50%, #0f1629 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 1;
+    transition: opacity 0.6s ease-out;
+}
+
+.splash-screen.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.splash-content {
+    text-align: center;
+    transform: scale(0.9);
+    animation: splashEntry 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes splashEntry {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.splash-logo {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 32px;
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% {
+        filter: drop-shadow(0 0 20px rgba(0, 217, 255, 0.4));
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 35px rgba(168, 85, 247, 0.6));
+        transform: scale(1.05);
+    }
+}
+
+.splash-title {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, var(--signal-cyan), #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+    animation: titleSlide 0.8s ease-out 0.3s both;
+}
+
+@keyframes titleSlide {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.splash-tagline {
+    font-size: 18px;
+    color: var(--signal-text-secondary);
+    margin-bottom: 40px;
+    animation: taglineSlide 0.8s ease-out 0.5s both;
+}
+
+@keyframes taglineSlide {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.splash-loader {
+    width: 200px;
+    height: 4px;
+    background: rgba(100, 116, 139, 0.2);
+    border-radius: 2px;
+    margin: 0 auto;
+    overflow: hidden;
+    animation: loaderFade 0.8s ease-out 0.7s both;
+}
+
+@keyframes loaderFade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.splash-loader-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--signal-cyan), #a855f7);
+    border-radius: 2px;
+    animation: loaderProgress 1.5s ease-out forwards;
+}
+
+@keyframes loaderProgress {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 100%;
+    }
 }
