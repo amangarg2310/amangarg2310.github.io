@@ -408,6 +408,24 @@ IMPORTANT:
                         if age < timedelta(minutes=10):
                             is_recently_recreated = True
                             logger.info(f"Vertical '{v}' was recently recreated ({age.total_seconds():.0f}s ago)")
+
+                            # Compare incoming brands with existing brands
+                            existing_brands = vertical_obj.brands
+                            existing_ig_handles = {b.instagram_handle.lower() for b in existing_brands if b.instagram_handle}
+                            existing_tt_handles = {b.tiktok_handle.lower() for b in existing_brands if b.tiktok_handle}
+
+                            incoming_ig_handles = {h.strip().lstrip("@").lower() for h in ig_handles if h.strip()}
+                            incoming_tt_handles = {h.strip().lstrip("@").lower() for h in tt_handles if h.strip()}
+
+                            # If different brands, delete all existing brands for clean slate
+                            if existing_ig_handles != incoming_ig_handles or existing_tt_handles != incoming_tt_handles:
+                                logger.info(f"Different brands detected - removing {len(existing_brands)} legacy brands from '{v}'")
+                                # Delete all brands from this vertical
+                                conn = self.vm._get_conn()
+                                conn.execute("DELETE FROM vertical_brands WHERE vertical_name = ?", (v,))
+                                conn.commit()
+                                conn.close()
+                                logger.info(f"Cleared legacy brands. Will add {len(incoming_ig_handles) + len(incoming_tt_handles)} new brands.")
                     except (ValueError, TypeError):
                         pass
                 break
