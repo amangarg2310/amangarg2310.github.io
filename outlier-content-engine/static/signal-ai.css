@@ -1240,18 +1240,20 @@ h1, h2, h3, h4, h5, h6 {
     border: none;
     border-radius: 3px;
     cursor: pointer;
-    opacity: 0;
-    transition: all 0.15s ease;
+    opacity: 0.3;  /* Slightly visible by default so users discover it */
+    transition: all 0.2s ease;
     color: var(--signal-text-secondary);
 }
 
 .brand-pill:hover .brand-pill-delete {
     opacity: 1;
+    transform: scale(1.1);  /* Subtle grow effect on pill hover */
 }
 
 .brand-pill-delete:hover {
-    background: rgba(255, 71, 87, 0.15);
+    background: rgba(255, 71, 87, 0.2);  /* Stronger red background */
     color: #ff4757;
+    transform: scale(1.15);  /* Grow more on direct hover */
 }
 
 /* ── Timeframe Context Subtitle ── */

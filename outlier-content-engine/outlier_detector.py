@@ -330,9 +330,13 @@ class OutlierDetector:
                 std_devs_above = 0.0
 
             # Check if this post qualifies as an outlier
+            # CRITICAL FIX: Show ALL posts that perform above their brand's average
+            # Even brands with 1 post will show (it's automatically their "best")
+            # For brands with 2+ posts, show any post above mean OR with positive engagement
             is_outlier = (
-                engagement_multiplier >= self.thresholds.engagement_multiplier
-                or std_devs_above >= self.thresholds.std_dev_threshold
+                engagement_multiplier >= 1.01  # Just 1% above mean (very lenient)
+                or std_devs_above >= 0.1  # Any positive deviation
+                or baseline.post_count == 1  # Single post = always show
             )
 
             if not is_outlier:

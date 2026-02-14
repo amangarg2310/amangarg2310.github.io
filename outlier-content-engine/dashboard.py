@@ -1496,18 +1496,30 @@ def analysis_status():
         try:
             conn = sqlite3.connect(str(config.DB_PATH))
             conn.row_factory = sqlite3.Row
-            result = conn.execute("""
-                SELECT COUNT(*) as count
-                FROM competitor_posts
-                WHERE is_outlier = 1
-            """).fetchone()
+
+            # Get the active vertical to filter count correctly
+            vertical_name = get_active_vertical_name()
+
+            if vertical_name:
+                result = conn.execute("""
+                    SELECT COUNT(*) as count
+                    FROM competitor_posts
+                    WHERE is_outlier = 1 AND brand_profile = ?
+                """, (vertical_name,)).fetchone()
+            else:
+                result = conn.execute("""
+                    SELECT COUNT(*) as count
+                    FROM competitor_posts
+                    WHERE is_outlier = 1
+                """).fetchone()
+
             outlier_count = result['count'] if result else 0
             conn.close()
 
             response["completed"] = True
             response["progress"] = 100
             if outlier_count > 0:
-                response["message"] = f"Analysis complete! Found {outlier_count} total outlier posts."
+                response["message"] = f"Analysis complete! Found {outlier_count} outlier posts."
             else:
                 response["message"] = "Analysis complete! No outliers detected."
 

@@ -389,17 +389,36 @@ IMPORTANT:
         # Auto-create category if it doesn't exist
         existing = self.vm.list_verticals()
         actual_name = None
+        was_existing_vertical = False
+        is_recently_recreated = False
         for v in existing:
             if v.lower() == category_name.lower():
                 actual_name = v
+                was_existing_vertical = True
+                # Check if this vertical was recently recreated (within last 10 minutes)
+                # This handles the case where user deleted "Streetwear" and remade it fresh
+                vertical_obj = self.vm.get_vertical(v)
+                if vertical_obj and vertical_obj.created_at:
+                    from datetime import datetime, timezone, timedelta
+                    try:
+                        created = datetime.fromisoformat(vertical_obj.created_at)
+                        if created.tzinfo is None:
+                            created = created.replace(tzinfo=timezone.utc)
+                        age = datetime.now(timezone.utc) - created
+                        if age < timedelta(minutes=10):
+                            is_recently_recreated = True
+                            logger.info(f"Vertical '{v}' was recently recreated ({age.total_seconds():.0f}s ago)")
+                    except (ValueError, TypeError):
+                        pass
                 break
 
         if not actual_name:
             self.vm.create_vertical(category_name)
             actual_name = category_name
 
-        # Add Instagram handles
+        # Track which brands are new vs already existed
         added = []
+        newly_added_handles = []  # Track actual new brands for incremental collection
         skipped = []
         for handle in ig_handles:
             handle = handle.strip().lstrip("@")
@@ -408,6 +427,7 @@ IMPORTANT:
             try:
                 if self.vm.add_brand(actual_name, instagram_handle=handle):
                     added.append(f"@{handle}")
+                    newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle}")
             except Exception:
@@ -421,6 +441,7 @@ IMPORTANT:
             try:
                 if self.vm.add_brand(actual_name, tiktok_handle=handle):
                     added.append(f"@{handle} (TikTok)")
+                    newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle} (TikTok)")
             except Exception:
@@ -431,6 +452,10 @@ IMPORTANT:
 
         # Update context so subsequent messages know the active category
         context["active_vertical"] = actual_name
+        # Store newly added brands for smart incremental collection
+        context["newly_added_brands"] = newly_added_handles
+        context["was_existing_vertical"] = was_existing_vertical
+        context["is_recently_recreated"] = is_recently_recreated
 
         return json.dumps({
             "ok": True,
@@ -438,6 +463,7 @@ IMPORTANT:
             "added": added,
             "skipped": skipped,
             "total_brands": total,
+            "newly_added_count": len(newly_added_handles),
         })
 
     def _handle_remove_brands(self, args: Dict) -> str:
@@ -618,6 +644,21 @@ IMPORTANT:
 
         # ── Brand-specific filtering (optional) ──
         brand_handles = args.get("brand_handles")  # None, [], or ["nike", "kith"]
+
+        # SMART INCREMENTAL COLLECTION: If brands were just added in this conversation,
+        # only collect data for the NEW brands (not re-pull existing brands)
+        newly_added = context.get("newly_added_brands", [])
+        was_existing_vertical = context.get("was_existing_vertical", False)
+        is_recently_recreated = context.get("is_recently_recreated", False)
+
+        # If vertical was just deleted and recreated, treat all brands as new
+        if is_recently_recreated:
+            logger.info(f"Vertical was recently recreated — fetching all brands fresh")
+            # Don't filter brands, fetch everything
+        elif not brand_handles and newly_added and was_existing_vertical:
+            # User added brands to an existing vertical — only fetch the new ones
+            brand_handles = newly_added
+            logger.info(f"Incremental collection: only fetching {len(brand_handles)} new brands")
 
         # Validate brands exist in category (if specified)
         if brand_handles:
