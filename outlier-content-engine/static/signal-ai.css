@@ -1256,6 +1256,67 @@ h1, h2, h3, h4, h5, h6 {
     transform: scale(1.15);  /* Grow more on direct hover */
 }
 
+/* ── Drag and Drop States ── */
+.brand-pill.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.brand-pill[draggable="true"] {
+    cursor: grab;
+}
+
+.trash-zone {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 120px;
+    height: 120px;
+    background: var(--signal-bg-tertiary);
+    border: 2px dashed var(--signal-border-light);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 9999;
+    color: var(--signal-text-secondary);
+}
+
+.trash-zone.visible {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.trash-zone.drag-over {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--signal-error);
+    border-style: solid;
+    transform: scale(1.1);
+}
+
+.trash-zone svg {
+    color: var(--signal-text-secondary);
+    transition: all 0.2s ease;
+}
+
+.trash-zone.drag-over svg {
+    color: var(--signal-error);
+    transform: scale(1.2);
+}
+
+.trash-zone span {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 /* ── Timeframe Context Subtitle ── */
 .signal-timeframe-context {
     font-size: 11px;
