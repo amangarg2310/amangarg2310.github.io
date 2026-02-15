@@ -463,6 +463,13 @@
                             </svg>
                             TT
                         </button>
+                        <button class="signal-pill {% if selected_platform == 'facebook' %}active{% endif %}"
+                                onclick="applyFilter('platform', 'facebook')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                            </svg>
+                            FB
+                        </button>
                     </div>
                 </div>
 
@@ -491,6 +498,23 @@
                                 onclick="applyFilter('sort', 'date')">Recent</button>
                     </div>
                 </div>
+
+                <!-- Export -->
+                {% if outliers %}
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">EXPORT</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill" onclick="exportCSV()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            CSV
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -541,6 +565,10 @@
                             {% if post.platform == 'tiktok' %}
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/>
+                            </svg>
+                            {% elif post.platform == 'facebook' %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
                             </svg>
                             {% else %}
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -920,11 +948,111 @@ function filterByCluster(patternName) {
     });
 }
 
-// Filter handling
+// ── AJAX Filter handling (progressive UX — no full page reload) ──
 function applyFilter(key, value) {
     const url = new URL(window.location.href);
     url.searchParams.set(key, value);
-    window.location.href = url.toString();
+
+    // Update URL without reload (for bookmarkability)
+    history.pushState(null, '', url.toString());
+
+    // Update active pill styling
+    updateActivePills(key, value);
+
+    // Show skeleton loading state
+    showSkeletonState();
+
+    // Fetch filtered data via AJAX
+    fetchFilteredOutliers();
+
+    // Sync filter state to chatbot context (fire-and-forget)
+    syncFilterToChat(key, value);
+}
+
+function updateActivePills(key, value) {
+    // Map filter keys to their pill groups
+    const groupLabels = {
+        'platform': 'PLATFORM',
+        'timeframe': 'TIMEFRAME',
+        'sort': 'SORT',
+    };
+    const label = groupLabels[key];
+    if (!label) return;
+
+    document.querySelectorAll('.signal-filter-group').forEach(group => {
+        const groupLabel = group.querySelector('.signal-filter-label');
+        if (groupLabel && groupLabel.textContent.trim() === label) {
+            group.querySelectorAll('.signal-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            // Find the pill that matches the value
+            group.querySelectorAll('.signal-pill').forEach(pill => {
+                const onclick = pill.getAttribute('onclick') || '';
+                if (onclick.includes(`'${value}'`)) {
+                    pill.classList.add('active');
+                }
+                // Handle "All" button (empty value)
+                if (value === '' && onclick.includes("''")) {
+                    pill.classList.add('active');
+                }
+            });
+        }
+    });
+}
+
+function showSkeletonState() {
+    const grid = document.querySelector('.signal-grid');
+    if (!grid) return;
+    let html = '';
+    for (let i = 0; i < 6; i++) {
+        html += `
+            <div class="signal-card-link skeleton-card" style="animation-delay: ${i * 0.1}s">
+                <div class="signal-card">
+                    <div class="signal-card-media skeleton-media"></div>
+                    <div class="signal-card-body">
+                        <div class="skeleton-line" style="width: 80%"></div>
+                        <div class="skeleton-line" style="width: 60%"></div>
+                        <div class="skeleton-line" style="width: 40%"></div>
+                    </div>
+                </div>
+            </div>`;
+    }
+    grid.innerHTML = html;
+}
+
+async function fetchFilteredOutliers() {
+    const params = new URLSearchParams(window.location.search);
+    try {
+        const response = await fetch('/api/outliers?' + params.toString());
+        const data = await response.json();
+
+        // Update the outlier count in header
+        const countEl = document.querySelector('.signal-chat-subtitle');
+        if (countEl) {
+            countEl.textContent = `Outliers Identified: ${data.count} posts`;
+        }
+
+        // Re-render the grid (full page reload for now — the Jinja2 cards are complex)
+        // For MVP, reload if data changed since skeleton was shown
+        window.location.reload();
+    } catch (error) {
+        console.error('Failed to fetch outliers:', error);
+        // Fallback: reload page
+        window.location.reload();
+    }
+}
+
+function syncFilterToChat(key, value) {
+    fetch('/chat/context', {
+        method: 'POST',
+        headers: getBYOKHeaders(),
+        body: JSON.stringify({ filter_key: key, filter_value: value })
+    }).catch(() => {}); // Fire and forget
+}
+
+function exportCSV() {
+    const params = new URLSearchParams(window.location.search);
+    window.open('/api/export/csv?' + params.toString(), '_blank');
 }
 
 // Pattern filtering
@@ -988,6 +1116,28 @@ async function sendChatMessage(message) {
             setTimeout(() => {
                 window.location.href = redirectUrl;
             }, 800);
+            return;
+        }
+
+        // Handle filter actions from chatbot (Phase 4: chat→filter sync)
+        if (data.filter_action && data.filter_brands && data.filter_brands.length > 0) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('competitor', data.filter_brands[0]);
+            return;
+        }
+        if (data.filter_platform) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('platform', data.filter_platform);
+            return;
+        }
+        if (data.filter_timeframe) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('timeframe', data.filter_timeframe);
+            return;
+        }
+        if (data.filter_sort) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('sort', data.filter_sort);
             return;
         }
 

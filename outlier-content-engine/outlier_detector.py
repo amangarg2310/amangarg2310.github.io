@@ -43,6 +43,16 @@ PLATFORM_WEIGHTS = {
         "likes": 1,
         "views": 0.5,
     },
+    "facebook": {
+        # Shares are king on Facebook (algorithmic reach amplifier)
+        # Comments indicate genuine discussion
+        # Saves not publicly available
+        "saves": 0,
+        "shares": 4,
+        "comments": 3,
+        "likes": 1,
+        "views": 0.5,
+    },
 }
 
 # Default fallback (used for unknown platforms)
@@ -281,7 +291,13 @@ class OutlierDetector:
                        handle: str, name: str,
                        baseline: CompetitorBaseline,
                        lookback_days: int = None) -> List[OutlierPost]:
-        """Identify outlier posts for a single competitor within a lookback window."""
+        """Identify outlier posts for a single competitor within a lookback window.
+
+        Uses two-pass detection:
+          Pass 1: Apply configured thresholds (default 2.0x multiplier, 1.5 std devs)
+          Pass 2: If brand has <2 outliers, take top posts above a softer floor
+                  to ensure minimum brand representation (at least 2 posts per brand).
+        """
         days = lookback_days or self.thresholds.lookback_days
         cutoff = (
             datetime.now(timezone.utc) -
@@ -300,7 +316,17 @@ class OutlierDetector:
             ORDER BY collected_at DESC
         """, (handle, self.profile.profile_name, cutoff)).fetchall()
 
-        outliers = []
+        # Thresholds from profile settings (defaults: 2.0x multiplier, 1.5 std devs)
+        min_multiplier = self.thresholds.engagement_multiplier
+        min_std_devs = self.thresholds.std_dev_threshold
+
+        # Softer floor for Pass 2 (minimum brand representation)
+        soft_multiplier = 1.2
+        soft_std_devs = 0.5
+        min_outliers_per_brand = 2
+
+        # Collect all candidates with their metrics
+        candidates = []
 
         for row in rows:
             likes = row["likes"] or 0
@@ -329,19 +355,6 @@ class OutlierDetector:
             else:
                 std_devs_above = 0.0
 
-            # Check if this post qualifies as an outlier
-            # CRITICAL FIX: Show ALL posts that perform above their brand's average
-            # Even brands with 1 post will show (it's automatically their "best")
-            # For brands with 2+ posts, show any post above mean OR with positive engagement
-            is_outlier = (
-                engagement_multiplier >= 1.01  # Just 1% above mean (very lenient)
-                or std_devs_above >= 0.1  # Any positive deviation
-                or baseline.post_count == 1  # Single post = always show
-            )
-
-            if not is_outlier:
-                continue
-
             # Composite score: weight multiplier more (intuitive in reports)
             outlier_score = (
                 0.6 * engagement_multiplier +
@@ -356,10 +369,12 @@ class OutlierDetector:
 
             if platform == "tiktok":
                 post_url = f"https://www.tiktok.com/@{handle}/video/{row['post_id']}"
+            elif platform == "facebook":
+                post_url = f"https://www.facebook.com/{handle}/posts/{row['post_id']}"
             else:
                 post_url = f"https://www.instagram.com/p/{row['post_id']}/"
 
-            outliers.append(OutlierPost(
+            post = OutlierPost(
                 post_id=row["post_id"],
                 competitor_handle=handle,
                 competitor_name=name,
@@ -383,9 +398,33 @@ class OutlierDetector:
                     platform=platform,
                 ),
                 content_tags=content_tags,
-            ))
+            )
+            candidates.append(post)
 
-        return outliers
+        # ── Two-Pass Outlier Selection ──
+
+        # Pass 1 (strict): Apply configured thresholds
+        strong_outliers = [
+            p for p in candidates
+            if p.engagement_multiplier >= min_multiplier
+            and p.std_devs_above >= min_std_devs
+        ]
+
+        # Pass 2 (min-representation): Ensure at least 2 outliers per brand
+        if len(strong_outliers) < min_outliers_per_brand and len(candidates) >= 3:
+            strong_ids = {p.post_id for p in strong_outliers}
+            # Pick top posts above the soft floor that weren't already selected
+            remaining = [
+                p for p in candidates
+                if p.post_id not in strong_ids
+                and p.engagement_multiplier >= soft_multiplier
+                and p.std_devs_above >= soft_std_devs
+            ]
+            remaining.sort(key=lambda x: x.outlier_score, reverse=True)
+            needed = min_outliers_per_brand - len(strong_outliers)
+            strong_outliers.extend(remaining[:needed])
+
+        return strong_outliers
 
     def _tag_content(self, caption: str, media_type: str) -> List[str]:
         """

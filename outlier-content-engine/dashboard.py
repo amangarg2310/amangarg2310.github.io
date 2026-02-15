@@ -358,6 +358,8 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             # Build correct post URL per platform
             if platform == "tiktok":
                 post_url = f"https://www.tiktok.com/@{row['competitor_handle']}/video/{row['post_id']}"
+            elif platform == "facebook":
+                post_url = f"https://www.facebook.com/{row['competitor_handle']}/posts/{row['post_id']}"
             else:
                 post_url = f"https://www.instagram.com/p/{row['post_id']}/"
 
@@ -703,6 +705,73 @@ def signal_page():
                            sort_by=sort_by)
 
 
+@app.route("/api/outliers")
+def api_outliers():
+    """JSON API for outlier posts — used by AJAX filter switching."""
+    from flask import jsonify
+
+    competitor = request.args.get("competitor", "")
+    platform = request.args.get("platform", "")
+    sort_by = request.args.get("sort", "score")
+    timeframe = request.args.get("timeframe", "") or "30d"
+    tag = request.args.get("tag", "")
+    vertical_name = get_active_vertical_name()
+
+    outliers = get_outlier_posts(
+        competitor=competitor or None,
+        platform=platform or None,
+        sort_by=sort_by,
+        vertical_name=vertical_name,
+        timeframe=timeframe,
+        tag=tag or None,
+    )
+    baselines = get_competitor_baselines(vertical_name, timeframe)
+    pattern_clusters = build_pattern_clusters(outliers)
+
+    return jsonify({
+        "outliers": outliers,
+        "baselines": baselines,
+        "pattern_clusters": pattern_clusters,
+        "count": len(outliers),
+    })
+
+
+@app.route("/api/export/csv")
+def export_csv():
+    """Export current filtered outliers as CSV download."""
+    import csv
+    import io
+
+    outliers = get_outlier_posts(
+        competitor=request.args.get("competitor") or None,
+        platform=request.args.get("platform") or None,
+        sort_by=request.args.get("sort", "score"),
+        vertical_name=get_active_vertical_name(),
+        timeframe=request.args.get("timeframe", "30d"),
+        tag=request.args.get("tag") or None,
+    )
+
+    output = io.StringIO()
+    fieldnames = [
+        "competitor_handle", "competitor_name", "platform", "post_url",
+        "caption", "media_type", "likes", "comments", "saves", "shares",
+        "views", "outlier_score", "posted_at", "content_tags",
+        "engagement_multiplier", "primary_driver",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for o in outliers:
+        row = dict(o)
+        row["content_tags"] = ", ".join(o.get("content_tags", []))
+        writer.writerow(row)
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=outliers_export.csv"},
+    )
+
+
 @app.route("/api/load_vertical/<vertical_name>")
 def load_vertical(vertical_name):
     """Load a competitive set (vertical) and redirect to signal page."""
@@ -783,6 +852,8 @@ ALLOWED_IMAGE_DOMAINS = {
     "p16-sign.tiktokcdn-us.com", "p16-sign-sg.tiktokcdn.com",
     "p16-sign-va.tiktokcdn.com", "p77-sign.tiktokcdn.com",
     "muscdn.com",
+    "facebook.com", "scontent.xx.fbcdn.net",
+    "external.xx.fbcdn.net", "lookaside.fbsbx.com",
 }
 
 
@@ -1185,15 +1256,28 @@ def chat_message():
                 session['chat_context'] = updated_context
                 session.modified = True
 
-                return jsonify({
+                result = {
                     "response": response,
                     "type": "text",
                     "analysis_started": analysis_started,
                     "selected_brands": selected_brands,
                     "context": {
                         "active_vertical": updated_context.get('active_vertical'),
-                    }
-                })
+                    },
+                }
+
+                # Pass filter actions from chatbot to frontend (Phase 4: bidirectional sync)
+                if updated_context.get('filter_action'):
+                    result["filter_action"] = True
+                    result["filter_brands"] = updated_context.get('filter_brands', [])
+                if updated_context.get('filter_platform'):
+                    result["filter_platform"] = updated_context['filter_platform']
+                if updated_context.get('filter_timeframe'):
+                    result["filter_timeframe"] = updated_context['filter_timeframe']
+                if updated_context.get('filter_sort'):
+                    result["filter_sort"] = updated_context['filter_sort']
+
+                return jsonify(result)
 
         except Exception as scout_err:
             logger.warning(f"Scout agent unavailable: {scout_err}")
@@ -1370,6 +1454,64 @@ def _get_fallback_response(message: str, current_vertical: str = None) -> str:
         "• **'help'** - see all commands\n\n"
         "What would you like to do?"
     )
+
+
+@app.route("/chat/context", methods=["POST"])
+def update_chat_context():
+    """Update chat context when user changes filters via the UI.
+
+    This keeps the ScoutAgent aware of the user's current filter state
+    so it can provide contextually relevant responses.
+    """
+    from flask import session, jsonify
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"ok": False}), 400
+
+    if "chat_context" not in session:
+        session["chat_context"] = {}
+
+    key = data.get("filter_key", "")
+    value = data.get("filter_value", "")
+
+    if key == "competitor":
+        session["chat_context"]["active_brand_filter"] = value
+    elif key == "platform":
+        session["chat_context"]["active_platform_filter"] = value
+    elif key == "timeframe":
+        session["chat_context"]["active_timeframe_filter"] = value
+    elif key == "sort":
+        session["chat_context"]["active_sort_filter"] = value
+
+    session.modified = True
+    return jsonify({"ok": True})
+
+
+@app.route("/analysis/stream")
+def analysis_stream():
+    """Server-Sent Events stream for real-time analysis progress."""
+    import time as _time
+
+    def generate():
+        progress_file = config.DATA_DIR / "analysis_progress.json"
+        last_data = None
+        for _ in range(600):  # Max 10 minutes
+            if progress_file.exists():
+                try:
+                    with open(progress_file) as f:
+                        data = json.load(f)
+                    if data != last_data:
+                        yield f"data: {json.dumps(data)}\n\n"
+                        last_data = data
+                        if data.get("status") in ("completed", "error"):
+                            break
+                except (json.JSONDecodeError, IOError):
+                    pass
+            _time.sleep(1)
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.route("/analysis/cancel", methods=["POST"])
@@ -1587,8 +1729,9 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column
         run_vertical_migrations()
+        add_facebook_handle_column()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

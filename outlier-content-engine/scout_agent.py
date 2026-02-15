@@ -85,6 +85,14 @@ TOOL_DEFINITIONS = [
                             "explicitly marks them as TikTok. Defaults to empty."
                         ),
                     },
+                    "facebook_handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of Facebook Page handles/slugs (without @) "
+                            "if the user explicitly marks them as Facebook."
+                        ),
+                    },
                 },
                 "required": ["category_name", "instagram_handles"],
             },
@@ -179,6 +187,38 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "set_filters",
+            "description": (
+                "Set dashboard display filters for platform, timeframe, or sort order. "
+                "Use when user says things like 'show me TikTok posts', "
+                "'switch to last 3 months', 'sort by saves', 'show Facebook only'. "
+                "This applies filters WITHOUT re-running analysis."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "platform": {
+                        "type": "string",
+                        "enum": ["instagram", "tiktok", "facebook", ""],
+                        "description": "Platform filter. Empty string for all platforms.",
+                    },
+                    "timeframe": {
+                        "type": "string",
+                        "enum": ["30d", "3mo", ""],
+                        "description": "Timeframe filter. 30d or 3mo.",
+                    },
+                    "sort": {
+                        "type": "string",
+                        "enum": ["score", "saves", "shares", "date", ""],
+                        "description": "Sort order.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "filter_view",
             "description": (
                 "Filter the dashboard to show only specific brands from EXISTING data. "
@@ -254,6 +294,18 @@ class ScoutAgent:
         else:
             state_lines.append("No categories created yet.")
 
+        # Include current filter context if available
+        filter_ctx = context.get("chat_context", {}) if isinstance(context.get("chat_context"), dict) else {}
+        active_filters = []
+        if filter_ctx.get("active_platform_filter"):
+            active_filters.append(f"Platform: {filter_ctx['active_platform_filter']}")
+        if filter_ctx.get("active_timeframe_filter"):
+            active_filters.append(f"Timeframe: {filter_ctx['active_timeframe_filter']}")
+        if filter_ctx.get("active_brand_filter"):
+            active_filters.append(f"Brand: {filter_ctx['active_brand_filter']}")
+        if active_filters:
+            state_lines.append(f"Active UI filters: {', '.join(active_filters)}")
+
         state_block = "\n".join(state_lines)
 
         return f"""You are Scout, a friendly AI assistant for the Outlier Content Engine — a platform that finds viral social media posts by detecting statistical outliers in engagement.
@@ -282,12 +334,13 @@ TERMINOLOGY:
 
 WHAT YOU CAN DO (use the provided tools):
 1. create_category — create a new competitive set
-2. add_brands — add Instagram/TikTok handles to a category (auto-creates if needed)
+2. add_brands — add Instagram/TikTok/Facebook handles to a category (auto-creates if needed)
 3. remove_brands — remove handles from a category
 4. list_categories — show all categories
 5. show_category — show brands in a specific category
 6. run_analysis — scan posts and find outlier content
 7. filter_view — filter dashboard to specific brands (no analysis, instant)
+8. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
 
 INTENT DISAMBIGUATION (CRITICAL):
 When user mentions a brand, determine their TRUE intent:
@@ -379,11 +432,12 @@ IMPORTANT:
         category_name = args.get("category_name", "").strip()
         ig_handles = args.get("instagram_handles", [])
         tt_handles = args.get("tiktok_handles", [])
+        fb_handles = args.get("facebook_handles", [])
 
         if not category_name:
             return json.dumps({"ok": False, "error": "Category name is required."})
 
-        if not ig_handles and not tt_handles:
+        if not ig_handles and not tt_handles and not fb_handles:
             return json.dumps({"ok": False, "error": "No handles provided."})
 
         # Auto-create category if it doesn't exist
@@ -464,6 +518,20 @@ IMPORTANT:
                     skipped.append(f"@{handle} (TikTok)")
             except Exception:
                 skipped.append(f"@{handle} (TikTok)")
+
+        # Add Facebook-only handles
+        for handle in fb_handles:
+            handle = handle.strip().lstrip("@")
+            if not handle:
+                continue
+            try:
+                if self.vm.add_brand(actual_name, facebook_handle=handle):
+                    added.append(f"@{handle} (Facebook)")
+                    newly_added_handles.append(handle)
+                else:
+                    skipped.append(f"@{handle} (Facebook)")
+            except Exception:
+                skipped.append(f"@{handle} (Facebook)")
 
         self.vm.update_vertical_timestamp(actual_name)
         total = self.vm.get_brand_count(actual_name)
@@ -568,6 +636,8 @@ IMPORTANT:
                 entry["instagram"] = f"@{b.instagram_handle}"
             if b.tiktok_handle:
                 entry["tiktok"] = f"@{b.tiktok_handle}"
+            if getattr(b, 'facebook_handle', None):
+                entry["facebook"] = f"@{b.facebook_handle}"
             if b.brand_name:
                 entry["name"] = b.brand_name
             handles.append(entry)
@@ -799,6 +869,27 @@ IMPORTANT:
             "selected_brands": brand_handles if brand_handles else None,
         })
 
+    def _handle_set_filters(self, args: Dict, context: Dict) -> str:
+        """Set dashboard filters (platform, timeframe, sort) from chat."""
+        context["filter_action"] = True
+        applied = []
+
+        if args.get("platform") is not None:
+            context["filter_platform"] = args["platform"]
+            applied.append(f"platform={args['platform'] or 'all'}")
+        if args.get("timeframe"):
+            context["filter_timeframe"] = args["timeframe"]
+            applied.append(f"timeframe={args['timeframe']}")
+        if args.get("sort"):
+            context["filter_sort"] = args["sort"]
+            applied.append(f"sort={args['sort']}")
+
+        return json.dumps({
+            "ok": True,
+            "message": f"Filters updated: {', '.join(applied)}",
+            "applied": applied,
+        })
+
     def _handle_filter_view(self, args: Dict, context: Dict) -> str:
         """Filter dashboard to show specific brands without triggering analysis."""
         brand_handles = args.get("brand_handles", [])
@@ -865,6 +956,8 @@ IMPORTANT:
             return self._handle_show_category(args)
         elif name == "run_analysis":
             return self._handle_run_analysis(args, context)
+        elif name == "set_filters":
+            return self._handle_set_filters(args, context)
         elif name == "filter_view":
             return self._handle_filter_view(args, context)
         else:

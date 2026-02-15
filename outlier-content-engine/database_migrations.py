@@ -225,11 +225,36 @@ def add_archived_column_to_posts(db_path=None):
     logger.info("archived column migration complete")
 
 
+def add_facebook_handle_column(db_path=None):
+    """
+    Add facebook_handle column to vertical_brands table.
+    Safe to call multiple times.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    try:
+        conn.execute("""
+            ALTER TABLE vertical_brands
+            ADD COLUMN facebook_handle TEXT
+        """)
+        conn.commit()
+        logger.info("  Added facebook_handle column to vertical_brands")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            logger.info("  facebook_handle column already exists, skipping")
+        else:
+            raise
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
 
     run_vertical_migrations()
+    add_facebook_handle_column()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile
