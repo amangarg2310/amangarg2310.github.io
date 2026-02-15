@@ -227,6 +227,17 @@
                         <div class="signal-benchmark-row">
                             <span class="signal-benchmark-handle">
                                 @{{ bl.competitor_handle }}
+                                {% set ns = namespace(has_error=false) %}
+                                {% for err in collection_errors %}
+                                {% if '@' + bl.competitor_handle in err %}
+                                {% set ns.has_error = true %}
+                                {% endif %}
+                                {% endfor %}
+                                {% if ns.has_error %}
+                                <span class="signal-benchmark-error-badge" title="Collection error on last run">!</span>
+                                {% elif bl.post_count == 0 %}
+                                <span class="signal-benchmark-warn-badge" title="No posts collected">0</span>
+                                {% endif %}
                                 {% if bl.outlier_count %}
                                 <span class="signal-benchmark-outlier-badge">{{ bl.outlier_count }}</span>
                                 {% endif %}
@@ -346,6 +357,13 @@
         <div class="signal-content-header">
             <div class="signal-title-row">
                 <h1 class="signal-content-title">Outliers Identified:</h1>
+                <button class="signal-settings-btn" onclick="showGuideModal()" title="Quick Guide">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </button>
                 <a href="{{ url_for('setup_page') }}" class="signal-settings-btn" title="Settings &amp; API keys">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"/>
@@ -524,6 +542,22 @@
                     </div>
                 </div>
                 {% endif %}
+
+                <!-- Reset Filters -->
+                {% if selected_competitor or selected_platform or selected_timeframe == '3mo' or sort_by != 'score' %}
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">&nbsp;</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill signal-pill-reset" onclick="resetAllFilters()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="1 4 1 10 7 10"/>
+                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                            </svg>
+                            Reset
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -589,7 +623,21 @@
                             @{{ post.competitor_handle }}
                         </div>
 
-                        <!-- Date Badge (Below Platform Badge) -->
+                        <!-- Multiplier Badge (Below Platform Badge) -->
+                        {% if post.engagement_multiplier and post.engagement_multiplier >= 1.5 %}
+                        <div class="signal-multiplier-badge">
+                            {% if post.engagement_multiplier >= 5 %}
+                            <span class="signal-multiplier-hot">{{ post.engagement_multiplier }}x</span>
+                            {% elif post.engagement_multiplier >= 3 %}
+                            <span class="signal-multiplier-high">{{ post.engagement_multiplier }}x</span>
+                            {% else %}
+                            <span class="signal-multiplier-med">{{ post.engagement_multiplier }}x</span>
+                            {% endif %}
+                            above baseline
+                        </div>
+                        {% endif %}
+
+                        <!-- Date Badge -->
                         {% if post.posted_at %}
                         <div class="signal-date-badge">
                             {{ post.posted_at|timeago }}
@@ -815,6 +863,72 @@
         </div>
     </div>
 
+    <!-- Quick Guide Modal -->
+    <div class="signal-modal-overlay" id="guideModal" role="dialog" aria-modal="true" aria-label="Quick Guide">
+        <div class="signal-modal" style="max-width: 520px;">
+            <div class="signal-modal-header">
+                <h3 class="signal-modal-title">Quick Guide</h3>
+                <button type="button" class="signal-modal-close" onclick="closeGuideModal()" aria-label="Close">&times;</button>
+            </div>
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Getting Started</div>
+                    <p class="signal-guide-desc">Create a competitive set, add brand handles, and run your first analysis.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Create a category called Streetwear"</code>
+                        <code>"Add @nike @kith @stussy to Streetwear"</code>
+                        <code>"Analyze Streetwear"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Filter & Browse</div>
+                    <p class="signal-guide-desc">Filter outlier posts by platform, brand, or timeframe without re-running analysis.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Show me TikTok posts"</code>
+                        <code>"Filter to @nike"</code>
+                        <code>"Show me posts from the last 3 months"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Score Your Content</div>
+                    <p class="signal-guide-desc">Test a caption or concept against learned patterns from competitor outliers. Shows format fit, hook strength, pattern alignment, voice match, and competitive gap fill. No API cost.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Score this: Just dropped our latest collection. Link in bio."</code>
+                        <code>"How would this caption perform as a reel?"</code>
+                        <code>"Rate this hook: You've been styling this wrong"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Optimize</div>
+                    <p class="signal-guide-desc">After scoring, ask for AI-powered improvements targeting your weakest areas. Uses GPT-4o-mini.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Optimize it"</code>
+                        <code>"Improve the hook"</code>
+                        <code>"Make it better for TikTok"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Trend Predictions</div>
+                    <p class="signal-guide-desc">See which content patterns, hooks, and formats are rising or declining across your competitive set.</p>
+                    <div class="signal-guide-examples">
+                        <code>"What's trending?"</code>
+                        <code>"What content patterns are rising?"</code>
+                        <code>"What should I post about this week?"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Manage Brands</div>
+                    <p class="signal-guide-desc">Add, remove, or list brands and categories at any time.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Show categories"</code>
+                        <code>"Remove @nike from Streetwear"</code>
+                        <code>"Add @zara to Fast Fashion"</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Category modal (all create flows stay on /signal) -->
     <div class="signal-modal-overlay" id="createCategoryModal" role="dialog" aria-modal="true" aria-label="Create category">
         <div class="signal-modal">
@@ -848,6 +962,38 @@
 </div>
 
 <script>
+// Quick Guide modal
+function showGuideModal() {
+    document.getElementById('guideModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeGuideModal() {
+    document.getElementById('guideModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('guideModal').addEventListener('click', function(e) {
+    if (e.target === this) closeGuideModal();
+});
+
+// Reset all filters to defaults
+function resetAllFilters() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('competitor');
+    url.searchParams.delete('platform');
+    url.searchParams.delete('sort');
+    url.searchParams.set('timeframe', '30d');
+    history.pushState(null, '', url.toString());
+    // Update active pills
+    document.querySelectorAll('.signal-pill.active').forEach(p => p.classList.remove('active'));
+    // Re-activate defaults
+    document.querySelectorAll('.signal-pill').forEach(p => {
+        const txt = p.textContent.trim();
+        if (txt.startsWith('All') || txt === '30 Days' || txt === 'Score') p.classList.add('active');
+    });
+    showSkeletonState();
+    fetchFilteredOutliers();
+}
+
 // Create category modal
 function openCreateModal() {
     document.querySelectorAll('.signal-vertical-dropdown-menu').forEach(m => m.classList.remove('open'));

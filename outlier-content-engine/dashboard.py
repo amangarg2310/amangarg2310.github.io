@@ -142,15 +142,18 @@ def needs_setup():
     if not config.DB_PATH.exists():
         return True
 
-    conn = get_db()
+    conn = None
     try:
+        conn = get_db()
         row = conn.execute(
             "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('apify', 'openai')"
         ).fetchone()
-        conn.close()
         return row['cnt'] < 2  # Need both keys
     except Exception:
         return True  # Database not ready
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_active_profile_name():
@@ -688,6 +691,16 @@ def signal_page():
     vm = VerticalManager()
     saved_verticals = vm.list_verticals()
 
+    # Get latest collection errors for error badges on brands
+    collection_errors = []
+    if vertical_name and not empty_state:
+        recent = get_recent_runs(limit=1)
+        if recent and recent[0].get("errors"):
+            try:
+                collection_errors = json.loads(recent[0]["errors"])
+            except (json.JSONDecodeError, TypeError):
+                collection_errors = []
+
     return render_template("signal.html",
                            profile=profile,
                            outliers=outliers,
@@ -702,7 +715,8 @@ def signal_page():
                            selected_competitor=competitor,
                            selected_platform=platform,
                            selected_timeframe=timeframe,
-                           sort_by=sort_by)
+                           sort_by=sort_by,
+                           collection_errors=collection_errors)
 
 
 @app.route("/api/outliers")
@@ -1000,7 +1014,7 @@ def save_setup():
                         VALUES (NULL, ?, ?)
                     """, (email, now))
 
-        # Save own-brand handles in config table
+        # Save own-brand handles in config table (handle clearing too)
         for cfg_key, cfg_val in [('own_brand_instagram', own_brand_instagram),
                                   ('own_brand_tiktok', own_brand_tiktok)]:
             if cfg_val:
@@ -1009,6 +1023,9 @@ def save_setup():
                     VALUES (?, ?)
                     ON CONFLICT(key) DO UPDATE SET value = ?
                 """, (cfg_key, cfg_val, cfg_val))
+            else:
+                # User cleared the field — remove the config entry
+                conn.execute("DELETE FROM config WHERE key = ?", (cfg_key,))
 
         conn.commit()
         flash("Settings saved.", "success")

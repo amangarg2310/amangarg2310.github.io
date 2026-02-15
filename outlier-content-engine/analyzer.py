@@ -486,7 +486,16 @@ ALWAYS respond with valid JSON matching this exact schema:
             # Gather adaptation suggestions — LLM stores these under brand_creative_brief
             brief = analysis.get("brand_creative_brief") or {}
             if isinstance(brief, dict) and brief:
-                adaptations.append(brief)
+                # Transform to the schema reporter.py expects
+                adaptations.append({
+                    "adapted_caption": brief.get("suggested_caption", ""),
+                    "format_suggestion": brief.get("format", ""),
+                    "visual_direction": brief.get("visual_concept", ""),
+                    "what_to_keep": brief.get("what_to_replicate", ""),
+                    "what_to_change": brief.get("what_to_avoid", ""),
+                    "brand_fit_score": brief.get("brand_fit_score", "?"),
+                    "original_competitor": analysis.get("competitor", analysis.get("handle", "")),
+                })
             else:
                 # Fallback for older cached formats
                 adaptation = analysis.get("brand_adaptation") or analysis.get("adaptation")

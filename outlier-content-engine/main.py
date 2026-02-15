@@ -695,6 +695,28 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
 
     run_stats["duration_seconds"] = round(time.time() - start_time, 1)
 
+    # ── Persist run stats to collection_runs table ──
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.execute("""
+            INSERT INTO collection_runs
+                (run_timestamp, profile_name, competitors_collected,
+                 posts_collected, posts_new, errors, duration_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now(timezone.utc).isoformat(),
+            vertical_name or profile.profile_name,
+            run_stats["competitors_collected"],
+            run_stats["posts_collected"],
+            run_stats["posts_new"],
+            json.dumps(run_stats["errors"]),
+            run_stats["duration_seconds"],
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to save collection run stats: {e}")
+
     reporter = ReportGenerator(profile)
     html = reporter.generate_report(
         analysis, outliers, baselines, run_stats,
