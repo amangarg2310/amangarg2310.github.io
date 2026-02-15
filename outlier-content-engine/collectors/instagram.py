@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS competitor_posts (
     outlier_score REAL,
     content_tags TEXT,
     collected_at TEXT NOT NULL,
-    UNIQUE(post_id, platform)
+    UNIQUE(post_id, platform, brand_profile)
 );
 
 CREATE TABLE IF NOT EXISTS token_usage (
@@ -418,7 +418,7 @@ class RapidAPIInstagramCollector(BaseCollector):
         media_type = item.get("media_type", 0)
         product_type = item.get("product_type", "")
 
-        if product_type == "clips" or media_type == 2:
+        if product_type == "clips":
             return "reel"
         elif media_type == 8:
             return "carousel"

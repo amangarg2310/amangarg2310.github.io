@@ -58,6 +58,44 @@ PLATFORM_WEIGHTS = {
 # Default fallback (used for unknown platforms)
 DEFAULT_WEIGHTS = PLATFORM_WEIGHTS["instagram"]
 
+# ── Per-Platform Outlier Thresholds ──
+# Each platform has different engagement dynamics, so one-size-fits-all
+# thresholds misfire:
+#   - TikTok: Algorithm-driven. FYP can spike any post 10-50x overnight.
+#     A 2x multiplier is noise, not signal. Need higher bar.
+#   - Instagram: Follower-graph dependent. 2x is a genuine breakout.
+#     Comments/saves are high-intent signals worth less filtering.
+#   - Facebook: Shares drive algorithmic reach, but base audience is stable.
+#     Between IG and TikTok in volatility.
+#
+# Values: (engagement_multiplier, std_dev_threshold, soft_multiplier, soft_std_devs)
+#   - engagement_multiplier: strict pass minimum (how many X above brand mean)
+#   - std_dev_threshold: strict pass std devs above mean
+#   - soft_multiplier: soft floor for pass-2 (minimum representation)
+#   - soft_std_devs: soft floor std devs for pass-2
+PLATFORM_THRESHOLDS = {
+    "instagram": {
+        "engagement_multiplier": 2.0,
+        "std_dev_threshold": 1.5,
+        "soft_multiplier": 1.2,
+        "soft_std_devs": 0.5,
+    },
+    "tiktok": {
+        "engagement_multiplier": 3.5,   # Higher bar — FYP volatility
+        "std_dev_threshold": 2.0,       # Need stronger statistical signal
+        "soft_multiplier": 2.0,         # Even the soft floor is higher
+        "soft_std_devs": 1.0,
+    },
+    "facebook": {
+        "engagement_multiplier": 2.5,   # Moderate — share-driven spikes
+        "std_dev_threshold": 1.5,
+        "soft_multiplier": 1.5,
+        "soft_std_devs": 0.5,
+    },
+}
+
+DEFAULT_PLATFORM_THRESHOLDS = PLATFORM_THRESHOLDS["instagram"]
+
 
 def get_weights(platform: str = "instagram") -> dict:
     """Return the weight dict for a given platform."""
@@ -204,16 +242,14 @@ class OutlierDetector:
         baselines = {}
         all_outliers = []
 
-        competitors = self.profile.get_competitor_handles("instagram")
-        # Also include TikTok competitors
-        tt_competitors = self.profile.get_competitor_handles("tiktok")
-        # Build a combined set, deduplicating by handle
+        # Collect competitors from all supported platforms
         seen_handles = set()
         combined = []
-        for comp in competitors + tt_competitors:
-            if comp["handle"] not in seen_handles:
-                combined.append(comp)
-                seen_handles.add(comp["handle"])
+        for platform in ("instagram", "tiktok", "facebook"):
+            for comp in self.profile.get_competitor_handles(platform):
+                if comp["handle"] not in seen_handles:
+                    combined.append(comp)
+                    seen_handles.add(comp["handle"])
 
         for comp in combined:
             handle = comp["handle"]
@@ -293,10 +329,14 @@ class OutlierDetector:
                        lookback_days: int = None) -> List[OutlierPost]:
         """Identify outlier posts for a single competitor within a lookback window.
 
-        Uses two-pass detection:
-          Pass 1: Apply configured thresholds (default 2.0x multiplier, 1.5 std devs)
+        Uses two-pass detection with per-platform thresholds:
+          Pass 1: Apply platform-specific strict thresholds (e.g., TikTok 3.5x vs IG 2.0x)
           Pass 2: If brand has <2 outliers, take top posts above a softer floor
                   to ensure minimum brand representation (at least 2 posts per brand).
+
+        Platform-aware: TikTok gets higher thresholds because FYP algorithm
+        creates higher natural variance; Instagram thresholds are lower because
+        engagement is more follower-graph-dependent and predictable.
         """
         days = lookback_days or self.thresholds.lookback_days
         cutoff = (
@@ -316,14 +356,26 @@ class OutlierDetector:
             ORDER BY collected_at DESC
         """, (handle, self.profile.profile_name, cutoff)).fetchall()
 
-        # Thresholds from profile settings (defaults: 2.0x multiplier, 1.5 std devs)
-        min_multiplier = self.thresholds.engagement_multiplier
-        min_std_devs = self.thresholds.std_dev_threshold
+        # Detect dominant platform for this handle's posts
+        platform_counts = {}
+        for row in rows:
+            p = row["platform"] or "instagram"
+            platform_counts[p] = platform_counts.get(p, 0) + 1
+        dominant_platform = max(platform_counts, key=platform_counts.get) if platform_counts else "instagram"
 
-        # Softer floor for Pass 2 (minimum brand representation)
-        soft_multiplier = 1.2
-        soft_std_devs = 0.5
+        # Get platform-specific thresholds (fall back to profile defaults for unknown)
+        pt = PLATFORM_THRESHOLDS.get(dominant_platform, DEFAULT_PLATFORM_THRESHOLDS)
+        min_multiplier = pt["engagement_multiplier"]
+        min_std_devs = pt["std_dev_threshold"]
+        soft_multiplier = pt["soft_multiplier"]
+        soft_std_devs = pt["soft_std_devs"]
         min_outliers_per_brand = 2
+
+        logger.debug(
+            f"  {handle} ({dominant_platform}): thresholds "
+            f"{min_multiplier}x / {min_std_devs}σ "
+            f"(soft: {soft_multiplier}x / {soft_std_devs}σ)"
+        )
 
         # Collect all candidates with their metrics
         candidates = []

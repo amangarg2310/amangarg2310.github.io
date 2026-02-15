@@ -1729,9 +1729,10 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint
         run_vertical_migrations()
         add_facebook_handle_column()
+        fix_post_unique_constraint()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

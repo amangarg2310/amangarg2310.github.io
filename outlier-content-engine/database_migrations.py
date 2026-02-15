@@ -249,12 +249,123 @@ def add_facebook_handle_column(db_path=None):
         conn.close()
 
 
+def fix_post_unique_constraint(db_path=None):
+    """
+    Fix UNIQUE(post_id, platform) → UNIQUE(post_id, platform, brand_profile).
+
+    The old constraint caused INSERT OR IGNORE to silently skip posts when
+    the same handle appeared in multiple verticals/profiles. Adding
+    brand_profile to the unique key isolates data per vertical.
+
+    Safe to call multiple times — checks the schema first.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    # Check if migration is needed by inspecting the CREATE TABLE statement
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='competitor_posts'"
+    ).fetchone()
+
+    if not row:
+        logger.info("  competitor_posts table does not exist yet, skipping unique constraint fix")
+        conn.close()
+        return
+
+    create_sql = row[0]
+    # If brand_profile is already in the unique constraint, skip
+    if "UNIQUE(post_id, platform, brand_profile)" in create_sql.replace(" ", ""):
+        logger.info("  competitor_posts already has 3-column unique constraint, skipping")
+        conn.close()
+        return
+
+    logger.info("Fixing competitor_posts UNIQUE constraint to include brand_profile...")
+
+    try:
+        conn.executescript("""
+            -- Rebuild table with corrected unique constraint
+            CREATE TABLE IF NOT EXISTS competitor_posts_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id TEXT NOT NULL,
+                brand_profile TEXT NOT NULL,
+                platform TEXT NOT NULL DEFAULT 'instagram',
+                competitor_name TEXT NOT NULL,
+                competitor_handle TEXT NOT NULL,
+                posted_at TEXT,
+                caption TEXT,
+                media_type TEXT,
+                media_url TEXT,
+                likes INTEGER DEFAULT 0,
+                comments INTEGER DEFAULT 0,
+                saves INTEGER,
+                shares INTEGER,
+                views INTEGER,
+                follower_count INTEGER,
+                estimated_engagement_rate REAL,
+                is_outlier INTEGER DEFAULT 0,
+                outlier_score REAL,
+                content_tags TEXT,
+                collected_at TEXT NOT NULL,
+                is_own_channel INTEGER DEFAULT 0,
+                audio_id TEXT,
+                audio_name TEXT,
+                is_trending_audio INTEGER DEFAULT 0,
+                weighted_engagement_score REAL,
+                primary_engagement_driver TEXT,
+                outlier_timeframe TEXT,
+                ai_analysis TEXT,
+                archived INTEGER DEFAULT 0,
+                UNIQUE(post_id, platform, brand_profile)
+            );
+
+            -- Copy all existing data
+            INSERT OR IGNORE INTO competitor_posts_new
+                SELECT id, post_id, brand_profile, platform, competitor_name,
+                       competitor_handle, posted_at, caption, media_type, media_url,
+                       likes, comments, saves, shares, views, follower_count,
+                       estimated_engagement_rate, is_outlier, outlier_score,
+                       content_tags, collected_at,
+                       COALESCE(is_own_channel, 0),
+                       audio_id, audio_name,
+                       COALESCE(is_trending_audio, 0),
+                       weighted_engagement_score, primary_engagement_driver,
+                       outlier_timeframe, ai_analysis,
+                       COALESCE(archived, 0)
+                FROM competitor_posts;
+
+            -- Swap tables
+            DROP TABLE competitor_posts;
+            ALTER TABLE competitor_posts_new RENAME TO competitor_posts;
+
+            -- Recreate indexes
+            CREATE INDEX IF NOT EXISTS idx_posts_competitor_date
+                ON competitor_posts(competitor_handle, collected_at);
+            CREATE INDEX IF NOT EXISTS idx_posts_outlier
+                ON competitor_posts(is_outlier);
+            CREATE INDEX IF NOT EXISTS idx_posts_profile
+                ON competitor_posts(brand_profile);
+            CREATE INDEX IF NOT EXISTS idx_posts_own_channel
+                ON competitor_posts(is_own_channel);
+            CREATE INDEX IF NOT EXISTS idx_posts_audio
+                ON competitor_posts(audio_id);
+            CREATE INDEX IF NOT EXISTS idx_posts_archived
+                ON competitor_posts(archived);
+        """)
+        logger.info("  competitor_posts UNIQUE constraint updated successfully")
+    except Exception as e:
+        logger.error(f"  Failed to fix unique constraint: {e}")
+        conn.rollback()
+
+    conn.close()
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
 
     run_vertical_migrations()
     add_facebook_handle_column()
+    fix_post_unique_constraint()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile

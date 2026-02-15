@@ -483,10 +483,15 @@ ALWAYS respond with valid JSON matching this exact schema:
             hook = analysis.get("hook") or analysis.get("why_it_worked")
             if hook and isinstance(hook, str):
                 themes.append(hook[:80])
-            # Gather adaptation suggestions
-            adaptation = analysis.get("brand_adaptation") or analysis.get("adaptation")
-            if adaptation:
-                adaptations.append(adaptation)
+            # Gather adaptation suggestions — LLM stores these under brand_creative_brief
+            brief = analysis.get("brand_creative_brief") or {}
+            if isinstance(brief, dict) and brief:
+                adaptations.append(brief)
+            else:
+                # Fallback for older cached formats
+                adaptation = analysis.get("brand_adaptation") or analysis.get("adaptation")
+                if adaptation:
+                    adaptations.append(adaptation)
 
         # Deduplicate content types, keep top entries
         seen_types = []
