@@ -236,133 +236,74 @@
             </div>
             {% endif %}
 
-            <!-- Analysis Summary (if insights exist) -->
+            <!-- Consolidated Analysis Report -->
             {% if insights and insights.has_insights %}
             <div class="signal-message">
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
                     <div class="signal-message-bubble">
-                        {{ insights.summary }}
+                        {{ insights.summary|md_bold }}
                     </div>
 
-                    <!-- Pattern Cards -->
-                    {% for pattern in insights.patterns[:3] %}
-                    <div class="signal-insight-card">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                {% if pattern.pattern_type == 'driver' %}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                                {% elif pattern.pattern_type == 'format' %}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="8" y1="2" x2="8" y2="22"/></svg>
-                                {% else %}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                {% endif %}
-                            </span>
-                            <span class="signal-insight-label">{{ pattern.pattern_type|upper }}</span>
-                            <span class="signal-insight-metric">{{ pattern.metric }}</span>
+                    <!-- Single consolidated report card -->
+                    {% if insights.report_sections %}
+                    <div class="signal-report-card">
+                        <div class="signal-report-header" onclick="toggleReport(this)">
+                            <div class="signal-report-header-left">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                <span>Competitive Intelligence Report</span>
+                            </div>
+                            <span class="signal-report-meta">{{ insights.outlier_count }} outliers analyzed</span>
+                            <svg class="signal-report-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
-                        <div class="signal-insight-title">{{ pattern.name }}</div>
-                        <div class="signal-insight-desc">{{ pattern.description }}</div>
-                        {% if pattern.actionable_takeaway %}
-                        <div class="signal-insight-action">{{ pattern.actionable_takeaway }}</div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
 
-                    <!-- Recommendations -->
-                    {% if insights.recommendations %}
-                    <div class="signal-insight-card signal-rec-card">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                            </span>
-                            <span class="signal-insight-label">WHAT TO DO NEXT</span>
+                        <div class="signal-report-body open">
+                            {% for section in insights.report_sections %}
+                            <div class="signal-report-section">
+                                <div class="signal-report-section-title">
+                                    {% if section.icon == 'formats' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="8" y1="2" x2="8" y2="22"/></svg>
+                                    {% elif section.icon == 'hooks' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    {% elif section.icon == 'psychology' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
+                                    {% elif section.icon == 'drivers' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                                    {% elif section.icon == 'playbook' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    {% elif section.icon == 'ideas' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                    {% else %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    {% endif %}
+                                    {{ section.title }}
+                                </div>
+                                <div class="signal-report-section-body">
+                                    {% for line in section.lines %}
+                                    <div class="signal-report-line">{{ line|md_bold }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
-                        {% for rec in insights.recommendations[:2] %}
-                        <div class="signal-rec-item">
-                            <div class="signal-insight-title">{{ rec.title }}</div>
-                            <div class="signal-insight-desc">{{ rec.description }}</div>
-                            <ul class="signal-rec-actions">
-                                {% for action in rec.actions[:3] %}
-                                <li>{{ action }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        {% endfor %}
                     </div>
                     {% endif %}
 
-                    <!-- Franchise Cards -->
-                    {% for franchise in insights.franchises[:1] %}
-                    <div class="signal-insight-card">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                            </span>
-                            <span class="signal-insight-label">FRANCHISE</span>
-                            <span class="signal-insight-metric">{{ franchise.retention_score }}</span>
-                        </div>
-                        <div class="signal-insight-title">{{ franchise.name }}</div>
-                        <div class="signal-insight-desc">{{ franchise.description }}</div>
-                    </div>
-                    {% endfor %}
-
-                    <!-- Content Pattern Clusters -->
+                    <!-- Content Pattern Clusters (clickable filters) -->
                     {% if pattern_clusters %}
-                    {% for cluster in pattern_clusters[:6] %}
-                    <div class="signal-insight-card signal-cluster-card" onclick="filterByCluster({{ cluster.pattern_name|tojson }})" style="cursor:pointer">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="9" x2="9" y2="11"/><line x1="18" y1="9" x2="15" y2="11"/><line x1="6" y1="15" x2="9" y2="13"/><line x1="18" y1="15" x2="15" y2="13"/></svg>
-                            </span>
-                            <span class="signal-insight-label">CLUSTER</span>
-                            <span class="signal-insight-metric">{{ cluster.count }} posts</span>
+                    <div class="signal-report-clusters">
+                        <div class="signal-report-clusters-label">Filter by pattern:</div>
+                        <div class="signal-report-cluster-pills">
+                            {% for cluster in pattern_clusters[:8] %}
+                            <button class="signal-pill signal-cluster-pill" onclick="filterByCluster({{ cluster.pattern_name|tojson }})">
+                                {{ cluster.pattern_name }} <span class="signal-cluster-count">{{ cluster.count }}</span>
+                            </button>
+                            {% endfor %}
                         </div>
-                        <div class="signal-insight-title">{{ cluster.pattern_name }}</div>
-                        <div class="signal-insight-desc">
-                            {{ cluster.count }} posts across
-                            {% for handle in cluster.brands[:3] %}@{{ handle }}{% if not loop.last %}, {% endif %}{% endfor %}{% if cluster.brands|length > 3 %} +{{ cluster.brands|length - 3 }} more{% endif %}
-                            used this pattern.
-                            Avg score: {{ cluster.avg_score }}
-                        </div>
-                        <div class="signal-cluster-filter-hint">Click to filter grid</div>
                     </div>
-                    {% endfor %}
                     {% endif %}
 
                     <div class="signal-message-time">{{ insights.outlier_count }} outliers analyzed</div>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Standalone Content Clusters (when AI analysis exists but no template insights) -->
-            {% if pattern_clusters and (not insights or not insights.has_insights) %}
-            <div class="signal-message">
-                <div class="signal-avatar">S</div>
-                <div class="signal-message-content">
-                    <div class="signal-message-bubble">
-                        I found <strong>{{ pattern_clusters|length }} content pattern clusters</strong> across your outlier posts.
-                    </div>
-                    {% for cluster in pattern_clusters[:6] %}
-                    <div class="signal-insight-card signal-cluster-card" onclick="filterByCluster({{ cluster.pattern_name|tojson }})" style="cursor:pointer">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="9" x2="9" y2="11"/><line x1="18" y1="9" x2="15" y2="11"/><line x1="6" y1="15" x2="9" y2="13"/><line x1="18" y1="15" x2="15" y2="13"/></svg>
-                            </span>
-                            <span class="signal-insight-label">CLUSTER</span>
-                            <span class="signal-insight-metric">{{ cluster.count }} posts</span>
-                        </div>
-                        <div class="signal-insight-title">{{ cluster.pattern_name }}</div>
-                        <div class="signal-insight-desc">
-                            {{ cluster.count }} posts across
-                            {% for handle in cluster.brands[:3] %}@{{ handle }}{% if not loop.last %}, {% endif %}{% endfor %}{% if cluster.brands|length > 3 %} +{{ cluster.brands|length - 3 }} more{% endif %}
-                            used this pattern.
-                            Avg score: {{ cluster.avg_score }}
-                        </div>
-                        <div class="signal-cluster-filter-hint">Click to filter grid</div>
-                    </div>
-                    {% endfor %}
-                    <div class="signal-message-time">{{ pattern_clusters|length }} clusters found</div>
                 </div>
             </div>
             {% endif %}
@@ -925,6 +866,14 @@ function toggleInsight(trigger) {
     panel.classList.toggle('open', !isOpen);
 }
 
+// Toggle consolidated report
+function toggleReport(header) {
+    const body = header.nextElementSibling;
+    const isOpen = body.classList.contains('open');
+    header.classList.toggle('collapsed', !isOpen);
+    body.classList.toggle('open', !isOpen);
+}
+
 // Toggle benchmarks panel
 function toggleBenchmarks(trigger) {
     const panel = trigger.nextElementSibling;
@@ -937,24 +886,26 @@ function toggleBenchmarks(trigger) {
 let activeClusterFilter = null;
 function filterByCluster(patternName) {
     const cards = document.querySelectorAll('.signal-card-link');
-    const clusterCards = document.querySelectorAll('.signal-cluster-card');
+    const clusterPills = document.querySelectorAll('.signal-cluster-pill');
 
     // Toggle off if clicking the same cluster
     if (activeClusterFilter === patternName) {
         activeClusterFilter = null;
         cards.forEach(card => { card.style.display = ''; });
-        clusterCards.forEach(c => c.classList.remove('signal-cluster-active'));
+        clusterPills.forEach(c => c.classList.remove('signal-cluster-active'));
         return;
     }
 
     activeClusterFilter = patternName;
 
-    // Highlight active cluster card
-    clusterCards.forEach(c => {
-        if (c.querySelector('.signal-insight-title').textContent.trim() === patternName) {
-            c.classList.add('signal-cluster-active');
+    // Highlight active cluster pill
+    clusterPills.forEach(pill => {
+        // The pill text includes the count span, so check textContent of first text node
+        const pillText = pill.childNodes[0].textContent.trim();
+        if (pillText === patternName) {
+            pill.classList.add('signal-cluster-active');
         } else {
-            c.classList.remove('signal-cluster-active');
+            pill.classList.remove('signal-cluster-active');
         }
     });
 
@@ -1647,10 +1598,17 @@ function showCustomPrompt(title, message, placeholder, onConfirm) {
 <script>
 // Analysis status polling
 let analysisPollingInterval = null;
+let analysisTimerInterval = null;
+let analysisStartedAt = null;
+let stallCheckCount = 0;
+let lastProgressPct = -1;
 
 function showAnalysisLoading() {
     const modal = document.getElementById('analysisLoadingModal');
     modal.style.display = 'flex';
+    analysisStartedAt = Date.now();
+    stallCheckCount = 0;
+    lastProgressPct = -1;
 
     // Clear old outlier cards to prevent showing stale data
     const outlierGrid = document.querySelector('.signal-grid');
@@ -1658,36 +1616,55 @@ function showAnalysisLoading() {
         outlierGrid.innerHTML = '<div class="signal-empty" style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--signal-text-dim);">Analyzing content...</div>';
     }
 
+    // Start client-side elapsed timer (updates every second for smooth display)
+    if (!analysisTimerInterval) {
+        analysisTimerInterval = setInterval(updateElapsedTimer, 1000);
+    }
+
     // Start polling for analysis status
     if (!analysisPollingInterval) {
-        analysisPollingInterval = setInterval(checkAnalysisStatus, 3000); // Poll every 3 seconds
+        analysisPollingInterval = setInterval(checkAnalysisStatus, 2500);
     }
+}
+
+function updateElapsedTimer() {
+    if (!analysisStartedAt) return;
+    const elapsed = Math.floor((Date.now() - analysisStartedAt) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const el = document.getElementById('analysisTimeElapsed');
+    if (el) el.textContent = `Elapsed: ${mins}m ${secs}s`;
 }
 
 function hideAnalysisLoading() {
     const modal = document.getElementById('analysisLoadingModal');
     modal.style.display = 'none';
 
-    // Stop polling
     if (analysisPollingInterval) {
         clearInterval(analysisPollingInterval);
         analysisPollingInterval = null;
     }
+    if (analysisTimerInterval) {
+        clearInterval(analysisTimerInterval);
+        analysisTimerInterval = null;
+    }
+    analysisStartedAt = null;
 }
 
 function checkAnalysisStatus() {
     fetch('/analysis/status')
         .then(response => response.json())
         .then(data => {
+            const progressFill = document.getElementById('analysisProgressFill');
+            const messageEl = document.getElementById('analysisLoadingMessage');
+            const timeRemainingEl = document.getElementById('analysisTimeEstimate');
+
             if (data.is_running) {
-                // Update progress if available
-                const progressFill = document.getElementById('analysisProgressFill');
-                const messageEl = document.getElementById('analysisLoadingMessage');
-                const timeRemainingEl = document.getElementById('analysisTimeEstimate');
-                const timeElapsedEl = document.getElementById('analysisTimeElapsed');
+                stallCheckCount = 0;  // Reset stall counter — server says it's running
 
                 if (data.progress !== undefined) {
                     progressFill.style.width = data.progress + '%';
+                    lastProgressPct = data.progress;
                 }
 
                 if (data.message) {
@@ -1697,26 +1674,33 @@ function checkAnalysisStatus() {
                 if (data.time_remaining) {
                     timeRemainingEl.textContent = 'Remaining: ' + data.time_remaining;
                 } else {
-                    timeRemainingEl.textContent = 'Remaining: Estimating...';
-                }
-
-                if (data.time_elapsed) {
-                    timeElapsedEl.textContent = 'Elapsed: ' + data.time_elapsed;
-                } else {
-                    timeElapsedEl.textContent = 'Elapsed: Starting...';
+                    timeRemainingEl.textContent = 'Remaining: estimating...';
                 }
             } else if (data.completed) {
-                // Analysis completed - refresh the page to show results
+                // Analysis completed — refresh to show results
                 hideAnalysisLoading();
-                window.location.reload();
+                window.location.href = '/signal';
             } else if (data.error) {
-                // Analysis failed
                 hideAnalysisLoading();
-                alert('Analysis failed: ' + data.error);
+                addChatMessage('Analysis failed: ' + data.error, false);
+            } else {
+                // Neither running nor completed — might be a gap between start and PID write
+                stallCheckCount++;
+                if (stallCheckCount > 8) {
+                    // 8 polls (~20s) with no running/completed — treat as done
+                    hideAnalysisLoading();
+                    window.location.href = '/signal';
+                }
             }
         })
         .catch(error => {
             console.error('Error checking analysis status:', error);
+            stallCheckCount++;
+            if (stallCheckCount > 12) {
+                // Network failures for 30s — give up gracefully
+                hideAnalysisLoading();
+                window.location.href = '/signal';
+            }
         });
 }
 

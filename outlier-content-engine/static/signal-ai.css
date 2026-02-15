@@ -318,7 +318,7 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 8px;
 }
 
-/* Recommendation cards */
+/* Recommendation cards (legacy — kept for backward compat) */
 .signal-rec-card {
     border-color: rgba(16, 185, 129, 0.2);
 }
@@ -359,6 +359,145 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: 50%;
     background: var(--signal-success);
     opacity: 0.6;
+}
+
+/* ========================================
+   CONSOLIDATED REPORT CARD
+   ======================================== */
+
+.signal-report-card {
+    background: var(--signal-bg-surface);
+    border: 1px solid var(--signal-border);
+    border-radius: 12px;
+    margin-top: 12px;
+    overflow: hidden;
+}
+
+.signal-report-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid transparent;
+}
+
+.signal-report-header:hover {
+    background: rgba(0, 217, 255, 0.04);
+}
+
+.signal-report-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--signal-text-primary);
+    letter-spacing: 0.3px;
+}
+
+.signal-report-meta {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--signal-text-dim);
+    font-weight: 500;
+}
+
+.signal-report-chevron {
+    transition: transform 0.2s ease;
+    color: var(--signal-text-dim);
+}
+
+.signal-report-header.collapsed .signal-report-chevron {
+    transform: rotate(-90deg);
+}
+
+.signal-report-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.signal-report-body.open {
+    max-height: 2000px;
+    border-top: 1px solid var(--signal-border);
+}
+
+.signal-report-section {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--signal-border-light);
+}
+
+.signal-report-section:last-child {
+    border-bottom: none;
+}
+
+.signal-report-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--signal-cyan);
+    margin-bottom: 10px;
+}
+
+.signal-report-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.signal-report-line {
+    font-size: 13px;
+    color: var(--signal-text-secondary);
+    line-height: 1.6;
+    padding-left: 4px;
+}
+
+.signal-report-line strong {
+    color: var(--signal-text-primary);
+    font-weight: 600;
+}
+
+/* Cluster filter pills (below report) */
+.signal-report-clusters {
+    margin-top: 12px;
+    padding: 12px 0 0;
+}
+
+.signal-report-clusters-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--signal-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+}
+
+.signal-report-cluster-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.signal-cluster-pill {
+    font-size: 11px !important;
+    padding: 4px 10px !important;
+}
+
+.signal-cluster-pill .signal-cluster-count {
+    opacity: 0.6;
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.signal-cluster-pill.signal-cluster-active {
+    background: var(--signal-cyan) !important;
+    color: #000 !important;
 }
 
 /* ========================================

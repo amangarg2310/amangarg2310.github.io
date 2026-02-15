@@ -288,12 +288,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         lifecycle.cleanup_old_data(days=3)
 
     # Start progress tracking
+    total_brands = len(ig_competitors) + len(tt_competitors)
     if _progress:
         _progress.start(
             total_brands_ig=len(ig_competitors),
             total_brands_tt=len(tt_competitors),
             is_cached=skip_collect
         )
+        _progress.update(2, "Initializing pipeline...")
 
     # ── 3. Collection Phase ──
     run_stats = {
@@ -326,9 +328,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                     "API health check failed. Will attempt collection anyway."
                 )
 
-            for comp in ig_competitors:
+            for idx, comp in enumerate(ig_competitors):
                 handle = comp["handle"]
                 name = comp["name"]
+
+                # Progress: collection is 5-65% of pipeline
+                if _progress and total_brands > 0:
+                    pct = 5 + int((idx / total_brands) * 60)
+                    _progress.update(pct, f"Collecting @{handle} ({idx+1}/{len(ig_competitors)} IG)...")
 
                 try:
                     posts = collector.collect_posts(
@@ -363,9 +370,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 try:
                     from collectors.tiktok import create_tiktok_collector
                     tt_collector = create_tiktok_collector()
-                    for comp in tt_competitors:
+                    for tt_idx, comp in enumerate(tt_competitors):
                         handle = comp["handle"]
                         name = comp["name"]
+
+                        if _progress and total_brands > 0:
+                            pct = 5 + int(((len(ig_competitors) + tt_idx) / total_brands) * 60)
+                            _progress.update(pct, f"Collecting @{handle} ({tt_idx+1}/{len(tt_competitors)} TT)...")
+
                         try:
                             posts = tt_collector.collect_posts(
                                 handle=handle,
@@ -446,12 +458,16 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
 
     else:
         logger.info("Skipping collection (--skip-collect)")
+        if _progress:
+            _progress.update(65, "Using cached data, skipping collection...")
 
     # (Content tagging is now consolidated into the Analysis phase via analyzer.py)
 
     # ── 4. Detection Phase ──
     logger.info("")
     logger.info("--- DETECTION PHASE ---")
+    if _progress:
+        _progress.update(68, "Detecting outlier posts...")
 
     detector = OutlierDetector(profile)
     outliers, baselines = detector.detect()
@@ -496,6 +512,8 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     # ── 7. Voice Analysis Phase ──
     logger.info("")
     logger.info("--- VOICE ANALYSIS PHASE ---")
+    if _progress:
+        _progress.update(75, f"Analyzing brand voice ({len(outliers)} outliers found)...")
 
     voice_data = None
     own_top_captions = []
@@ -548,6 +566,8 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     # ── 8. Analysis Phase ──
     logger.info("")
     logger.info("--- ANALYSIS PHASE ---")
+    if _progress:
+        _progress.update(82, f"Running AI analysis on {len(outliers)} outliers...")
 
     analyzer = ContentAnalyzer(
         profile,
@@ -592,6 +612,8 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     # ── 9. Report Phase ──
     logger.info("")
     logger.info("--- REPORT PHASE ---")
+    if _progress:
+        _progress.update(92, "Generating report...")
 
     run_stats["duration_seconds"] = round(time.time() - start_time, 1)
 
@@ -624,6 +646,9 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         f"Errors: {len(run_stats['errors'])}"
     )
     logger.info("=" * 60)
+
+    if _progress:
+        _progress.update(98, f"Done! {len(outliers)} outliers found.")
 
     # ── Save Lifecycle Info ──
     if vertical_name:

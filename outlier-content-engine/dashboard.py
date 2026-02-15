@@ -31,6 +31,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, send_file, Response,
 )
+from markupsafe import Markup
 
 import config
 from profile_loader import load_profile
@@ -93,6 +94,15 @@ def timeago_filter(timestamp_str):
     except Exception as e:
         logger.debug(f"Error parsing timestamp '{timestamp_str}': {e}")
         return ""
+
+
+@app.template_filter('md_bold')
+def md_bold_filter(text):
+    """Convert **bold** markdown to <strong> tags for safe HTML rendering."""
+    import re
+    if not text or '**' not in str(text):
+        return text
+    return Markup(re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', str(text)))
 
 
 # ── Helpers ──
@@ -1476,36 +1486,57 @@ def analysis_status():
             start_time = progress_data.get("start_time")
 
             if status == "running":
-                # Analysis is actively running (or was running)
-                elapsed = time.time() - start_time if start_time else 0
-                response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
-                response["progress"] = progress_data.get("progress_percent", 0)
-                response["message"] = progress_data.get("message", "Running analysis...")
+                # Check if process is actually still alive
+                if response["is_running"]:
+                    # Process is alive — show real progress
+                    elapsed = time.time() - start_time if start_time else 0
+                    response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+                    response["progress"] = progress_data.get("progress_percent", 0)
+                    response["message"] = progress_data.get("message", "Running analysis...")
 
-                # Only mark as running if process is actually still alive
-                if not response["is_running"]:
-                    # Process ended, mark as completed
-                    status = "completed"
-
-                # Calculate time remaining based on actual progress
-                progress_pct = progress_data.get("progress_percent", 0)
-                if progress_pct > 5:  # Only estimate after some progress
-                    estimated_total = (elapsed / progress_pct) * 100
-                    remaining = max(0, estimated_total - elapsed)
-                    response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
-                else:
-                    # Early stages, use cached vs fresh estimate
-                    is_cached = progress_data.get("is_cached", False)
-                    if is_cached:
-                        response["time_remaining"] = "30-60 seconds"
+                    # Calculate time remaining based on actual progress
+                    progress_pct = progress_data.get("progress_percent", 0)
+                    if progress_pct > 5:
+                        estimated_total = (elapsed / progress_pct) * 100
+                        remaining = max(0, estimated_total - elapsed)
+                        response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
                     else:
-                        total_brands = progress_data.get("total_brands_ig", 0) + progress_data.get("total_brands_tt", 0)
-                        # Estimate ~90s per 6 brands in parallel
-                        est_minutes = (total_brands / 6) * 1.5 + 2  # Add 2 min for analysis
-                        response["time_remaining"] = f"{int(est_minutes)} minutes"
+                        is_cached = progress_data.get("is_cached", False)
+                        if is_cached:
+                            response["time_remaining"] = "~1 minute"
+                        else:
+                            total_brands = progress_data.get("total_brands_ig", 0) + progress_data.get("total_brands_tt", 0)
+                            est_minutes = max(1, int((total_brands / 6) * 1.5 + 2))
+                            response["time_remaining"] = f"~{est_minutes} minutes"
+                else:
+                    # Process died but progress file still says "running"
+                    # This is the stuck-screen scenario — treat as completed
+                    response["completed"] = True
+                    response["progress"] = 100
+                    elapsed = time.time() - start_time if start_time else 0
+                    response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+
+                    # Check DB for outliers to give a meaningful message
+                    try:
+                        v_name = get_active_vertical_name()
+                        conn2 = sqlite3.connect(str(config.DB_PATH))
+                        row2 = conn2.execute(
+                            "SELECT COUNT(*) as cnt FROM competitor_posts WHERE is_outlier = 1 AND brand_profile = ?",
+                            (v_name or "",)
+                        ).fetchone()
+                        conn2.close()
+                        cnt = row2[0] if row2 else 0
+                        response["message"] = f"Analysis complete! Found {cnt} outlier posts." if cnt else "Analysis complete."
+                    except Exception:
+                        response["message"] = "Analysis complete!"
+
+                    # Clean up stale progress file
+                    try:
+                        progress_file.unlink()
+                    except Exception:
+                        pass
 
             elif status == "completed":
-                # Analysis finished
                 response["completed"] = True
                 response["progress"] = 100
                 response["message"] = progress_data.get("message", "Analysis complete!")
@@ -1515,52 +1546,25 @@ def analysis_status():
                     duration = end_time - start_time
                     response["time_elapsed"] = f"{int(duration // 60)}m {int(duration % 60)}s"
 
+                # Clean up completed progress file
+                try:
+                    progress_file.unlink()
+                except Exception:
+                    pass
+
             elif status == "error":
-                # Analysis failed
                 response["completed"] = True
                 response["error"] = progress_data.get("error", "Unknown error occurred")
                 response["message"] = "Analysis failed"
 
+                # Clean up error progress file
+                try:
+                    progress_file.unlink()
+                except Exception:
+                    pass
+
         except Exception as e:
             logger.error(f"Error reading progress file: {e}")
-
-    # Fallback: check if analysis was running but now stopped (no progress file)
-    elif not response["is_running"] and session.get('analysis_was_running', False):
-        try:
-            conn = sqlite3.connect(str(config.DB_PATH))
-            conn.row_factory = sqlite3.Row
-
-            # Get the active vertical to filter count correctly
-            vertical_name = get_active_vertical_name()
-
-            if vertical_name:
-                result = conn.execute("""
-                    SELECT COUNT(*) as count
-                    FROM competitor_posts
-                    WHERE is_outlier = 1 AND brand_profile = ?
-                """, (vertical_name,)).fetchone()
-            else:
-                result = conn.execute("""
-                    SELECT COUNT(*) as count
-                    FROM competitor_posts
-                    WHERE is_outlier = 1
-                """).fetchone()
-
-            outlier_count = result['count'] if result else 0
-            conn.close()
-
-            response["completed"] = True
-            response["progress"] = 100
-            if outlier_count > 0:
-                response["message"] = f"Analysis complete! Found {outlier_count} outlier posts."
-            else:
-                response["message"] = "Analysis complete! No outliers detected."
-
-            # Clear the flag
-            session['analysis_was_running'] = False
-            session.modified = True
-        except Exception as e:
-            logger.error(f"Error checking completion: {e}")
 
     return jsonify(response)
 

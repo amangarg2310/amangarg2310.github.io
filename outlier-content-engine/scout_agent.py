@@ -865,6 +865,8 @@ IMPORTANT:
             return self._handle_show_category(args)
         elif name == "run_analysis":
             return self._handle_run_analysis(args, context)
+        elif name == "filter_view":
+            return self._handle_filter_view(args, context)
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
 
