@@ -184,9 +184,11 @@ def save_profile_data(data):
 
 
 def get_db():
-    """Get a SQLite connection."""
+    """Get a SQLite connection with WAL mode for concurrent read/write."""
     conn = sqlite3.connect(str(config.DB_PATH))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -784,6 +786,92 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=outliers_export.csv"},
     )
+
+
+@app.route("/api/budget")
+def api_budget():
+    """Return current monthly LLM spend and limit for budget visibility."""
+    from flask import jsonify
+    if not config.DB_PATH.exists():
+        return jsonify({"spent": 0, "limit": config.MONTHLY_COST_LIMIT_USD, "remaining": config.MONTHLY_COST_LIMIT_USD, "runs_this_month": 0})
+
+    try:
+        conn = get_db()
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
+
+        row = conn.execute(
+            "SELECT COALESCE(SUM(estimated_cost_usd), 0) as total FROM token_usage WHERE timestamp >= ?",
+            (month_start,)
+        ).fetchone()
+        spent = row["total"] if row else 0
+
+        runs_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM collection_runs WHERE run_timestamp >= ?",
+            (month_start,)
+        ).fetchone()
+        runs = runs_row["cnt"] if runs_row else 0
+
+        conn.close()
+        limit = config.MONTHLY_COST_LIMIT_USD
+        return jsonify({
+            "spent": round(spent, 4),
+            "limit": limit,
+            "remaining": round(limit - spent, 4),
+            "percent_used": round((spent / limit) * 100, 1) if limit > 0 else 0,
+            "runs_this_month": runs,
+        })
+    except Exception:
+        return jsonify({"spent": 0, "limit": config.MONTHLY_COST_LIMIT_USD, "remaining": config.MONTHLY_COST_LIMIT_USD, "runs_this_month": 0})
+
+
+@app.route("/api/validate_keys", methods=["POST"])
+def api_validate_keys():
+    """Live validation of API keys before saving."""
+    from flask import jsonify
+    import requests as http_requests
+
+    data = request.get_json() or {}
+    results = {}
+
+    # Validate Apify token
+    apify_token = data.get("apify_token", "").strip()
+    if apify_token:
+        try:
+            resp = http_requests.get(
+                "https://api.apify.com/v2/users/me",
+                params={"token": apify_token},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                user_data = resp.json().get("data", {})
+                results["apify"] = {"valid": True, "username": user_data.get("username", "")}
+            else:
+                results["apify"] = {"valid": False, "error": "Invalid token"}
+        except Exception as e:
+            results["apify"] = {"valid": False, "error": f"Connection error: {str(e)[:60]}"}
+    else:
+        results["apify"] = {"valid": False, "error": "Token required"}
+
+    # Validate OpenAI key
+    openai_key = data.get("openai_key", "").strip()
+    if openai_key:
+        try:
+            resp = http_requests.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                results["openai"] = {"valid": True}
+            else:
+                results["openai"] = {"valid": False, "error": "Invalid API key"}
+        except Exception as e:
+            results["openai"] = {"valid": False, "error": f"Connection error: {str(e)[:60]}"}
+    else:
+        results["openai"] = {"valid": False, "error": "Key required"}
+
+    return jsonify(results)
 
 
 @app.route("/api/load_vertical/<vertical_name>")

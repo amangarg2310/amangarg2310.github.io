@@ -360,8 +360,8 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 except Exception as e:
                     return {"handle": handle, "posts": 0, "new": 0, "error": str(e)}
 
-            # Parallel collection with ThreadPoolExecutor (up to 4 concurrent)
-            max_workers = min(4, len(ig_competitors)) if ig_competitors else 1
+            # Parallel collection with ThreadPoolExecutor (up to 8 concurrent)
+            max_workers = min(8, len(ig_competitors)) if ig_competitors else 1
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(
@@ -398,41 +398,43 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 f"{run_stats['competitors_collected']} competitors"
             )
 
-            # ── 3b. TikTok Collection ──
+            # ── 3b. TikTok Collection (parallel) ──
             if tt_competitors:
                 logger.info("")
                 logger.info("--- TIKTOK COLLECTION PHASE ---")
                 try:
                     from collectors.tiktok import create_tiktok_collector
                     tt_collector = create_tiktok_collector()
-                    for tt_idx, comp in enumerate(tt_competitors):
-                        handle = comp["handle"]
-                        name = comp["name"]
 
-                        if _progress and total_brands > 0:
-                            pct = 5 + int(((len(ig_competitors) + tt_idx) / total_brands) * 60)
-                            _progress.update(pct, f"Collecting @{handle} ({tt_idx+1}/{len(tt_competitors)} TT)...")
-
+                    def _collect_tt_brand(comp_data):
+                        h, n = comp_data["handle"], comp_data["name"]
                         try:
                             posts = tt_collector.collect_posts(
-                                handle=handle,
-                                competitor_name=name,
+                                handle=h, competitor_name=n,
                                 count=config.DEFAULT_POSTS_PER_COMPETITOR,
                             )
-                            new_count = store_posts(posts, profile.profile_name)
-                            run_stats["posts_collected"] += len(posts)
-                            run_stats["posts_new"] += new_count
-                            logger.info(
-                                f"  @{handle}: {len(posts)} TikTok posts "
-                                f"({new_count} new)"
-                            )
+                            with _db_write_lock:
+                                nc = store_posts(posts, profile.profile_name)
+                            return {"handle": h, "posts": len(posts), "new": nc, "error": None}
                         except Exception as e:
-                            run_stats["errors"].append(
-                                f"tiktok/@{handle}: {str(e)}"
-                            )
-                            logger.error(
-                                f"  Failed TikTok @{handle}: {e}"
-                            )
+                            return {"handle": h, "posts": 0, "new": 0, "error": str(e)}
+
+                    tt_workers = min(4, len(tt_competitors))
+                    with ThreadPoolExecutor(max_workers=tt_workers) as executor:
+                        tt_futures = {executor.submit(_collect_tt_brand, c): c for c in tt_competitors}
+                        for tt_idx, future in enumerate(as_completed(tt_futures)):
+                            result = future.result()
+                            _completed_count[0] += 1
+                            if result["error"]:
+                                run_stats["errors"].append(f"tiktok/@{result['handle']}: {result['error']}")
+                                logger.error(f"  Failed TikTok @{result['handle']}: {result['error']}")
+                            else:
+                                run_stats["posts_collected"] += result["posts"]
+                                run_stats["posts_new"] += result["new"]
+                                logger.info(f"  @{result['handle']}: {result['posts']} TikTok posts ({result['new']} new)")
+                            if _progress and total_brands > 0:
+                                pct = 5 + int((_completed_count[0] / total_brands) * 60)
+                                _progress.update(pct, f"Collected @{result['handle']} ({tt_idx+1}/{len(tt_competitors)} TT)")
                 except ImportError:
                     logger.info(
                         "TikTok collector not available. Skipping."
@@ -440,7 +442,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 except Exception as e:
                     logger.error(f"TikTok collection failed: {e}")
 
-            # ── 3c. Facebook Collection ──
+            # ── 3c. Facebook Collection (parallel) ──
             fb_competitors = profile.get_competitor_handles("facebook") if hasattr(profile, 'get_competitor_handles') else []
             if fb_competitors:
                 logger.info("")
@@ -448,34 +450,36 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 try:
                     from collectors.facebook import create_facebook_collector
                     fb_collector = create_facebook_collector()
-                    for fb_idx, comp in enumerate(fb_competitors):
-                        handle = comp["handle"]
-                        name = comp["name"]
 
-                        if _progress and total_brands > 0:
-                            pct = 5 + int(((len(ig_competitors) + len(tt_competitors) + fb_idx) / total_brands) * 60)
-                            _progress.update(pct, f"Collecting @{handle} ({fb_idx+1}/{len(fb_competitors)} FB)...")
-
+                    def _collect_fb_brand(comp_data):
+                        h, n = comp_data["handle"], comp_data["name"]
                         try:
                             posts = fb_collector.collect_posts(
-                                handle=handle,
-                                competitor_name=name,
+                                handle=h, competitor_name=n,
                                 count=config.DEFAULT_POSTS_PER_COMPETITOR,
                             )
-                            new_count = store_posts(posts, profile_id)
-                            run_stats["posts_collected"] += len(posts)
-                            run_stats["posts_new"] += new_count
-                            logger.info(
-                                f"  @{handle}: {len(posts)} Facebook posts "
-                                f"({new_count} new)"
-                            )
+                            with _db_write_lock:
+                                nc = store_posts(posts, profile_id)
+                            return {"handle": h, "posts": len(posts), "new": nc, "error": None}
                         except Exception as e:
-                            run_stats["errors"].append(
-                                f"facebook/@{handle}: {str(e)}"
-                            )
-                            logger.error(
-                                f"  Failed Facebook @{handle}: {e}"
-                            )
+                            return {"handle": h, "posts": 0, "new": 0, "error": str(e)}
+
+                    fb_workers = min(4, len(fb_competitors))
+                    with ThreadPoolExecutor(max_workers=fb_workers) as executor:
+                        fb_futures = {executor.submit(_collect_fb_brand, c): c for c in fb_competitors}
+                        for fb_idx, future in enumerate(as_completed(fb_futures)):
+                            result = future.result()
+                            _completed_count[0] += 1
+                            if result["error"]:
+                                run_stats["errors"].append(f"facebook/@{result['handle']}: {result['error']}")
+                                logger.error(f"  Failed Facebook @{result['handle']}: {result['error']}")
+                            else:
+                                run_stats["posts_collected"] += result["posts"]
+                                run_stats["posts_new"] += result["new"]
+                                logger.info(f"  @{result['handle']}: {result['posts']} Facebook posts ({result['new']} new)")
+                            if _progress and total_brands > 0:
+                                pct = 5 + int((_completed_count[0] / total_brands) * 60)
+                                _progress.update(pct, f"Collected @{result['handle']} ({fb_idx+1}/{len(fb_competitors)} FB)")
                 except ImportError:
                     logger.info(
                         "Facebook collector not available. Skipping."

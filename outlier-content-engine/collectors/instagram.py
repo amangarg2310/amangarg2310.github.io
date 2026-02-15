@@ -183,15 +183,27 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
     """
     Store collected posts in SQLite. Returns count of new posts inserted.
     Uses INSERT OR IGNORE to skip duplicates (same post_id + platform).
+    Batch inserts for performance.
     """
+    if not posts:
+        return 0
+
     db_path = db_path or config.DB_PATH
     conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     cursor = conn.cursor()
     now = datetime.now(timezone.utc).isoformat()
-    new_count = 0
 
+    # Pre-count existing posts to calculate new inserts
+    before_count = cursor.execute(
+        "SELECT COUNT(*) FROM competitor_posts WHERE brand_profile = ?",
+        (profile_name,)
+    ).fetchone()[0]
+
+    # Build batch of row tuples
+    rows = []
     for post in posts:
-        # Compute engagement rate if follower count is available
         engagement_rate = None
         if post.follower_count and post.follower_count > 0:
             total_engagement = (
@@ -200,33 +212,39 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
             )
             engagement_rate = total_engagement / post.follower_count
 
-        try:
-            cursor.execute("""
-                INSERT OR IGNORE INTO competitor_posts
-                (post_id, brand_profile, platform, competitor_name,
-                 competitor_handle, posted_at, caption, media_type,
-                 media_url, likes, comments, saves, shares, views,
-                 follower_count, estimated_engagement_rate, collected_at,
-                 audio_id, audio_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                post.post_id, profile_name, post.platform,
-                post.competitor_name, post.competitor_handle,
-                post.posted_at.isoformat() if post.posted_at else None,
-                post.caption, post.media_type, post.media_url,
-                post.likes, post.comments, post.saves, post.shares,
-                post.views, post.follower_count, engagement_rate, now,
-                getattr(post, 'audio_id', None),
-                getattr(post, 'audio_name', None),
-            ))
-            if cursor.rowcount > 0:
-                new_count += 1
-        except sqlite3.Error as e:
-            logger.error(f"DB insert error for post {post.post_id}: {e}")
+        rows.append((
+            post.post_id, profile_name, post.platform,
+            post.competitor_name, post.competitor_handle,
+            post.posted_at.isoformat() if post.posted_at else None,
+            post.caption, post.media_type, post.media_url,
+            post.likes, post.comments, post.saves, post.shares,
+            post.views, post.follower_count, engagement_rate, now,
+            getattr(post, 'audio_id', None),
+            getattr(post, 'audio_name', None),
+        ))
 
-    conn.commit()
+    try:
+        cursor.executemany("""
+            INSERT OR IGNORE INTO competitor_posts
+            (post_id, brand_profile, platform, competitor_name,
+             competitor_handle, posted_at, caption, media_type,
+             media_url, likes, comments, saves, shares, views,
+             follower_count, estimated_engagement_rate, collected_at,
+             audio_id, audio_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, rows)
+        conn.commit()
+    except sqlite3.Error as e:
+        logger.error(f"DB batch insert error: {e}")
+        conn.rollback()
+
+    after_count = cursor.execute(
+        "SELECT COUNT(*) FROM competitor_posts WHERE brand_profile = ?",
+        (profile_name,)
+    ).fetchone()[0]
+
     conn.close()
-    return new_count
+    return after_count - before_count
 
 
 # ── RapidAPI Instagram Collector ──

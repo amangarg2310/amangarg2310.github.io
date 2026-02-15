@@ -1103,6 +1103,49 @@ h1, h2, h3, h4, h5, h6 {
     opacity: 0.9;
 }
 
+.signal-empty-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+    max-width: 360px;
+    width: 100%;
+}
+
+.signal-empty-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--signal-text-secondary);
+    padding: 10px 14px;
+    background: var(--signal-bg-surface);
+    border: 1px solid var(--signal-border);
+    border-radius: 8px;
+}
+
+.signal-empty-step code {
+    background: var(--signal-bg-elevated);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--signal-cyan);
+}
+
+.signal-empty-step-num {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--signal-cyan);
+    color: #000;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 /* Create category modal */
 .signal-modal-overlay {
     position: fixed;
@@ -2377,5 +2420,171 @@ h1, h2, h3, h4, h5, h6 {
 .signal-guide-examples code:hover {
     background: var(--signal-bg-surface);
     color: var(--signal-cyan);
+    border-color: var(--signal-cyan);
+}
+
+/* ── Onboarding Template Cards ── */
+.signal-onboarding-templates {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.signal-template-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--signal-bg-surface);
+    border: 1px solid var(--signal-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.signal-template-card:hover {
+    border-color: var(--signal-cyan);
+    background: rgba(0, 200, 255, 0.05);
+    transform: translateX(4px);
+}
+
+.signal-template-card.signal-template-custom {
+    border-style: dashed;
+    opacity: 0.7;
+}
+
+.signal-template-card.signal-template-custom:hover {
+    opacity: 1;
+}
+
+.signal-template-icon {
+    font-size: 22px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--signal-bg-elevated);
+    border-radius: 8px;
+}
+
+.signal-template-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.signal-template-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--signal-text-primary);
+}
+
+.signal-template-brands {
+    font-size: 11px;
+    color: var(--signal-text-dim);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Budget Indicator Bar ── */
+.signal-budget-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: var(--signal-bg-surface);
+    border: 1px solid var(--signal-border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: var(--signal-text-dim);
+}
+
+.signal-budget-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.signal-budget-track {
+    flex: 1;
+    height: 4px;
+    background: var(--signal-bg-elevated);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 60px;
+}
+
+.signal-budget-fill {
+    height: 100%;
+    background: var(--signal-success);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.signal-budget-fill.budget-warning {
+    background: var(--signal-warning);
+}
+
+.signal-budget-fill.budget-danger {
+    background: var(--signal-error);
+}
+
+.signal-budget-runs {
+    white-space: nowrap;
+    color: var(--signal-text-muted);
+    font-size: 10px;
+}
+
+/* ── First-Run Hints ── */
+.signal-first-run-hints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(0, 200, 255, 0.04);
+    border: 1px solid rgba(0, 200, 255, 0.15);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.signal-hint-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--signal-text-secondary);
+    padding: 6px 10px;
+    background: var(--signal-bg-surface);
+    border-radius: 6px;
+    border: 1px solid var(--signal-border);
+}
+
+.signal-hint-card strong {
+    color: var(--signal-cyan);
+}
+
+.signal-hint-dismiss {
+    margin-left: auto;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--signal-text-dim);
+    background: var(--signal-bg-elevated);
+    border: 1px solid var(--signal-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.signal-hint-dismiss:hover {
+    color: var(--signal-text-primary);
     border-color: var(--signal-cyan);
 }

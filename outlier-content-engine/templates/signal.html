@@ -163,11 +163,54 @@
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
                     <div class="signal-message-bubble">
-                        You're all set up! Now let's create your first competitor category.
-                        <br><br>
-                        Tell me a category (e.g. "Streetwear" or "DTC Beauty") and the brands you want to track, or click the button below.
+                        You're all set! Let's create your first competitive set. Pick a template or describe your niche:
                     </div>
                     <div class="signal-message-time">Just now</div>
+                </div>
+            </div>
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-onboarding-templates">
+                        <div class="signal-template-card" onclick="useTemplate('Streetwear', '@supremenewyork @kaboreitokyo @stussy @palaceskateboards @noahclothing')">
+                            <div class="signal-template-icon">&#128085;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Streetwear</div>
+                                <div class="signal-template-brands">Supreme, Kith, Stussy, Palace, Noah</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card" onclick="useTemplate('Beauty & Skincare', '@glossier @theordinary @fentybeauty @rfrfrfrfrf @milkmakeup')">
+                            <div class="signal-template-icon">&#10024;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Beauty & Skincare</div>
+                                <div class="signal-template-brands">Glossier, The Ordinary, Fenty, Rhode, Milk</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card" onclick="useTemplate('Fitness & Wellness', '@gymshark @lululemon @nike @aloyoga @outdoorvoices')">
+                            <div class="signal-template-icon">&#128170;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Fitness & Wellness</div>
+                                <div class="signal-template-brands">Gymshark, Lululemon, Nike, Alo, Outdoor Voices</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card" onclick="useTemplate('Food & Beverage', '@chipotle @sweetgreen @liquid.death @poppi @olipop')">
+                            <div class="signal-template-icon">&#127828;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Food & Beverage</div>
+                                <div class="signal-template-brands">Chipotle, Sweetgreen, Liquid Death, Poppi, Olipop</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card signal-template-custom" onclick="openCreateModal()">
+                            <div class="signal-template-icon">&#43;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Custom</div>
+                                <div class="signal-template-brands">Start from scratch with your own brands</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="signal-onboarding-hint" style="margin-top:10px;">
+                        Or type something like: <code>"Create a Streetwear set with @nike and @adidas"</code>
+                    </div>
                 </div>
             </div>
             {% else %}
@@ -371,6 +414,37 @@
                     </svg>
                 </a>
             </div>
+
+            <!-- Budget Indicator (loaded async) -->
+            <div class="signal-budget-bar" id="budgetBar" style="display:none;">
+                <div class="signal-budget-info">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span id="budgetLabel">Loading...</span>
+                </div>
+                <div class="signal-budget-track">
+                    <div class="signal-budget-fill" id="budgetFill" style="width:0%"></div>
+                </div>
+                <span class="signal-budget-runs" id="budgetRuns"></span>
+            </div>
+
+            <!-- First-Run Hints (shown once after first analysis) -->
+            {% if outliers and not needs_setup %}
+            <div class="signal-first-run-hints" id="firstRunHints" style="display:none;">
+                <div class="signal-hint-card">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span><strong>Multiplier</strong> shows how much more engagement a post got vs brand average</span>
+                </div>
+                <div class="signal-hint-card">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span><strong>Click any card</strong> to see AI analysis — why it worked, what to replicate</span>
+                </div>
+                <div class="signal-hint-card">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                    <span><strong>Ask the chatbot</strong> to filter, compare brands, or get content suggestions</span>
+                </div>
+                <button class="signal-hint-dismiss" onclick="dismissFirstRunHints()">Got it</button>
+            </div>
+            {% endif %}
 
             <!-- Filter Pills -->
             <div class="signal-filters">
@@ -856,8 +930,22 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="M21 21l-4.35-4.35"></path>
                     </svg>
-                    <h3>No outlier posts found</h3>
+                    <h3>No outlier posts yet</h3>
                     <p>Run an analysis to find viral content from your competitors.</p>
+                    <div class="signal-empty-steps">
+                        <div class="signal-empty-step">
+                            <span class="signal-empty-step-num">1</span>
+                            <span>Select a competitive set from the dropdown above</span>
+                        </div>
+                        <div class="signal-empty-step">
+                            <span class="signal-empty-step-num">2</span>
+                            <span>Type <code>"analyze"</code> in the chat — takes ~2 minutes</span>
+                        </div>
+                        <div class="signal-empty-step">
+                            <span class="signal-empty-step-num">3</span>
+                            <span>Outlier posts will appear here, ranked by score</span>
+                        </div>
+                    </div>
                 </div>
             {% endif %}
         </div>
@@ -992,6 +1080,54 @@ function resetAllFilters() {
     });
     showSkeletonState();
     fetchFilteredOutliers();
+}
+
+// Template card: send chat message to create category + add brands
+function useTemplate(name, handles) {
+    const input = document.getElementById('chatInput');
+    const msg = 'Create a category called ' + name + ' and add ' + handles;
+    if (input) {
+        input.value = msg;
+        // Auto-submit
+        const form = input.closest('form');
+        if (form) form.dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));
+    }
+}
+
+// Budget bar: fetch and display monthly LLM spend
+(function loadBudget() {
+    fetch('/api/budget')
+        .then(r => r.json())
+        .then(data => {
+            const bar = document.getElementById('budgetBar');
+            if (!bar) return;
+            bar.style.display = '';
+            const pct = Math.min(data.percent_used || 0, 100);
+            const fill = document.getElementById('budgetFill');
+            fill.style.width = pct + '%';
+            // Color coding: green < 50%, yellow < 80%, red >= 80%
+            if (pct >= 80) fill.classList.add('budget-danger');
+            else if (pct >= 50) fill.classList.add('budget-warning');
+            document.getElementById('budgetLabel').textContent =
+                '$' + data.spent.toFixed(2) + ' / $' + data.limit.toFixed(2) + ' this month';
+            document.getElementById('budgetRuns').textContent = data.runs_this_month + ' runs';
+        })
+        .catch(() => {});
+})();
+
+// First-run hints: show once after first analysis
+(function checkFirstRun() {
+    const hints = document.getElementById('firstRunHints');
+    if (!hints) return;
+    const key = 'scout_first_run_dismissed';
+    if (!localStorage.getItem(key)) {
+        hints.style.display = '';
+    }
+})();
+function dismissFirstRunHints() {
+    const hints = document.getElementById('firstRunHints');
+    if (hints) hints.style.display = 'none';
+    localStorage.setItem('scout_first_run_dismissed', '1');
 }
 
 // Create category modal
