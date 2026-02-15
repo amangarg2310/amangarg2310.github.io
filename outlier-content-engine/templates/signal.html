@@ -1696,10 +1696,14 @@ function checkAnalysisStatus() {
 
                 if (data.time_remaining) {
                     timeRemainingEl.textContent = 'Remaining: ' + data.time_remaining;
+                } else {
+                    timeRemainingEl.textContent = 'Remaining: Estimating...';
                 }
 
                 if (data.time_elapsed) {
                     timeElapsedEl.textContent = 'Elapsed: ' + data.time_elapsed;
+                } else {
+                    timeElapsedEl.textContent = 'Elapsed: Starting...';
                 }
             } else if (data.completed) {
                 // Analysis completed - refresh the page to show results

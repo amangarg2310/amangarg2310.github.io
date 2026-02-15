@@ -40,6 +40,14 @@ The Outlier Content Engine is an AI-powered social media competitive intelligenc
 - Token usage tracking and monthly budget enforcement
 - Core logic in `analyzer.py`
 
+### 6. **Data Lifecycle Management** 🆕
+- **3-day auto-cleanup**: Automatically deletes posts older than 3 days
+- **Competitive set tracking**: Detects when brands are added/removed
+- **Blank canvas logic**: Clears data when set changes or >3 days old
+- **Incremental analysis**: Keeps existing outliers + adds new ones (same set within 3 days)
+- **Soft delete**: Removed brands are archived (not deleted) for instant re-add
+- Core logic in `data_lifecycle.py`
+
 ---
 
 ## Directory Structure
@@ -62,13 +70,15 @@ outlier-content-engine/
 ├── outlier_detector.py         # Statistical outlier detection
 ├── analyzer.py                 # GPT-4 analysis and content rewriting
 ├── profile_loader.py           # YAML profile loader
-├── vertical_manager.py         # Competitive set management
+├── vertical_manager.py         # Competitive set management (CRUD)
+├── data_lifecycle.py           # 3-day cleanup & blank canvas logic 🆕
 ├── brand_handle_discovery.py   # Brand name → handle mapping
 ├── insight_generator.py        # Pattern analysis from outliers
 ├── voice_learner.py            # Learn brand voice from top posts
 ├── audio_analyzer.py           # TikTok audio trend analysis
 ├── series_detector.py          # Detect recurring content formats
 ├── report_generator.py         # Generate analysis reports
+├── progress_tracker.py         # Real-time progress tracking
 │
 ├── templates/                  # Jinja2 HTML templates
 │   ├── signal.html            # Scout AI dashboard (main view)
@@ -835,8 +845,88 @@ For questions or issues, please open a GitHub issue or contact the project maint
 
 ---
 
-**Last Updated:** 2026-02-12
+## Recent Updates & Changelog
 
-**Version:** 1.0.0
+### 2026-02-15: Data Lifecycle Management & Brand Removal Fixes
+
+**Major Features Added:**
+
+1. **3-Day Data Lifecycle System** (`data_lifecycle.py`)
+   - Automatic cleanup of posts older than 3 days
+   - Competitive set change detection via signature fingerprinting
+   - Blank canvas logic: clears data when set changes or is >3 days old
+   - Incremental analysis: keeps existing outliers + adds new ones when re-running same set within 3 days
+   - Integration points in `main.py` (lines 236-249 and 687-698)
+
+2. **Soft Delete Verification**
+   - Fixed brand removal system to properly archive posts when brands are removed
+   - Verified with Stussy brand test: 24 posts correctly archived on removal
+   - System works for ANY brand removal, not just specific cases
+   - Removed brands no longer appear in dashboard results
+
+**Bug Fixes:**
+
+1. **Analysis Timer Showing "0m 0s"** ([scout_agent.py:619](scout_agent.py#L619))
+   - Fixed database query: changed `WHERE handle = ?` to `WHERE competitor_handle = ?`
+   - Added frontend fallback in [signal.html:1703-1706](templates/signal.html#L1703-L1706) to show "Starting..." instead of "0m 0s"
+
+2. **Cancel Button Error** ([dashboard.py:1365-1420](dashboard.py#L1365-L1420))
+   - Rewrote cancel endpoint to use PID file directly instead of scanning processes
+   - Now reliably kills analysis process using `psutil.Process(pid).send_signal(SIGTERM)`
+   - Gracefully handles "already stopped" cases
+
+3. **Removed Brands Still Showing (Nike, Adidas)**
+   - Root cause: Database migrations hadn't been run, so `verticals` and `vertical_brands` tables didn't exist
+   - Fixed by running `run_vertical_migrations()` and `add_archived_column_to_posts()`
+   - Manually archived Nike and Adidas posts: `UPDATE competitor_posts SET archived = 1 WHERE brand_profile = 'Streetwear' AND competitor_handle IN ('nike', 'adidas')`
+   - Created Streetwear vertical with 8 active brands
+
+4. **Timer Display Logic** ([dashboard.py:1451](dashboard.py#L1451))
+   - Removed overly restrictive condition preventing elapsed timer calculation
+   - Timer now updates properly during analysis
+
+**Technical Implementation:**
+
+- **Data Lifecycle Manager Class** with methods:
+  - `cleanup_old_data(days=3)` - Deletes posts older than N days
+  - `get_competitive_set_signature(vertical_name)` - Creates sorted JSON fingerprint of brand handles
+  - `should_clear_data(vertical_name)` - Determines if data should be cleared based on set changes or age
+  - `clear_vertical_data(vertical_name)` - Clears all posts for a vertical (blank canvas)
+  - `save_analysis_info()` - Stores competitive set signature and timestamp for future comparisons
+
+- **Lifecycle Config File**: `data/lifecycle_config.json` tracks:
+  - Competitive set signature (sorted JSON array of handles)
+  - Last analysis timestamp
+  - Number of posts analyzed
+
+**User-Facing Changes:**
+
+1. **First-time visitors** now see a blank canvas (no historical data)
+2. **Re-running same competitive set within 3 days** keeps existing outliers AND adds new outliers from fresh posts
+3. **Different competitive set or >3 days old** shows blank canvas (old data deleted)
+4. **Removed brands** are properly archived and don't appear in results
+5. **Analysis timer** displays correctly during runs
+6. **Cancel button** works reliably without errors
+
+**Files Modified:**
+- [scout_agent.py](scout_agent.py) - Fixed cache check database query
+- [templates/signal.html](templates/signal.html) - Added timer fallback display
+- [dashboard.py](dashboard.py) - Rewrote cancel endpoint, fixed timer logic
+- [main.py](main.py) - Integrated data lifecycle management
+- [data_lifecycle.py](data_lifecycle.py) - NEW FILE: Complete lifecycle management system
+- [CLAUDE.md](CLAUDE.md) - Updated documentation
+
+**Testing Performed:**
+- Verified brand removal with Stussy: 24 posts archived correctly ✅
+- Confirmed Nike and Adidas no longer appear after archiving ✅
+- Tested lifecycle logic: competitive set signatures match/differ correctly ✅
+- Verified timer displays "Starting..." then updates with elapsed time ✅
+- Confirmed cancel button terminates running analysis ✅
+
+---
+
+**Last Updated:** 2026-02-15
+
+**Version:** 1.1.0
 
 **Maintained by:** Claude Code (AI Assistant)

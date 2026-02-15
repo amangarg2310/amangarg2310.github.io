@@ -616,7 +616,7 @@ IMPORTANT:
                 result = conn.execute("""
                     SELECT COUNT(*) as count, MAX(collected_at) as last_collected
                     FROM competitor_posts
-                    WHERE handle = ?
+                    WHERE competitor_handle = ?
                       AND collected_at >= ?
                 """, (handle, cutoff_str)).fetchone()
 

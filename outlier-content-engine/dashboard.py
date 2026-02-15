@@ -1367,26 +1367,53 @@ def cancel_analysis():
     """Cancel the currently running analysis."""
     import psutil
     import signal
+    from pathlib import Path
 
     try:
-        # Find and kill main.py process
-        killed = False
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                cmdline = proc.info.get('cmdline', [])
-                cmdline_str = ' '.join(cmdline) if cmdline else ''
-                if cmdline and 'main.py' in cmdline_str:
-                    proc.send_signal(signal.SIGTERM)
-                    killed = True
-                    logger.info(f"Cancelled analysis process (PID: {proc.info['pid']})")
-                    break
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
+        pid_file = config.DATA_DIR / "analysis.pid"
+        progress_file = config.DATA_DIR / "analysis_progress.json"
 
-        if killed:
-            return jsonify({"success": True, "message": "Analysis cancelled"})
-        else:
+        # Check if PID file exists
+        if not pid_file.exists():
+            logger.warning("Cancel requested but no PID file found")
             return jsonify({"success": False, "error": "No running analysis found"})
+
+        # Read PID from file
+        try:
+            with open(pid_file, 'r') as f:
+                pid = int(f.read().strip())
+        except Exception as e:
+            logger.error(f"Error reading PID file: {e}")
+            return jsonify({"success": False, "error": "Could not read process ID"})
+
+        # Try to kill the process
+        try:
+            proc = psutil.Process(pid)
+            proc.send_signal(signal.SIGTERM)
+            logger.info(f"Cancelled analysis process (PID: {pid})")
+
+            # Clean up files
+            try:
+                pid_file.unlink()
+            except:
+                pass
+
+            try:
+                if progress_file.exists():
+                    progress_file.unlink()
+            except:
+                pass
+
+            return jsonify({"success": True, "message": "Analysis cancelled"})
+
+        except psutil.NoSuchProcess:
+            # Process already ended, just clean up files
+            logger.info("Process already ended, cleaning up files")
+            try:
+                pid_file.unlink()
+            except:
+                pass
+            return jsonify({"success": True, "message": "Analysis already stopped"})
 
     except Exception as e:
         logger.error(f"Error cancelling analysis: {e}")
@@ -1448,12 +1475,17 @@ def analysis_status():
             status = progress_data.get("status", "unknown")
             start_time = progress_data.get("start_time")
 
-            if status == "running" and response["is_running"]:
-                # Analysis is actively running
+            if status == "running":
+                # Analysis is actively running (or was running)
                 elapsed = time.time() - start_time if start_time else 0
                 response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
                 response["progress"] = progress_data.get("progress_percent", 0)
                 response["message"] = progress_data.get("message", "Running analysis...")
+
+                # Only mark as running if process is actually still alive
+                if not response["is_running"]:
+                    # Process ended, mark as completed
+                    status = "completed"
 
                 # Calculate time remaining based on actual progress
                 progress_pct = progress_data.get("progress_percent", 0)

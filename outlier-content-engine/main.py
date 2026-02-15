@@ -272,6 +272,21 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     init_database()
     migrate_database()
 
+    # ── 2b. Data Lifecycle Management ──
+    if vertical_name:
+        from data_lifecycle import DataLifecycleManager
+        lifecycle = DataLifecycleManager()
+
+        # Check if we should clear data (new set or >3 days old)
+        if lifecycle.should_clear_data(vertical_name):
+            lifecycle.clear_vertical_data(vertical_name)
+            logger.info("Cleared old data - starting with blank canvas")
+        else:
+            logger.info("Keeping existing data - will add new outliers incrementally")
+
+        # Always cleanup data older than 3 days
+        lifecycle.cleanup_old_data(days=3)
+
     # Start progress tracking
     if _progress:
         _progress.start(
@@ -609,6 +624,19 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         f"Errors: {len(run_stats['errors'])}"
     )
     logger.info("=" * 60)
+
+    # ── Save Lifecycle Info ──
+    if vertical_name:
+        from data_lifecycle import DataLifecycleManager
+        lifecycle = DataLifecycleManager()
+        current_signature = lifecycle.get_competitive_set_signature(vertical_name)
+        if current_signature:
+            lifecycle.save_analysis_info(
+                vertical_name,
+                current_signature,
+                posts_analyzed=len(outliers)
+            )
+            logger.info(f"Saved analysis signature for future runs")
 
     return {
         "profile": profile.profile_name,
