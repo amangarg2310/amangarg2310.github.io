@@ -687,8 +687,9 @@ IMPORTANT:
                     SELECT COUNT(*) as count, MAX(collected_at) as last_collected
                     FROM competitor_posts
                     WHERE competitor_handle = ?
+                      AND brand_profile = ?
                       AND collected_at >= ?
-                """, (handle, cutoff_str)).fetchone()
+                """, (handle, vertical_name, cutoff_str)).fetchone()
 
                 # If this brand has no recent posts, we need fresh collection
                 if not result or result['count'] == 0:
@@ -826,30 +827,35 @@ IMPORTANT:
         should_skip_collect = self._should_skip_collection(actual_name, brand_handles)
 
         # Build CLI command with optional brand filtering
-        cmd = [sys.executable, "main.py", "--profile", actual_name, "--no-email"]
+        cmd = [sys.executable, "main.py", "--vertical", actual_name, "--no-email"]
         if should_skip_collect:
             cmd.append("--skip-collect")
             logger.info("Using cached data (posts collected within last 24 hours)")
         if brand_handles:
             cmd.extend(["--brands", ",".join(brand_handles)])
 
+        vm = self.vm  # capture reference for thread
+
         def _run():
             try:
-                subprocess.run(
+                result = subprocess.run(
                     cmd,
                     cwd=str(config.PROJECT_ROOT),
                     capture_output=True,
                     text=True,
                     timeout=900,  # Increased from 300s to 900s (15 minutes)
                 )
+                if result.returncode == 0:
+                    # Only update cooldown timestamp on successful completion
+                    vm.update_vertical_timestamp(actual_name)
+                else:
+                    logger.error(f"Analysis exited with code {result.returncode}: {result.stderr[:500]}")
             except Exception as exc:
                 logger.error(f"Analysis failed: {exc}")
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
-        # Update the vertical timestamp (used for cooldown tracking)
-        self.vm.update_vertical_timestamp(actual_name)
         context["analysis_started"] = True
 
         # Build response message based on scope

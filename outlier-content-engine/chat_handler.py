@@ -309,8 +309,8 @@ class ChatHandler:
         """
         items = []
 
-        # Split by common delimiters
-        parts = re.split(r'[,\s]+', input_str)
+        # Split by commas or pipes only (preserve multi-word brand names)
+        parts = re.split(r'[,|]+', input_str)
 
         for part in parts:
             part = part.strip()

@@ -75,6 +75,11 @@ def parse_args():
         action="store_true",
         help="Don't send email, save report locally instead",
     )
+    parser.add_argument(
+        "--brands",
+        default=None,
+        help="Comma-separated list of brand handles to collect (subset of vertical)",
+    )
     return parser.parse_args()
 
 
@@ -598,7 +603,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
             try:
                 logger.info(f"  Collecting own-brand posts for @{own_handle}...")
                 collector = create_collector()
-                own_posts = collector.collect(own_handle)
+                own_posts = collector.collect_posts(handle=own_handle, competitor_name=profile.name)
                 if own_posts:
                     new_own = store_own_posts(own_posts, profile.profile_name)
                     logger.info(f"  Stored {new_own} new own-brand posts for @{own_handle}")
