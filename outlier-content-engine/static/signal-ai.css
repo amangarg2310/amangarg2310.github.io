@@ -2588,3 +2588,240 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--signal-text-primary);
     border-color: var(--signal-cyan);
 }
+
+/* ========================================
+   CONTENT SCORER
+   ======================================== */
+
+.signal-score-btn {
+    border-color: rgba(168, 85, 247, 0.3) !important;
+    color: #a855f7 !important;
+}
+
+.signal-score-btn:hover {
+    background: rgba(168, 85, 247, 0.1) !important;
+    border-color: rgba(168, 85, 247, 0.5) !important;
+}
+
+.signal-scorer-row {
+    display: flex;
+    gap: 12px;
+}
+
+.signal-scorer-result-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--signal-border);
+}
+
+.signal-scorer-score-ring {
+    width: 72px;
+    height: 72px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.signal-scorer-score-ring .signal-score-svg {
+    width: 72px;
+    height: 72px;
+}
+
+.signal-scorer-score-ring .signal-score-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--signal-text-primary);
+}
+
+.signal-scorer-score-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--signal-text-primary);
+}
+
+.signal-scorer-predicted {
+    font-size: 12px;
+    color: var(--signal-text-dim);
+    margin-top: 2px;
+}
+
+.signal-optimize-btn {
+    margin-left: auto;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.signal-scorer-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.signal-scorer-bar-label {
+    font-size: 12px;
+    color: var(--signal-text-secondary);
+    width: 110px;
+    flex-shrink: 0;
+}
+
+.signal-scorer-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--signal-bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.signal-scorer-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+.signal-scorer-bar-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--signal-text-dim);
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.signal-scorer-suggestions {
+    margin-top: 16px;
+}
+
+.signal-scorer-suggestion {
+    font-size: 12px;
+    color: var(--signal-text-secondary);
+    padding: 6px 10px;
+    background: var(--signal-bg-tertiary);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    border-left: 2px solid var(--signal-cyan);
+}
+
+.signal-scorer-divider {
+    height: 1px;
+    background: var(--signal-border);
+    margin: 20px 0;
+}
+
+.signal-scorer-optimized-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--signal-success);
+    margin-bottom: 12px;
+}
+
+.signal-scorer-improved-caption {
+    font-size: 13px;
+    color: var(--signal-text-primary);
+    background: var(--signal-bg-tertiary);
+    padding: 12px;
+    border-radius: 8px;
+    line-height: 1.6;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.signal-scorer-improved-hook {
+    font-size: 12px;
+    color: var(--signal-text-dim);
+    font-style: italic;
+    margin-top: 8px;
+}
+
+.signal-scorer-improvement {
+    font-size: 12px;
+    color: var(--signal-text-secondary);
+    padding: 4px 0;
+}
+
+.signal-scorer-improvement strong {
+    color: var(--signal-cyan);
+}
+
+.signal-scorer-score-compare {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 14px;
+    color: var(--signal-text-secondary);
+}
+
+.signal-scorer-score-compare strong {
+    color: var(--signal-success);
+    font-size: 16px;
+}
+
+.signal-scorer-loading {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.signal-scorer-loading p {
+    margin-top: 12px;
+    color: var(--signal-text-dim);
+    font-size: 13px;
+}
+
+/* ── Quick Guide Styles ── */
+.signal-guide-section {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--signal-border);
+}
+
+.signal-guide-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.signal-guide-heading {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--signal-cyan);
+    margin-bottom: 4px;
+}
+
+.signal-guide-desc {
+    font-size: 12px;
+    color: var(--signal-text-dim);
+    margin-bottom: 8px;
+}
+
+.signal-guide-examples {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.signal-guide-examples code {
+    display: block;
+    font-size: 12px;
+    color: var(--signal-text-secondary);
+    background: var(--signal-bg-tertiary);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--signal-border-light);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+
+.signal-guide-examples code:hover {
+    border-color: var(--signal-cyan);
+}

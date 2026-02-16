@@ -359,6 +359,70 @@ def fix_post_unique_constraint(db_path=None):
     conn.close()
 
 
+def add_scoring_tables(db_path=None):
+    """
+    Add tables for content scoring, trend tracking, and gap analysis.
+    Safe to call multiple times (CREATE IF NOT EXISTS).
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    logger.info("Running scoring system migrations...")
+
+    conn.executescript("""
+        -- Periodic pattern frequency snapshots for trend detection
+        CREATE TABLE IF NOT EXISTS trend_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            snapshot_data TEXT NOT NULL,
+            outlier_count INTEGER DEFAULT 0,
+            avg_outlier_score REAL,
+            created_at TEXT NOT NULL,
+            UNIQUE(brand_profile, snapshot_date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_trend_snapshots_profile_date
+            ON trend_snapshots(brand_profile, snapshot_date);
+
+        -- Scored content concepts (iteration chain via parent_score_id)
+        CREATE TABLE IF NOT EXISTS content_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            concept_text TEXT NOT NULL,
+            hook_line TEXT,
+            format_choice TEXT,
+            platform TEXT,
+            score_data TEXT NOT NULL,
+            overall_score REAL NOT NULL,
+            predicted_engagement_range TEXT,
+            optimization_suggestions TEXT,
+            version INTEGER DEFAULT 1,
+            parent_score_id INTEGER,
+            scored_at TEXT NOT NULL,
+            FOREIGN KEY (parent_score_id) REFERENCES content_scores(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_content_scores_profile
+            ON content_scores(brand_profile, scored_at DESC);
+
+        -- Cache for own-brand gap analysis (24h TTL)
+        CREATE TABLE IF NOT EXISTS gap_analysis_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            computed_at TEXT NOT NULL,
+            gap_data TEXT NOT NULL,
+            own_post_count INTEGER,
+            competitor_outlier_count INTEGER,
+            UNIQUE(brand_profile)
+        );
+    """)
+
+    conn.commit()
+    conn.close()
+    logger.info("Scoring system migrations complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
@@ -366,6 +430,7 @@ if __name__ == "__main__":
     run_vertical_migrations()
     add_facebook_handle_column()
     fix_post_unique_constraint()
+    add_scoring_tables()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile

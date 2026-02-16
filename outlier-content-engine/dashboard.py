@@ -788,6 +788,181 @@ def export_csv():
     )
 
 
+@app.route("/api/score-concept", methods=["POST"])
+def api_score_concept():
+    """Score a content concept against learned outlier patterns."""
+    from flask import jsonify
+    from content_scorer import ContentScorer
+
+    data = request.get_json() or {}
+    caption = data.get("caption", "").strip()
+    if not caption:
+        return jsonify({"error": "Caption text is required."}), 400
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category. Create one first."}), 400
+
+    concept = {
+        "caption": caption,
+        "hook_line": data.get("hook_line", "").strip(),
+        "format": data.get("format", "reel"),
+        "platform": data.get("platform", "instagram"),
+    }
+
+    try:
+        scorer = ContentScorer(vertical_name)
+        result = scorer.score_concept(concept)
+
+        # Store the score
+        parent_id = data.get("parent_score_id")
+        score_id = scorer.store_score(concept, result, parent_score_id=parent_id)
+        result["score_id"] = score_id
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Scoring failed: {e}")
+        return jsonify({"error": f"Scoring failed: {e}"}), 500
+
+
+@app.route("/api/optimize-concept", methods=["POST"])
+def api_optimize_concept():
+    """Optimize a concept via LLM and auto-re-score the improved version."""
+    from flask import jsonify
+    from content_scorer import ContentScorer
+    from content_optimizer import ContentOptimizer
+
+    data = request.get_json() or {}
+    caption = data.get("caption", "").strip()
+    if not caption:
+        return jsonify({"error": "Caption text is required."}), 400
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category."}), 400
+
+    concept = {
+        "caption": caption,
+        "hook_line": data.get("hook_line", "").strip(),
+        "format": data.get("format", "reel"),
+        "platform": data.get("platform", "instagram"),
+    }
+    score_data = data.get("score_data", {})
+    parent_score_id = data.get("score_id")
+
+    try:
+        optimizer = ContentOptimizer(vertical_name)
+        optimized = optimizer.optimize(concept, score_data)
+
+        # Auto-re-score the optimized version
+        improved_concept = {
+            "caption": optimized["improved_caption"],
+            "hook_line": optimized["improved_hook"],
+            "format": optimized.get("format_recommendation", concept["format"]),
+            "platform": concept["platform"],
+        }
+        scorer = ContentScorer(vertical_name)
+        new_score = scorer.score_concept(improved_concept)
+        new_score_id = scorer.store_score(
+            improved_concept, new_score, parent_score_id=parent_score_id
+        )
+
+        return jsonify({
+            "optimized": optimized,
+            "new_score": new_score,
+            "new_score_id": new_score_id,
+        })
+    except Exception as e:
+        logger.error(f"Optimization failed: {e}")
+        return jsonify({"error": f"Optimization failed: {e}"}), 500
+
+
+@app.route("/api/trends")
+def api_trends():
+    """Return rising/declining content pattern trends."""
+    from flask import jsonify
+    from trend_analyzer import TrendAnalyzer
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category."}), 400
+
+    lookback = request.args.get("lookback_weeks", 4, type=int)
+
+    try:
+        ta = TrendAnalyzer(vertical_name)
+        trends = ta.get_trends(lookback_weeks=lookback)
+        return jsonify(trends)
+    except Exception as e:
+        logger.error(f"Trend analysis failed: {e}")
+        return jsonify({"error": f"Trend analysis failed: {e}"}), 500
+
+
+@app.route("/api/gap-analysis")
+def api_gap_analysis():
+    """Return own-brand gap analysis (what competitors do that brand hasn't tried)."""
+    from flask import jsonify
+    from gap_analyzer import GapAnalyzer
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category."}), 400
+
+    try:
+        ga = GapAnalyzer(vertical_name)
+        gaps = ga.analyze_gaps()
+        return jsonify(gaps)
+    except Exception as e:
+        logger.error(f"Gap analysis failed: {e}")
+        return jsonify({"error": f"Gap analysis failed: {e}"}), 500
+
+
+@app.route("/api/score-history")
+def api_score_history():
+    """Return recent content scoring history for the active vertical."""
+    from flask import jsonify
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"scores": []}), 200
+
+    limit = request.args.get("limit", 20, type=int)
+
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT id, concept_text, hook_line, format_choice, platform,
+                   overall_score, score_data, predicted_engagement_range,
+                   version, parent_score_id, scored_at
+            FROM content_scores
+            WHERE brand_profile = ?
+            ORDER BY scored_at DESC
+            LIMIT ?
+        """, (vertical_name, limit)).fetchall()
+        conn.close()
+
+        scores = []
+        for row in rows:
+            scores.append({
+                "id": row["id"],
+                "caption": row["concept_text"],
+                "hook_line": row["hook_line"],
+                "format": row["format_choice"],
+                "platform": row["platform"],
+                "overall_score": row["overall_score"],
+                "breakdown": json.loads(row["score_data"]) if row["score_data"] else {},
+                "predicted_engagement": json.loads(row["predicted_engagement_range"]) if row["predicted_engagement_range"] else None,
+                "version": row["version"],
+                "parent_score_id": row["parent_score_id"],
+                "scored_at": row["scored_at"],
+            })
+
+        return jsonify({"scores": scores})
+    except Exception as e:
+        logger.error(f"Score history failed: {e}")
+        return jsonify({"scores": [], "error": str(e)}), 200
+
+
 @app.route("/api/budget")
 def api_budget():
     """Return current monthly LLM spend and limit for budget visibility."""
@@ -1834,10 +2009,11 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, add_scoring_tables
         run_vertical_migrations()
         add_facebook_handle_column()
         fix_post_unique_constraint()
+        add_scoring_tables()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

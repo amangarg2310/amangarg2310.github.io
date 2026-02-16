@@ -391,6 +391,12 @@
                 </svg>
                 Create category
             </button>
+            <button type="button" class="signal-create-category-btn signal-score-btn" onclick="openScorerModal()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                Score content
+            </button>
         </div>
     </div>
 
@@ -1017,6 +1023,105 @@
         </div>
     </div>
 
+    <!-- Content Scorer Modal -->
+    <div class="signal-modal-overlay" id="scorerModal" role="dialog" aria-modal="true" aria-label="Score Content">
+        <div class="signal-modal" style="max-width: 560px;">
+            <div class="signal-modal-header">
+                <h3 class="signal-modal-title">Score Your Content</h3>
+                <button type="button" class="signal-modal-close" onclick="closeScorerModal()" aria-label="Close">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <!-- Scorer Form -->
+                <div id="scorerForm">
+                    <div class="signal-scorer-row">
+                        <div class="signal-form-group" style="flex:1">
+                            <label class="signal-form-label">Platform</label>
+                            <select id="scorerPlatform" class="signal-form-input">
+                                <option value="instagram">Instagram</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="facebook">Facebook</option>
+                            </select>
+                        </div>
+                        <div class="signal-form-group" style="flex:1">
+                            <label class="signal-form-label">Format</label>
+                            <select id="scorerFormat" class="signal-form-input">
+                                <option value="reel">Reel</option>
+                                <option value="carousel">Carousel</option>
+                                <option value="static">Static</option>
+                                <option value="story">Story</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="signal-form-group">
+                        <label class="signal-form-label">Hook line <span class="signal-form-optional">(optional)</span></label>
+                        <input type="text" id="scorerHook" class="signal-form-input" placeholder="e.g. You've been styling this wrong">
+                    </div>
+                    <div class="signal-form-group">
+                        <label class="signal-form-label">Caption</label>
+                        <textarea id="scorerCaption" class="signal-form-textarea" rows="4" placeholder="Enter your caption or concept text..."></textarea>
+                    </div>
+                    <button type="button" class="signal-btn-primary" style="width:100%" onclick="runScore()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        Score This Concept
+                    </button>
+                </div>
+
+                <!-- Score Results (hidden initially) -->
+                <div id="scorerResults" style="display:none;">
+                    <div class="signal-scorer-result-header">
+                        <div class="signal-scorer-score-ring">
+                            <svg viewBox="0 0 88 88" class="signal-score-svg">
+                                <circle class="signal-score-bg" cx="44" cy="44" r="40"/>
+                                <circle id="scorerScoreRing" class="signal-score-fg cyan" cx="44" cy="44" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <span class="signal-score-value" id="scorerScoreValue">0</span>
+                        </div>
+                        <div>
+                            <div class="signal-scorer-score-label">Overall Score</div>
+                            <div class="signal-scorer-predicted" id="scorerPredicted"></div>
+                        </div>
+                        <button type="button" class="signal-btn-primary signal-optimize-btn" id="scorerOptimizeBtn" onclick="runOptimize()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/>
+                                <line x1="9" y1="21" x2="15" y2="21"/>
+                            </svg>
+                            Optimize
+                        </button>
+                    </div>
+
+                    <!-- Breakdown Bars -->
+                    <div class="signal-scorer-breakdown" id="scorerBreakdown"></div>
+
+                    <!-- Suggestions -->
+                    <div class="signal-scorer-suggestions" id="scorerSuggestions"></div>
+
+                    <!-- Optimized Results (shown after optimize) -->
+                    <div id="scorerOptimized" style="display:none;">
+                        <div class="signal-scorer-divider"></div>
+                        <div class="signal-scorer-optimized-header">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            AI-Improved Version
+                        </div>
+                        <div class="signal-scorer-improved-caption" id="scorerImprovedCaption"></div>
+                        <div class="signal-scorer-improved-hook" id="scorerImprovedHook"></div>
+                        <div class="signal-scorer-improvements" id="scorerImprovements"></div>
+                        <div class="signal-scorer-new-score" id="scorerNewScore"></div>
+                    </div>
+
+                    <button type="button" class="signal-btn-outline" style="width:100%;margin-top:16px" onclick="resetScorer()">Score Another</button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="scorerLoading" style="display:none;" class="signal-scorer-loading">
+                    <div class="analysis-spinner"></div>
+                    <p id="scorerLoadingMsg">Scoring your concept...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Category modal (all create flows stay on /signal) -->
     <div class="signal-modal-overlay" id="createCategoryModal" role="dialog" aria-modal="true" aria-label="Create category">
         <div class="signal-modal">
@@ -1349,6 +1454,241 @@ function exportCSV() {
 // Pattern filtering
 function filterByPattern(patternName) {
     applyFilter('tag', patternName);
+}
+
+// ── Content Scorer Modal ──
+let lastScoreData = null;
+let lastScoreId = null;
+let lastScoredConcept = null;
+
+function openScorerModal() {
+    document.getElementById('scorerModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeScorerModal() {
+    document.getElementById('scorerModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('scorerModal').addEventListener('click', function(e) {
+    if (e.target === this) closeScorerModal();
+});
+
+function resetScorer() {
+    document.getElementById('scorerForm').style.display = '';
+    document.getElementById('scorerResults').style.display = 'none';
+    document.getElementById('scorerLoading').style.display = 'none';
+    document.getElementById('scorerOptimized').style.display = 'none';
+    document.getElementById('scorerCaption').value = '';
+    document.getElementById('scorerHook').value = '';
+    lastScoreData = null;
+    lastScoreId = null;
+    lastScoredConcept = null;
+}
+
+async function runScore() {
+    const caption = document.getElementById('scorerCaption').value.trim();
+    if (!caption) { alert('Please enter a caption.'); return; }
+
+    const concept = {
+        caption: caption,
+        hook_line: document.getElementById('scorerHook').value.trim(),
+        format: document.getElementById('scorerFormat').value,
+        platform: document.getElementById('scorerPlatform').value,
+    };
+
+    document.getElementById('scorerForm').style.display = 'none';
+    document.getElementById('scorerResults').style.display = 'none';
+    document.getElementById('scorerLoading').style.display = '';
+    document.getElementById('scorerLoadingMsg').textContent = 'Scoring your concept...';
+
+    try {
+        const resp = await fetch('/api/score-concept', {
+            method: 'POST',
+            headers: getBYOKHeaders(),
+            body: JSON.stringify(concept),
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        lastScoreData = data;
+        lastScoreId = data.score_id;
+        lastScoredConcept = concept;
+        renderScoreResults(data);
+
+        document.getElementById('scorerLoading').style.display = 'none';
+        document.getElementById('scorerResults').style.display = '';
+    } catch (err) {
+        document.getElementById('scorerLoading').style.display = 'none';
+        document.getElementById('scorerForm').style.display = '';
+        alert('Scoring failed: ' + err.message);
+    }
+}
+
+function renderScoreResults(data) {
+    const score = Math.round(data.overall_score || 0);
+    const circ = 251.2;
+    const offset = circ - (circ * score / 100);
+
+    // Score ring
+    const ring = document.getElementById('scorerScoreRing');
+    ring.style.strokeDashoffset = offset;
+    ring.className = 'signal-score-fg ' + (score >= 80 ? 'cyan' : score >= 60 ? 'green' : score >= 40 ? 'yellow' : 'dim');
+    document.getElementById('scorerScoreValue').textContent = score;
+
+    // Predicted engagement
+    const pred = data.predicted_engagement_range;
+    if (pred && pred.mid) {
+        document.getElementById('scorerPredicted').textContent =
+            'Predicted: ' + Math.round(pred.low).toLocaleString() + ' - ' + Math.round(pred.high).toLocaleString() + ' likes';
+    } else {
+        document.getElementById('scorerPredicted').textContent = '';
+    }
+
+    // Breakdown bars
+    const breakdown = data.breakdown || {};
+    const dims = ['format_fit', 'hook_strength', 'pattern_alignment', 'voice_match', 'competitive_gap_fill'];
+    const labels = {'format_fit': 'Format Fit', 'hook_strength': 'Hook Strength', 'pattern_alignment': 'Pattern Match', 'voice_match': 'Voice Match', 'competitive_gap_fill': 'Gap Fill'};
+    let barsHtml = '';
+    dims.forEach(dim => {
+        const d = breakdown[dim] || {};
+        const s = d.score || 0;
+        const pct = (s / 20) * 100;
+        const color = pct >= 80 ? 'var(--signal-cyan)' : pct >= 60 ? 'var(--signal-success)' : pct >= 40 ? 'var(--signal-warning)' : 'var(--signal-error)';
+        barsHtml += `<div class="signal-scorer-bar-row">
+            <span class="signal-scorer-bar-label">${labels[dim] || dim}</span>
+            <div class="signal-scorer-bar-track"><div class="signal-scorer-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+            <span class="signal-scorer-bar-value">${s}/20</span>
+        </div>`;
+    });
+    document.getElementById('scorerBreakdown').innerHTML = barsHtml;
+
+    // Suggestions
+    const suggs = data.suggestions || [];
+    let suggsHtml = '';
+    suggs.forEach(s => {
+        suggsHtml += `<div class="signal-scorer-suggestion">${s}</div>`;
+    });
+    document.getElementById('scorerSuggestions').innerHTML = suggsHtml;
+}
+
+async function runOptimize() {
+    if (!lastScoredConcept) return;
+
+    document.getElementById('scorerOptimizeBtn').disabled = true;
+    document.getElementById('scorerOptimizeBtn').textContent = 'Optimizing...';
+
+    try {
+        const resp = await fetch('/api/optimize-concept', {
+            method: 'POST',
+            headers: getBYOKHeaders(),
+            body: JSON.stringify({
+                caption: lastScoredConcept.caption,
+                hook_line: lastScoredConcept.hook_line,
+                format: lastScoredConcept.format,
+                platform: lastScoredConcept.platform,
+                score_data: lastScoreData,
+                score_id: lastScoreId,
+            }),
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        const opt = data.optimized || {};
+        const newScore = data.new_score || {};
+
+        // Show improved caption
+        document.getElementById('scorerImprovedCaption').textContent = opt.improved_caption || '';
+        document.getElementById('scorerImprovedHook').textContent = opt.improved_hook ? 'Hook: "' + opt.improved_hook + '"' : '';
+
+        // Improvements list
+        const improvements = opt.improvements || [];
+        let impHtml = '';
+        improvements.forEach(imp => {
+            impHtml += `<div class="signal-scorer-improvement"><strong>${imp.area}:</strong> ${imp.suggestion}</div>`;
+        });
+        document.getElementById('scorerImprovements').innerHTML = impHtml;
+
+        // New score comparison
+        const oldScore = Math.round(lastScoreData.overall_score || 0);
+        const newScoreVal = Math.round(newScore.overall_score || 0);
+        const diff = newScoreVal - oldScore;
+        const diffStr = diff > 0 ? '+' + diff : '' + diff;
+        document.getElementById('scorerNewScore').innerHTML =
+            `<span class="signal-scorer-score-compare">Score: ${oldScore} → <strong>${newScoreVal}</strong> (${diffStr})</span>`;
+
+        // Update state for further optimization
+        lastScoreData = newScore;
+        lastScoreId = data.new_score_id;
+        lastScoredConcept = {
+            caption: opt.improved_caption,
+            hook_line: opt.improved_hook,
+            format: opt.format_recommendation || lastScoredConcept.format,
+            platform: lastScoredConcept.platform,
+        };
+
+        document.getElementById('scorerOptimized').style.display = '';
+        document.getElementById('scorerOptimizeBtn').disabled = false;
+        document.getElementById('scorerOptimizeBtn').textContent = 'Optimize Again';
+
+        // Re-render main score with new data
+        renderScoreResults(newScore);
+
+    } catch (err) {
+        document.getElementById('scorerOptimizeBtn').disabled = false;
+        document.getElementById('scorerOptimizeBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg> Optimize';
+        alert('Optimization failed: ' + err.message);
+    }
+}
+
+// ── Score Card in Chat (for chatbot-triggered scoring) ──
+function addScoreCard(data) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'signal-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'signal-avatar';
+    avatar.textContent = 'S';
+
+    const content = document.createElement('div');
+    content.className = 'signal-message-content';
+
+    const score = Math.round(data.overall_score || 0);
+    const breakdown = data.breakdown || {};
+    const dims = ['format_fit', 'hook_strength', 'pattern_alignment', 'voice_match', 'competitive_gap_fill'];
+    const labels = {'format_fit': 'Format Fit', 'hook_strength': 'Hook Strength', 'pattern_alignment': 'Pattern Match', 'voice_match': 'Voice Match', 'competitive_gap_fill': 'Gap Fill'};
+
+    let barsHtml = '';
+    dims.forEach(dim => {
+        const d = breakdown[dim] || {};
+        const s = d.score || 0;
+        const pct = (s / 20) * 100;
+        const color = pct >= 80 ? 'var(--signal-cyan)' : pct >= 60 ? 'var(--signal-success)' : pct >= 40 ? 'var(--signal-warning)' : 'var(--signal-error)';
+        barsHtml += `<div class="signal-scorer-bar-row"><span class="signal-scorer-bar-label">${labels[dim] || dim}</span><div class="signal-scorer-bar-track"><div class="signal-scorer-bar-fill" style="width:${pct}%;background:${color}"></div></div><span class="signal-scorer-bar-value">${s}/20</span></div>`;
+    });
+
+    const card = document.createElement('div');
+    card.className = 'signal-insight-card';
+    card.style.marginTop = '12px';
+    card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px;font-weight:700;color:${score >= 80 ? 'var(--signal-cyan)' : score >= 60 ? 'var(--signal-success)' : score >= 40 ? 'var(--signal-warning)' : 'var(--signal-error)'}">${score}/100</div>
+            <div style="font-size:12px;color:var(--signal-text-dim)">Content Score</div>
+        </div>
+        ${barsHtml}
+    `;
+
+    content.appendChild(card);
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'signal-message-time';
+    timeDiv.textContent = 'Just now';
+    content.appendChild(timeDiv);
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
 // Chat input handling

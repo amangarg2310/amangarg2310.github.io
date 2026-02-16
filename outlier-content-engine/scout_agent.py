@@ -244,6 +244,104 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "score_content",
+            "description": (
+                "Score a content concept against learned outlier patterns. "
+                "Use when user says 'score this', 'rate this caption', "
+                "'how would this perform', or provides a caption to evaluate. "
+                "Returns a 0-100 score with breakdown across 5 dimensions. "
+                "This is FREE and instant — no LLM call needed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caption": {
+                        "type": "string",
+                        "description": "The caption or concept text to score.",
+                    },
+                    "hook_line": {
+                        "type": "string",
+                        "description": "Optional opening hook line.",
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["reel", "carousel", "static", "story"],
+                        "description": "Content format. Defaults to 'reel'.",
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": ["instagram", "tiktok", "facebook"],
+                        "description": "Target platform. Defaults to 'instagram'.",
+                    },
+                },
+                "required": ["caption"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "optimize_content",
+            "description": (
+                "Optimize a content concept using AI to improve its score. "
+                "Use when user says 'optimize this', 'improve it', 'make it better', "
+                "'rewrite this caption', or wants to improve a previously scored concept. "
+                "Costs ~$0.0003 per call (uses GPT-4o-mini)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caption": {
+                        "type": "string",
+                        "description": "The caption to optimize. Use the most recent scored caption if user says 'optimize it'.",
+                    },
+                    "hook_line": {
+                        "type": "string",
+                        "description": "Optional opening hook line.",
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["reel", "carousel", "static", "story"],
+                        "description": "Content format.",
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": ["instagram", "tiktok", "facebook"],
+                        "description": "Target platform.",
+                    },
+                    "score_id": {
+                        "type": "integer",
+                        "description": "ID of a previous score to link as parent (for iteration tracking).",
+                    },
+                },
+                "required": ["caption"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_trends",
+            "description": (
+                "Show content trend predictions — which patterns, hooks, and formats "
+                "are rising vs declining. Use when user asks 'what's trending', "
+                "'content predictions', 'what patterns are rising', or "
+                "'what should I post about this week'. Requires 2+ analysis runs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lookback_weeks": {
+                        "type": "integer",
+                        "description": "Number of weeks to look back. Defaults to 4.",
+                    },
+                },
+            },
+        },
+    },
 ]
 
 
@@ -341,6 +439,9 @@ WHAT YOU CAN DO (use the provided tools):
 6. run_analysis — scan posts and find outlier content
 7. filter_view — filter dashboard to specific brands (no analysis, instant)
 8. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
+9. score_content — score a content concept (FREE, instant, no LLM). Returns 0-100 score with format fit, hook strength, pattern alignment, voice match, and competitive gap fill.
+10. optimize_content — AI-powered caption improvement (~$0.0003). Rewrites caption + hook using learned patterns, then auto-re-scores. Only call when user explicitly asks to optimize/improve.
+11. show_trends — show which content patterns/hooks are rising vs declining. Needs 2+ analysis runs on different days.
 
 INTENT DISAMBIGUATION (CRITICAL):
 When user mentions a brand, determine their TRUE intent:
@@ -402,10 +503,30 @@ RESPONSE TEMPLATES:
 ✓ Full category: "Running analysis on all 6 brands in Streetwear."
 ✓ Brand not found: "Hmm, I don't see 'fakeband' in Streetwear. Did you mean one of these: @nike, @kith, @stussy?"
 
+SCORING & OPTIMIZATION:
+When user provides a caption/concept to score:
+1. Use score_content — returns 0-100 with breakdown
+2. Present the score clearly: "Your concept scored 72/100" then list each dimension
+3. Mention the weakest areas and specific suggestions
+4. Suggest "say 'optimize it' to get an AI-improved version"
+
+When user says "optimize it", "improve it", "make it better":
+1. Use optimize_content — this calls GPT-4o-mini
+2. Present the improved caption vs. original
+3. Show the before/after scores
+4. The user can say "optimize again" to iterate further
+
+When user asks "what's trending", "what should I post about":
+1. Use show_trends — needs 2+ analysis snapshots
+2. Present rising patterns with emphasis
+3. If not enough data, explain they need to run analysis on different days
+
 IMPORTANT:
 - NEVER output raw JSON to the user
 - When you successfully add brands, summarize what you added and suggest "say 'analyze' to find viral posts"
 - If the user seems confused, offer specific examples they can try
+- When presenting scores, format them clearly with each dimension on its own line
+- Always suggest next steps after scoring ("optimize it" or "try a different caption")
 """
 
     # ── Tool Handlers ───────────────────────────────────────────────────
@@ -946,6 +1067,129 @@ IMPORTANT:
             "message": message,
         })
 
+    # ── Scoring & Trend Handlers ─────────────────────────────────────────
+
+    def _handle_score_content(self, args: Dict, context: Dict) -> str:
+        """Score a content concept against learned outlier patterns."""
+        from content_scorer import ContentScorer
+
+        caption = args.get("caption", "").strip()
+        if not caption:
+            return json.dumps({"ok": False, "error": "Caption text is required."})
+
+        active = context.get("active_vertical")
+        if not active:
+            return json.dumps({"ok": False, "error": "No active category. Create one first."})
+
+        concept = {
+            "caption": caption,
+            "hook_line": args.get("hook_line", ""),
+            "format": args.get("format", "reel"),
+            "platform": args.get("platform", "instagram"),
+        }
+
+        try:
+            scorer = ContentScorer(active)
+            result = scorer.score_concept(concept)
+            score_id = scorer.store_score(concept, result)
+
+            # Store in context so "optimize it" can reference this score
+            context["last_score_id"] = score_id
+            context["last_scored_concept"] = concept
+            context["last_score_data"] = result
+
+            return json.dumps({
+                "ok": True,
+                "score_id": score_id,
+                "overall_score": result.get("overall_score", 0),
+                "breakdown": result.get("breakdown", {}),
+                "suggestions": result.get("suggestions", []),
+                "predicted_engagement_range": result.get("predicted_engagement_range", {}),
+            })
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"Scoring failed: {e}"})
+
+    def _handle_optimize_content(self, args: Dict, context: Dict) -> str:
+        """Optimize a content concept via LLM and auto-re-score."""
+        from content_scorer import ContentScorer
+        from content_optimizer import ContentOptimizer
+
+        caption = args.get("caption", "").strip()
+        active = context.get("active_vertical")
+
+        if not active:
+            return json.dumps({"ok": False, "error": "No active category."})
+
+        # If no caption provided, use the last scored concept
+        if not caption and context.get("last_scored_concept"):
+            caption = context["last_scored_concept"]["caption"]
+
+        if not caption:
+            return json.dumps({"ok": False, "error": "No caption to optimize. Score a concept first."})
+
+        concept = {
+            "caption": caption,
+            "hook_line": args.get("hook_line", context.get("last_scored_concept", {}).get("hook_line", "")),
+            "format": args.get("format", context.get("last_scored_concept", {}).get("format", "reel")),
+            "platform": args.get("platform", context.get("last_scored_concept", {}).get("platform", "instagram")),
+        }
+
+        score_data = context.get("last_score_data", {})
+        parent_score_id = args.get("score_id") or context.get("last_score_id")
+
+        try:
+            optimizer = ContentOptimizer(active)
+            optimized = optimizer.optimize(concept, score_data)
+
+            # Auto-re-score the improved version
+            improved_concept = {
+                "caption": optimized["improved_caption"],
+                "hook_line": optimized["improved_hook"],
+                "format": optimized.get("format_recommendation", concept["format"]),
+                "platform": concept["platform"],
+            }
+            scorer = ContentScorer(active)
+            new_score = scorer.score_concept(improved_concept)
+            new_score_id = scorer.store_score(
+                improved_concept, new_score, parent_score_id=parent_score_id
+            )
+
+            # Update context with new score
+            context["last_score_id"] = new_score_id
+            context["last_scored_concept"] = improved_concept
+            context["last_score_data"] = new_score
+
+            return json.dumps({
+                "ok": True,
+                "improved_caption": optimized["improved_caption"],
+                "improved_hook": optimized["improved_hook"],
+                "improvements": optimized.get("improvements", []),
+                "format_recommendation": optimized.get("format_recommendation", ""),
+                "new_overall_score": new_score.get("overall_score", 0),
+                "new_breakdown": new_score.get("breakdown", {}),
+                "original_score": score_data.get("overall_score", 0),
+                "score_id": new_score_id,
+            })
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"Optimization failed: {e}"})
+
+    def _handle_show_trends(self, args: Dict, context: Dict) -> str:
+        """Show rising/declining content pattern trends."""
+        from trend_analyzer import TrendAnalyzer
+
+        active = context.get("active_vertical")
+        if not active:
+            return json.dumps({"ok": False, "error": "No active category."})
+
+        lookback = args.get("lookback_weeks", 4)
+
+        try:
+            ta = TrendAnalyzer(active)
+            trends = ta.get_trends(lookback_weeks=lookback)
+            return json.dumps({"ok": True, **trends})
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"Trend analysis failed: {e}"})
+
     # ── Dispatch a tool call ────────────────────────────────────────────
 
     def _dispatch_tool(self, name: str, args: Dict, context: Dict) -> str:
@@ -966,6 +1210,12 @@ IMPORTANT:
             return self._handle_set_filters(args, context)
         elif name == "filter_view":
             return self._handle_filter_view(args, context)
+        elif name == "score_content":
+            return self._handle_score_content(args, context)
+        elif name == "optimize_content":
+            return self._handle_optimize_content(args, context)
+        elif name == "show_trends":
+            return self._handle_show_trends(args, context)
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
 

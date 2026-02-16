@@ -691,6 +691,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         except Exception as e:
             logger.warning(f"  Failed to store AI analysis: {e}")
 
+    # ── 8b. Trend Snapshot ──
+    try:
+        from trend_analyzer import TrendAnalyzer
+        ta = TrendAnalyzer(profile.profile_name)
+        ta.capture_snapshot()
+    except Exception as e:
+        logger.warning(f"  Trend snapshot failed: {e}")
+
     # ── 9. Report Phase ──
     logger.info("")
     logger.info("--- REPORT PHASE ---")
