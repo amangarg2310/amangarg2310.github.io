@@ -750,6 +750,17 @@ def signal_page():
         # Compute per-brand baselines
         brand_baselines = get_competitor_baselines(vertical_name, timeframe)
 
+    # Trend Radar: velocity-based sound/hashtag trends
+    trend_radar_trends = []
+    if vertical_name and not empty_state:
+        try:
+            from trend_radar.scorer import TrendRadarScorer
+            trend_radar_trends = TrendRadarScorer(vertical_name).get_top_trends(limit=10)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"Trend Radar scoring failed: {e}")
+
     # Get competitive set for context display (empty if empty state)
     # Only show brands that actually have data in the database
     competitive_set = []
@@ -776,6 +787,7 @@ def signal_page():
                            insights=insights,
                            pattern_clusters=pattern_clusters,
                            brand_baselines=brand_baselines,
+                           trend_radar_trends=trend_radar_trends,
                            competitive_set=competitive_set,
                            vertical_name=vertical_name,
                            saved_verticals=saved_verticals,
@@ -2118,13 +2130,14 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table, add_trend_radar_tables
         run_vertical_migrations()
         add_facebook_handle_column()
         fix_post_unique_constraint()
         fix_vertical_brands_nullable()
         add_scoring_tables()
         add_users_table()
+        add_trend_radar_tables()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

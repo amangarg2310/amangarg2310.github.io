@@ -33,7 +33,8 @@ class ContentAnalyzer:
 
     def __init__(self, profile: BrandProfile, db_path=None,
                  voice_data=None, own_top_captions=None,
-                 audio_insights=None, series_data=None):
+                 audio_insights=None, series_data=None,
+                 trend_radar_data=None):
         self.profile = profile
         self.db_path = db_path or config.DB_PATH
         self.client = None  # lazy init — only create when needed
@@ -41,6 +42,7 @@ class ContentAnalyzer:
         self.own_top_captions = own_top_captions or []
         self.audio_insights = audio_insights
         self.series_data = series_data
+        self.trend_radar_data = trend_radar_data
 
     def _get_client(self) -> OpenAI:
         """Lazy-initialize the OpenAI client."""
@@ -203,6 +205,46 @@ REAL TOP-PERFORMING CAPTIONS from {brand}'s own Instagram (primary style referen
 TRENDING AUDIO across competitor outliers:
 {audio_list}"""
 
+        # Build trend radar section (velocity-based trend intelligence)
+        trend_radar_section = ""
+        if self.trend_radar_data:
+            top_trends = self.trend_radar_data[:10]
+            sound_trends = [t for t in top_trends if t["item_type"] == "sound"]
+            hashtag_trends = [t for t in top_trends if t["item_type"] == "hashtag"]
+
+            parts = []
+            if sound_trends:
+                sound_list = "\n".join(
+                    f"  - {t['item_name']} "
+                    f"(velocity: {t['velocity_label']}, "
+                    f"score: {t['composite_score']:.0f}/100, "
+                    f"phase: {t['phase']}, "
+                    f"{t['current_usage']} posts, "
+                    f"{t['outlier_correlation']*100:.0f}% in outliers)"
+                    for t in sound_trends[:5]
+                )
+                parts.append(f"RISING SOUNDS (velocity-detected, pre-peak):\n{sound_list}")
+
+            if hashtag_trends:
+                hashtag_list = "\n".join(
+                    f"  - #{t['item_name']} "
+                    f"(velocity: {t['velocity_label']}, "
+                    f"score: {t['composite_score']:.0f}/100, "
+                    f"phase: {t['phase']}, "
+                    f"{t['current_usage']} posts)"
+                    for t in hashtag_trends[:5]
+                )
+                parts.append(f"RISING HASHTAGS (velocity-detected, pre-peak):\n{hashtag_list}")
+
+            if parts:
+                trend_radar_section = (
+                    "\n\nTREND RADAR (forward-looking velocity signals — these are RISING, not yet mainstream):\n"
+                    + "\n".join(parts)
+                    + "\nNOTE: When an outlier post used one of these trending sounds/hashtags, "
+                    "note this in the analysis as a contributing factor. In brand_creative_brief."
+                    "suggested_audio, recommend rising sounds that fit the brand."
+                )
+
         # Build series context section
         series_section = ""
         if self.series_data:
@@ -239,6 +281,7 @@ You analyze competitor outlier posts with forensic precision and create actionab
 {learned_voice_section}
 {real_examples_section}
 {audio_section}
+{trend_radar_section}
 {series_section}
 {scale_section}
 

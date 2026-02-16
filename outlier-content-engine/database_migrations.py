@@ -529,6 +529,45 @@ def add_users_table(db_path=None):
     logger.info("Users table migration complete")
 
 
+def add_trend_radar_tables(db_path=None):
+    """
+    Add trend_radar_snapshots table for velocity-based trend detection.
+    Safe to call multiple times (CREATE IF NOT EXISTS).
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    logger.info("Running trend radar migrations...")
+
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS trend_radar_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            snapshot_timestamp TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            item_name TEXT,
+            usage_count INTEGER NOT NULL DEFAULT 0,
+            outlier_count INTEGER NOT NULL DEFAULT 0,
+            total_engagement INTEGER DEFAULT 0,
+            avg_engagement REAL DEFAULT 0,
+            top_post_id TEXT,
+            collected_at TEXT NOT NULL,
+            UNIQUE(brand_profile, snapshot_timestamp, item_type, item_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_trend_radar_profile_ts
+            ON trend_radar_snapshots(brand_profile, snapshot_timestamp DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_trend_radar_item
+            ON trend_radar_snapshots(item_type, item_id, brand_profile);
+    """)
+
+    conn.commit()
+    conn.close()
+    logger.info("Trend radar migrations complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
@@ -538,6 +577,7 @@ if __name__ == "__main__":
     fix_post_unique_constraint()
     add_scoring_tables()
     add_users_table()
+    add_trend_radar_tables()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile
