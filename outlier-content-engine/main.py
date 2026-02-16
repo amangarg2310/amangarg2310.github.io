@@ -22,6 +22,8 @@ import logging
 import sqlite3
 import sys
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import config
@@ -72,6 +74,11 @@ def parse_args():
         "--no-email",
         action="store_true",
         help="Don't send email, save report locally instead",
+    )
+    parser.add_argument(
+        "--brands",
+        default=None,
+        help="Comma-separated list of brand handles to collect (subset of vertical)",
     )
     return parser.parse_args()
 
@@ -125,7 +132,7 @@ def with_progress_tracking(func):
 
 
 @with_progress_tracking
-def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, _progress=None):
+def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, brands=None, _progress=None):
     """
     Run the full outlier detection pipeline.
 
@@ -135,6 +142,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         vertical_name: Database vertical name (new system, takes priority)
         skip_collect: Skip data collection phase
         no_email: Save report locally instead of emailing
+        brands: Comma-separated brand handles to collect (subset of vertical)
     Returns a dict with pipeline results.
     """
     logger = logging.getLogger("engine")
@@ -235,6 +243,11 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                             "name": brand.brand_name or brand.tiktok_handle,
                             "handle": brand.tiktok_handle
                         })
+                    elif platform == "facebook" and getattr(brand, 'facebook_handle', None):
+                        results.append({
+                            "name": brand.brand_name or brand.facebook_handle,
+                            "handle": brand.facebook_handle
+                        })
                 return results
 
             def get_voice_prompt(self):
@@ -268,6 +281,16 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
             f"{len(tt_competitors)} TikTok competitors"
         )
 
+    # ── 1b. Filter to specific brands (if --brands was provided) ──
+    if brands:
+        brand_set = {b.strip().lstrip('@').lower() for b in brands.split(',')}
+        ig_competitors = [c for c in ig_competitors if c["handle"].lower() in brand_set]
+        tt_competitors = [c for c in tt_competitors if c["handle"].lower() in brand_set]
+        logger.info(
+            f"Filtered to {len(ig_competitors)} IG + {len(tt_competitors)} TT brands "
+            f"(requested: {', '.join(brand_set)})"
+        )
+
     # ── 2. Initialize Database ──
     init_database()
     migrate_database()
@@ -288,12 +311,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         lifecycle.cleanup_old_data(days=3)
 
     # Start progress tracking
+    total_brands = len(ig_competitors) + len(tt_competitors)
     if _progress:
         _progress.start(
             total_brands_ig=len(ig_competitors),
             total_brands_tt=len(tt_competitors),
             is_cached=skip_collect
         )
+        _progress.update(2, "Initializing pipeline...")
 
     # ── 3. Collection Phase ──
     run_stats = {
@@ -326,29 +351,57 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                     "API health check failed. Will attempt collection anyway."
                 )
 
-            for comp in ig_competitors:
-                handle = comp["handle"]
-                name = comp["name"]
+            # Thread-safe write lock for SQLite
+            _db_write_lock = threading.Lock()
+            _completed_count = [0]  # mutable counter for threads
 
+            def _collect_brand(comp_data, coll, prof_id, post_count):
+                """Collect posts for a single brand (thread-safe)."""
+                handle = comp_data["handle"]
+                name = comp_data["name"]
                 try:
-                    posts = collector.collect_posts(
+                    posts = coll.collect_posts(
                         handle=handle,
                         competitor_name=name,
-                        count=config.DEFAULT_POSTS_PER_COMPETITOR,
+                        count=post_count,
                     )
-                    new_count = store_posts(posts, profile_id)
-                    run_stats["posts_collected"] += len(posts)
-                    run_stats["posts_new"] += new_count
-                    run_stats["competitors_collected"] += 1
-
-                    logger.info(
-                        f"  @{handle}: {len(posts)} posts "
-                        f"({new_count} new)"
-                    )
+                    with _db_write_lock:
+                        new_count = store_posts(posts, prof_id)
+                    return {"handle": handle, "posts": len(posts), "new": new_count, "error": None}
                 except Exception as e:
-                    error_msg = f"@{handle}: {str(e)}"
-                    run_stats["errors"].append(error_msg)
-                    logger.error(f"  Failed collecting {error_msg}")
+                    return {"handle": handle, "posts": 0, "new": 0, "error": str(e)}
+
+            # Parallel collection with ThreadPoolExecutor (up to 8 concurrent)
+            max_workers = min(8, len(ig_competitors)) if ig_competitors else 1
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        _collect_brand, comp, collector, profile_id,
+                        config.DEFAULT_POSTS_PER_COMPETITOR,
+                    ): comp
+                    for comp in ig_competitors
+                }
+
+                for future in as_completed(futures):
+                    comp = futures[future]
+                    result = future.result()
+                    _completed_count[0] += 1
+
+                    if result["error"]:
+                        run_stats["errors"].append(f"@{result['handle']}: {result['error']}")
+                        logger.error(f"  Failed collecting @{result['handle']}: {result['error']}")
+                    else:
+                        run_stats["posts_collected"] += result["posts"]
+                        run_stats["posts_new"] += result["new"]
+                        run_stats["competitors_collected"] += 1
+                        logger.info(
+                            f"  @{result['handle']}: {result['posts']} posts "
+                            f"({result['new']} new)"
+                        )
+
+                    if _progress and total_brands > 0:
+                        pct = 5 + int((_completed_count[0] / total_brands) * 60)
+                        _progress.update(pct, f"Collected @{result['handle']} ({_completed_count[0]}/{len(ig_competitors)} IG)")
 
             logger.info(
                 f"Instagram collection: {run_stats['posts_collected']} posts "
@@ -356,36 +409,43 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 f"{run_stats['competitors_collected']} competitors"
             )
 
-            # ── 3b. TikTok Collection ──
+            # ── 3b. TikTok Collection (parallel) ──
             if tt_competitors:
                 logger.info("")
                 logger.info("--- TIKTOK COLLECTION PHASE ---")
                 try:
                     from collectors.tiktok import create_tiktok_collector
                     tt_collector = create_tiktok_collector()
-                    for comp in tt_competitors:
-                        handle = comp["handle"]
-                        name = comp["name"]
+
+                    def _collect_tt_brand(comp_data):
+                        h, n = comp_data["handle"], comp_data["name"]
                         try:
                             posts = tt_collector.collect_posts(
-                                handle=handle,
-                                competitor_name=name,
+                                handle=h, competitor_name=n,
                                 count=config.DEFAULT_POSTS_PER_COMPETITOR,
                             )
-                            new_count = store_posts(posts, profile.profile_name)
-                            run_stats["posts_collected"] += len(posts)
-                            run_stats["posts_new"] += new_count
-                            logger.info(
-                                f"  @{handle}: {len(posts)} TikTok posts "
-                                f"({new_count} new)"
-                            )
+                            with _db_write_lock:
+                                nc = store_posts(posts, profile.profile_name)
+                            return {"handle": h, "posts": len(posts), "new": nc, "error": None}
                         except Exception as e:
-                            run_stats["errors"].append(
-                                f"tiktok/@{handle}: {str(e)}"
-                            )
-                            logger.error(
-                                f"  Failed TikTok @{handle}: {e}"
-                            )
+                            return {"handle": h, "posts": 0, "new": 0, "error": str(e)}
+
+                    tt_workers = min(4, len(tt_competitors))
+                    with ThreadPoolExecutor(max_workers=tt_workers) as executor:
+                        tt_futures = {executor.submit(_collect_tt_brand, c): c for c in tt_competitors}
+                        for tt_idx, future in enumerate(as_completed(tt_futures)):
+                            result = future.result()
+                            _completed_count[0] += 1
+                            if result["error"]:
+                                run_stats["errors"].append(f"tiktok/@{result['handle']}: {result['error']}")
+                                logger.error(f"  Failed TikTok @{result['handle']}: {result['error']}")
+                            else:
+                                run_stats["posts_collected"] += result["posts"]
+                                run_stats["posts_new"] += result["new"]
+                                logger.info(f"  @{result['handle']}: {result['posts']} TikTok posts ({result['new']} new)")
+                            if _progress and total_brands > 0:
+                                pct = 5 + int((_completed_count[0] / total_brands) * 60)
+                                _progress.update(pct, f"Collected @{result['handle']} ({tt_idx+1}/{len(tt_competitors)} TT)")
                 except ImportError:
                     logger.info(
                         "TikTok collector not available. Skipping."
@@ -393,7 +453,52 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 except Exception as e:
                     logger.error(f"TikTok collection failed: {e}")
 
-            # ── 3c. Own-Channel Collection ──
+            # ── 3c. Facebook Collection (parallel) ──
+            fb_competitors = profile.get_competitor_handles("facebook") if hasattr(profile, 'get_competitor_handles') else []
+            if fb_competitors:
+                logger.info("")
+                logger.info("--- FACEBOOK COLLECTION PHASE ---")
+                try:
+                    from collectors.facebook import create_facebook_collector
+                    fb_collector = create_facebook_collector()
+
+                    def _collect_fb_brand(comp_data):
+                        h, n = comp_data["handle"], comp_data["name"]
+                        try:
+                            posts = fb_collector.collect_posts(
+                                handle=h, competitor_name=n,
+                                count=config.DEFAULT_POSTS_PER_COMPETITOR,
+                            )
+                            with _db_write_lock:
+                                nc = store_posts(posts, profile_id)
+                            return {"handle": h, "posts": len(posts), "new": nc, "error": None}
+                        except Exception as e:
+                            return {"handle": h, "posts": 0, "new": 0, "error": str(e)}
+
+                    fb_workers = min(4, len(fb_competitors))
+                    with ThreadPoolExecutor(max_workers=fb_workers) as executor:
+                        fb_futures = {executor.submit(_collect_fb_brand, c): c for c in fb_competitors}
+                        for fb_idx, future in enumerate(as_completed(fb_futures)):
+                            result = future.result()
+                            _completed_count[0] += 1
+                            if result["error"]:
+                                run_stats["errors"].append(f"facebook/@{result['handle']}: {result['error']}")
+                                logger.error(f"  Failed Facebook @{result['handle']}: {result['error']}")
+                            else:
+                                run_stats["posts_collected"] += result["posts"]
+                                run_stats["posts_new"] += result["new"]
+                                logger.info(f"  @{result['handle']}: {result['posts']} Facebook posts ({result['new']} new)")
+                            if _progress and total_brands > 0:
+                                pct = 5 + int((_completed_count[0] / total_brands) * 60)
+                                _progress.update(pct, f"Collected @{result['handle']} ({fb_idx+1}/{len(fb_competitors)} FB)")
+                except ImportError:
+                    logger.info(
+                        "Facebook collector not available. Skipping."
+                    )
+                except Exception as e:
+                    logger.error(f"Facebook collection failed: {e}")
+
+            # ── 3d. Own-Channel Collection ──
             own_handle = profile.get_own_handle("instagram")
             if own_handle:
                 logger.info("")
@@ -446,12 +551,16 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
 
     else:
         logger.info("Skipping collection (--skip-collect)")
+        if _progress:
+            _progress.update(65, "Using cached data, skipping collection...")
 
     # (Content tagging is now consolidated into the Analysis phase via analyzer.py)
 
     # ── 4. Detection Phase ──
     logger.info("")
     logger.info("--- DETECTION PHASE ---")
+    if _progress:
+        _progress.update(68, "Detecting outlier posts...")
 
     detector = OutlierDetector(profile)
     outliers, baselines = detector.detect()
@@ -496,6 +605,8 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     # ── 7. Voice Analysis Phase ──
     logger.info("")
     logger.info("--- VOICE ANALYSIS PHASE ---")
+    if _progress:
+        _progress.update(75, f"Analyzing brand voice ({len(outliers)} outliers found)...")
 
     voice_data = None
     own_top_captions = []
@@ -507,7 +618,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
             try:
                 logger.info(f"  Collecting own-brand posts for @{own_handle}...")
                 collector = create_collector()
-                own_posts = collector.collect(own_handle)
+                own_posts = collector.collect_posts(handle=own_handle, competitor_name=profile.name)
                 if own_posts:
                     new_own = store_own_posts(own_posts, profile.profile_name)
                     logger.info(f"  Stored {new_own} new own-brand posts for @{own_handle}")
@@ -548,6 +659,8 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     # ── 8. Analysis Phase ──
     logger.info("")
     logger.info("--- ANALYSIS PHASE ---")
+    if _progress:
+        _progress.update(82, f"Running AI analysis on {len(outliers)} outliers...")
 
     analyzer = ContentAnalyzer(
         profile,
@@ -589,11 +702,43 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         except Exception as e:
             logger.warning(f"  Failed to store AI analysis: {e}")
 
+    # ── 8b. Trend Snapshot ──
+    try:
+        from trend_analyzer import TrendAnalyzer
+        ta = TrendAnalyzer(profile.profile_name)
+        ta.capture_snapshot()
+    except Exception as e:
+        logger.warning(f"  Trend snapshot failed: {e}")
+
     # ── 9. Report Phase ──
     logger.info("")
     logger.info("--- REPORT PHASE ---")
+    if _progress:
+        _progress.update(92, "Generating report...")
 
     run_stats["duration_seconds"] = round(time.time() - start_time, 1)
+
+    # ── Persist run stats to collection_runs table ──
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.execute("""
+            INSERT INTO collection_runs
+                (run_timestamp, profile_name, competitors_collected,
+                 posts_collected, posts_new, errors, duration_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now(timezone.utc).isoformat(),
+            vertical_name or profile.profile_name,
+            run_stats["competitors_collected"],
+            run_stats["posts_collected"],
+            run_stats["posts_new"],
+            json.dumps(run_stats["errors"]),
+            run_stats["duration_seconds"],
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to save collection run stats: {e}")
 
     reporter = ReportGenerator(profile)
     html = reporter.generate_report(
@@ -624,6 +769,9 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         f"Errors: {len(run_stats['errors'])}"
     )
     logger.info("=" * 60)
+
+    if _progress:
+        _progress.update(98, f"Done! {len(outliers)} outliers found.")
 
     # ── Save Lifecycle Info ──
     if vertical_name:
@@ -661,6 +809,7 @@ def main():
         vertical_name=args.vertical,
         skip_collect=args.skip_collect,
         no_email=args.no_email,
+        brands=args.brands,
     )
     if result.get("error"):
         sys.exit(1)

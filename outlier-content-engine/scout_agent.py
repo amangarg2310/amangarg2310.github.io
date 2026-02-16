@@ -85,6 +85,14 @@ TOOL_DEFINITIONS = [
                             "explicitly marks them as TikTok. Defaults to empty."
                         ),
                     },
+                    "facebook_handles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of Facebook Page handles/slugs (without @) "
+                            "if the user explicitly marks them as Facebook."
+                        ),
+                    },
                 },
                 "required": ["category_name", "instagram_handles"],
             },
@@ -179,6 +187,38 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "set_filters",
+            "description": (
+                "Set dashboard display filters for platform, timeframe, or sort order. "
+                "Use when user says things like 'show me TikTok posts', "
+                "'switch to last 3 months', 'sort by saves', 'show Facebook only'. "
+                "This applies filters WITHOUT re-running analysis."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "platform": {
+                        "type": "string",
+                        "enum": ["instagram", "tiktok", "facebook", ""],
+                        "description": "Platform filter. Empty string for all platforms.",
+                    },
+                    "timeframe": {
+                        "type": "string",
+                        "enum": ["30d", "3mo", ""],
+                        "description": "Timeframe filter. 30d or 3mo.",
+                    },
+                    "sort": {
+                        "type": "string",
+                        "enum": ["score", "saves", "shares", "date", ""],
+                        "description": "Sort order.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "filter_view",
             "description": (
                 "Filter the dashboard to show only specific brands from EXISTING data. "
@@ -201,6 +241,104 @@ TOOL_DEFINITIONS = [
                     },
                 },
                 "required": ["brand_handles"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "score_content",
+            "description": (
+                "Score a content concept against learned outlier patterns. "
+                "Use when user says 'score this', 'rate this caption', "
+                "'how would this perform', or provides a caption to evaluate. "
+                "Returns a 0-100 score with breakdown across 5 dimensions. "
+                "This is FREE and instant — no LLM call needed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caption": {
+                        "type": "string",
+                        "description": "The caption or concept text to score.",
+                    },
+                    "hook_line": {
+                        "type": "string",
+                        "description": "Optional opening hook line.",
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["reel", "carousel", "static", "story"],
+                        "description": "Content format. Defaults to 'reel'.",
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": ["instagram", "tiktok", "facebook"],
+                        "description": "Target platform. Defaults to 'instagram'.",
+                    },
+                },
+                "required": ["caption"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "optimize_content",
+            "description": (
+                "Optimize a content concept using AI to improve its score. "
+                "Use when user says 'optimize this', 'improve it', 'make it better', "
+                "'rewrite this caption', or wants to improve a previously scored concept. "
+                "Costs ~$0.0003 per call (uses GPT-4o-mini)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caption": {
+                        "type": "string",
+                        "description": "The caption to optimize. Use the most recent scored caption if user says 'optimize it'.",
+                    },
+                    "hook_line": {
+                        "type": "string",
+                        "description": "Optional opening hook line.",
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["reel", "carousel", "static", "story"],
+                        "description": "Content format.",
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": ["instagram", "tiktok", "facebook"],
+                        "description": "Target platform.",
+                    },
+                    "score_id": {
+                        "type": "integer",
+                        "description": "ID of a previous score to link as parent (for iteration tracking).",
+                    },
+                },
+                "required": ["caption"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_trends",
+            "description": (
+                "Show content trend predictions — which patterns, hooks, and formats "
+                "are rising vs declining. Use when user asks 'what's trending', "
+                "'content predictions', 'what patterns are rising', or "
+                "'what should I post about this week'. Requires 2+ analysis runs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lookback_weeks": {
+                        "type": "integer",
+                        "description": "Number of weeks to look back. Defaults to 4.",
+                    },
+                },
             },
         },
     },
@@ -254,6 +392,18 @@ class ScoutAgent:
         else:
             state_lines.append("No categories created yet.")
 
+        # Include current filter context if available
+        filter_ctx = context.get("chat_context", {}) if isinstance(context.get("chat_context"), dict) else {}
+        active_filters = []
+        if filter_ctx.get("active_platform_filter"):
+            active_filters.append(f"Platform: {filter_ctx['active_platform_filter']}")
+        if filter_ctx.get("active_timeframe_filter"):
+            active_filters.append(f"Timeframe: {filter_ctx['active_timeframe_filter']}")
+        if filter_ctx.get("active_brand_filter"):
+            active_filters.append(f"Brand: {filter_ctx['active_brand_filter']}")
+        if active_filters:
+            state_lines.append(f"Active UI filters: {', '.join(active_filters)}")
+
         state_block = "\n".join(state_lines)
 
         return f"""You are Scout, a friendly AI assistant for the Outlier Content Engine — a platform that finds viral social media posts by detecting statistical outliers in engagement.
@@ -282,12 +432,16 @@ TERMINOLOGY:
 
 WHAT YOU CAN DO (use the provided tools):
 1. create_category — create a new competitive set
-2. add_brands — add Instagram/TikTok handles to a category (auto-creates if needed)
+2. add_brands — add Instagram/TikTok/Facebook handles to a category (auto-creates if needed)
 3. remove_brands — remove handles from a category
 4. list_categories — show all categories
 5. show_category — show brands in a specific category
 6. run_analysis — scan posts and find outlier content
 7. filter_view — filter dashboard to specific brands (no analysis, instant)
+8. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
+9. score_content — score a content concept (FREE, instant, no LLM). Returns 0-100 score with format fit, hook strength, pattern alignment, voice match, and competitive gap fill.
+10. optimize_content — AI-powered caption improvement (~$0.0003). Rewrites caption + hook using learned patterns, then auto-re-scores. Only call when user explicitly asks to optimize/improve.
+11. show_trends — show which content patterns/hooks are rising vs declining. Needs 2+ analysis runs on different days.
 
 INTENT DISAMBIGUATION (CRITICAL):
 When user mentions a brand, determine their TRUE intent:
@@ -349,10 +503,30 @@ RESPONSE TEMPLATES:
 ✓ Full category: "Running analysis on all 6 brands in Streetwear."
 ✓ Brand not found: "Hmm, I don't see 'fakeband' in Streetwear. Did you mean one of these: @nike, @kith, @stussy?"
 
+SCORING & OPTIMIZATION:
+When user provides a caption/concept to score:
+1. Use score_content — returns 0-100 with breakdown
+2. Present the score clearly: "Your concept scored 72/100" then list each dimension
+3. Mention the weakest areas and specific suggestions
+4. Suggest "say 'optimize it' to get an AI-improved version"
+
+When user says "optimize it", "improve it", "make it better":
+1. Use optimize_content — this calls GPT-4o-mini
+2. Present the improved caption vs. original
+3. Show the before/after scores
+4. The user can say "optimize again" to iterate further
+
+When user asks "what's trending", "what should I post about":
+1. Use show_trends — needs 2+ analysis snapshots
+2. Present rising patterns with emphasis
+3. If not enough data, explain they need to run analysis on different days
+
 IMPORTANT:
 - NEVER output raw JSON to the user
 - When you successfully add brands, summarize what you added and suggest "say 'analyze' to find viral posts"
 - If the user seems confused, offer specific examples they can try
+- When presenting scores, format them clearly with each dimension on its own line
+- Always suggest next steps after scoring ("optimize it" or "try a different caption")
 """
 
     # ── Tool Handlers ───────────────────────────────────────────────────
@@ -379,11 +553,12 @@ IMPORTANT:
         category_name = args.get("category_name", "").strip()
         ig_handles = args.get("instagram_handles", [])
         tt_handles = args.get("tiktok_handles", [])
+        fb_handles = args.get("facebook_handles", [])
 
         if not category_name:
             return json.dumps({"ok": False, "error": "Category name is required."})
 
-        if not ig_handles and not tt_handles:
+        if not ig_handles and not tt_handles and not fb_handles:
             return json.dumps({"ok": False, "error": "No handles provided."})
 
         # Auto-create category if it doesn't exist
@@ -465,6 +640,20 @@ IMPORTANT:
             except Exception:
                 skipped.append(f"@{handle} (TikTok)")
 
+        # Add Facebook-only handles
+        for handle in fb_handles:
+            handle = handle.strip().lstrip("@")
+            if not handle:
+                continue
+            try:
+                if self.vm.add_brand(actual_name, facebook_handle=handle):
+                    added.append(f"@{handle} (Facebook)")
+                    newly_added_handles.append(handle)
+                else:
+                    skipped.append(f"@{handle} (Facebook)")
+            except Exception:
+                skipped.append(f"@{handle} (Facebook)")
+
         self.vm.update_vertical_timestamp(actual_name)
         total = self.vm.get_brand_count(actual_name)
 
@@ -505,7 +694,7 @@ IMPORTANT:
         not_found = []
         for handle in handles:
             handle = handle.strip().lstrip("@")
-            if self.vm.remove_brand(actual_name, instagram_handle=handle):
+            if self.vm.remove_brand(actual_name, handle):
                 removed.append(f"@{handle}")
             else:
                 not_found.append(f"@{handle}")
@@ -568,6 +757,8 @@ IMPORTANT:
                 entry["instagram"] = f"@{b.instagram_handle}"
             if b.tiktok_handle:
                 entry["tiktok"] = f"@{b.tiktok_handle}"
+            if getattr(b, 'facebook_handle', None):
+                entry["facebook"] = f"@{b.facebook_handle}"
             if b.brand_name:
                 entry["name"] = b.brand_name
             handles.append(entry)
@@ -617,8 +808,9 @@ IMPORTANT:
                     SELECT COUNT(*) as count, MAX(collected_at) as last_collected
                     FROM competitor_posts
                     WHERE competitor_handle = ?
+                      AND brand_profile = ?
                       AND collected_at >= ?
-                """, (handle, cutoff_str)).fetchone()
+                """, (handle, vertical_name, cutoff_str)).fetchone()
 
                 # If this brand has no recent posts, we need fresh collection
                 if not result or result['count'] == 0:
@@ -756,30 +948,35 @@ IMPORTANT:
         should_skip_collect = self._should_skip_collection(actual_name, brand_handles)
 
         # Build CLI command with optional brand filtering
-        cmd = [sys.executable, "main.py", "--profile", actual_name, "--no-email"]
+        cmd = [sys.executable, "main.py", "--vertical", actual_name, "--no-email"]
         if should_skip_collect:
             cmd.append("--skip-collect")
             logger.info("Using cached data (posts collected within last 24 hours)")
         if brand_handles:
             cmd.extend(["--brands", ",".join(brand_handles)])
 
+        vm = self.vm  # capture reference for thread
+
         def _run():
             try:
-                subprocess.run(
+                result = subprocess.run(
                     cmd,
                     cwd=str(config.PROJECT_ROOT),
                     capture_output=True,
                     text=True,
                     timeout=900,  # Increased from 300s to 900s (15 minutes)
                 )
+                if result.returncode == 0:
+                    # Only update cooldown timestamp on successful completion
+                    vm.update_vertical_timestamp(actual_name)
+                else:
+                    logger.error(f"Analysis exited with code {result.returncode}: {result.stderr[:500]}")
             except Exception as exc:
                 logger.error(f"Analysis failed: {exc}")
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
-        # Update the vertical timestamp (used for cooldown tracking)
-        self.vm.update_vertical_timestamp(actual_name)
         context["analysis_started"] = True
 
         # Build response message based on scope
@@ -797,6 +994,27 @@ IMPORTANT:
             "brand_count": len(brand_handles) if brand_handles else brand_count,
             "message": message,
             "selected_brands": brand_handles if brand_handles else None,
+        })
+
+    def _handle_set_filters(self, args: Dict, context: Dict) -> str:
+        """Set dashboard filters (platform, timeframe, sort) from chat."""
+        context["filter_action"] = True
+        applied = []
+
+        if args.get("platform") is not None:
+            context["filter_platform"] = args["platform"]
+            applied.append(f"platform={args['platform'] or 'all'}")
+        if args.get("timeframe"):
+            context["filter_timeframe"] = args["timeframe"]
+            applied.append(f"timeframe={args['timeframe']}")
+        if args.get("sort"):
+            context["filter_sort"] = args["sort"]
+            applied.append(f"sort={args['sort']}")
+
+        return json.dumps({
+            "ok": True,
+            "message": f"Filters updated: {', '.join(applied)}",
+            "applied": applied,
         })
 
     def _handle_filter_view(self, args: Dict, context: Dict) -> str:
@@ -849,6 +1067,129 @@ IMPORTANT:
             "message": message,
         })
 
+    # ── Scoring & Trend Handlers ─────────────────────────────────────────
+
+    def _handle_score_content(self, args: Dict, context: Dict) -> str:
+        """Score a content concept against learned outlier patterns."""
+        from content_scorer import ContentScorer
+
+        caption = args.get("caption", "").strip()
+        if not caption:
+            return json.dumps({"ok": False, "error": "Caption text is required."})
+
+        active = context.get("active_vertical")
+        if not active:
+            return json.dumps({"ok": False, "error": "No active category. Create one first."})
+
+        concept = {
+            "caption": caption,
+            "hook_line": args.get("hook_line", ""),
+            "format": args.get("format", "reel"),
+            "platform": args.get("platform", "instagram"),
+        }
+
+        try:
+            scorer = ContentScorer(active)
+            result = scorer.score_concept(concept)
+            score_id = scorer.store_score(concept, result)
+
+            # Store in context so "optimize it" can reference this score
+            context["last_score_id"] = score_id
+            context["last_scored_concept"] = concept
+            context["last_score_data"] = result
+
+            return json.dumps({
+                "ok": True,
+                "score_id": score_id,
+                "overall_score": result.get("overall_score", 0),
+                "breakdown": result.get("breakdown", {}),
+                "suggestions": result.get("suggestions", []),
+                "predicted_engagement_range": result.get("predicted_engagement_range", {}),
+            })
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"Scoring failed: {e}"})
+
+    def _handle_optimize_content(self, args: Dict, context: Dict) -> str:
+        """Optimize a content concept via LLM and auto-re-score."""
+        from content_scorer import ContentScorer
+        from content_optimizer import ContentOptimizer
+
+        caption = args.get("caption", "").strip()
+        active = context.get("active_vertical")
+
+        if not active:
+            return json.dumps({"ok": False, "error": "No active category."})
+
+        # If no caption provided, use the last scored concept
+        if not caption and context.get("last_scored_concept"):
+            caption = context["last_scored_concept"]["caption"]
+
+        if not caption:
+            return json.dumps({"ok": False, "error": "No caption to optimize. Score a concept first."})
+
+        concept = {
+            "caption": caption,
+            "hook_line": args.get("hook_line", context.get("last_scored_concept", {}).get("hook_line", "")),
+            "format": args.get("format", context.get("last_scored_concept", {}).get("format", "reel")),
+            "platform": args.get("platform", context.get("last_scored_concept", {}).get("platform", "instagram")),
+        }
+
+        score_data = context.get("last_score_data", {})
+        parent_score_id = args.get("score_id") or context.get("last_score_id")
+
+        try:
+            optimizer = ContentOptimizer(active)
+            optimized = optimizer.optimize(concept, score_data)
+
+            # Auto-re-score the improved version
+            improved_concept = {
+                "caption": optimized["improved_caption"],
+                "hook_line": optimized["improved_hook"],
+                "format": optimized.get("format_recommendation", concept["format"]),
+                "platform": concept["platform"],
+            }
+            scorer = ContentScorer(active)
+            new_score = scorer.score_concept(improved_concept)
+            new_score_id = scorer.store_score(
+                improved_concept, new_score, parent_score_id=parent_score_id
+            )
+
+            # Update context with new score
+            context["last_score_id"] = new_score_id
+            context["last_scored_concept"] = improved_concept
+            context["last_score_data"] = new_score
+
+            return json.dumps({
+                "ok": True,
+                "improved_caption": optimized["improved_caption"],
+                "improved_hook": optimized["improved_hook"],
+                "improvements": optimized.get("improvements", []),
+                "format_recommendation": optimized.get("format_recommendation", ""),
+                "new_overall_score": new_score.get("overall_score", 0),
+                "new_breakdown": new_score.get("breakdown", {}),
+                "original_score": score_data.get("overall_score", 0),
+                "score_id": new_score_id,
+            })
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"Optimization failed: {e}"})
+
+    def _handle_show_trends(self, args: Dict, context: Dict) -> str:
+        """Show rising/declining content pattern trends."""
+        from trend_analyzer import TrendAnalyzer
+
+        active = context.get("active_vertical")
+        if not active:
+            return json.dumps({"ok": False, "error": "No active category."})
+
+        lookback = args.get("lookback_weeks", 4)
+
+        try:
+            ta = TrendAnalyzer(active)
+            trends = ta.get_trends(lookback_weeks=lookback)
+            return json.dumps({"ok": True, **trends})
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"Trend analysis failed: {e}"})
+
     # ── Dispatch a tool call ────────────────────────────────────────────
 
     def _dispatch_tool(self, name: str, args: Dict, context: Dict) -> str:
@@ -865,6 +1206,16 @@ IMPORTANT:
             return self._handle_show_category(args)
         elif name == "run_analysis":
             return self._handle_run_analysis(args, context)
+        elif name == "set_filters":
+            return self._handle_set_filters(args, context)
+        elif name == "filter_view":
+            return self._handle_filter_view(args, context)
+        elif name == "score_content":
+            return self._handle_score_content(args, context)
+        elif name == "optimize_content":
+            return self._handle_optimize_content(args, context)
+        elif name == "show_trends":
+            return self._handle_show_trends(args, context)
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
 

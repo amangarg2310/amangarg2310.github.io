@@ -48,11 +48,10 @@ def run_vertical_migrations(db_path=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             vertical_name TEXT NOT NULL,
             brand_name TEXT,  -- optional display name
-            instagram_handle TEXT NOT NULL,
+            instagram_handle TEXT,  -- nullable for TikTok/FB-only brands
             tiktok_handle TEXT,
             added_at TEXT NOT NULL,
-            FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE,
-            UNIQUE(vertical_name, instagram_handle)
+            FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
         );
 
         -- Email subscriptions (team members)
@@ -225,11 +224,320 @@ def add_archived_column_to_posts(db_path=None):
     logger.info("archived column migration complete")
 
 
+def add_facebook_handle_column(db_path=None):
+    """
+    Add facebook_handle column to vertical_brands table.
+    Safe to call multiple times.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    try:
+        conn.execute("""
+            ALTER TABLE vertical_brands
+            ADD COLUMN facebook_handle TEXT
+        """)
+        conn.commit()
+        logger.info("  Added facebook_handle column to vertical_brands")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            logger.info("  facebook_handle column already exists, skipping")
+        else:
+            raise
+    finally:
+        conn.close()
+
+
+def fix_post_unique_constraint(db_path=None):
+    """
+    Fix UNIQUE(post_id, platform) → UNIQUE(post_id, platform, brand_profile).
+
+    The old constraint caused INSERT OR IGNORE to silently skip posts when
+    the same handle appeared in multiple verticals/profiles. Adding
+    brand_profile to the unique key isolates data per vertical.
+
+    Safe to call multiple times — checks the schema first.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    # Check if migration is needed by inspecting the CREATE TABLE statement
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='competitor_posts'"
+    ).fetchone()
+
+    if not row:
+        logger.info("  competitor_posts table does not exist yet, skipping unique constraint fix")
+        conn.close()
+        return
+
+    create_sql = row[0]
+    # If brand_profile is already in the unique constraint, skip
+    if "UNIQUE(post_id,platform,brand_profile)" in create_sql.replace(" ", ""):
+        logger.info("  competitor_posts already has 3-column unique constraint, skipping")
+        conn.close()
+        return
+
+    logger.info("Fixing competitor_posts UNIQUE constraint to include brand_profile...")
+
+    try:
+        conn.executescript("""
+            -- Rebuild table with corrected unique constraint
+            CREATE TABLE IF NOT EXISTS competitor_posts_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id TEXT NOT NULL,
+                brand_profile TEXT NOT NULL,
+                platform TEXT NOT NULL DEFAULT 'instagram',
+                competitor_name TEXT NOT NULL,
+                competitor_handle TEXT NOT NULL,
+                posted_at TEXT,
+                caption TEXT,
+                media_type TEXT,
+                media_url TEXT,
+                likes INTEGER DEFAULT 0,
+                comments INTEGER DEFAULT 0,
+                saves INTEGER,
+                shares INTEGER,
+                views INTEGER,
+                follower_count INTEGER,
+                estimated_engagement_rate REAL,
+                is_outlier INTEGER DEFAULT 0,
+                outlier_score REAL,
+                content_tags TEXT,
+                collected_at TEXT NOT NULL,
+                is_own_channel INTEGER DEFAULT 0,
+                audio_id TEXT,
+                audio_name TEXT,
+                is_trending_audio INTEGER DEFAULT 0,
+                weighted_engagement_score REAL,
+                primary_engagement_driver TEXT,
+                outlier_timeframe TEXT,
+                ai_analysis TEXT,
+                archived INTEGER DEFAULT 0,
+                UNIQUE(post_id, platform, brand_profile)
+            );
+
+            -- Copy all existing data
+            INSERT OR IGNORE INTO competitor_posts_new
+                SELECT id, post_id, brand_profile, platform, competitor_name,
+                       competitor_handle, posted_at, caption, media_type, media_url,
+                       likes, comments, saves, shares, views, follower_count,
+                       estimated_engagement_rate, is_outlier, outlier_score,
+                       content_tags, collected_at,
+                       COALESCE(is_own_channel, 0),
+                       audio_id, audio_name,
+                       COALESCE(is_trending_audio, 0),
+                       weighted_engagement_score, primary_engagement_driver,
+                       outlier_timeframe, ai_analysis,
+                       COALESCE(archived, 0)
+                FROM competitor_posts;
+
+            -- Swap tables
+            DROP TABLE competitor_posts;
+            ALTER TABLE competitor_posts_new RENAME TO competitor_posts;
+
+            -- Recreate indexes
+            CREATE INDEX IF NOT EXISTS idx_posts_competitor_date
+                ON competitor_posts(competitor_handle, collected_at);
+            CREATE INDEX IF NOT EXISTS idx_posts_outlier
+                ON competitor_posts(is_outlier);
+            CREATE INDEX IF NOT EXISTS idx_posts_profile
+                ON competitor_posts(brand_profile);
+            CREATE INDEX IF NOT EXISTS idx_posts_own_channel
+                ON competitor_posts(is_own_channel);
+            CREATE INDEX IF NOT EXISTS idx_posts_audio
+                ON competitor_posts(audio_id);
+            CREATE INDEX IF NOT EXISTS idx_posts_archived
+                ON competitor_posts(archived);
+        """)
+        logger.info("  competitor_posts UNIQUE constraint updated successfully")
+    except Exception as e:
+        logger.error(f"  Failed to fix unique constraint: {e}")
+        conn.rollback()
+
+    conn.close()
+
+
+def fix_vertical_brands_nullable(db_path=None):
+    """
+    Make instagram_handle nullable in vertical_brands so TikTok/FB-only brands can exist.
+    Also drops the old UNIQUE(vertical_name, instagram_handle) constraint since NULL
+    instagram_handle would cause issues with it.
+    Safe to call multiple times — checks schema first.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='vertical_brands'"
+    ).fetchone()
+
+    if not row:
+        conn.close()
+        return
+
+    create_sql = row[0]
+    # If instagram_handle is already nullable (NOT NULL not present), skip
+    if "instagram_handle TEXT," in create_sql or "instagram_handleTEXT," in create_sql.replace(" ", ""):
+        logger.info("  vertical_brands.instagram_handle already nullable, skipping")
+        conn.close()
+        return
+
+    # Only migrate if NOT NULL is present
+    if "NOT NULL" not in create_sql.split("instagram_handle")[1].split(",")[0]:
+        logger.info("  vertical_brands.instagram_handle already nullable, skipping")
+        conn.close()
+        return
+
+    logger.info("Making vertical_brands.instagram_handle nullable...")
+
+    try:
+        # Check if facebook_handle column exists
+        cols = [info[1] for info in conn.execute("PRAGMA table_info(vertical_brands)").fetchall()]
+        has_facebook = "facebook_handle" in cols
+
+        if has_facebook:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS vertical_brands_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vertical_name TEXT NOT NULL,
+                    brand_name TEXT,
+                    instagram_handle TEXT,
+                    tiktok_handle TEXT,
+                    facebook_handle TEXT,
+                    added_at TEXT NOT NULL,
+                    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
+                );
+                INSERT OR IGNORE INTO vertical_brands_new
+                    SELECT id, vertical_name, brand_name, instagram_handle,
+                           tiktok_handle, facebook_handle, added_at
+                    FROM vertical_brands;
+                DROP TABLE vertical_brands;
+                ALTER TABLE vertical_brands_new RENAME TO vertical_brands;
+            """)
+        else:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS vertical_brands_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vertical_name TEXT NOT NULL,
+                    brand_name TEXT,
+                    instagram_handle TEXT,
+                    tiktok_handle TEXT,
+                    added_at TEXT NOT NULL,
+                    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
+                );
+                INSERT OR IGNORE INTO vertical_brands_new
+                    SELECT id, vertical_name, brand_name, instagram_handle,
+                           tiktok_handle, added_at
+                    FROM vertical_brands;
+                DROP TABLE vertical_brands;
+                ALTER TABLE vertical_brands_new RENAME TO vertical_brands;
+            """)
+        logger.info("  vertical_brands.instagram_handle is now nullable")
+    except Exception as e:
+        logger.error(f"  Failed to fix vertical_brands schema: {e}")
+
+    conn.close()
+
+
+def add_scoring_tables(db_path=None):
+    """
+    Add tables for content scoring, trend tracking, and gap analysis.
+    Safe to call multiple times (CREATE IF NOT EXISTS).
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    logger.info("Running scoring system migrations...")
+
+    conn.executescript("""
+        -- Periodic pattern frequency snapshots for trend detection
+        CREATE TABLE IF NOT EXISTS trend_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            snapshot_data TEXT NOT NULL,
+            outlier_count INTEGER DEFAULT 0,
+            avg_outlier_score REAL,
+            created_at TEXT NOT NULL,
+            UNIQUE(brand_profile, snapshot_date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_trend_snapshots_profile_date
+            ON trend_snapshots(brand_profile, snapshot_date);
+
+        -- Scored content concepts (iteration chain via parent_score_id)
+        CREATE TABLE IF NOT EXISTS content_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            concept_text TEXT NOT NULL,
+            hook_line TEXT,
+            format_choice TEXT,
+            platform TEXT,
+            score_data TEXT NOT NULL,
+            overall_score REAL NOT NULL,
+            predicted_engagement_range TEXT,
+            optimization_suggestions TEXT,
+            version INTEGER DEFAULT 1,
+            parent_score_id INTEGER,
+            scored_at TEXT NOT NULL,
+            FOREIGN KEY (parent_score_id) REFERENCES content_scores(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_content_scores_profile
+            ON content_scores(brand_profile, scored_at DESC);
+
+        -- Cache for own-brand gap analysis (24h TTL)
+        CREATE TABLE IF NOT EXISTS gap_analysis_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_profile TEXT NOT NULL,
+            computed_at TEXT NOT NULL,
+            gap_data TEXT NOT NULL,
+            own_post_count INTEGER,
+            competitor_outlier_count INTEGER,
+            UNIQUE(brand_profile)
+        );
+    """)
+
+    conn.commit()
+    conn.close()
+    logger.info("Scoring system migrations complete")
+
+
+def add_users_table(db_path=None):
+    """
+    Add users table for Google OAuth authentication.
+    Safe to call multiple times (CREATE IF NOT EXISTS).
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_id TEXT UNIQUE NOT NULL,
+            email TEXT NOT NULL,
+            name TEXT,
+            picture TEXT,
+            created_at TEXT NOT NULL,
+            last_login TEXT NOT NULL
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+    logger.info("Users table migration complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
 
     run_vertical_migrations()
+    add_facebook_handle_column()
+    fix_post_unique_constraint()
+    add_scoring_tables()
+    add_users_table()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile

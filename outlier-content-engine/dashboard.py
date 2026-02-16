@@ -29,10 +29,12 @@ import requests
 import yaml
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, send_file, Response,
+    flash, send_file, Response, session,
 )
+from markupsafe import Markup
 
 import config
+from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user
 from profile_loader import load_profile
 
 app = Flask(__name__)
@@ -95,6 +97,15 @@ def timeago_filter(timestamp_str):
         return ""
 
 
+@app.template_filter('md_bold')
+def md_bold_filter(text):
+    """Convert **bold** markdown to <strong> tags for safe HTML rendering."""
+    import re
+    if not text or '**' not in str(text):
+        return text
+    return Markup(re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', str(text)))
+
+
 # ── Helpers ──
 
 def get_available_profiles():
@@ -132,15 +143,18 @@ def needs_setup():
     if not config.DB_PATH.exists():
         return True
 
-    conn = get_db()
+    conn = None
     try:
+        conn = get_db()
         row = conn.execute(
             "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('apify', 'openai')"
         ).fetchone()
-        conn.close()
         return row['cnt'] < 2  # Need both keys
     except Exception:
         return True  # Database not ready
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_active_profile_name():
@@ -171,9 +185,11 @@ def save_profile_data(data):
 
 
 def get_db():
-    """Get a SQLite connection."""
+    """Get a SQLite connection with WAL mode for concurrent read/write."""
     conn = sqlite3.connect(str(config.DB_PATH))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -348,6 +364,8 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             # Build correct post URL per platform
             if platform == "tiktok":
                 post_url = f"https://www.tiktok.com/@{row['competitor_handle']}/video/{row['post_id']}"
+            elif platform == "facebook":
+                post_url = f"https://www.facebook.com/{row['competitor_handle']}/posts/{row['post_id']}"
             else:
                 post_url = f"https://www.instagram.com/p/{row['post_id']}/"
 
@@ -612,7 +630,72 @@ def inject_globals():
         "available_profiles": get_available_profiles(),
         "active_vertical": get_active_vertical_name(),
         "available_verticals": get_available_verticals(),
+        "current_user": get_current_user(),
+        "auth_enabled": is_auth_enabled(),
     }
+
+
+# ── Routes: Authentication ──
+
+@app.route("/login")
+def login_page():
+    """Login page — shown when auth is enabled and user is not logged in."""
+    if not is_auth_enabled() or get_current_user():
+        return redirect(url_for('signal_page'))
+    return render_template('login.html')
+
+
+@app.route("/auth/google")
+def auth_google():
+    """Redirect to Google OAuth consent screen."""
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    auth_url = build_google_auth_url(redirect_uri)
+    if not auth_url:
+        flash("Google OAuth is not configured. Add Client ID and Secret in Settings.", "danger")
+        return redirect(url_for('setup_page'))
+    return redirect(auth_url)
+
+
+@app.route("/auth/google/callback")
+def auth_google_callback():
+    """Handle Google OAuth callback."""
+    error = request.args.get("error")
+    if error:
+        flash(f"Google login failed: {error}", "danger")
+        return redirect(url_for('login_page'))
+
+    code = request.args.get("code")
+    state = request.args.get("state")
+
+    # Verify CSRF state
+    expected_state = session.pop("oauth_state", None)
+    if not state or state != expected_state:
+        flash("Invalid OAuth state. Please try again.", "danger")
+        return redirect(url_for('login_page'))
+
+    # Exchange code for user info
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    user_info = exchange_code_for_user(code, redirect_uri)
+    if not user_info:
+        flash("Failed to authenticate with Google. Please try again.", "danger")
+        return redirect(url_for('login_page'))
+
+    # Store user in DB and session
+    upsert_user(user_info)
+    session["user"] = user_info
+
+    # Redirect to originally requested page
+    next_url = session.pop("next_url", None) or url_for('signal_page')
+    return redirect(next_url)
+
+
+@app.route("/logout")
+def logout():
+    """Clear session and redirect to login."""
+    session.clear()
+    if is_auth_enabled():
+        return redirect(url_for('login_page'))
+    return redirect(url_for('signal_page'))
 
 
 # ── Routes: Pages ──
@@ -624,6 +707,7 @@ def index():
 
 
 @app.route("/signal")
+@login_required
 def signal_page():
     """Signal AI - Conversational outlier viewer with insights."""
     from insight_generator import generate_insights_for_vertical
@@ -676,6 +760,16 @@ def signal_page():
     vm = VerticalManager()
     saved_verticals = vm.list_verticals()
 
+    # Get latest collection errors for error badges on brands
+    collection_errors = []
+    if vertical_name and not empty_state:
+        recent = get_recent_runs(limit=1)
+        if recent and recent[0].get("errors"):
+            try:
+                collection_errors = json.loads(recent[0]["errors"])
+            except (json.JSONDecodeError, TypeError):
+                collection_errors = []
+
     return render_template("signal.html",
                            profile=profile,
                            outliers=outliers,
@@ -690,7 +784,340 @@ def signal_page():
                            selected_competitor=competitor,
                            selected_platform=platform,
                            selected_timeframe=timeframe,
-                           sort_by=sort_by)
+                           sort_by=sort_by,
+                           collection_errors=collection_errors)
+
+
+@app.route("/api/outliers")
+@login_required
+def api_outliers():
+    """JSON API for outlier posts — used by AJAX filter switching."""
+    from flask import jsonify
+
+    competitor = request.args.get("competitor", "")
+    platform = request.args.get("platform", "")
+    sort_by = request.args.get("sort", "score")
+    timeframe = request.args.get("timeframe", "") or "30d"
+    tag = request.args.get("tag", "")
+    vertical_name = get_active_vertical_name()
+
+    outliers = get_outlier_posts(
+        competitor=competitor or None,
+        platform=platform or None,
+        sort_by=sort_by,
+        vertical_name=vertical_name,
+        timeframe=timeframe,
+        tag=tag or None,
+    )
+    baselines = get_competitor_baselines(vertical_name, timeframe)
+    pattern_clusters = build_pattern_clusters(outliers)
+
+    return jsonify({
+        "outliers": outliers,
+        "baselines": baselines,
+        "pattern_clusters": pattern_clusters,
+        "count": len(outliers),
+    })
+
+
+@app.route("/api/export/csv")
+@login_required
+def export_csv():
+    """Export current filtered outliers as CSV download."""
+    import csv
+    import io
+
+    outliers = get_outlier_posts(
+        competitor=request.args.get("competitor") or None,
+        platform=request.args.get("platform") or None,
+        sort_by=request.args.get("sort", "score"),
+        vertical_name=get_active_vertical_name(),
+        timeframe=request.args.get("timeframe", "30d"),
+        tag=request.args.get("tag") or None,
+    )
+
+    output = io.StringIO()
+    fieldnames = [
+        "competitor_handle", "competitor_name", "platform", "post_url",
+        "caption", "media_type", "likes", "comments", "saves", "shares",
+        "views", "outlier_score", "posted_at", "content_tags",
+        "engagement_multiplier", "primary_driver",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for o in outliers:
+        row = dict(o)
+        row["content_tags"] = ", ".join(o.get("content_tags", []))
+        writer.writerow(row)
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=outliers_export.csv"},
+    )
+
+
+@app.route("/api/score-concept", methods=["POST"])
+@login_required
+def api_score_concept():
+    """Score a content concept against learned outlier patterns."""
+    from flask import jsonify
+    from content_scorer import ContentScorer
+
+    data = request.get_json() or {}
+    caption = data.get("caption", "").strip()
+    if not caption:
+        return jsonify({"error": "Caption text is required."}), 400
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category. Create one first."}), 400
+
+    concept = {
+        "caption": caption,
+        "hook_line": data.get("hook_line", "").strip(),
+        "format": data.get("format", "reel"),
+        "platform": data.get("platform", "instagram"),
+    }
+
+    try:
+        scorer = ContentScorer(vertical_name)
+        result = scorer.score_concept(concept)
+
+        # Store the score
+        parent_id = data.get("parent_score_id")
+        score_id = scorer.store_score(concept, result, parent_score_id=parent_id)
+        result["score_id"] = score_id
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Scoring failed: {e}")
+        return jsonify({"error": f"Scoring failed: {e}"}), 500
+
+
+@app.route("/api/optimize-concept", methods=["POST"])
+@login_required
+def api_optimize_concept():
+    """Optimize a concept via LLM and auto-re-score the improved version."""
+    from flask import jsonify
+    from content_scorer import ContentScorer
+    from content_optimizer import ContentOptimizer
+
+    data = request.get_json() or {}
+    caption = data.get("caption", "").strip()
+    if not caption:
+        return jsonify({"error": "Caption text is required."}), 400
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category."}), 400
+
+    concept = {
+        "caption": caption,
+        "hook_line": data.get("hook_line", "").strip(),
+        "format": data.get("format", "reel"),
+        "platform": data.get("platform", "instagram"),
+    }
+    score_data = data.get("score_data", {})
+    parent_score_id = data.get("score_id")
+
+    try:
+        optimizer = ContentOptimizer(vertical_name)
+        optimized = optimizer.optimize(concept, score_data)
+
+        # Auto-re-score the optimized version
+        improved_concept = {
+            "caption": optimized["improved_caption"],
+            "hook_line": optimized["improved_hook"],
+            "format": optimized.get("format_recommendation", concept["format"]),
+            "platform": concept["platform"],
+        }
+        scorer = ContentScorer(vertical_name)
+        new_score = scorer.score_concept(improved_concept)
+        new_score_id = scorer.store_score(
+            improved_concept, new_score, parent_score_id=parent_score_id
+        )
+
+        return jsonify({
+            "optimized": optimized,
+            "new_score": new_score,
+            "new_score_id": new_score_id,
+        })
+    except Exception as e:
+        logger.error(f"Optimization failed: {e}")
+        return jsonify({"error": f"Optimization failed: {e}"}), 500
+
+
+@app.route("/api/trends")
+def api_trends():
+    """Return rising/declining content pattern trends."""
+    from flask import jsonify
+    from trend_analyzer import TrendAnalyzer
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category."}), 400
+
+    lookback = request.args.get("lookback_weeks", 4, type=int)
+
+    try:
+        ta = TrendAnalyzer(vertical_name)
+        trends = ta.get_trends(lookback_weeks=lookback)
+        return jsonify(trends)
+    except Exception as e:
+        logger.error(f"Trend analysis failed: {e}")
+        return jsonify({"error": f"Trend analysis failed: {e}"}), 500
+
+
+@app.route("/api/gap-analysis")
+def api_gap_analysis():
+    """Return own-brand gap analysis (what competitors do that brand hasn't tried)."""
+    from flask import jsonify
+    from gap_analyzer import GapAnalyzer
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"error": "No active category."}), 400
+
+    try:
+        ga = GapAnalyzer(vertical_name)
+        gaps = ga.analyze_gaps()
+        return jsonify(gaps)
+    except Exception as e:
+        logger.error(f"Gap analysis failed: {e}")
+        return jsonify({"error": f"Gap analysis failed: {e}"}), 500
+
+
+@app.route("/api/score-history")
+def api_score_history():
+    """Return recent content scoring history for the active vertical."""
+    from flask import jsonify
+
+    vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        return jsonify({"scores": []}), 200
+
+    limit = request.args.get("limit", 20, type=int)
+
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT id, concept_text, hook_line, format_choice, platform,
+                   overall_score, score_data, predicted_engagement_range,
+                   version, parent_score_id, scored_at
+            FROM content_scores
+            WHERE brand_profile = ?
+            ORDER BY scored_at DESC
+            LIMIT ?
+        """, (vertical_name, limit)).fetchall()
+        conn.close()
+
+        scores = []
+        for row in rows:
+            scores.append({
+                "id": row["id"],
+                "caption": row["concept_text"],
+                "hook_line": row["hook_line"],
+                "format": row["format_choice"],
+                "platform": row["platform"],
+                "overall_score": row["overall_score"],
+                "breakdown": json.loads(row["score_data"]) if row["score_data"] else {},
+                "predicted_engagement": json.loads(row["predicted_engagement_range"]) if row["predicted_engagement_range"] else None,
+                "version": row["version"],
+                "parent_score_id": row["parent_score_id"],
+                "scored_at": row["scored_at"],
+            })
+
+        return jsonify({"scores": scores})
+    except Exception as e:
+        logger.error(f"Score history failed: {e}")
+        return jsonify({"scores": [], "error": str(e)}), 200
+
+
+@app.route("/api/budget")
+def api_budget():
+    """Return current monthly LLM spend and limit for budget visibility."""
+    from flask import jsonify
+    if not config.DB_PATH.exists():
+        return jsonify({"spent": 0, "limit": config.MONTHLY_COST_LIMIT_USD, "remaining": config.MONTHLY_COST_LIMIT_USD, "runs_this_month": 0})
+
+    try:
+        conn = get_db()
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
+
+        row = conn.execute(
+            "SELECT COALESCE(SUM(estimated_cost_usd), 0) as total FROM token_usage WHERE timestamp >= ?",
+            (month_start,)
+        ).fetchone()
+        spent = row["total"] if row else 0
+
+        runs_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM collection_runs WHERE run_timestamp >= ?",
+            (month_start,)
+        ).fetchone()
+        runs = runs_row["cnt"] if runs_row else 0
+
+        conn.close()
+        limit = config.MONTHLY_COST_LIMIT_USD
+        return jsonify({
+            "spent": round(spent, 4),
+            "limit": limit,
+            "remaining": round(limit - spent, 4),
+            "percent_used": round((spent / limit) * 100, 1) if limit > 0 else 0,
+            "runs_this_month": runs,
+        })
+    except Exception:
+        return jsonify({"spent": 0, "limit": config.MONTHLY_COST_LIMIT_USD, "remaining": config.MONTHLY_COST_LIMIT_USD, "runs_this_month": 0})
+
+
+@app.route("/api/validate_keys", methods=["POST"])
+def api_validate_keys():
+    """Live validation of API keys before saving."""
+    from flask import jsonify
+    import requests as http_requests
+
+    data = request.get_json() or {}
+    results = {}
+
+    # Validate Apify token
+    apify_token = data.get("apify_token", "").strip()
+    if apify_token:
+        try:
+            resp = http_requests.get(
+                "https://api.apify.com/v2/users/me",
+                params={"token": apify_token},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                user_data = resp.json().get("data", {})
+                results["apify"] = {"valid": True, "username": user_data.get("username", "")}
+            else:
+                results["apify"] = {"valid": False, "error": "Invalid token"}
+        except Exception as e:
+            results["apify"] = {"valid": False, "error": f"Connection error: {str(e)[:60]}"}
+    else:
+        results["apify"] = {"valid": False, "error": "Token required"}
+
+    # Validate OpenAI key
+    openai_key = data.get("openai_key", "").strip()
+    if openai_key:
+        try:
+            resp = http_requests.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                results["openai"] = {"valid": True}
+            else:
+                results["openai"] = {"valid": False, "error": "Invalid API key"}
+        except Exception as e:
+            results["openai"] = {"valid": False, "error": f"Connection error: {str(e)[:60]}"}
+    else:
+        results["openai"] = {"valid": False, "error": "Key required"}
+
+    return jsonify(results)
 
 
 @app.route("/api/load_vertical/<vertical_name>")
@@ -703,6 +1130,7 @@ def load_vertical(vertical_name):
 # ── Routes: Actions ──
 
 @app.route("/switch-vertical", methods=["POST"])
+@login_required
 def switch_vertical():
     """Switch the active vertical."""
     vertical_name = request.form.get("vertical", "").strip()
@@ -716,19 +1144,26 @@ def switch_vertical():
 
 
 @app.route("/run", methods=["POST"])
+@login_required
 def run_engine():
     """Run the outlier detection pipeline in the background."""
     skip_collect = request.form.get("skip_collect", "0") == "1"
-    profile_name = get_active_profile_name()
+    vertical_name = request.form.get("vertical_name", "").strip()
 
-    cmd = [sys.executable, "main.py", "--profile", profile_name, "--no-email"]
+    # Prefer vertical (new system) over profile (legacy)
+    if vertical_name:
+        cmd = [sys.executable, "main.py", "--vertical", vertical_name, "--no-email"]
+    else:
+        profile_name = get_active_profile_name()
+        cmd = [sys.executable, "main.py", "--profile", profile_name, "--no-email"]
+
     if skip_collect:
         cmd.append("--skip-collect")
 
     def _run():
         try:
             subprocess.run(cmd, cwd=str(config.PROJECT_ROOT),
-                           capture_output=True, text=True, timeout=300)
+                           capture_output=True, text=True, timeout=900)
         except Exception as e:
             logger.error(f"Pipeline run failed: {e}")
 
@@ -773,6 +1208,8 @@ ALLOWED_IMAGE_DOMAINS = {
     "p16-sign.tiktokcdn-us.com", "p16-sign-sg.tiktokcdn.com",
     "p16-sign-va.tiktokcdn.com", "p77-sign.tiktokcdn.com",
     "muscdn.com",
+    "facebook.com", "scontent.xx.fbcdn.net",
+    "external.xx.fbcdn.net", "lookaside.fbsbx.com",
 }
 
 
@@ -827,6 +1264,7 @@ def proxy_image():
 # ── Vertical Management Routes ──
 
 @app.route("/setup")
+@login_required
 def setup_page():
     """One-time setup page for API keys and team settings."""
     from database_migrations import run_vertical_migrations
@@ -842,6 +1280,12 @@ def setup_page():
     ).fetchone()
     tiktok_key = conn.execute(
         "SELECT api_key FROM api_credentials WHERE service = 'tiktok'"
+    ).fetchone()
+    google_client_id_row = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'google_client_id'"
+    ).fetchone()
+    google_client_secret_row = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'google_client_secret'"
     ).fetchone()
 
     # Get team emails
@@ -866,6 +1310,8 @@ def setup_page():
                            apify_token=apify_token['api_key'] if apify_token else '',
                            openai_key=openai_key['api_key'] if openai_key else '',
                            tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
+                           google_client_id=google_client_id_row['api_key'] if google_client_id_row else '',
+                           google_client_secret=google_client_secret_row['api_key'] if google_client_secret_row else '',
                            team_emails=team_emails,
                            own_brand_instagram=own_brand_instagram,
                            own_brand_tiktok=own_brand_tiktok,
@@ -873,6 +1319,7 @@ def setup_page():
 
 
 @app.route("/setup/save", methods=["POST"])
+@login_required
 def save_setup():
     """Save API keys and team settings to database."""
     from datetime import datetime, timezone
@@ -883,6 +1330,8 @@ def save_setup():
     team_emails = request.form.get('team_emails', '').strip()
     own_brand_instagram = request.form.get('own_brand_instagram', '').strip().lstrip('@')
     own_brand_tiktok = request.form.get('own_brand_tiktok', '').strip().lstrip('@')
+    google_client_id = request.form.get('google_client_id', '').strip()
+    google_client_secret = request.form.get('google_client_secret', '').strip()
 
     if not apify_token or not openai_key:
         flash("Apify token and OpenAI key are required", "danger")
@@ -908,6 +1357,18 @@ def save_setup():
                 ON CONFLICT(service) DO UPDATE SET api_key = ?, updated_at = ?
             """, ('tiktok', tiktok_key, now, now, tiktok_key, now))
 
+        # Save Google OAuth credentials (upsert or delete if cleared)
+        for service, key in [('google_client_id', google_client_id),
+                              ('google_client_secret', google_client_secret)]:
+            if key:
+                conn.execute("""
+                    INSERT INTO api_credentials (service, api_key, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(service) DO UPDATE SET api_key = ?, updated_at = ?
+                """, (service, key, now, now, key, now))
+            else:
+                conn.execute("DELETE FROM api_credentials WHERE service = ?", (service,))
+
         # Save team emails (clear existing, then insert new)
         conn.execute("DELETE FROM email_subscriptions WHERE vertical_name IS NULL")
         if team_emails:
@@ -919,7 +1380,7 @@ def save_setup():
                         VALUES (NULL, ?, ?)
                     """, (email, now))
 
-        # Save own-brand handles in config table
+        # Save own-brand handles in config table (handle clearing too)
         for cfg_key, cfg_val in [('own_brand_instagram', own_brand_instagram),
                                   ('own_brand_tiktok', own_brand_tiktok)]:
             if cfg_val:
@@ -928,6 +1389,9 @@ def save_setup():
                     VALUES (?, ?)
                     ON CONFLICT(key) DO UPDATE SET value = ?
                 """, (cfg_key, cfg_val, cfg_val))
+            else:
+                # User cleared the field — remove the config entry
+                conn.execute("DELETE FROM config WHERE key = ?", (cfg_key,))
 
         conn.commit()
         flash("Settings saved.", "success")
@@ -954,6 +1418,7 @@ def vertical_create_page():
 
 
 @app.route("/verticals/create", methods=["POST"])
+@login_required
 def create_vertical():
     """Create a new vertical with brands."""
     from vertical_manager import VerticalManager
@@ -1006,6 +1471,7 @@ def vertical_edit_page(name):
 
 
 @app.route("/verticals/brand/add", methods=["POST"])
+@login_required
 def add_brand_to_vertical():
     """Add a single brand to a vertical."""
     from vertical_manager import VerticalManager
@@ -1059,6 +1525,7 @@ def bulk_add_brands():
 
 
 @app.route("/verticals/brand/remove", methods=["POST"])
+@login_required
 def remove_brand_from_vertical():
     """Remove a brand from a vertical."""
     from vertical_manager import VerticalManager
@@ -1089,6 +1556,7 @@ def remove_brand_from_set(vertical_name):
 
 
 @app.route("/verticals/delete", methods=["POST"])
+@login_required
 def delete_vertical():
     """Delete a vertical."""
     from vertical_manager import VerticalManager
@@ -1113,6 +1581,7 @@ def chat_page():
 
 
 @app.route("/chat/message", methods=["POST"])
+@login_required
 def chat_message():
     """Process chat message from user and return Scout's response.
 
@@ -1163,8 +1632,9 @@ def chat_message():
             response, updated_context = scout.chat(message, context)
 
             if response:
-                analysis_started = updated_context.get('analysis_started', False)
-                selected_brands = updated_context.get('selected_brands')
+                # Pop (not get) so flag is consumed once and cleared from persisted context
+                analysis_started = updated_context.pop('analysis_started', False)
+                selected_brands = updated_context.pop('selected_brands', None)
 
                 # If Scout's tools changed the active vertical, sync the app state
                 new_vertical = updated_context.get('active_vertical')
@@ -1175,15 +1645,28 @@ def chat_message():
                 session['chat_context'] = updated_context
                 session.modified = True
 
-                return jsonify({
+                result = {
                     "response": response,
                     "type": "text",
                     "analysis_started": analysis_started,
                     "selected_brands": selected_brands,
                     "context": {
                         "active_vertical": updated_context.get('active_vertical'),
-                    }
-                })
+                    },
+                }
+
+                # Pass filter actions from chatbot to frontend (Phase 4: bidirectional sync)
+                if updated_context.get('filter_action'):
+                    result["filter_action"] = True
+                    result["filter_brands"] = updated_context.get('filter_brands', [])
+                if updated_context.get('filter_platform'):
+                    result["filter_platform"] = updated_context['filter_platform']
+                if updated_context.get('filter_timeframe'):
+                    result["filter_timeframe"] = updated_context['filter_timeframe']
+                if updated_context.get('filter_sort'):
+                    result["filter_sort"] = updated_context['filter_sort']
+
+                return jsonify(result)
 
         except Exception as scout_err:
             logger.warning(f"Scout agent unavailable: {scout_err}")
@@ -1362,6 +1845,64 @@ def _get_fallback_response(message: str, current_vertical: str = None) -> str:
     )
 
 
+@app.route("/chat/context", methods=["POST"])
+def update_chat_context():
+    """Update chat context when user changes filters via the UI.
+
+    This keeps the ScoutAgent aware of the user's current filter state
+    so it can provide contextually relevant responses.
+    """
+    from flask import session, jsonify
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"ok": False}), 400
+
+    if "chat_context" not in session:
+        session["chat_context"] = {}
+
+    key = data.get("filter_key", "")
+    value = data.get("filter_value", "")
+
+    if key == "competitor":
+        session["chat_context"]["active_brand_filter"] = value
+    elif key == "platform":
+        session["chat_context"]["active_platform_filter"] = value
+    elif key == "timeframe":
+        session["chat_context"]["active_timeframe_filter"] = value
+    elif key == "sort":
+        session["chat_context"]["active_sort_filter"] = value
+
+    session.modified = True
+    return jsonify({"ok": True})
+
+
+@app.route("/analysis/stream")
+def analysis_stream():
+    """Server-Sent Events stream for real-time analysis progress."""
+    import time as _time
+
+    def generate():
+        progress_file = config.DATA_DIR / "analysis_progress.json"
+        last_data = None
+        for _ in range(600):  # Max 10 minutes
+            if progress_file.exists():
+                try:
+                    with open(progress_file) as f:
+                        data = json.load(f)
+                    if data != last_data:
+                        yield f"data: {json.dumps(data)}\n\n"
+                        last_data = data
+                        if data.get("status") in ("completed", "error"):
+                            break
+                except (json.JSONDecodeError, IOError):
+                    pass
+            _time.sleep(1)
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.route("/analysis/cancel", methods=["POST"])
 def cancel_analysis():
     """Cancel the currently running analysis."""
@@ -1476,36 +2017,57 @@ def analysis_status():
             start_time = progress_data.get("start_time")
 
             if status == "running":
-                # Analysis is actively running (or was running)
-                elapsed = time.time() - start_time if start_time else 0
-                response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
-                response["progress"] = progress_data.get("progress_percent", 0)
-                response["message"] = progress_data.get("message", "Running analysis...")
+                # Check if process is actually still alive
+                if response["is_running"]:
+                    # Process is alive — show real progress
+                    elapsed = time.time() - start_time if start_time else 0
+                    response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+                    response["progress"] = progress_data.get("progress_percent", 0)
+                    response["message"] = progress_data.get("message", "Running analysis...")
 
-                # Only mark as running if process is actually still alive
-                if not response["is_running"]:
-                    # Process ended, mark as completed
-                    status = "completed"
-
-                # Calculate time remaining based on actual progress
-                progress_pct = progress_data.get("progress_percent", 0)
-                if progress_pct > 5:  # Only estimate after some progress
-                    estimated_total = (elapsed / progress_pct) * 100
-                    remaining = max(0, estimated_total - elapsed)
-                    response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
-                else:
-                    # Early stages, use cached vs fresh estimate
-                    is_cached = progress_data.get("is_cached", False)
-                    if is_cached:
-                        response["time_remaining"] = "30-60 seconds"
+                    # Calculate time remaining based on actual progress
+                    progress_pct = progress_data.get("progress_percent", 0)
+                    if progress_pct > 5:
+                        estimated_total = (elapsed / progress_pct) * 100
+                        remaining = max(0, estimated_total - elapsed)
+                        response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
                     else:
-                        total_brands = progress_data.get("total_brands_ig", 0) + progress_data.get("total_brands_tt", 0)
-                        # Estimate ~90s per 6 brands in parallel
-                        est_minutes = (total_brands / 6) * 1.5 + 2  # Add 2 min for analysis
-                        response["time_remaining"] = f"{int(est_minutes)} minutes"
+                        is_cached = progress_data.get("is_cached", False)
+                        if is_cached:
+                            response["time_remaining"] = "~1 minute"
+                        else:
+                            total_brands = progress_data.get("total_brands_ig", 0) + progress_data.get("total_brands_tt", 0)
+                            est_minutes = max(1, int((total_brands / 6) * 1.5 + 2))
+                            response["time_remaining"] = f"~{est_minutes} minutes"
+                else:
+                    # Process died but progress file still says "running"
+                    # This is the stuck-screen scenario — treat as completed
+                    response["completed"] = True
+                    response["progress"] = 100
+                    elapsed = time.time() - start_time if start_time else 0
+                    response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+
+                    # Check DB for outliers to give a meaningful message
+                    try:
+                        v_name = get_active_vertical_name()
+                        conn2 = sqlite3.connect(str(config.DB_PATH))
+                        row2 = conn2.execute(
+                            "SELECT COUNT(*) as cnt FROM competitor_posts WHERE is_outlier = 1 AND brand_profile = ?",
+                            (v_name or "",)
+                        ).fetchone()
+                        conn2.close()
+                        cnt = row2[0] if row2 else 0
+                        response["message"] = f"Analysis complete! Found {cnt} outlier posts." if cnt else "Analysis complete."
+                    except Exception:
+                        response["message"] = "Analysis complete!"
+
+                    # Clean up stale progress file
+                    try:
+                        progress_file.unlink()
+                    except Exception:
+                        pass
 
             elif status == "completed":
-                # Analysis finished
                 response["completed"] = True
                 response["progress"] = 100
                 response["message"] = progress_data.get("message", "Analysis complete!")
@@ -1515,52 +2077,25 @@ def analysis_status():
                     duration = end_time - start_time
                     response["time_elapsed"] = f"{int(duration // 60)}m {int(duration % 60)}s"
 
+                # Clean up completed progress file
+                try:
+                    progress_file.unlink()
+                except Exception:
+                    pass
+
             elif status == "error":
-                # Analysis failed
                 response["completed"] = True
                 response["error"] = progress_data.get("error", "Unknown error occurred")
                 response["message"] = "Analysis failed"
 
+                # Clean up error progress file
+                try:
+                    progress_file.unlink()
+                except Exception:
+                    pass
+
         except Exception as e:
             logger.error(f"Error reading progress file: {e}")
-
-    # Fallback: check if analysis was running but now stopped (no progress file)
-    elif not response["is_running"] and session.get('analysis_was_running', False):
-        try:
-            conn = sqlite3.connect(str(config.DB_PATH))
-            conn.row_factory = sqlite3.Row
-
-            # Get the active vertical to filter count correctly
-            vertical_name = get_active_vertical_name()
-
-            if vertical_name:
-                result = conn.execute("""
-                    SELECT COUNT(*) as count
-                    FROM competitor_posts
-                    WHERE is_outlier = 1 AND brand_profile = ?
-                """, (vertical_name,)).fetchone()
-            else:
-                result = conn.execute("""
-                    SELECT COUNT(*) as count
-                    FROM competitor_posts
-                    WHERE is_outlier = 1
-                """).fetchone()
-
-            outlier_count = result['count'] if result else 0
-            conn.close()
-
-            response["completed"] = True
-            response["progress"] = 100
-            if outlier_count > 0:
-                response["message"] = f"Analysis complete! Found {outlier_count} outlier posts."
-            else:
-                response["message"] = "Analysis complete! No outliers detected."
-
-            # Clear the flag
-            session['analysis_was_running'] = False
-            session.modified = True
-        except Exception as e:
-            logger.error(f"Error checking completion: {e}")
 
     return jsonify(response)
 
@@ -1583,8 +2118,13 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table
         run_vertical_migrations()
+        add_facebook_handle_column()
+        fix_post_unique_constraint()
+        fix_vertical_brands_nullable()
+        add_scoring_tables()
+        add_users_table()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

@@ -43,10 +43,58 @@ PLATFORM_WEIGHTS = {
         "likes": 1,
         "views": 0.5,
     },
+    "facebook": {
+        # Shares are king on Facebook (algorithmic reach amplifier)
+        # Comments indicate genuine discussion
+        # Saves not publicly available
+        "saves": 0,
+        "shares": 4,
+        "comments": 3,
+        "likes": 1,
+        "views": 0.5,
+    },
 }
 
 # Default fallback (used for unknown platforms)
 DEFAULT_WEIGHTS = PLATFORM_WEIGHTS["instagram"]
+
+# ── Per-Platform Outlier Thresholds ──
+# Each platform has different engagement dynamics, so one-size-fits-all
+# thresholds misfire:
+#   - TikTok: Algorithm-driven. FYP can spike any post 10-50x overnight.
+#     A 2x multiplier is noise, not signal. Need higher bar.
+#   - Instagram: Follower-graph dependent. 2x is a genuine breakout.
+#     Comments/saves are high-intent signals worth less filtering.
+#   - Facebook: Shares drive algorithmic reach, but base audience is stable.
+#     Between IG and TikTok in volatility.
+#
+# Values: (engagement_multiplier, std_dev_threshold, soft_multiplier, soft_std_devs)
+#   - engagement_multiplier: strict pass minimum (how many X above brand mean)
+#   - std_dev_threshold: strict pass std devs above mean
+#   - soft_multiplier: soft floor for pass-2 (minimum representation)
+#   - soft_std_devs: soft floor std devs for pass-2
+PLATFORM_THRESHOLDS = {
+    "instagram": {
+        "engagement_multiplier": 2.0,
+        "std_dev_threshold": 1.5,
+        "soft_multiplier": 1.2,
+        "soft_std_devs": 0.5,
+    },
+    "tiktok": {
+        "engagement_multiplier": 3.5,   # Higher bar — FYP volatility
+        "std_dev_threshold": 2.0,       # Need stronger statistical signal
+        "soft_multiplier": 2.0,         # Even the soft floor is higher
+        "soft_std_devs": 1.0,
+    },
+    "facebook": {
+        "engagement_multiplier": 2.5,   # Moderate — share-driven spikes
+        "std_dev_threshold": 1.5,
+        "soft_multiplier": 1.5,
+        "soft_std_devs": 0.5,
+    },
+}
+
+DEFAULT_PLATFORM_THRESHOLDS = PLATFORM_THRESHOLDS["instagram"]
 
 
 def get_weights(platform: str = "instagram") -> dict:
@@ -194,16 +242,14 @@ class OutlierDetector:
         baselines = {}
         all_outliers = []
 
-        competitors = self.profile.get_competitor_handles("instagram")
-        # Also include TikTok competitors
-        tt_competitors = self.profile.get_competitor_handles("tiktok")
-        # Build a combined set, deduplicating by handle
+        # Collect competitors from all supported platforms
         seen_handles = set()
         combined = []
-        for comp in competitors + tt_competitors:
-            if comp["handle"] not in seen_handles:
-                combined.append(comp)
-                seen_handles.add(comp["handle"])
+        for platform in ("instagram", "tiktok", "facebook"):
+            for comp in self.profile.get_competitor_handles(platform):
+                if comp["handle"] not in seen_handles:
+                    combined.append(comp)
+                    seen_handles.add(comp["handle"])
 
         for comp in combined:
             handle = comp["handle"]
@@ -281,7 +327,17 @@ class OutlierDetector:
                        handle: str, name: str,
                        baseline: CompetitorBaseline,
                        lookback_days: int = None) -> List[OutlierPost]:
-        """Identify outlier posts for a single competitor within a lookback window."""
+        """Identify outlier posts for a single competitor within a lookback window.
+
+        Uses two-pass detection with per-platform thresholds:
+          Pass 1: Apply platform-specific strict thresholds (e.g., TikTok 3.5x vs IG 2.0x)
+          Pass 2: If brand has <2 outliers, take top posts above a softer floor
+                  to ensure minimum brand representation (at least 2 posts per brand).
+
+        Platform-aware: TikTok gets higher thresholds because FYP algorithm
+        creates higher natural variance; Instagram thresholds are lower because
+        engagement is more follower-graph-dependent and predictable.
+        """
         days = lookback_days or self.thresholds.lookback_days
         cutoff = (
             datetime.now(timezone.utc) -
@@ -300,7 +356,29 @@ class OutlierDetector:
             ORDER BY collected_at DESC
         """, (handle, self.profile.profile_name, cutoff)).fetchall()
 
-        outliers = []
+        # Detect dominant platform for this handle's posts
+        platform_counts = {}
+        for row in rows:
+            p = row["platform"] or "instagram"
+            platform_counts[p] = platform_counts.get(p, 0) + 1
+        dominant_platform = max(platform_counts, key=platform_counts.get) if platform_counts else "instagram"
+
+        # Get platform-specific thresholds (fall back to profile defaults for unknown)
+        pt = PLATFORM_THRESHOLDS.get(dominant_platform, DEFAULT_PLATFORM_THRESHOLDS)
+        min_multiplier = pt["engagement_multiplier"]
+        min_std_devs = pt["std_dev_threshold"]
+        soft_multiplier = pt["soft_multiplier"]
+        soft_std_devs = pt["soft_std_devs"]
+        min_outliers_per_brand = 2
+
+        logger.debug(
+            f"  {handle} ({dominant_platform}): thresholds "
+            f"{min_multiplier}x / {min_std_devs}σ "
+            f"(soft: {soft_multiplier}x / {soft_std_devs}σ)"
+        )
+
+        # Collect all candidates with their metrics
+        candidates = []
 
         for row in rows:
             likes = row["likes"] or 0
@@ -329,19 +407,6 @@ class OutlierDetector:
             else:
                 std_devs_above = 0.0
 
-            # Check if this post qualifies as an outlier
-            # CRITICAL FIX: Show ALL posts that perform above their brand's average
-            # Even brands with 1 post will show (it's automatically their "best")
-            # For brands with 2+ posts, show any post above mean OR with positive engagement
-            is_outlier = (
-                engagement_multiplier >= 1.01  # Just 1% above mean (very lenient)
-                or std_devs_above >= 0.1  # Any positive deviation
-                or baseline.post_count == 1  # Single post = always show
-            )
-
-            if not is_outlier:
-                continue
-
             # Composite score: weight multiplier more (intuitive in reports)
             outlier_score = (
                 0.6 * engagement_multiplier +
@@ -356,10 +421,12 @@ class OutlierDetector:
 
             if platform == "tiktok":
                 post_url = f"https://www.tiktok.com/@{handle}/video/{row['post_id']}"
+            elif platform == "facebook":
+                post_url = f"https://www.facebook.com/{handle}/posts/{row['post_id']}"
             else:
                 post_url = f"https://www.instagram.com/p/{row['post_id']}/"
 
-            outliers.append(OutlierPost(
+            post = OutlierPost(
                 post_id=row["post_id"],
                 competitor_handle=handle,
                 competitor_name=name,
@@ -383,9 +450,33 @@ class OutlierDetector:
                     platform=platform,
                 ),
                 content_tags=content_tags,
-            ))
+            )
+            candidates.append(post)
 
-        return outliers
+        # ── Two-Pass Outlier Selection ──
+
+        # Pass 1 (strict): Apply configured thresholds
+        strong_outliers = [
+            p for p in candidates
+            if p.engagement_multiplier >= min_multiplier
+            and p.std_devs_above >= min_std_devs
+        ]
+
+        # Pass 2 (min-representation): Ensure at least 2 outliers per brand
+        if len(strong_outliers) < min_outliers_per_brand and len(candidates) >= 3:
+            strong_ids = {p.post_id for p in strong_outliers}
+            # Pick top posts above the soft floor that weren't already selected
+            remaining = [
+                p for p in candidates
+                if p.post_id not in strong_ids
+                and p.engagement_multiplier >= soft_multiplier
+                and p.std_devs_above >= soft_std_devs
+            ]
+            remaining.sort(key=lambda x: x.outlier_score, reverse=True)
+            needed = min_outliers_per_brand - len(strong_outliers)
+            strong_outliers.extend(remaining[:needed])
+
+        return strong_outliers
 
     def _tag_content(self, caption: str, media_type: str) -> List[str]:
         """

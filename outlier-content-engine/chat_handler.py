@@ -309,8 +309,13 @@ class ChatHandler:
         """
         items = []
 
-        # Split by common delimiters
-        parts = re.split(r'[,\s]+', input_str)
+        # Pre-split space-separated @handles: "@nike @adidas" → "@nike,@adidas"
+        # Preserves multi-word brand names (no @) like "Supreme New York"
+        if re.search(r'@[\w.]+\s+@[\w.]', input_str):
+            input_str = re.sub(r'\s+(?=@)', ',', input_str)
+
+        # Split by commas or pipes (preserve multi-word brand names)
+        parts = re.split(r'[,|]+', input_str)
 
         for part in parts:
             part = part.strip()
@@ -334,8 +339,9 @@ class ChatHandler:
     def _handle_remove_brands(self, handles_str: str, category_name: str) -> Dict:
         """Remove brands from a category."""
         try:
-            # Extract handles
-            handles = re.findall(r'@([\w\.]+)', handles_str)
+            # Extract handles (supports both @handle and bare handle formats)
+            items = self._parse_brand_input(handles_str)
+            handles = [item['value'] for item in items if item.get('value')]
             if not handles:
                 return {
                     "response": "I couldn't find any valid handles to remove.",
@@ -360,7 +366,7 @@ class ChatHandler:
             removed = 0
             not_found = 0
             for handle in handles:
-                success = self.vm.remove_brand(actual_name, instagram_handle=handle)
+                success = self.vm.remove_brand(actual_name, handle)
                 if success:
                     removed += 1
                 else:

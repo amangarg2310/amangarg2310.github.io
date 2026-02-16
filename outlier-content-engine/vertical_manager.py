@@ -21,6 +21,7 @@ class Brand:
     brand_name: Optional[str]
     instagram_handle: str
     tiktok_handle: Optional[str] = None
+    facebook_handle: Optional[str] = None
 
 
 @dataclass
@@ -75,24 +76,38 @@ class VerticalManager:
             conn.close()
             return None
 
-        # Get all brands
-        brand_rows = conn.execute("""
-            SELECT brand_name, instagram_handle, tiktok_handle
-            FROM vertical_brands
-            WHERE vertical_name = ?
-            ORDER BY added_at DESC
-        """, (name,)).fetchall()
+        # Get all brands (facebook_handle may not exist in older schemas)
+        try:
+            brand_rows = conn.execute("""
+                SELECT brand_name, instagram_handle, tiktok_handle, facebook_handle
+                FROM vertical_brands
+                WHERE vertical_name = ?
+                ORDER BY added_at DESC
+            """, (name,)).fetchall()
+        except sqlite3.OperationalError:
+            # Fallback if facebook_handle column doesn't exist yet
+            brand_rows = conn.execute("""
+                SELECT brand_name, instagram_handle, tiktok_handle
+                FROM vertical_brands
+                WHERE vertical_name = ?
+                ORDER BY added_at DESC
+            """, (name,)).fetchall()
 
         conn.close()
 
-        brands = [
-            Brand(
+        brands = []
+        for b in brand_rows:
+            fb_handle = None
+            try:
+                fb_handle = b['facebook_handle']
+            except (IndexError, KeyError):
+                pass
+            brands.append(Brand(
                 brand_name=b['brand_name'],
                 instagram_handle=b['instagram_handle'],
-                tiktok_handle=b['tiktok_handle']
-            )
-            for b in brand_rows
-        ]
+                tiktok_handle=b['tiktok_handle'],
+                facebook_handle=fb_handle,
+            ))
 
         return Vertical(
             name=row['name'],
@@ -125,7 +140,12 @@ class VerticalManager:
         """Delete a vertical and all its brands."""
         conn = self._get_conn()
 
-        # Delete vertical metadata (CASCADE deletes brands via foreign key)
+        # Explicitly delete brands first (don't rely on CASCADE — SQLite
+        # foreign keys are off by default and we don't enable them)
+        conn.execute("DELETE FROM vertical_brands WHERE vertical_name = ?", (name,))
+        brands_deleted = conn.total_changes
+
+        # Delete vertical metadata
         conn.execute("DELETE FROM verticals WHERE name = ?", (name,))
         deleted = conn.total_changes > 0
 
@@ -137,14 +157,15 @@ class VerticalManager:
         conn.close()
 
         if deleted:
-            logger.info(f"Deleted vertical '{name}' and {posts_deleted} associated posts")
+            logger.info(f"Deleted vertical '{name}', {brands_deleted} brands, and {posts_deleted} associated posts")
         return deleted
 
     def add_brand(self, vertical_name: str, instagram_handle: str = None,
-                  brand_name: str = None, tiktok_handle: str = None) -> bool:
-        """Add a brand to a vertical. At least one handle (Instagram or TikTok) is required."""
-        if not instagram_handle and not tiktok_handle:
-            raise ValueError("At least one handle (Instagram or TikTok) is required")
+                  brand_name: str = None, tiktok_handle: str = None,
+                  facebook_handle: str = None) -> bool:
+        """Add a brand to a vertical. At least one handle is required."""
+        if not instagram_handle and not tiktok_handle and not facebook_handle:
+            raise ValueError("At least one handle (Instagram, TikTok, or Facebook) is required")
 
         conn = self._get_conn()
         now = datetime.now(timezone.utc).isoformat()
@@ -154,6 +175,8 @@ class VerticalManager:
             instagram_handle = instagram_handle.lstrip('@')
         if tiktok_handle:
             tiktok_handle = tiktok_handle.lstrip('@')
+        if facebook_handle:
+            facebook_handle = facebook_handle.lstrip('@')
 
         try:
             # Check if this brand has archived posts in this vertical (from previous removal)
@@ -173,14 +196,22 @@ class VerticalManager:
                 logger.info(f"Unarchived {archived_count} posts for @{handle_to_check} in {vertical_name}")
 
             # Add brand to vertical
-            conn.execute("""
-                INSERT INTO vertical_brands
-                (vertical_name, brand_name, instagram_handle, tiktok_handle, added_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (vertical_name, brand_name, instagram_handle, tiktok_handle, now))
+            try:
+                conn.execute("""
+                    INSERT INTO vertical_brands
+                    (vertical_name, brand_name, instagram_handle, tiktok_handle, facebook_handle, added_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (vertical_name, brand_name, instagram_handle, tiktok_handle, facebook_handle, now))
+            except sqlite3.OperationalError:
+                # Fallback if facebook_handle column doesn't exist yet
+                conn.execute("""
+                    INSERT INTO vertical_brands
+                    (vertical_name, brand_name, instagram_handle, tiktok_handle, added_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (vertical_name, brand_name, instagram_handle, tiktok_handle, now))
             conn.commit()
 
-            handle_info = instagram_handle or tiktok_handle
+            handle_info = instagram_handle or tiktok_handle or facebook_handle
             if archived_count > 0:
                 logger.info(f"Re-added {handle_info} to {vertical_name} (instant: unarchived {archived_count} cached posts)")
             else:
@@ -192,31 +223,35 @@ class VerticalManager:
         finally:
             conn.close()
 
-    def remove_brand(self, vertical_name: str, instagram_handle: str) -> bool:
-        """Remove a brand from a vertical (soft delete - archives posts for instant re-add)."""
+    def remove_brand(self, vertical_name: str, handle: str) -> bool:
+        """Remove a brand from a vertical (soft delete - archives posts for instant re-add).
+
+        Matches by any handle column (instagram, tiktok, or facebook).
+        """
         conn = self._get_conn()
-        instagram_handle = instagram_handle.lstrip('@')
+        handle = handle.lstrip('@')
 
         # Archive brand's posts from this vertical (soft delete)
         conn.execute("""
             UPDATE competitor_posts
             SET archived = 1
             WHERE brand_profile = ? AND competitor_handle = ?
-        """, (vertical_name, instagram_handle))
+        """, (vertical_name, handle))
         posts_archived = conn.total_changes
 
-        # Delete brand from vertical_brands table
+        # Delete brand from vertical_brands table — match any handle column
         conn.execute("""
             DELETE FROM vertical_brands
-            WHERE vertical_name = ? AND instagram_handle = ?
-        """, (vertical_name, instagram_handle))
+            WHERE vertical_name = ?
+              AND (instagram_handle = ? OR tiktok_handle = ? OR facebook_handle = ?)
+        """, (vertical_name, handle, handle, handle))
 
         deleted = conn.total_changes > 0
         conn.commit()
         conn.close()
 
         if deleted:
-            logger.info(f"Removed @{instagram_handle} from {vertical_name} ({posts_archived} posts archived)")
+            logger.info(f"Removed @{handle} from {vertical_name} ({posts_archived} posts archived)")
         return deleted
 
     def bulk_add_brands(self, vertical_name: str, handles_text: str) -> Dict:

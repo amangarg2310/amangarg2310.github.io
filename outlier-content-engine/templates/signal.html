@@ -13,40 +13,54 @@
 <div id="splashScreen" class="splash-screen" style="display: none;">
     <div class="splash-content">
         <div class="splash-logo">
-            <svg width="120" height="120" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <!-- Radar circle background -->
-                <circle cx="32" cy="32" r="28" fill="url(#splashGradient)" opacity="0.15"/>
-                <circle cx="32" cy="32" r="22" stroke="url(#splashGradient)" stroke-width="1.5" opacity="0.3" fill="none"/>
-                <circle cx="32" cy="32" r="16" stroke="url(#splashGradient)" stroke-width="1.5" opacity="0.5" fill="none"/>
+            <svg width="180" height="130" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Dog outline - flowing line art style -->
+                <!-- Back of head flowing into ear -->
+                <path d="M95 52 C85 30, 105 15, 120 28" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Top of head -->
+                <path d="M120 28 C135 18, 155 20, 165 35" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Forehead to nose bridge -->
+                <path d="M165 35 C170 42, 172 52, 168 60" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Nose/snout -->
+                <path d="M168 60 C172 68, 170 75, 160 78" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Under chin flowing down -->
+                <path d="M160 78 C150 82, 140 80, 135 85" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Chest flowing down -->
+                <path d="M135 85 C125 95, 115 110, 110 130" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Front leg -->
+                <path d="M110 130 C108 140, 110 148, 115 150" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Back of head down to back -->
+                <path d="M95 52 C88 65, 82 80, 80 100" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Back/body curve -->
+                <path d="M80 100 C78 115, 80 130, 85 142" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Rear end -->
+                <path d="M85 142 C90 148, 95 150, 100 148" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <!-- Floppy ear -->
+                <path d="M110 38 C100 42, 92 55, 98 65" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+                <!-- Eye -->
+                <circle cx="148" cy="48" r="4" fill="white"/>
+                <!-- Nose dot -->
+                <circle cx="170" cy="65" r="3.5" fill="white"/>
+                <!-- Tail curving up -->
+                <path d="M80 105 C65 95, 55 80, 60 65" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M60 65 C62 58, 68 55, 72 58" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
 
-                <!-- Radar sweep line -->
-                <line x1="32" y1="32" x2="52" y2="20" stroke="url(#splashGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+                <!-- Magnifying glass -->
+                <!-- Glass ring -->
+                <circle cx="215" cy="65" r="32" stroke="white" stroke-width="5" fill="none"/>
+                <!-- Lens glare arc -->
+                <path d="M198 48 C204 38, 218 36, 228 44" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+                <!-- Handle -->
+                <line x1="238" y1="88" x2="268" y2="125" stroke="white" stroke-width="7" stroke-linecap="round"/>
+                <!-- Handle grip lines -->
+                <line x1="252" y1="108" x2="248" y2="112" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+                <line x1="258" y1="115" x2="254" y2="119" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
 
-                <!-- Crosshair center -->
-                <circle cx="32" cy="32" r="4" fill="url(#splashGradient)"/>
-                <circle cx="32" cy="32" r="2" fill="#fff"/>
-
-                <!-- Discovery dots -->
-                <circle cx="42" cy="24" r="2.5" fill="#00d9ff" opacity="0.9">
-                    <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
-                </circle>
-                <circle cx="24" cy="40" r="2.5" fill="#a855f7" opacity="0.9">
-                    <animate attributeName="opacity" values="1;0.4;1" dur="2.5s" repeatCount="indefinite"/>
-                </circle>
-                <circle cx="46" cy="38" r="2" fill="#00d9ff" opacity="0.7">
-                    <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3s" repeatCount="indefinite"/>
-                </circle>
-
-                <!-- Gradient definition -->
-                <defs>
-                    <linearGradient id="splashGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
-                    </linearGradient>
-                </defs>
+                <!-- "ScoutAI" text integrated below -->
+                <!-- The S flows from the tail -->
+                <text x="72" y="192" font-family="'Segoe UI', Arial, sans-serif" font-size="48" font-weight="700" fill="white" letter-spacing="2">ScoutAI</text>
             </svg>
         </div>
-        <h1 class="splash-title">ScoutAI</h1>
         <p class="splash-tagline">Discover What's Working in Social Media</p>
         <div class="splash-loader">
             <div class="splash-loader-bar"></div>
@@ -61,37 +75,32 @@
         <div class="signal-chat-header">
             <div class="signal-brand">
                 <div class="signal-brand-icon">
-                    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Radar circle background -->
-                        <circle cx="32" cy="32" r="28" fill="url(#scoutGradient)" opacity="0.15"/>
-                        <circle cx="32" cy="32" r="22" stroke="url(#scoutGradient)" stroke-width="1.5" opacity="0.3" fill="none"/>
-                        <circle cx="32" cy="32" r="16" stroke="url(#scoutGradient)" stroke-width="1.5" opacity="0.5" fill="none"/>
-
-                        <!-- Radar sweep line (animated feel) -->
-                        <line x1="32" y1="32" x2="52" y2="20" stroke="url(#scoutGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-
-                        <!-- Crosshair center -->
-                        <circle cx="32" cy="32" r="4" fill="url(#scoutGradient)"/>
-                        <circle cx="32" cy="32" r="2" fill="#fff"/>
-
-                        <!-- Discovery dots (content signals) -->
-                        <circle cx="42" cy="24" r="2.5" fill="#00d9ff" opacity="0.9">
-                            <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
-                        </circle>
-                        <circle cx="24" cy="40" r="2.5" fill="#a855f7" opacity="0.9">
-                            <animate attributeName="opacity" values="1;0.4;1" dur="2.5s" repeatCount="indefinite"/>
-                        </circle>
-                        <circle cx="46" cy="38" r="2" fill="#00d9ff" opacity="0.7">
-                            <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3s" repeatCount="indefinite"/>
-                        </circle>
-
-                        <!-- Gradient definition -->
-                        <defs>
-                            <linearGradient id="scoutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
-                            </linearGradient>
-                        </defs>
+                    <svg width="36" height="28" viewBox="0 0 280 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Dog outline - white line art (compact for header) -->
+                        <path d="M75 42 C65 20, 85 5, 100 18" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M100 18 C115 8, 135 10, 145 25" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M145 25 C150 32, 152 42, 148 50" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M148 50 C152 58, 150 65, 140 68" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M140 68 C130 72, 120 70, 115 75" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M115 75 C105 85, 95 100, 90 120" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M90 120 C88 130, 90 138, 95 140" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M75 42 C68 55, 62 70, 60 90" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M60 90 C58 105, 60 120, 65 132" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M65 132 C70 138, 75 140, 80 138" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <!-- Ear -->
+                        <path d="M90 28 C80 32, 72 45, 78 55" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+                        <!-- Eye -->
+                        <circle cx="128" cy="38" r="3.5" fill="white"/>
+                        <!-- Nose -->
+                        <circle cx="150" cy="55" r="3" fill="white"/>
+                        <!-- Tail -->
+                        <path d="M60 95 C45 85, 35 70, 40 55" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M40 55 C42 48, 48 45, 52 48" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+                        <!-- Magnifying glass -->
+                        <circle cx="195" cy="55" r="28" stroke="white" stroke-width="5" fill="none"/>
+                        <path d="M178 38 C184 28, 198 26, 208 34" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+                        <line x1="216" y1="76" x2="242" y2="108" stroke="white" stroke-width="7" stroke-linecap="round"/>
+                        <line x1="228" y1="92" x2="225" y2="96" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
                     </svg>
                 </div>
                 <span class="signal-brand-name">ScoutAI</span>
@@ -154,11 +163,54 @@
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
                     <div class="signal-message-bubble">
-                        You're all set up! Now let's create your first competitor category.
-                        <br><br>
-                        Tell me a category (e.g. "Streetwear" or "DTC Beauty") and the brands you want to track, or click the button below.
+                        You're all set! Let's create your first competitive set. Pick a template or describe your niche:
                     </div>
                     <div class="signal-message-time">Just now</div>
+                </div>
+            </div>
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-onboarding-templates">
+                        <div class="signal-template-card" onclick="useTemplate('Streetwear', '@supremenewyork @kaboreitokyo @stussy @palaceskateboards @noahclothing')">
+                            <div class="signal-template-icon">&#128085;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Streetwear</div>
+                                <div class="signal-template-brands">Supreme, Kith, Stussy, Palace, Noah</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card" onclick="useTemplate('Beauty & Skincare', '@glossier @theordinary @fentybeauty @rfrfrfrfrf @milkmakeup')">
+                            <div class="signal-template-icon">&#10024;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Beauty & Skincare</div>
+                                <div class="signal-template-brands">Glossier, The Ordinary, Fenty, Rhode, Milk</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card" onclick="useTemplate('Fitness & Wellness', '@gymshark @lululemon @nike @aloyoga @outdoorvoices')">
+                            <div class="signal-template-icon">&#128170;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Fitness & Wellness</div>
+                                <div class="signal-template-brands">Gymshark, Lululemon, Nike, Alo, Outdoor Voices</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card" onclick="useTemplate('Food & Beverage', '@chipotle @sweetgreen @liquid.death @poppi @olipop')">
+                            <div class="signal-template-icon">&#127828;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Food & Beverage</div>
+                                <div class="signal-template-brands">Chipotle, Sweetgreen, Liquid Death, Poppi, Olipop</div>
+                            </div>
+                        </div>
+                        <div class="signal-template-card signal-template-custom" onclick="openCreateModal()">
+                            <div class="signal-template-icon">&#43;</div>
+                            <div class="signal-template-info">
+                                <div class="signal-template-name">Custom</div>
+                                <div class="signal-template-brands">Start from scratch with your own brands</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="signal-onboarding-hint" style="margin-top:10px;">
+                        Or type something like: <code>"Create a Streetwear set with @nike and @adidas"</code>
+                    </div>
                 </div>
             </div>
             {% else %}
@@ -218,6 +270,17 @@
                         <div class="signal-benchmark-row">
                             <span class="signal-benchmark-handle">
                                 @{{ bl.competitor_handle }}
+                                {% set ns = namespace(has_error=false) %}
+                                {% for err in collection_errors %}
+                                {% if '@' + bl.competitor_handle in err %}
+                                {% set ns.has_error = true %}
+                                {% endif %}
+                                {% endfor %}
+                                {% if ns.has_error %}
+                                <span class="signal-benchmark-error-badge" title="Collection error on last run">!</span>
+                                {% elif bl.post_count == 0 %}
+                                <span class="signal-benchmark-warn-badge" title="No posts collected">0</span>
+                                {% endif %}
                                 {% if bl.outlier_count %}
                                 <span class="signal-benchmark-outlier-badge">{{ bl.outlier_count }}</span>
                                 {% endif %}
@@ -236,133 +299,74 @@
             </div>
             {% endif %}
 
-            <!-- Analysis Summary (if insights exist) -->
+            <!-- Consolidated Analysis Report -->
             {% if insights and insights.has_insights %}
             <div class="signal-message">
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
                     <div class="signal-message-bubble">
-                        {{ insights.summary }}
+                        {{ insights.summary|md_bold }}
                     </div>
 
-                    <!-- Pattern Cards -->
-                    {% for pattern in insights.patterns[:3] %}
-                    <div class="signal-insight-card">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                {% if pattern.pattern_type == 'driver' %}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                                {% elif pattern.pattern_type == 'format' %}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="8" y1="2" x2="8" y2="22"/></svg>
-                                {% else %}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                {% endif %}
-                            </span>
-                            <span class="signal-insight-label">{{ pattern.pattern_type|upper }}</span>
-                            <span class="signal-insight-metric">{{ pattern.metric }}</span>
+                    <!-- Single consolidated report card -->
+                    {% if insights.report_sections %}
+                    <div class="signal-report-card">
+                        <div class="signal-report-header" onclick="toggleReport(this)">
+                            <div class="signal-report-header-left">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                <span>Competitive Intelligence Report</span>
+                            </div>
+                            <span class="signal-report-meta">{{ insights.outlier_count }} outliers analyzed</span>
+                            <svg class="signal-report-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
-                        <div class="signal-insight-title">{{ pattern.name }}</div>
-                        <div class="signal-insight-desc">{{ pattern.description }}</div>
-                        {% if pattern.actionable_takeaway %}
-                        <div class="signal-insight-action">{{ pattern.actionable_takeaway }}</div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
 
-                    <!-- Recommendations -->
-                    {% if insights.recommendations %}
-                    <div class="signal-insight-card signal-rec-card">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                            </span>
-                            <span class="signal-insight-label">WHAT TO DO NEXT</span>
+                        <div class="signal-report-body open">
+                            {% for section in insights.report_sections %}
+                            <div class="signal-report-section">
+                                <div class="signal-report-section-title">
+                                    {% if section.icon == 'formats' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="8" y1="2" x2="8" y2="22"/></svg>
+                                    {% elif section.icon == 'hooks' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    {% elif section.icon == 'psychology' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
+                                    {% elif section.icon == 'drivers' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                                    {% elif section.icon == 'playbook' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    {% elif section.icon == 'ideas' %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                    {% else %}
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    {% endif %}
+                                    {{ section.title }}
+                                </div>
+                                <div class="signal-report-section-body">
+                                    {% for line in section.lines %}
+                                    <div class="signal-report-line">{{ line|md_bold }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
-                        {% for rec in insights.recommendations[:2] %}
-                        <div class="signal-rec-item">
-                            <div class="signal-insight-title">{{ rec.title }}</div>
-                            <div class="signal-insight-desc">{{ rec.description }}</div>
-                            <ul class="signal-rec-actions">
-                                {% for action in rec.actions[:3] %}
-                                <li>{{ action }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        {% endfor %}
                     </div>
                     {% endif %}
 
-                    <!-- Franchise Cards -->
-                    {% for franchise in insights.franchises[:1] %}
-                    <div class="signal-insight-card">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                            </span>
-                            <span class="signal-insight-label">FRANCHISE</span>
-                            <span class="signal-insight-metric">{{ franchise.retention_score }}</span>
-                        </div>
-                        <div class="signal-insight-title">{{ franchise.name }}</div>
-                        <div class="signal-insight-desc">{{ franchise.description }}</div>
-                    </div>
-                    {% endfor %}
-
-                    <!-- Content Pattern Clusters -->
+                    <!-- Content Pattern Clusters (clickable filters) -->
                     {% if pattern_clusters %}
-                    {% for cluster in pattern_clusters[:6] %}
-                    <div class="signal-insight-card signal-cluster-card" onclick="filterByCluster({{ cluster.pattern_name|tojson }})" style="cursor:pointer">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="9" x2="9" y2="11"/><line x1="18" y1="9" x2="15" y2="11"/><line x1="6" y1="15" x2="9" y2="13"/><line x1="18" y1="15" x2="15" y2="13"/></svg>
-                            </span>
-                            <span class="signal-insight-label">CLUSTER</span>
-                            <span class="signal-insight-metric">{{ cluster.count }} posts</span>
+                    <div class="signal-report-clusters">
+                        <div class="signal-report-clusters-label">Filter by pattern:</div>
+                        <div class="signal-report-cluster-pills">
+                            {% for cluster in pattern_clusters[:8] %}
+                            <button class="signal-pill signal-cluster-pill" onclick="filterByCluster({{ cluster.pattern_name|tojson }})">
+                                {{ cluster.pattern_name }} <span class="signal-cluster-count">{{ cluster.count }}</span>
+                            </button>
+                            {% endfor %}
                         </div>
-                        <div class="signal-insight-title">{{ cluster.pattern_name }}</div>
-                        <div class="signal-insight-desc">
-                            {{ cluster.count }} posts across
-                            {% for handle in cluster.brands[:3] %}@{{ handle }}{% if not loop.last %}, {% endif %}{% endfor %}{% if cluster.brands|length > 3 %} +{{ cluster.brands|length - 3 }} more{% endif %}
-                            used this pattern.
-                            Avg score: {{ cluster.avg_score }}
-                        </div>
-                        <div class="signal-cluster-filter-hint">Click to filter grid</div>
                     </div>
-                    {% endfor %}
                     {% endif %}
 
                     <div class="signal-message-time">{{ insights.outlier_count }} outliers analyzed</div>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Standalone Content Clusters (when AI analysis exists but no template insights) -->
-            {% if pattern_clusters and (not insights or not insights.has_insights) %}
-            <div class="signal-message">
-                <div class="signal-avatar">S</div>
-                <div class="signal-message-content">
-                    <div class="signal-message-bubble">
-                        I found <strong>{{ pattern_clusters|length }} content pattern clusters</strong> across your outlier posts.
-                    </div>
-                    {% for cluster in pattern_clusters[:6] %}
-                    <div class="signal-insight-card signal-cluster-card" onclick="filterByCluster({{ cluster.pattern_name|tojson }})" style="cursor:pointer">
-                        <div class="signal-insight-header">
-                            <span class="signal-insight-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal-tag-purple)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="9" x2="9" y2="11"/><line x1="18" y1="9" x2="15" y2="11"/><line x1="6" y1="15" x2="9" y2="13"/><line x1="18" y1="15" x2="15" y2="13"/></svg>
-                            </span>
-                            <span class="signal-insight-label">CLUSTER</span>
-                            <span class="signal-insight-metric">{{ cluster.count }} posts</span>
-                        </div>
-                        <div class="signal-insight-title">{{ cluster.pattern_name }}</div>
-                        <div class="signal-insight-desc">
-                            {{ cluster.count }} posts across
-                            {% for handle in cluster.brands[:3] %}@{{ handle }}{% if not loop.last %}, {% endif %}{% endfor %}{% if cluster.brands|length > 3 %} +{{ cluster.brands|length - 3 }} more{% endif %}
-                            used this pattern.
-                            Avg score: {{ cluster.avg_score }}
-                        </div>
-                        <div class="signal-cluster-filter-hint">Click to filter grid</div>
-                    </div>
-                    {% endfor %}
-                    <div class="signal-message-time">{{ pattern_clusters|length }} clusters found</div>
                 </div>
             </div>
             {% endif %}
@@ -387,6 +391,12 @@
                 </svg>
                 Create category
             </button>
+            <button type="button" class="signal-create-category-btn signal-score-btn" onclick="openScorerModal()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                Score content
+            </button>
         </div>
     </div>
 
@@ -396,13 +406,68 @@
         <div class="signal-content-header">
             <div class="signal-title-row">
                 <h1 class="signal-content-title">Outliers Identified:</h1>
+                <button class="signal-settings-btn" onclick="showGuideModal()" title="Quick Guide">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </button>
                 <a href="{{ url_for('setup_page') }}" class="signal-settings-btn" title="Settings &amp; API keys">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"/>
                         <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
                     </svg>
                 </a>
+                {% if auth_enabled and current_user %}
+                <div class="signal-user-menu" id="userMenu">
+                    <button class="signal-user-avatar-btn" onclick="toggleUserMenu()" title="{{ current_user.email }}">
+                        {% if current_user.picture %}
+                        <img src="{{ current_user.picture }}" alt="" class="signal-user-avatar" referrerpolicy="no-referrer">
+                        {% else %}
+                        <span class="signal-user-avatar-fallback">{{ current_user.name[0] if current_user.name else 'U' }}</span>
+                        {% endif %}
+                    </button>
+                    <div class="signal-user-dropdown" id="userDropdown" style="display:none;">
+                        <div class="signal-user-dropdown-name">{{ current_user.name }}</div>
+                        <div class="signal-user-dropdown-email">{{ current_user.email }}</div>
+                        <hr class="signal-user-dropdown-divider">
+                        <a href="{{ url_for('logout') }}" class="signal-user-dropdown-item">Sign out</a>
+                    </div>
+                </div>
+                {% endif %}
             </div>
+
+            <!-- Budget Indicator (loaded async) -->
+            <div class="signal-budget-bar" id="budgetBar" style="display:none;">
+                <div class="signal-budget-info">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span id="budgetLabel">Loading...</span>
+                </div>
+                <div class="signal-budget-track">
+                    <div class="signal-budget-fill" id="budgetFill" style="width:0%"></div>
+                </div>
+                <span class="signal-budget-runs" id="budgetRuns"></span>
+            </div>
+
+            <!-- First-Run Hints (shown once after first analysis) -->
+            {% if outliers and not needs_setup %}
+            <div class="signal-first-run-hints" id="firstRunHints" style="display:none;">
+                <div class="signal-hint-card">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span><strong>Multiplier</strong> shows how much more engagement a post got vs brand average</span>
+                </div>
+                <div class="signal-hint-card">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span><strong>Click any card</strong> to see AI analysis — why it worked, what to replicate</span>
+                </div>
+                <div class="signal-hint-card">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                    <span><strong>Ask the chatbot</strong> to filter, compare brands, or get content suggestions</span>
+                </div>
+                <button class="signal-hint-dismiss" onclick="dismissFirstRunHints()">Got it</button>
+            </div>
+            {% endif %}
 
             <!-- Filter Pills -->
             <div class="signal-filters">
@@ -522,6 +587,13 @@
                             </svg>
                             TT
                         </button>
+                        <button class="signal-pill {% if selected_platform == 'facebook' %}active{% endif %}"
+                                onclick="applyFilter('platform', 'facebook')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                            </svg>
+                            FB
+                        </button>
                     </div>
                 </div>
 
@@ -550,6 +622,39 @@
                                 onclick="applyFilter('sort', 'date')">Recent</button>
                     </div>
                 </div>
+
+                <!-- Export -->
+                {% if outliers %}
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">EXPORT</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill" onclick="exportCSV()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            CSV
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Reset Filters -->
+                {% if selected_competitor or selected_platform or selected_timeframe == '3mo' or sort_by != 'score' %}
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">&nbsp;</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill signal-pill-reset" onclick="resetAllFilters()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="1 4 1 10 7 10"/>
+                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                            </svg>
+                            Reset
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -601,6 +706,10 @@
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/>
                             </svg>
+                            {% elif post.platform == 'facebook' %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                            </svg>
                             {% else %}
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="2" y="2" width="20" height="20" rx="5"/>
@@ -611,7 +720,21 @@
                             @{{ post.competitor_handle }}
                         </div>
 
-                        <!-- Date Badge (Below Platform Badge) -->
+                        <!-- Multiplier Badge (Below Platform Badge) -->
+                        {% if post.engagement_multiplier and post.engagement_multiplier >= 1.5 %}
+                        <div class="signal-multiplier-badge">
+                            {% if post.engagement_multiplier >= 5 %}
+                            <span class="signal-multiplier-hot">{{ post.engagement_multiplier }}x</span>
+                            {% elif post.engagement_multiplier >= 3 %}
+                            <span class="signal-multiplier-high">{{ post.engagement_multiplier }}x</span>
+                            {% else %}
+                            <span class="signal-multiplier-med">{{ post.engagement_multiplier }}x</span>
+                            {% endif %}
+                            above baseline
+                        </div>
+                        {% endif %}
+
+                        <!-- Date Badge -->
                         {% if post.posted_at %}
                         <div class="signal-date-badge">
                             {{ post.posted_at|timeago }}
@@ -830,10 +953,189 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="M21 21l-4.35-4.35"></path>
                     </svg>
-                    <h3>No outlier posts found</h3>
+                    <h3>No outlier posts yet</h3>
                     <p>Run an analysis to find viral content from your competitors.</p>
+                    <div class="signal-empty-steps">
+                        <div class="signal-empty-step">
+                            <span class="signal-empty-step-num">1</span>
+                            <span>Select a competitive set from the dropdown above</span>
+                        </div>
+                        <div class="signal-empty-step">
+                            <span class="signal-empty-step-num">2</span>
+                            <span>Type <code>"analyze"</code> in the chat — takes ~2 minutes</span>
+                        </div>
+                        <div class="signal-empty-step">
+                            <span class="signal-empty-step-num">3</span>
+                            <span>Outlier posts will appear here, ranked by score</span>
+                        </div>
+                    </div>
                 </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Guide Modal -->
+    <div class="signal-modal-overlay" id="guideModal" role="dialog" aria-modal="true" aria-label="Quick Guide">
+        <div class="signal-modal" style="max-width: 520px;">
+            <div class="signal-modal-header">
+                <h3 class="signal-modal-title">Quick Guide</h3>
+                <button type="button" class="signal-modal-close" onclick="closeGuideModal()" aria-label="Close">&times;</button>
+            </div>
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Getting Started</div>
+                    <p class="signal-guide-desc">Create a competitive set, add brand handles, and run your first analysis.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Create a category called Streetwear"</code>
+                        <code>"Add @nike @kith @stussy to Streetwear"</code>
+                        <code>"Analyze Streetwear"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Filter & Browse</div>
+                    <p class="signal-guide-desc">Filter outlier posts by platform, brand, or timeframe without re-running analysis.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Show me TikTok posts"</code>
+                        <code>"Filter to @nike"</code>
+                        <code>"Show me posts from the last 3 months"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Score Your Content</div>
+                    <p class="signal-guide-desc">Test a caption or concept against learned patterns from competitor outliers. Shows format fit, hook strength, pattern alignment, voice match, and competitive gap fill. No API cost.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Score this: Just dropped our latest collection. Link in bio."</code>
+                        <code>"How would this caption perform as a reel?"</code>
+                        <code>"Rate this hook: You've been styling this wrong"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Optimize</div>
+                    <p class="signal-guide-desc">After scoring, ask for AI-powered improvements targeting your weakest areas. Uses GPT-4o-mini.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Optimize it"</code>
+                        <code>"Improve the hook"</code>
+                        <code>"Make it better for TikTok"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Trend Predictions</div>
+                    <p class="signal-guide-desc">See which content patterns, hooks, and formats are rising or declining across your competitive set.</p>
+                    <div class="signal-guide-examples">
+                        <code>"What's trending?"</code>
+                        <code>"What content patterns are rising?"</code>
+                        <code>"What should I post about this week?"</code>
+                    </div>
+                </div>
+                <div class="signal-guide-section">
+                    <div class="signal-guide-heading">Manage Brands</div>
+                    <p class="signal-guide-desc">Add, remove, or list brands and categories at any time.</p>
+                    <div class="signal-guide-examples">
+                        <code>"Show categories"</code>
+                        <code>"Remove @nike from Streetwear"</code>
+                        <code>"Add @zara to Fast Fashion"</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Scorer Modal -->
+    <div class="signal-modal-overlay" id="scorerModal" role="dialog" aria-modal="true" aria-label="Score Content">
+        <div class="signal-modal" style="max-width: 560px;">
+            <div class="signal-modal-header">
+                <h3 class="signal-modal-title">Score Your Content</h3>
+                <button type="button" class="signal-modal-close" onclick="closeScorerModal()" aria-label="Close">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <!-- Scorer Form -->
+                <div id="scorerForm">
+                    <div class="signal-scorer-row">
+                        <div class="signal-form-group" style="flex:1">
+                            <label class="signal-form-label">Platform</label>
+                            <select id="scorerPlatform" class="signal-form-input">
+                                <option value="instagram">Instagram</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="facebook">Facebook</option>
+                            </select>
+                        </div>
+                        <div class="signal-form-group" style="flex:1">
+                            <label class="signal-form-label">Format</label>
+                            <select id="scorerFormat" class="signal-form-input">
+                                <option value="reel">Reel</option>
+                                <option value="carousel">Carousel</option>
+                                <option value="static">Static</option>
+                                <option value="story">Story</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="signal-form-group">
+                        <label class="signal-form-label">Hook line <span class="signal-form-optional">(optional)</span></label>
+                        <input type="text" id="scorerHook" class="signal-form-input" placeholder="e.g. You've been styling this wrong">
+                    </div>
+                    <div class="signal-form-group">
+                        <label class="signal-form-label">Caption</label>
+                        <textarea id="scorerCaption" class="signal-form-textarea" rows="4" placeholder="Enter your caption or concept text..."></textarea>
+                    </div>
+                    <button type="button" class="signal-btn-primary" style="width:100%" onclick="runScore()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        Score This Concept
+                    </button>
+                </div>
+
+                <!-- Score Results (hidden initially) -->
+                <div id="scorerResults" style="display:none;">
+                    <div class="signal-scorer-result-header">
+                        <div class="signal-scorer-score-ring">
+                            <svg viewBox="0 0 88 88" class="signal-score-svg">
+                                <circle class="signal-score-bg" cx="44" cy="44" r="40"/>
+                                <circle id="scorerScoreRing" class="signal-score-fg cyan" cx="44" cy="44" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <span class="signal-score-value" id="scorerScoreValue">0</span>
+                        </div>
+                        <div>
+                            <div class="signal-scorer-score-label">Overall Score</div>
+                            <div class="signal-scorer-predicted" id="scorerPredicted"></div>
+                        </div>
+                        <button type="button" class="signal-btn-primary signal-optimize-btn" id="scorerOptimizeBtn" onclick="runOptimize()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/>
+                                <line x1="9" y1="21" x2="15" y2="21"/>
+                            </svg>
+                            Optimize
+                        </button>
+                    </div>
+
+                    <!-- Breakdown Bars -->
+                    <div class="signal-scorer-breakdown" id="scorerBreakdown"></div>
+
+                    <!-- Suggestions -->
+                    <div class="signal-scorer-suggestions" id="scorerSuggestions"></div>
+
+                    <!-- Optimized Results (shown after optimize) -->
+                    <div id="scorerOptimized" style="display:none;">
+                        <div class="signal-scorer-divider"></div>
+                        <div class="signal-scorer-optimized-header">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            AI-Improved Version
+                        </div>
+                        <div class="signal-scorer-improved-caption" id="scorerImprovedCaption"></div>
+                        <div class="signal-scorer-improved-hook" id="scorerImprovedHook"></div>
+                        <div class="signal-scorer-improvements" id="scorerImprovements"></div>
+                        <div class="signal-scorer-new-score" id="scorerNewScore"></div>
+                    </div>
+
+                    <button type="button" class="signal-btn-outline" style="width:100%;margin-top:16px" onclick="resetScorer()">Score Another</button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="scorerLoading" style="display:none;" class="signal-scorer-loading">
+                    <div class="analysis-spinner"></div>
+                    <p id="scorerLoadingMsg">Scoring your concept...</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -870,6 +1172,100 @@
 </div>
 
 <script>
+// User menu toggle
+function toggleUserMenu() {
+    const dd = document.getElementById('userDropdown');
+    if (dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+// Close user menu when clicking outside
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('userMenu');
+    const dd = document.getElementById('userDropdown');
+    if (menu && dd && !menu.contains(e.target)) {
+        dd.style.display = 'none';
+    }
+});
+
+// Quick Guide modal
+function showGuideModal() {
+    document.getElementById('guideModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeGuideModal() {
+    document.getElementById('guideModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('guideModal').addEventListener('click', function(e) {
+    if (e.target === this) closeGuideModal();
+});
+
+// Reset all filters to defaults
+function resetAllFilters() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('competitor');
+    url.searchParams.delete('platform');
+    url.searchParams.delete('sort');
+    url.searchParams.set('timeframe', '30d');
+    history.pushState(null, '', url.toString());
+    // Update active pills
+    document.querySelectorAll('.signal-pill.active').forEach(p => p.classList.remove('active'));
+    // Re-activate defaults
+    document.querySelectorAll('.signal-pill').forEach(p => {
+        const txt = p.textContent.trim();
+        if (txt.startsWith('All') || txt === '30 Days' || txt === 'Score') p.classList.add('active');
+    });
+    showSkeletonState();
+    fetchFilteredOutliers();
+}
+
+// Template card: send chat message to create category + add brands
+function useTemplate(name, handles) {
+    const input = document.getElementById('chatInput');
+    const msg = 'Create a category called ' + name + ' and add ' + handles;
+    if (input) {
+        input.value = msg;
+        // Auto-submit
+        const form = input.closest('form');
+        if (form) form.dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));
+    }
+}
+
+// Budget bar: fetch and display monthly LLM spend
+(function loadBudget() {
+    fetch('/api/budget')
+        .then(r => r.json())
+        .then(data => {
+            const bar = document.getElementById('budgetBar');
+            if (!bar) return;
+            bar.style.display = '';
+            const pct = Math.min(data.percent_used || 0, 100);
+            const fill = document.getElementById('budgetFill');
+            fill.style.width = pct + '%';
+            // Color coding: green < 50%, yellow < 80%, red >= 80%
+            if (pct >= 80) fill.classList.add('budget-danger');
+            else if (pct >= 50) fill.classList.add('budget-warning');
+            document.getElementById('budgetLabel').textContent =
+                '$' + data.spent.toFixed(2) + ' / $' + data.limit.toFixed(2) + ' this month';
+            document.getElementById('budgetRuns').textContent = data.runs_this_month + ' runs';
+        })
+        .catch(() => {});
+})();
+
+// First-run hints: show once after first analysis
+(function checkFirstRun() {
+    const hints = document.getElementById('firstRunHints');
+    if (!hints) return;
+    const key = 'scout_first_run_dismissed';
+    if (!localStorage.getItem(key)) {
+        hints.style.display = '';
+    }
+})();
+function dismissFirstRunHints() {
+    const hints = document.getElementById('firstRunHints');
+    if (hints) hints.style.display = 'none';
+    localStorage.setItem('scout_first_run_dismissed', '1');
+}
+
 // Create category modal
 function openCreateModal() {
     document.querySelectorAll('.signal-vertical-dropdown-menu').forEach(m => m.classList.remove('open'));
@@ -925,6 +1321,14 @@ function toggleInsight(trigger) {
     panel.classList.toggle('open', !isOpen);
 }
 
+// Toggle consolidated report
+function toggleReport(header) {
+    const body = header.nextElementSibling;
+    const isOpen = body.classList.contains('open');
+    header.classList.toggle('collapsed', !isOpen);
+    body.classList.toggle('open', !isOpen);
+}
+
 // Toggle benchmarks panel
 function toggleBenchmarks(trigger) {
     const panel = trigger.nextElementSibling;
@@ -937,24 +1341,26 @@ function toggleBenchmarks(trigger) {
 let activeClusterFilter = null;
 function filterByCluster(patternName) {
     const cards = document.querySelectorAll('.signal-card-link');
-    const clusterCards = document.querySelectorAll('.signal-cluster-card');
+    const clusterPills = document.querySelectorAll('.signal-cluster-pill');
 
     // Toggle off if clicking the same cluster
     if (activeClusterFilter === patternName) {
         activeClusterFilter = null;
         cards.forEach(card => { card.style.display = ''; });
-        clusterCards.forEach(c => c.classList.remove('signal-cluster-active'));
+        clusterPills.forEach(c => c.classList.remove('signal-cluster-active'));
         return;
     }
 
     activeClusterFilter = patternName;
 
-    // Highlight active cluster card
-    clusterCards.forEach(c => {
-        if (c.querySelector('.signal-insight-title').textContent.trim() === patternName) {
-            c.classList.add('signal-cluster-active');
+    // Highlight active cluster pill
+    clusterPills.forEach(pill => {
+        // The pill text includes the count span, so check textContent of first text node
+        const pillText = pill.childNodes[0].textContent.trim();
+        if (pillText === patternName) {
+            pill.classList.add('signal-cluster-active');
         } else {
-            c.classList.remove('signal-cluster-active');
+            pill.classList.remove('signal-cluster-active');
         }
     });
 
@@ -969,16 +1375,351 @@ function filterByCluster(patternName) {
     });
 }
 
-// Filter handling
+// ── AJAX Filter handling (progressive UX — no full page reload) ──
 function applyFilter(key, value) {
     const url = new URL(window.location.href);
     url.searchParams.set(key, value);
-    window.location.href = url.toString();
+
+    // Update URL without reload (for bookmarkability)
+    history.pushState(null, '', url.toString());
+
+    // Update active pill styling
+    updateActivePills(key, value);
+
+    // Show skeleton loading state
+    showSkeletonState();
+
+    // Fetch filtered data via AJAX
+    fetchFilteredOutliers();
+
+    // Sync filter state to chatbot context (fire-and-forget)
+    syncFilterToChat(key, value);
+}
+
+function updateActivePills(key, value) {
+    // Map filter keys to their pill groups
+    const groupLabels = {
+        'platform': 'PLATFORM',
+        'timeframe': 'TIMEFRAME',
+        'sort': 'SORT',
+    };
+    const label = groupLabels[key];
+    if (!label) return;
+
+    document.querySelectorAll('.signal-filter-group').forEach(group => {
+        const groupLabel = group.querySelector('.signal-filter-label');
+        if (groupLabel && groupLabel.textContent.trim() === label) {
+            group.querySelectorAll('.signal-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            // Find the pill that matches the value
+            group.querySelectorAll('.signal-pill').forEach(pill => {
+                const onclick = pill.getAttribute('onclick') || '';
+                if (onclick.includes(`'${value}'`)) {
+                    pill.classList.add('active');
+                }
+                // Handle "All" button (empty value)
+                if (value === '' && onclick.includes("''")) {
+                    pill.classList.add('active');
+                }
+            });
+        }
+    });
+}
+
+function showSkeletonState() {
+    const grid = document.querySelector('.signal-grid');
+    if (!grid) return;
+    let html = '';
+    for (let i = 0; i < 6; i++) {
+        html += `
+            <div class="signal-card-link skeleton-card" style="animation-delay: ${i * 0.1}s">
+                <div class="signal-card">
+                    <div class="signal-card-media skeleton-media"></div>
+                    <div class="signal-card-body">
+                        <div class="skeleton-line" style="width: 80%"></div>
+                        <div class="skeleton-line" style="width: 60%"></div>
+                        <div class="skeleton-line" style="width: 40%"></div>
+                    </div>
+                </div>
+            </div>`;
+    }
+    grid.innerHTML = html;
+}
+
+async function fetchFilteredOutliers() {
+    const params = new URLSearchParams(window.location.search);
+    try {
+        const response = await fetch('/api/outliers?' + params.toString());
+        const data = await response.json();
+
+        // Update the outlier count in header
+        const countEl = document.querySelector('.signal-chat-subtitle');
+        if (countEl) {
+            countEl.textContent = `Outliers Identified: ${data.count} posts`;
+        }
+
+        // Re-render the grid (full page reload for now — the Jinja2 cards are complex)
+        // For MVP, reload if data changed since skeleton was shown
+        window.location.reload();
+    } catch (error) {
+        console.error('Failed to fetch outliers:', error);
+        // Fallback: reload page
+        window.location.reload();
+    }
+}
+
+function syncFilterToChat(key, value) {
+    fetch('/chat/context', {
+        method: 'POST',
+        headers: getBYOKHeaders(),
+        body: JSON.stringify({ filter_key: key, filter_value: value })
+    }).catch(() => {}); // Fire and forget
+}
+
+function exportCSV() {
+    const params = new URLSearchParams(window.location.search);
+    window.open('/api/export/csv?' + params.toString(), '_blank');
 }
 
 // Pattern filtering
 function filterByPattern(patternName) {
     applyFilter('tag', patternName);
+}
+
+// ── Content Scorer Modal ──
+let lastScoreData = null;
+let lastScoreId = null;
+let lastScoredConcept = null;
+
+function openScorerModal() {
+    document.getElementById('scorerModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeScorerModal() {
+    document.getElementById('scorerModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('scorerModal').addEventListener('click', function(e) {
+    if (e.target === this) closeScorerModal();
+});
+
+function resetScorer() {
+    document.getElementById('scorerForm').style.display = '';
+    document.getElementById('scorerResults').style.display = 'none';
+    document.getElementById('scorerLoading').style.display = 'none';
+    document.getElementById('scorerOptimized').style.display = 'none';
+    document.getElementById('scorerCaption').value = '';
+    document.getElementById('scorerHook').value = '';
+    lastScoreData = null;
+    lastScoreId = null;
+    lastScoredConcept = null;
+}
+
+async function runScore() {
+    const caption = document.getElementById('scorerCaption').value.trim();
+    if (!caption) { alert('Please enter a caption.'); return; }
+
+    const concept = {
+        caption: caption,
+        hook_line: document.getElementById('scorerHook').value.trim(),
+        format: document.getElementById('scorerFormat').value,
+        platform: document.getElementById('scorerPlatform').value,
+    };
+
+    document.getElementById('scorerForm').style.display = 'none';
+    document.getElementById('scorerResults').style.display = 'none';
+    document.getElementById('scorerLoading').style.display = '';
+    document.getElementById('scorerLoadingMsg').textContent = 'Scoring your concept...';
+
+    try {
+        const resp = await fetch('/api/score-concept', {
+            method: 'POST',
+            headers: getBYOKHeaders(),
+            body: JSON.stringify(concept),
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        lastScoreData = data;
+        lastScoreId = data.score_id;
+        lastScoredConcept = concept;
+        renderScoreResults(data);
+
+        document.getElementById('scorerLoading').style.display = 'none';
+        document.getElementById('scorerResults').style.display = '';
+    } catch (err) {
+        document.getElementById('scorerLoading').style.display = 'none';
+        document.getElementById('scorerForm').style.display = '';
+        alert('Scoring failed: ' + err.message);
+    }
+}
+
+function renderScoreResults(data) {
+    const score = Math.round(data.overall_score || 0);
+    const circ = 251.2;
+    const offset = circ - (circ * score / 100);
+
+    // Score ring
+    const ring = document.getElementById('scorerScoreRing');
+    ring.style.strokeDashoffset = offset;
+    ring.className = 'signal-score-fg ' + (score >= 80 ? 'cyan' : score >= 60 ? 'green' : score >= 40 ? 'yellow' : 'dim');
+    document.getElementById('scorerScoreValue').textContent = score;
+
+    // Predicted engagement
+    const pred = data.predicted_engagement_range;
+    if (pred && pred.mid) {
+        document.getElementById('scorerPredicted').textContent =
+            'Predicted: ' + Math.round(pred.low).toLocaleString() + ' - ' + Math.round(pred.high).toLocaleString() + ' likes';
+    } else {
+        document.getElementById('scorerPredicted').textContent = '';
+    }
+
+    // Breakdown bars
+    const breakdown = data.breakdown || {};
+    const dims = ['format_fit', 'hook_strength', 'pattern_alignment', 'voice_match', 'competitive_gap_fill'];
+    const labels = {'format_fit': 'Format Fit', 'hook_strength': 'Hook Strength', 'pattern_alignment': 'Pattern Match', 'voice_match': 'Voice Match', 'competitive_gap_fill': 'Gap Fill'};
+    let barsHtml = '';
+    dims.forEach(dim => {
+        const d = breakdown[dim] || {};
+        const s = d.score || 0;
+        const pct = (s / 20) * 100;
+        const color = pct >= 80 ? 'var(--signal-cyan)' : pct >= 60 ? 'var(--signal-success)' : pct >= 40 ? 'var(--signal-warning)' : 'var(--signal-error)';
+        barsHtml += `<div class="signal-scorer-bar-row">
+            <span class="signal-scorer-bar-label">${labels[dim] || dim}</span>
+            <div class="signal-scorer-bar-track"><div class="signal-scorer-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+            <span class="signal-scorer-bar-value">${s}/20</span>
+        </div>`;
+    });
+    document.getElementById('scorerBreakdown').innerHTML = barsHtml;
+
+    // Suggestions
+    const suggs = data.suggestions || [];
+    let suggsHtml = '';
+    suggs.forEach(s => {
+        suggsHtml += `<div class="signal-scorer-suggestion">${s}</div>`;
+    });
+    document.getElementById('scorerSuggestions').innerHTML = suggsHtml;
+}
+
+async function runOptimize() {
+    if (!lastScoredConcept) return;
+
+    document.getElementById('scorerOptimizeBtn').disabled = true;
+    document.getElementById('scorerOptimizeBtn').textContent = 'Optimizing...';
+
+    try {
+        const resp = await fetch('/api/optimize-concept', {
+            method: 'POST',
+            headers: getBYOKHeaders(),
+            body: JSON.stringify({
+                caption: lastScoredConcept.caption,
+                hook_line: lastScoredConcept.hook_line,
+                format: lastScoredConcept.format,
+                platform: lastScoredConcept.platform,
+                score_data: lastScoreData,
+                score_id: lastScoreId,
+            }),
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        const opt = data.optimized || {};
+        const newScore = data.new_score || {};
+
+        // Show improved caption
+        document.getElementById('scorerImprovedCaption').textContent = opt.improved_caption || '';
+        document.getElementById('scorerImprovedHook').textContent = opt.improved_hook ? 'Hook: "' + opt.improved_hook + '"' : '';
+
+        // Improvements list
+        const improvements = opt.improvements || [];
+        let impHtml = '';
+        improvements.forEach(imp => {
+            impHtml += `<div class="signal-scorer-improvement"><strong>${imp.area}:</strong> ${imp.suggestion}</div>`;
+        });
+        document.getElementById('scorerImprovements').innerHTML = impHtml;
+
+        // New score comparison
+        const oldScore = Math.round(lastScoreData.overall_score || 0);
+        const newScoreVal = Math.round(newScore.overall_score || 0);
+        const diff = newScoreVal - oldScore;
+        const diffStr = diff > 0 ? '+' + diff : '' + diff;
+        document.getElementById('scorerNewScore').innerHTML =
+            `<span class="signal-scorer-score-compare">Score: ${oldScore} → <strong>${newScoreVal}</strong> (${diffStr})</span>`;
+
+        // Update state for further optimization
+        lastScoreData = newScore;
+        lastScoreId = data.new_score_id;
+        lastScoredConcept = {
+            caption: opt.improved_caption,
+            hook_line: opt.improved_hook,
+            format: opt.format_recommendation || lastScoredConcept.format,
+            platform: lastScoredConcept.platform,
+        };
+
+        document.getElementById('scorerOptimized').style.display = '';
+        document.getElementById('scorerOptimizeBtn').disabled = false;
+        document.getElementById('scorerOptimizeBtn').textContent = 'Optimize Again';
+
+        // Re-render main score with new data
+        renderScoreResults(newScore);
+
+    } catch (err) {
+        document.getElementById('scorerOptimizeBtn').disabled = false;
+        document.getElementById('scorerOptimizeBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg> Optimize';
+        alert('Optimization failed: ' + err.message);
+    }
+}
+
+// ── Score Card in Chat (for chatbot-triggered scoring) ──
+function addScoreCard(data) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'signal-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'signal-avatar';
+    avatar.textContent = 'S';
+
+    const content = document.createElement('div');
+    content.className = 'signal-message-content';
+
+    const score = Math.round(data.overall_score || 0);
+    const breakdown = data.breakdown || {};
+    const dims = ['format_fit', 'hook_strength', 'pattern_alignment', 'voice_match', 'competitive_gap_fill'];
+    const labels = {'format_fit': 'Format Fit', 'hook_strength': 'Hook Strength', 'pattern_alignment': 'Pattern Match', 'voice_match': 'Voice Match', 'competitive_gap_fill': 'Gap Fill'};
+
+    let barsHtml = '';
+    dims.forEach(dim => {
+        const d = breakdown[dim] || {};
+        const s = d.score || 0;
+        const pct = (s / 20) * 100;
+        const color = pct >= 80 ? 'var(--signal-cyan)' : pct >= 60 ? 'var(--signal-success)' : pct >= 40 ? 'var(--signal-warning)' : 'var(--signal-error)';
+        barsHtml += `<div class="signal-scorer-bar-row"><span class="signal-scorer-bar-label">${labels[dim] || dim}</span><div class="signal-scorer-bar-track"><div class="signal-scorer-bar-fill" style="width:${pct}%;background:${color}"></div></div><span class="signal-scorer-bar-value">${s}/20</span></div>`;
+    });
+
+    const card = document.createElement('div');
+    card.className = 'signal-insight-card';
+    card.style.marginTop = '12px';
+    card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px;font-weight:700;color:${score >= 80 ? 'var(--signal-cyan)' : score >= 60 ? 'var(--signal-success)' : score >= 40 ? 'var(--signal-warning)' : 'var(--signal-error)'}">${score}/100</div>
+            <div style="font-size:12px;color:var(--signal-text-dim)">Content Score</div>
+        </div>
+        ${barsHtml}
+    `;
+
+    content.appendChild(card);
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'signal-message-time';
+    timeDiv.textContent = 'Just now';
+    content.appendChild(timeDiv);
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
 // Chat input handling
@@ -1037,6 +1778,28 @@ async function sendChatMessage(message) {
             setTimeout(() => {
                 window.location.href = redirectUrl;
             }, 800);
+            return;
+        }
+
+        // Handle filter actions from chatbot (Phase 4: chat→filter sync)
+        if (data.filter_action && data.filter_brands && data.filter_brands.length > 0) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('competitor', data.filter_brands[0]);
+            return;
+        }
+        if (data.filter_platform) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('platform', data.filter_platform);
+            return;
+        }
+        if (data.filter_timeframe) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('timeframe', data.filter_timeframe);
+            return;
+        }
+        if (data.filter_sort) {
+            if (data.response) addChatMessage(data.response, false);
+            applyFilter('sort', data.filter_sort);
             return;
         }
 
@@ -1647,10 +2410,17 @@ function showCustomPrompt(title, message, placeholder, onConfirm) {
 <script>
 // Analysis status polling
 let analysisPollingInterval = null;
+let analysisTimerInterval = null;
+let analysisStartedAt = null;
+let stallCheckCount = 0;
+let lastProgressPct = -1;
 
 function showAnalysisLoading() {
     const modal = document.getElementById('analysisLoadingModal');
     modal.style.display = 'flex';
+    analysisStartedAt = Date.now();
+    stallCheckCount = 0;
+    lastProgressPct = -1;
 
     // Clear old outlier cards to prevent showing stale data
     const outlierGrid = document.querySelector('.signal-grid');
@@ -1658,36 +2428,55 @@ function showAnalysisLoading() {
         outlierGrid.innerHTML = '<div class="signal-empty" style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--signal-text-dim);">Analyzing content...</div>';
     }
 
+    // Start client-side elapsed timer (updates every second for smooth display)
+    if (!analysisTimerInterval) {
+        analysisTimerInterval = setInterval(updateElapsedTimer, 1000);
+    }
+
     // Start polling for analysis status
     if (!analysisPollingInterval) {
-        analysisPollingInterval = setInterval(checkAnalysisStatus, 3000); // Poll every 3 seconds
+        analysisPollingInterval = setInterval(checkAnalysisStatus, 2500);
     }
+}
+
+function updateElapsedTimer() {
+    if (!analysisStartedAt) return;
+    const elapsed = Math.floor((Date.now() - analysisStartedAt) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const el = document.getElementById('analysisTimeElapsed');
+    if (el) el.textContent = `Elapsed: ${mins}m ${secs}s`;
 }
 
 function hideAnalysisLoading() {
     const modal = document.getElementById('analysisLoadingModal');
     modal.style.display = 'none';
 
-    // Stop polling
     if (analysisPollingInterval) {
         clearInterval(analysisPollingInterval);
         analysisPollingInterval = null;
     }
+    if (analysisTimerInterval) {
+        clearInterval(analysisTimerInterval);
+        analysisTimerInterval = null;
+    }
+    analysisStartedAt = null;
 }
 
 function checkAnalysisStatus() {
     fetch('/analysis/status')
         .then(response => response.json())
         .then(data => {
+            const progressFill = document.getElementById('analysisProgressFill');
+            const messageEl = document.getElementById('analysisLoadingMessage');
+            const timeRemainingEl = document.getElementById('analysisTimeEstimate');
+
             if (data.is_running) {
-                // Update progress if available
-                const progressFill = document.getElementById('analysisProgressFill');
-                const messageEl = document.getElementById('analysisLoadingMessage');
-                const timeRemainingEl = document.getElementById('analysisTimeEstimate');
-                const timeElapsedEl = document.getElementById('analysisTimeElapsed');
+                stallCheckCount = 0;  // Reset stall counter — server says it's running
 
                 if (data.progress !== undefined) {
                     progressFill.style.width = data.progress + '%';
+                    lastProgressPct = data.progress;
                 }
 
                 if (data.message) {
@@ -1697,26 +2486,33 @@ function checkAnalysisStatus() {
                 if (data.time_remaining) {
                     timeRemainingEl.textContent = 'Remaining: ' + data.time_remaining;
                 } else {
-                    timeRemainingEl.textContent = 'Remaining: Estimating...';
-                }
-
-                if (data.time_elapsed) {
-                    timeElapsedEl.textContent = 'Elapsed: ' + data.time_elapsed;
-                } else {
-                    timeElapsedEl.textContent = 'Elapsed: Starting...';
+                    timeRemainingEl.textContent = 'Remaining: estimating...';
                 }
             } else if (data.completed) {
-                // Analysis completed - refresh the page to show results
+                // Analysis completed — refresh to show results
                 hideAnalysisLoading();
-                window.location.reload();
+                window.location.href = '/signal';
             } else if (data.error) {
-                // Analysis failed
                 hideAnalysisLoading();
-                alert('Analysis failed: ' + data.error);
+                addChatMessage('Analysis failed: ' + data.error, false);
+            } else {
+                // Neither running nor completed — might be a gap between start and PID write
+                stallCheckCount++;
+                if (stallCheckCount > 8) {
+                    // 8 polls (~20s) with no running/completed — treat as done
+                    hideAnalysisLoading();
+                    window.location.href = '/signal';
+                }
             }
         })
         .catch(error => {
             console.error('Error checking analysis status:', error);
+            stallCheckCount++;
+            if (stallCheckCount > 12) {
+                // Network failures for 30s — give up gracefully
+                hideAnalysisLoading();
+                window.location.href = '/signal';
+            }
         });
 }
 

@@ -14,9 +14,12 @@
         <!-- Apify API Token -->
         <div class="settings-form-group">
             <label class="settings-label">Apify API Token *</label>
-            <input type="text" name="apify_token" id="apifyToken" class="settings-input"
-                   value="{{ apify_token or '' }}" required
-                   placeholder="apify_api_...">
+            <div class="settings-input-wrap">
+                <input type="text" name="apify_token" id="apifyToken" class="settings-input"
+                       value="{{ apify_token or '' }}" required
+                       placeholder="apify_api_...">
+                <span class="settings-validation-badge" id="apifyBadge"></span>
+            </div>
             <div class="settings-hint">
                 Used for Instagram and TikTok data collection.
                 <a href="https://console.apify.com/account/integrations" target="_blank">Get your token here &rarr;</a>
@@ -26,14 +29,23 @@
         <!-- OpenAI Key -->
         <div class="settings-form-group">
             <label class="settings-label">OpenAI API Key *</label>
-            <input type="text" name="openai_key" id="openaiKey" class="settings-input"
-                   value="{{ openai_key or '' }}" required
-                   placeholder="sk-...">
+            <div class="settings-input-wrap">
+                <input type="text" name="openai_key" id="openaiKey" class="settings-input"
+                       value="{{ openai_key or '' }}" required
+                       placeholder="sk-...">
+                <span class="settings-validation-badge" id="openaiBadge"></span>
+            </div>
             <div class="settings-hint">
                 Used for AI content analysis.
                 <a href="https://platform.openai.com/api-keys" target="_blank">Get your key here &rarr;</a>
             </div>
         </div>
+
+        <!-- Validate Keys Button -->
+        <button type="button" class="settings-btn-validate" id="validateBtn" onclick="validateKeys()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Validate Keys
+        </button>
 
         <hr class="settings-divider">
 
@@ -74,6 +86,32 @@
             </div>
         </div>
 
+        <hr class="settings-divider">
+
+        <!-- Google Login -->
+        <div class="settings-card-title">Google Login <span class="settings-text-muted">(optional)</span></div>
+        <div class="settings-card-subtitle">Enable Google OAuth to require login. When not configured, the app is accessible without authentication.</div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Google OAuth Client ID</label>
+            <input type="text" name="google_client_id" class="settings-input"
+                   value="{{ google_client_id or '' }}"
+                   placeholder="123456789.apps.googleusercontent.com">
+            <div class="settings-hint">
+                From <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console &rarr; Credentials</a>
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Google OAuth Client Secret</label>
+            <input type="password" name="google_client_secret" class="settings-input"
+                   value="{{ google_client_secret or '' }}"
+                   placeholder="GOCSPX-...">
+            <div class="settings-hint">
+                Keep this secret. Add <code>{{ request.url_root }}auth/google/callback</code> as an Authorized Redirect URI in Google Cloud Console.
+            </div>
+        </div>
+
         <!-- Save Button -->
         <div class="settings-actions">
             <button type="submit" class="settings-btn-primary">
@@ -100,10 +138,18 @@
         </ol>
 
         <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">OpenAI (AI Analysis):</strong></p>
-        <ol style="padding-left:20px">
+        <ol style="padding-left:20px;margin-bottom:20px">
             <li>Sign up at <a href="https://platform.openai.com" target="_blank" style="color:var(--signal-cyan)">platform.openai.com</a></li>
             <li>Add payment method ($5 minimum)</li>
             <li>Go to API Keys &rarr; Create new secret key</li>
+        </ol>
+
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">Google Login (optional):</strong></p>
+        <ol style="padding-left:20px">
+            <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--signal-cyan)">Google Cloud Console &rarr; Credentials</a></li>
+            <li>Create an OAuth 2.0 Client ID (Web application)</li>
+            <li>Add <code style="color:var(--signal-cyan)">{{ request.url_root }}auth/google/callback</code> as a redirect URI</li>
+            <li>Copy the Client ID and Client Secret</li>
         </ol>
     </div>
 </div>
@@ -137,6 +183,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// Live API key validation
+function validateKeys() {
+    const btn = document.getElementById('validateBtn');
+    const apifyBadge = document.getElementById('apifyBadge');
+    const openaiBadge = document.getElementById('openaiBadge');
+    const apifyVal = document.getElementById('apifyToken').value.trim();
+    const openaiVal = document.getElementById('openaiKey').value.trim();
+
+    btn.disabled = true;
+    btn.textContent = 'Validating...';
+    apifyBadge.className = 'settings-validation-badge checking';
+    apifyBadge.textContent = '...';
+    openaiBadge.className = 'settings-validation-badge checking';
+    openaiBadge.textContent = '...';
+
+    fetch('/api/validate_keys', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({apify_token: apifyVal, openai_key: openaiVal}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.apify && data.apify.valid) {
+            apifyBadge.className = 'settings-validation-badge valid';
+            apifyBadge.textContent = data.apify.username ? '\u2713 ' + data.apify.username : '\u2713 Valid';
+        } else {
+            apifyBadge.className = 'settings-validation-badge invalid';
+            apifyBadge.textContent = '\u2717 ' + (data.apify ? data.apify.error : 'Invalid');
+        }
+        if (data.openai && data.openai.valid) {
+            openaiBadge.className = 'settings-validation-badge valid';
+            openaiBadge.textContent = '\u2713 Valid';
+        } else {
+            openaiBadge.className = 'settings-validation-badge invalid';
+            openaiBadge.textContent = '\u2717 ' + (data.openai ? data.openai.error : 'Invalid');
+        }
+    })
+    .catch(() => {
+        apifyBadge.className = 'settings-validation-badge invalid';
+        apifyBadge.textContent = 'Error';
+        openaiBadge.className = 'settings-validation-badge invalid';
+        openaiBadge.textContent = 'Error';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Validate Keys';
+    });
+}
 
 // On form submit: save keys to localStorage
 document.getElementById('setupForm').addEventListener('submit', () => {

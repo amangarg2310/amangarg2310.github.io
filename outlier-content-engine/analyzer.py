@@ -71,13 +71,6 @@ class ContentAnalyzer:
             logger.info("No outliers to analyze.")
             return self._empty_response()
 
-        # Check budget before making API call
-        if not self._check_budget():
-            logger.warning(
-                "Monthly LLM budget exceeded. Returning raw data only."
-            )
-            return self._budget_exceeded_response(outliers)
-
         settings = self.profile.outlier_settings
         top_outliers = outliers[:settings.top_outliers_to_analyze]
 
@@ -87,8 +80,14 @@ class ContentAnalyzer:
 
         if not posts_needing_analysis:
             logger.info(f"All {len(top_outliers)} outliers already analyzed - using cached AI analysis")
-            # Return cached results with empty weekly patterns and calendar
-            return self._build_cached_response(cached_analyses)
+            return self._build_cached_response(cached_analyses, baselines)
+
+        # Check budget AFTER cache partition — cached-only runs are free
+        if not self._check_budget():
+            logger.warning(
+                "Monthly LLM budget exceeded. Returning raw data only."
+            )
+            return self._budget_exceeded_response(outliers)
 
         logger.info(
             f"Analyzing {len(posts_needing_analysis)}/{len(top_outliers)} outliers with {config.OPENAI_MODEL} "
@@ -96,7 +95,8 @@ class ContentAnalyzer:
         )
 
         system_prompt = self._build_system_prompt()
-        user_prompt = self._build_user_prompt(posts_needing_analysis, baselines)
+        user_prompt = self._build_user_prompt(posts_needing_analysis, baselines,
+                                              cached_analyses=cached_analyses)
 
         try:
             client = self._get_client()
@@ -120,6 +120,23 @@ class ContentAnalyzer:
             new_analyses = result.get("outlier_analysis", [])
             combined_analyses = cached_analyses + new_analyses
             result["outlier_analysis"] = combined_analyses
+
+            # Merge cached brand adaptations (from brand_creative_brief)
+            cached_adaptations = []
+            for ca in cached_analyses:
+                brief = ca.get("brand_creative_brief") or {}
+                if isinstance(brief, dict) and brief:
+                    cached_adaptations.append({
+                        "adapted_caption": brief.get("suggested_caption", ""),
+                        "format_suggestion": brief.get("format", ""),
+                        "visual_direction": brief.get("visual_concept", ""),
+                        "what_to_keep": brief.get("what_to_replicate", ""),
+                        "what_to_change": brief.get("what_to_avoid", ""),
+                        "brand_fit_score": brief.get("brand_fit_score", "?"),
+                        "original_competitor": ca.get("competitor", ca.get("handle", "")),
+                    })
+            new_adaptations = result.get("brand_adaptations", [])
+            result["brand_adaptations"] = cached_adaptations + new_adaptations
 
             logger.info(f"LLM analysis complete ({len(new_analyses)} new, {len(cached_analyses)} cached).")
             return result
@@ -307,9 +324,15 @@ ALWAYS respond with valid JSON matching this exact schema:
 }}"""
 
     def _build_user_prompt(self, outliers: List[OutlierPost],
-                           baselines: Dict[str, CompetitorBaseline]) -> str:
-        """Build the user prompt with outlier data and baselines."""
-        # Format outlier posts
+                           baselines: Dict[str, CompetitorBaseline],
+                           cached_analyses: List[Dict] = None) -> str:
+        """Build the user prompt with outlier data and baselines.
+
+        When cached_analyses is provided (partial-cache scenario), includes
+        summaries of already-analyzed posts so the LLM can generate accurate
+        weekly_patterns and content_calendar_suggestions across ALL outliers.
+        """
+        # Format outlier posts needing analysis
         posts_data = []
         for outlier in outliers:
             posts_data.append({
@@ -341,11 +364,30 @@ ALWAYS respond with valid JSON matching this exact schema:
                 "median_engagement": round(bl.median_engagement),
             }
 
-        return (
+        prompt = (
             f"Analyze these top-performing competitor posts:\n\n"
-            f"OUTLIER POSTS:\n{json.dumps(posts_data, indent=2)}\n\n"
+            f"OUTLIER POSTS (need analysis):\n{json.dumps(posts_data, indent=2)}\n\n"
             f"COMPETITOR BASELINES:\n{json.dumps(baseline_data, indent=2)}"
         )
+
+        # Include cached analysis summaries so strategy sections reflect ALL outliers
+        if cached_analyses:
+            cached_summaries = []
+            for ca in cached_analyses:
+                cached_summaries.append({
+                    "competitor": ca.get("competitor") or ca.get("handle", ""),
+                    "content_pattern": ca.get("content_pattern", ""),
+                    "hook_type": ca.get("hook_type", ""),
+                    "why_it_worked": (ca.get("why_it_worked") or "")[:100],
+                    "content_tags": ca.get("content_tags", []),
+                })
+            prompt += (
+                f"\n\nPREVIOUSLY ANALYZED OUTLIERS (already have individual analysis, "
+                f"include in weekly_patterns and content_calendar_suggestions):\n"
+                f"{json.dumps(cached_summaries, indent=2)}"
+            )
+
+        return prompt
 
     def _check_budget(self) -> bool:
         """Check if monthly LLM spend is under the configured limit."""
@@ -421,8 +463,8 @@ ALWAYS respond with valid JSON matching this exact schema:
             row = conn.execute("""
                 SELECT ai_analysis
                 FROM competitor_posts
-                WHERE post_id = ? AND brand_profile = ?
-            """, (outlier.post_id, self.profile.profile_name)).fetchone()
+                WHERE post_id = ? AND brand_profile = ? AND platform = ?
+            """, (outlier.post_id, self.profile.profile_name, outlier.platform)).fetchone()
 
             if row and row["ai_analysis"]:
                 # Post already has analysis - use cached version
@@ -439,15 +481,60 @@ ALWAYS respond with valid JSON matching this exact schema:
         conn.close()
         return posts_needing_analysis, cached_analyses
 
-    def _build_cached_response(self, cached_analyses: List[Dict]) -> Dict:
-        """Build response using only cached analyses (no new GPT-4 call)."""
+    def _build_cached_response(self, cached_analyses: List[Dict], baselines=None) -> Dict:
+        """Build response using only cached analyses (no new GPT-4 call).
+
+        Extracts pattern insights from individual cached analyses rather than
+        returning empty patterns.
+        """
+        # Extract pattern insights from cached analyses
+        content_types = []
+        themes = []
+        adaptations = []
+
+        for analysis in cached_analyses:
+            # Gather content format mentions (check content_pattern first, then format)
+            content_pattern = analysis.get("content_pattern")
+            if content_pattern and isinstance(content_pattern, str):
+                content_types.append(content_pattern)
+            # Gather themes/hooks (hook_type is a classification, why_it_worked is detail)
+            hook_type = analysis.get("hook_type")
+            if hook_type and isinstance(hook_type, str):
+                themes.append(hook_type)
+            elif analysis.get("why_it_worked"):
+                themes.append(analysis["why_it_worked"][:80])
+            # Gather adaptation suggestions — LLM stores these under brand_creative_brief
+            brief = analysis.get("brand_creative_brief") or {}
+            if isinstance(brief, dict) and brief:
+                # Transform to the schema reporter.py expects
+                adaptations.append({
+                    "adapted_caption": brief.get("suggested_caption", ""),
+                    "format_suggestion": brief.get("format", ""),
+                    "visual_direction": brief.get("visual_concept", ""),
+                    "what_to_keep": brief.get("what_to_replicate", ""),
+                    "what_to_change": brief.get("what_to_avoid", ""),
+                    "brand_fit_score": brief.get("brand_fit_score", "?"),
+                    "original_competitor": analysis.get("competitor", analysis.get("handle", "")),
+                })
+            else:
+                # Fallback for older cached formats
+                adaptation = analysis.get("brand_adaptation") or analysis.get("adaptation")
+                if adaptation:
+                    adaptations.append(adaptation)
+
+        # Deduplicate content types, keep top entries
+        seen_types = []
+        for ct in content_types:
+            if ct not in seen_types:
+                seen_types.append(ct)
+
         return {
             "outlier_analysis": cached_analyses,
-            "brand_adaptations": [],  # Could extract from cached analyses if needed
+            "brand_adaptations": adaptations[:5],
             "weekly_patterns": {
-                "best_content_types": [],
+                "best_content_types": seen_types[:5],
                 "best_posting_days": [],
-                "trending_themes": [],
+                "trending_themes": themes[:5],
                 "avoid": [],
             },
             "content_calendar_suggestions": [],
