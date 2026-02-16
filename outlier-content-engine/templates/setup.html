@@ -86,6 +86,32 @@
             </div>
         </div>
 
+        <hr class="settings-divider">
+
+        <!-- Google Login -->
+        <div class="settings-card-title">Google Login <span class="settings-text-muted">(optional)</span></div>
+        <div class="settings-card-subtitle">Enable Google OAuth to require login. When not configured, the app is accessible without authentication.</div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Google OAuth Client ID</label>
+            <input type="text" name="google_client_id" class="settings-input"
+                   value="{{ google_client_id or '' }}"
+                   placeholder="123456789.apps.googleusercontent.com">
+            <div class="settings-hint">
+                From <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console &rarr; Credentials</a>
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Google OAuth Client Secret</label>
+            <input type="password" name="google_client_secret" class="settings-input"
+                   value="{{ google_client_secret or '' }}"
+                   placeholder="GOCSPX-...">
+            <div class="settings-hint">
+                Keep this secret. Add <code>{{ request.url_root }}auth/google/callback</code> as an Authorized Redirect URI in Google Cloud Console.
+            </div>
+        </div>
+
         <!-- Save Button -->
         <div class="settings-actions">
             <button type="submit" class="settings-btn-primary">
@@ -112,10 +138,18 @@
         </ol>
 
         <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">OpenAI (AI Analysis):</strong></p>
-        <ol style="padding-left:20px">
+        <ol style="padding-left:20px;margin-bottom:20px">
             <li>Sign up at <a href="https://platform.openai.com" target="_blank" style="color:var(--signal-cyan)">platform.openai.com</a></li>
             <li>Add payment method ($5 minimum)</li>
             <li>Go to API Keys &rarr; Create new secret key</li>
+        </ol>
+
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">Google Login (optional):</strong></p>
+        <ol style="padding-left:20px">
+            <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--signal-cyan)">Google Cloud Console &rarr; Credentials</a></li>
+            <li>Create an OAuth 2.0 Client ID (Web application)</li>
+            <li>Add <code style="color:var(--signal-cyan)">{{ request.url_root }}auth/google/callback</code> as a redirect URI</li>
+            <li>Copy the Client ID and Client Secret</li>
         </ol>
     </div>
 </div>

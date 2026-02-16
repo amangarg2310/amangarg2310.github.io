@@ -419,6 +419,23 @@
                         <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
                     </svg>
                 </a>
+                {% if auth_enabled and current_user %}
+                <div class="signal-user-menu" id="userMenu">
+                    <button class="signal-user-avatar-btn" onclick="toggleUserMenu()" title="{{ current_user.email }}">
+                        {% if current_user.picture %}
+                        <img src="{{ current_user.picture }}" alt="" class="signal-user-avatar" referrerpolicy="no-referrer">
+                        {% else %}
+                        <span class="signal-user-avatar-fallback">{{ current_user.name[0] if current_user.name else 'U' }}</span>
+                        {% endif %}
+                    </button>
+                    <div class="signal-user-dropdown" id="userDropdown" style="display:none;">
+                        <div class="signal-user-dropdown-name">{{ current_user.name }}</div>
+                        <div class="signal-user-dropdown-email">{{ current_user.email }}</div>
+                        <hr class="signal-user-dropdown-divider">
+                        <a href="{{ url_for('logout') }}" class="signal-user-dropdown-item">Sign out</a>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Budget Indicator (loaded async) -->
@@ -1155,6 +1172,20 @@
 </div>
 
 <script>
+// User menu toggle
+function toggleUserMenu() {
+    const dd = document.getElementById('userDropdown');
+    if (dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+// Close user menu when clicking outside
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('userMenu');
+    const dd = document.getElementById('userDropdown');
+    if (menu && dd && !menu.contains(e.target)) {
+        dd.style.display = 'none';
+    }
+});
+
 // Quick Guide modal
 function showGuideModal() {
     document.getElementById('guideModal').classList.add('open');

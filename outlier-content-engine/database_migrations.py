@@ -504,6 +504,31 @@ def add_scoring_tables(db_path=None):
     logger.info("Scoring system migrations complete")
 
 
+def add_users_table(db_path=None):
+    """
+    Add users table for Google OAuth authentication.
+    Safe to call multiple times (CREATE IF NOT EXISTS).
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_id TEXT UNIQUE NOT NULL,
+            email TEXT NOT NULL,
+            name TEXT,
+            picture TEXT,
+            created_at TEXT NOT NULL,
+            last_login TEXT NOT NULL
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+    logger.info("Users table migration complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
@@ -512,6 +537,7 @@ if __name__ == "__main__":
     add_facebook_handle_column()
     fix_post_unique_constraint()
     add_scoring_tables()
+    add_users_table()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile

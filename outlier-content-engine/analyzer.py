@@ -121,6 +121,23 @@ class ContentAnalyzer:
             combined_analyses = cached_analyses + new_analyses
             result["outlier_analysis"] = combined_analyses
 
+            # Merge cached brand adaptations (from brand_creative_brief)
+            cached_adaptations = []
+            for ca in cached_analyses:
+                brief = ca.get("brand_creative_brief") or {}
+                if isinstance(brief, dict) and brief:
+                    cached_adaptations.append({
+                        "adapted_caption": brief.get("suggested_caption", ""),
+                        "format_suggestion": brief.get("format", ""),
+                        "visual_direction": brief.get("visual_concept", ""),
+                        "what_to_keep": brief.get("what_to_replicate", ""),
+                        "what_to_change": brief.get("what_to_avoid", ""),
+                        "brand_fit_score": brief.get("brand_fit_score", "?"),
+                        "original_competitor": ca.get("competitor", ca.get("handle", "")),
+                    })
+            new_adaptations = result.get("brand_adaptations", [])
+            result["brand_adaptations"] = cached_adaptations + new_adaptations
+
             logger.info(f"LLM analysis complete ({len(new_analyses)} new, {len(cached_analyses)} cached).")
             return result
 

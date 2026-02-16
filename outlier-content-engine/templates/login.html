@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - ScoutAI</title>
+    <link rel="stylesheet" href="/static/signal-ai.css">
+    <style>
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--signal-bg-primary);
+            color: var(--signal-text-primary);
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 48px 40px;
+            text-align: center;
+        }
+
+        .login-logo {
+            margin-bottom: 32px;
+        }
+
+        .login-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .login-subtitle {
+            font-size: 13px;
+            color: var(--signal-text-dim);
+            margin-bottom: 36px;
+            line-height: 1.5;
+        }
+
+        .login-btn-google {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            color: var(--signal-text-primary);
+            background: var(--signal-bg-tertiary);
+            border: 1px solid var(--signal-border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .login-btn-google:hover {
+            border-color: var(--signal-cyan);
+            background: var(--signal-bg-elevated, var(--signal-bg-secondary));
+        }
+
+        .login-btn-google svg {
+            flex-shrink: 0;
+        }
+
+        .login-divider {
+            margin: 28px 0;
+            border: none;
+            border-top: 1px solid var(--signal-border);
+        }
+
+        .login-help {
+            font-size: 11px;
+            color: var(--signal-text-dim);
+            line-height: 1.6;
+        }
+
+        .login-help a {
+            color: var(--signal-cyan);
+            text-decoration: none;
+        }
+
+        .login-help a:hover {
+            text-decoration: underline;
+        }
+
+        .login-flash {
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .login-flash-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+    </style>
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <!-- ScoutAI Logo -->
+        <div class="login-logo">
+            <svg width="140" height="100" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M95 52 C85 30, 105 15, 120 28" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M120 28 C135 18, 155 20, 165 35" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M165 35 C170 42, 172 52, 168 60" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M168 60 C172 68, 170 75, 160 78" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M160 78 C150 82, 140 80, 135 85" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M135 85 C125 95, 115 110, 110 130" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M110 130 C108 140, 110 148, 115 150" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M95 52 C88 65, 82 80, 80 100" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M80 100 C78 115, 80 130, 85 142" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M85 142 C90 148, 95 150, 100 148" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M110 38 C100 42, 92 55, 98 65" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+                <circle cx="148" cy="48" r="4" fill="white"/>
+                <circle cx="170" cy="65" r="3.5" fill="white"/>
+                <path d="M80 105 C65 95, 55 80, 60 65" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M60 65 C62 58, 68 55, 72 58" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="215" cy="65" r="32" stroke="white" stroke-width="5" fill="none"/>
+                <path d="M198 48 C204 38, 218 36, 228 44" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+                <line x1="238" y1="88" x2="268" y2="125" stroke="white" stroke-width="7" stroke-linecap="round"/>
+                <text x="72" y="192" font-family="'Segoe UI', Arial, sans-serif" font-size="48" font-weight="700" fill="white" letter-spacing="2">ScoutAI</text>
+            </svg>
+        </div>
+
+        <h1 class="login-title">Welcome to ScoutAI</h1>
+        <p class="login-subtitle">Sign in to access your competitive intelligence dashboard</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="login-flash login-flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <a href="{{ url_for('auth_google') }}" class="login-btn-google">
+            <!-- Google "G" icon -->
+            <svg width="20" height="20" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Sign in with Google
+        </a>
+
+        <hr class="login-divider">
+
+        <p class="login-help">
+            Google login is configured by your admin via Settings.
+            <br>
+            Need help? See the <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>.
+        </p>
+    </div>
+</div>
+</body>
+</html>

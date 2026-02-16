@@ -29,11 +29,12 @@ import requests
 import yaml
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, send_file, Response,
+    flash, send_file, Response, session,
 )
 from markupsafe import Markup
 
 import config
+from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user
 from profile_loader import load_profile
 
 app = Flask(__name__)
@@ -629,7 +630,72 @@ def inject_globals():
         "available_profiles": get_available_profiles(),
         "active_vertical": get_active_vertical_name(),
         "available_verticals": get_available_verticals(),
+        "current_user": get_current_user(),
+        "auth_enabled": is_auth_enabled(),
     }
+
+
+# ── Routes: Authentication ──
+
+@app.route("/login")
+def login_page():
+    """Login page — shown when auth is enabled and user is not logged in."""
+    if not is_auth_enabled() or get_current_user():
+        return redirect(url_for('signal_page'))
+    return render_template('login.html')
+
+
+@app.route("/auth/google")
+def auth_google():
+    """Redirect to Google OAuth consent screen."""
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    auth_url = build_google_auth_url(redirect_uri)
+    if not auth_url:
+        flash("Google OAuth is not configured. Add Client ID and Secret in Settings.", "danger")
+        return redirect(url_for('setup_page'))
+    return redirect(auth_url)
+
+
+@app.route("/auth/google/callback")
+def auth_google_callback():
+    """Handle Google OAuth callback."""
+    error = request.args.get("error")
+    if error:
+        flash(f"Google login failed: {error}", "danger")
+        return redirect(url_for('login_page'))
+
+    code = request.args.get("code")
+    state = request.args.get("state")
+
+    # Verify CSRF state
+    expected_state = session.pop("oauth_state", None)
+    if not state or state != expected_state:
+        flash("Invalid OAuth state. Please try again.", "danger")
+        return redirect(url_for('login_page'))
+
+    # Exchange code for user info
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    user_info = exchange_code_for_user(code, redirect_uri)
+    if not user_info:
+        flash("Failed to authenticate with Google. Please try again.", "danger")
+        return redirect(url_for('login_page'))
+
+    # Store user in DB and session
+    upsert_user(user_info)
+    session["user"] = user_info
+
+    # Redirect to originally requested page
+    next_url = session.pop("next_url", None) or url_for('signal_page')
+    return redirect(next_url)
+
+
+@app.route("/logout")
+def logout():
+    """Clear session and redirect to login."""
+    session.clear()
+    if is_auth_enabled():
+        return redirect(url_for('login_page'))
+    return redirect(url_for('signal_page'))
 
 
 # ── Routes: Pages ──
@@ -641,6 +707,7 @@ def index():
 
 
 @app.route("/signal")
+@login_required
 def signal_page():
     """Signal AI - Conversational outlier viewer with insights."""
     from insight_generator import generate_insights_for_vertical
@@ -722,6 +789,7 @@ def signal_page():
 
 
 @app.route("/api/outliers")
+@login_required
 def api_outliers():
     """JSON API for outlier posts — used by AJAX filter switching."""
     from flask import jsonify
@@ -753,6 +821,7 @@ def api_outliers():
 
 
 @app.route("/api/export/csv")
+@login_required
 def export_csv():
     """Export current filtered outliers as CSV download."""
     import csv
@@ -789,6 +858,7 @@ def export_csv():
 
 
 @app.route("/api/score-concept", methods=["POST"])
+@login_required
 def api_score_concept():
     """Score a content concept against learned outlier patterns."""
     from flask import jsonify
@@ -826,6 +896,7 @@ def api_score_concept():
 
 
 @app.route("/api/optimize-concept", methods=["POST"])
+@login_required
 def api_optimize_concept():
     """Optimize a concept via LLM and auto-re-score the improved version."""
     from flask import jsonify
@@ -1059,6 +1130,7 @@ def load_vertical(vertical_name):
 # ── Routes: Actions ──
 
 @app.route("/switch-vertical", methods=["POST"])
+@login_required
 def switch_vertical():
     """Switch the active vertical."""
     vertical_name = request.form.get("vertical", "").strip()
@@ -1072,6 +1144,7 @@ def switch_vertical():
 
 
 @app.route("/run", methods=["POST"])
+@login_required
 def run_engine():
     """Run the outlier detection pipeline in the background."""
     skip_collect = request.form.get("skip_collect", "0") == "1"
@@ -1191,6 +1264,7 @@ def proxy_image():
 # ── Vertical Management Routes ──
 
 @app.route("/setup")
+@login_required
 def setup_page():
     """One-time setup page for API keys and team settings."""
     from database_migrations import run_vertical_migrations
@@ -1206,6 +1280,12 @@ def setup_page():
     ).fetchone()
     tiktok_key = conn.execute(
         "SELECT api_key FROM api_credentials WHERE service = 'tiktok'"
+    ).fetchone()
+    google_client_id_row = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'google_client_id'"
+    ).fetchone()
+    google_client_secret_row = conn.execute(
+        "SELECT api_key FROM api_credentials WHERE service = 'google_client_secret'"
     ).fetchone()
 
     # Get team emails
@@ -1230,6 +1310,8 @@ def setup_page():
                            apify_token=apify_token['api_key'] if apify_token else '',
                            openai_key=openai_key['api_key'] if openai_key else '',
                            tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
+                           google_client_id=google_client_id_row['api_key'] if google_client_id_row else '',
+                           google_client_secret=google_client_secret_row['api_key'] if google_client_secret_row else '',
                            team_emails=team_emails,
                            own_brand_instagram=own_brand_instagram,
                            own_brand_tiktok=own_brand_tiktok,
@@ -1237,6 +1319,7 @@ def setup_page():
 
 
 @app.route("/setup/save", methods=["POST"])
+@login_required
 def save_setup():
     """Save API keys and team settings to database."""
     from datetime import datetime, timezone
@@ -1247,6 +1330,8 @@ def save_setup():
     team_emails = request.form.get('team_emails', '').strip()
     own_brand_instagram = request.form.get('own_brand_instagram', '').strip().lstrip('@')
     own_brand_tiktok = request.form.get('own_brand_tiktok', '').strip().lstrip('@')
+    google_client_id = request.form.get('google_client_id', '').strip()
+    google_client_secret = request.form.get('google_client_secret', '').strip()
 
     if not apify_token or not openai_key:
         flash("Apify token and OpenAI key are required", "danger")
@@ -1271,6 +1356,18 @@ def save_setup():
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(service) DO UPDATE SET api_key = ?, updated_at = ?
             """, ('tiktok', tiktok_key, now, now, tiktok_key, now))
+
+        # Save Google OAuth credentials (upsert or delete if cleared)
+        for service, key in [('google_client_id', google_client_id),
+                              ('google_client_secret', google_client_secret)]:
+            if key:
+                conn.execute("""
+                    INSERT INTO api_credentials (service, api_key, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(service) DO UPDATE SET api_key = ?, updated_at = ?
+                """, (service, key, now, now, key, now))
+            else:
+                conn.execute("DELETE FROM api_credentials WHERE service = ?", (service,))
 
         # Save team emails (clear existing, then insert new)
         conn.execute("DELETE FROM email_subscriptions WHERE vertical_name IS NULL")
@@ -1321,6 +1418,7 @@ def vertical_create_page():
 
 
 @app.route("/verticals/create", methods=["POST"])
+@login_required
 def create_vertical():
     """Create a new vertical with brands."""
     from vertical_manager import VerticalManager
@@ -1373,6 +1471,7 @@ def vertical_edit_page(name):
 
 
 @app.route("/verticals/brand/add", methods=["POST"])
+@login_required
 def add_brand_to_vertical():
     """Add a single brand to a vertical."""
     from vertical_manager import VerticalManager
@@ -1426,6 +1525,7 @@ def bulk_add_brands():
 
 
 @app.route("/verticals/brand/remove", methods=["POST"])
+@login_required
 def remove_brand_from_vertical():
     """Remove a brand from a vertical."""
     from vertical_manager import VerticalManager
@@ -1456,6 +1556,7 @@ def remove_brand_from_set(vertical_name):
 
 
 @app.route("/verticals/delete", methods=["POST"])
+@login_required
 def delete_vertical():
     """Delete a vertical."""
     from vertical_manager import VerticalManager
@@ -1480,6 +1581,7 @@ def chat_page():
 
 
 @app.route("/chat/message", methods=["POST"])
+@login_required
 def chat_message():
     """Process chat message from user and return Scout's response.
 
@@ -1530,8 +1632,9 @@ def chat_message():
             response, updated_context = scout.chat(message, context)
 
             if response:
-                analysis_started = updated_context.get('analysis_started', False)
-                selected_brands = updated_context.get('selected_brands')
+                # Pop (not get) so flag is consumed once and cleared from persisted context
+                analysis_started = updated_context.pop('analysis_started', False)
+                selected_brands = updated_context.pop('selected_brands', None)
 
                 # If Scout's tools changed the active vertical, sync the app state
                 new_vertical = updated_context.get('active_vertical')
@@ -2015,12 +2118,13 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table
         run_vertical_migrations()
         add_facebook_handle_column()
         fix_post_unique_constraint()
         fix_vertical_brands_nullable()
         add_scoring_tables()
+        add_users_table()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

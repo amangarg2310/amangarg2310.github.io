@@ -694,7 +694,7 @@ IMPORTANT:
         not_found = []
         for handle in handles:
             handle = handle.strip().lstrip("@")
-            if self.vm.remove_brand(actual_name, instagram_handle=handle):
+            if self.vm.remove_brand(actual_name, handle):
                 removed.append(f"@{handle}")
             else:
                 not_found.append(f"@{handle}")
