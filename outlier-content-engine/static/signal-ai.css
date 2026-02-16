@@ -144,7 +144,10 @@ h1, h2, h3, h4, h5, h6 {
 .signal-chat-subtitle {
     font-size: 13px;
     color: var(--signal-text-dim);
-    margin-left: 48px;
+    margin-left: 0;
+    max-width: 600px;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
 }
 
 /* Chat Messages Area */
@@ -2236,13 +2239,6 @@ h1, h2, h3, h4, h5, h6 {
     text-align: center;
     transform: scale(0.9);
     animation: splashEntry 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    height: 80vh;
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 40px 20px 20px;
 }
 
 @keyframes splashEntry {
@@ -2257,10 +2253,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .splash-logo {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    margin: 0;
+    margin-bottom: 30px;
 }
 
 .splash-logo img {
@@ -2292,12 +2285,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .splash-tagline {
-    font-size: 20px;
+    font-size: 16px;
     color: var(--signal-text-secondary);
-    margin-bottom: 8px;
-    margin-top: auto;
+    margin-bottom: 40px;
     line-height: 1.6;
-    max-width: 100%;
     animation: taglineSlide 0.8s ease-out 0.5s both;
 }
 
