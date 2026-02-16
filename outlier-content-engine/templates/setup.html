@@ -269,13 +269,14 @@ function saveKeysOnly() {
     formData.append('apify_token', apifyVal);
     formData.append('openai_key', openaiVal);
 
-    fetch('/save_setup', {
+    fetch('/setup/save', {
         method: 'POST',
         body: formData,
+        redirect: 'manual'
     })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
+    .then(r => {
+        // Check if the request was successful (status 200-299 or redirect 300-399)
+        if (r.ok || (r.status >= 300 && r.status < 400)) {
             // Save to localStorage
             localStorage.setItem(STORAGE_KEYS.apify, apifyVal);
             localStorage.setItem(STORAGE_KEYS.openai, openaiVal);
@@ -288,7 +289,7 @@ function saveKeysOnly() {
                 btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
             }, 2000);
         } else {
-            alert('Error saving keys: ' + (data.error || 'Unknown error'));
+            alert('Error saving keys. Please try again.');
             btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
         }
     })
