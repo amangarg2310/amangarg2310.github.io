@@ -366,7 +366,7 @@
                             <div class="signal-user-dropdown-name">{{ current_user.name }}</div>
                             <div class="signal-user-dropdown-email">{{ current_user.email }}</div>
                             <hr class="signal-user-dropdown-divider">
-                            <a href="{{ url_for('logout') }}" class="signal-user-dropdown-item">Sign out</a>
+                            <a href="{{ url_for('logout') }}" class="signal-user-dropdown-item" onclick="clearSplashOnLogout()">Sign out</a>
                         </div>
                     </div>
                     {% endif %}
@@ -2498,8 +2498,16 @@ window.addEventListener('DOMContentLoaded', function() {
 // ========================================
 
 (function() {
-    const SPLASH_SHOWN_KEY = 'scoutai_splash_shown';
     const SPLASH_DURATION = 4000; // 4.0 seconds
+
+    // Get user-specific key for localStorage (includes email if available)
+    function getSplashKey() {
+        {% if auth_enabled and current_user %}
+        return 'scoutai_splash_shown_{{ current_user.email }}';
+        {% else %}
+        return 'scoutai_splash_shown';
+        {% endif %}
+    }
 
     function shouldShowSplash() {
         // Check if user came from browser back button
@@ -2507,8 +2515,8 @@ window.addEventListener('DOMContentLoaded', function() {
             return false; // Don't show on back button
         }
 
-        // Check if we already showed the splash in this session
-        const splashShown = sessionStorage.getItem(SPLASH_SHOWN_KEY);
+        // Check if we already showed the splash for this user (persists across sessions)
+        const splashShown = localStorage.getItem(getSplashKey());
         return !splashShown;
     }
 
@@ -2519,8 +2527,8 @@ window.addEventListener('DOMContentLoaded', function() {
         // Show splash immediately
         splash.style.display = 'flex';
 
-        // Mark as shown in session storage (persists only for this tab/session)
-        sessionStorage.setItem(SPLASH_SHOWN_KEY, 'true');
+        // Mark as shown in localStorage (persists across sessions until logout)
+        localStorage.setItem(getSplashKey(), 'true');
 
         // Hide after duration
         setTimeout(function() {
@@ -2532,6 +2540,11 @@ window.addEventListener('DOMContentLoaded', function() {
             }, 600); // Match CSS transition duration
         }, SPLASH_DURATION);
     }
+
+    // Clear splash flag on logout
+    window.clearSplashOnLogout = function() {
+        localStorage.removeItem(getSplashKey());
+    };
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
