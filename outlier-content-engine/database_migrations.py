@@ -48,11 +48,10 @@ def run_vertical_migrations(db_path=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             vertical_name TEXT NOT NULL,
             brand_name TEXT,  -- optional display name
-            instagram_handle TEXT NOT NULL,
+            instagram_handle TEXT,  -- nullable for TikTok/FB-only brands
             tiktok_handle TEXT,
             added_at TEXT NOT NULL,
-            FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE,
-            UNIQUE(vertical_name, instagram_handle)
+            FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
         );
 
         -- Email subscriptions (team members)
@@ -274,7 +273,7 @@ def fix_post_unique_constraint(db_path=None):
 
     create_sql = row[0]
     # If brand_profile is already in the unique constraint, skip
-    if "UNIQUE(post_id, platform, brand_profile)" in create_sql.replace(" ", ""):
+    if "UNIQUE(post_id,platform,brand_profile)" in create_sql.replace(" ", ""):
         logger.info("  competitor_posts already has 3-column unique constraint, skipping")
         conn.close()
         return
@@ -355,6 +354,88 @@ def fix_post_unique_constraint(db_path=None):
     except Exception as e:
         logger.error(f"  Failed to fix unique constraint: {e}")
         conn.rollback()
+
+    conn.close()
+
+
+def fix_vertical_brands_nullable(db_path=None):
+    """
+    Make instagram_handle nullable in vertical_brands so TikTok/FB-only brands can exist.
+    Also drops the old UNIQUE(vertical_name, instagram_handle) constraint since NULL
+    instagram_handle would cause issues with it.
+    Safe to call multiple times — checks schema first.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='vertical_brands'"
+    ).fetchone()
+
+    if not row:
+        conn.close()
+        return
+
+    create_sql = row[0]
+    # If instagram_handle is already nullable (NOT NULL not present), skip
+    if "instagram_handle TEXT," in create_sql or "instagram_handleTEXT," in create_sql.replace(" ", ""):
+        logger.info("  vertical_brands.instagram_handle already nullable, skipping")
+        conn.close()
+        return
+
+    # Only migrate if NOT NULL is present
+    if "NOT NULL" not in create_sql.split("instagram_handle")[1].split(",")[0]:
+        logger.info("  vertical_brands.instagram_handle already nullable, skipping")
+        conn.close()
+        return
+
+    logger.info("Making vertical_brands.instagram_handle nullable...")
+
+    try:
+        # Check if facebook_handle column exists
+        cols = [info[1] for info in conn.execute("PRAGMA table_info(vertical_brands)").fetchall()]
+        has_facebook = "facebook_handle" in cols
+
+        if has_facebook:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS vertical_brands_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vertical_name TEXT NOT NULL,
+                    brand_name TEXT,
+                    instagram_handle TEXT,
+                    tiktok_handle TEXT,
+                    facebook_handle TEXT,
+                    added_at TEXT NOT NULL,
+                    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
+                );
+                INSERT OR IGNORE INTO vertical_brands_new
+                    SELECT id, vertical_name, brand_name, instagram_handle,
+                           tiktok_handle, facebook_handle, added_at
+                    FROM vertical_brands;
+                DROP TABLE vertical_brands;
+                ALTER TABLE vertical_brands_new RENAME TO vertical_brands;
+            """)
+        else:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS vertical_brands_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vertical_name TEXT NOT NULL,
+                    brand_name TEXT,
+                    instagram_handle TEXT,
+                    tiktok_handle TEXT,
+                    added_at TEXT NOT NULL,
+                    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
+                );
+                INSERT OR IGNORE INTO vertical_brands_new
+                    SELECT id, vertical_name, brand_name, instagram_handle,
+                           tiktok_handle, added_at
+                    FROM vertical_brands;
+                DROP TABLE vertical_brands;
+                ALTER TABLE vertical_brands_new RENAME TO vertical_brands;
+            """)
+        logger.info("  vertical_brands.instagram_handle is now nullable")
+    except Exception as e:
+        logger.error(f"  Failed to fix vertical_brands schema: {e}")
 
     conn.close()
 

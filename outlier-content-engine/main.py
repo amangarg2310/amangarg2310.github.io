@@ -132,7 +132,7 @@ def with_progress_tracking(func):
 
 
 @with_progress_tracking
-def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, _progress=None):
+def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, brands=None, _progress=None):
     """
     Run the full outlier detection pipeline.
 
@@ -142,6 +142,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         vertical_name: Database vertical name (new system, takes priority)
         skip_collect: Skip data collection phase
         no_email: Save report locally instead of emailing
+        brands: Comma-separated brand handles to collect (subset of vertical)
     Returns a dict with pipeline results.
     """
     logger = logging.getLogger("engine")
@@ -278,6 +279,16 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         logger.info(
             f"Monitoring {len(ig_competitors)} Instagram + "
             f"{len(tt_competitors)} TikTok competitors"
+        )
+
+    # ── 1b. Filter to specific brands (if --brands was provided) ──
+    if brands:
+        brand_set = {b.strip().lstrip('@').lower() for b in brands.split(',')}
+        ig_competitors = [c for c in ig_competitors if c["handle"].lower() in brand_set]
+        tt_competitors = [c for c in tt_competitors if c["handle"].lower() in brand_set]
+        logger.info(
+            f"Filtered to {len(ig_competitors)} IG + {len(tt_competitors)} TT brands "
+            f"(requested: {', '.join(brand_set)})"
         )
 
     # ── 2. Initialize Database ──
@@ -798,6 +809,7 @@ def main():
         vertical_name=args.vertical,
         skip_collect=args.skip_collect,
         no_email=args.no_email,
+        brands=args.brands,
     )
     if result.get("error"):
         sys.exit(1)

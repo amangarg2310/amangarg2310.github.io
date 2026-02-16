@@ -1075,16 +1075,22 @@ def switch_vertical():
 def run_engine():
     """Run the outlier detection pipeline in the background."""
     skip_collect = request.form.get("skip_collect", "0") == "1"
-    profile_name = get_active_profile_name()
+    vertical_name = request.form.get("vertical_name", "").strip()
 
-    cmd = [sys.executable, "main.py", "--profile", profile_name, "--no-email"]
+    # Prefer vertical (new system) over profile (legacy)
+    if vertical_name:
+        cmd = [sys.executable, "main.py", "--vertical", vertical_name, "--no-email"]
+    else:
+        profile_name = get_active_profile_name()
+        cmd = [sys.executable, "main.py", "--profile", profile_name, "--no-email"]
+
     if skip_collect:
         cmd.append("--skip-collect")
 
     def _run():
         try:
             subprocess.run(cmd, cwd=str(config.PROJECT_ROOT),
-                           capture_output=True, text=True, timeout=300)
+                           capture_output=True, text=True, timeout=900)
         except Exception as e:
             logger.error(f"Pipeline run failed: {e}")
 
@@ -2009,10 +2015,11 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, add_scoring_tables
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables
         run_vertical_migrations()
         add_facebook_handle_column()
         fix_post_unique_constraint()
+        fix_vertical_brands_nullable()
         add_scoring_tables()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")

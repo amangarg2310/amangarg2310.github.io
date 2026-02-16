@@ -359,8 +359,9 @@ ALWAYS respond with valid JSON matching this exact schema:
             for ca in cached_analyses:
                 cached_summaries.append({
                     "competitor": ca.get("competitor") or ca.get("handle", ""),
-                    "media_type": ca.get("media_type") or ca.get("format", ""),
-                    "hook": (ca.get("hook") or ca.get("why_it_worked") or "")[:100],
+                    "content_pattern": ca.get("content_pattern", ""),
+                    "hook_type": ca.get("hook_type", ""),
+                    "why_it_worked": (ca.get("why_it_worked") or "")[:100],
                     "content_tags": ca.get("content_tags", []),
                 })
             prompt += (
@@ -475,14 +476,16 @@ ALWAYS respond with valid JSON matching this exact schema:
         adaptations = []
 
         for analysis in cached_analyses:
-            # Gather content format mentions
-            media_type = analysis.get("media_type") or analysis.get("format")
-            if media_type:
-                content_types.append(media_type)
-            # Gather themes/hooks
-            hook = analysis.get("hook") or analysis.get("why_it_worked")
-            if hook and isinstance(hook, str):
-                themes.append(hook[:80])
+            # Gather content format mentions (check content_pattern first, then format)
+            content_pattern = analysis.get("content_pattern")
+            if content_pattern and isinstance(content_pattern, str):
+                content_types.append(content_pattern)
+            # Gather themes/hooks (hook_type is a classification, why_it_worked is detail)
+            hook_type = analysis.get("hook_type")
+            if hook_type and isinstance(hook_type, str):
+                themes.append(hook_type)
+            elif analysis.get("why_it_worked"):
+                themes.append(analysis["why_it_worked"][:80])
             # Gather adaptation suggestions — LLM stores these under brand_creative_brief
             brief = analysis.get("brand_creative_brief") or {}
             if isinstance(brief, dict) and brief:
