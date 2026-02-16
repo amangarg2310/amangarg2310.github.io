@@ -214,14 +214,15 @@ h1, h2, h3, h4, h5, h6 {
 
 .signal-message-bubble {
     background: var(--signal-bg-tertiary);
-    padding: 14px 18px;
-    border-radius: 14px;
-    font-size: 14px;
-    line-height: 1.6;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
     color: var(--signal-text-secondary);
     border: 1px solid var(--signal-border-light);
     word-wrap: break-word;
     overflow-wrap: break-word;
+    word-break: break-word;
     max-width: 100%;
 }
 
@@ -2244,21 +2245,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .splash-logo {
-    width: 120px;
-    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0 auto 32px;
-    animation: pulseGlow 2s ease-in-out infinite;
 }
 
-@keyframes pulseGlow {
-    0%, 100% {
-        filter: drop-shadow(0 0 20px rgba(0, 217, 255, 0.4));
-        transform: scale(1);
-    }
-    50% {
-        filter: drop-shadow(0 0 35px rgba(168, 85, 247, 0.6));
-        transform: scale(1.05);
-    }
+.splash-logo img {
+    display: block;
+    margin: 0 auto;
 }
 
 .splash-title {

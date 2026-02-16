@@ -21,7 +21,7 @@
                 <span class="settings-validation-badge" id="apifyBadge"></span>
             </div>
             <div class="settings-hint">
-                Used for Instagram and TikTok data collection.
+                Used for Instagram, TikTok, and Facebook data collection.
                 <a href="https://console.apify.com/account/integrations" target="_blank">Get your token here &rarr;</a>
             </div>
         </div>
@@ -41,11 +41,17 @@
             </div>
         </div>
 
-        <!-- Validate Keys Button -->
-        <button type="button" class="settings-btn-validate" id="validateBtn" onclick="validateKeys()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            Validate Keys
-        </button>
+        <!-- Validate and Save Keys Buttons -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button type="button" class="settings-btn-validate" id="validateBtn" onclick="validateKeys()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Validate Keys
+            </button>
+            <button type="button" class="settings-btn-validate" id="saveKeysBtn" onclick="saveKeysOnly()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Keys
+            </button>
+        </div>
 
         <hr class="settings-divider">
 
@@ -241,6 +247,57 @@ function validateKeys() {
     .finally(() => {
         btn.disabled = false;
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Validate Keys';
+    });
+}
+
+// Save just the API keys
+function saveKeysOnly() {
+    const btn = document.getElementById('saveKeysBtn');
+    const apifyVal = document.getElementById('apifyToken').value.trim();
+    const openaiVal = document.getElementById('openaiKey').value.trim();
+
+    if (!apifyVal || !openaiVal) {
+        alert('Please enter both API keys before saving.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    // Create form data with only the API keys
+    const formData = new FormData();
+    formData.append('apify_token', apifyVal);
+    formData.append('openai_key', openaiVal);
+
+    fetch('/save_setup', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Save to localStorage
+            localStorage.setItem(STORAGE_KEYS.apify, apifyVal);
+            localStorage.setItem(STORAGE_KEYS.openai, openaiVal);
+
+            // Update button to show success
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Saved!';
+
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
+            }, 2000);
+        } else {
+            alert('Error saving keys: ' + (data.error || 'Unknown error'));
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
+        }
+    })
+    .catch(err => {
+        alert('Error saving keys: ' + err.message);
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
+    })
+    .finally(() => {
+        btn.disabled = false;
     });
 }
 

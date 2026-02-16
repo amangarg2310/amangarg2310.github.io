@@ -147,7 +147,7 @@ def needs_setup():
     try:
         conn = get_db()
         row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('apify', 'openai')"
+            "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('apify', 'openai') AND api_key IS NOT NULL AND api_key != ''"
         ).fetchone()
         return row['cnt'] < 2  # Need both keys
     except Exception:
