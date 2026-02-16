@@ -291,6 +291,27 @@
                     </div>
                     {% endif %}
 
+                    <!-- Trend Radar (velocity-based sound/hashtag trends) -->
+                    {% if trend_radar_trends %}
+                    <div class="signal-report-section" style="margin-top: 16px;">
+                        <div class="signal-report-section-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                            Trend Radar
+                        </div>
+                        <div class="signal-report-section-body">
+                            {% for trend in trend_radar_trends[:5] %}
+                            <div class="signal-trend-item">
+                                <span class="signal-trend-rank">#{{ trend.rank }}</span>
+                                <span class="signal-trend-icon">{% if trend.item_type == 'sound' %}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>{% else %}#{% endif %}</span>
+                                <span class="signal-trend-name">{{ trend.item_name|truncate(30) }}</span>
+                                <span class="signal-trend-velocity signal-trend-{{ trend.phase }}">{{ trend.velocity_label }}</span>
+                            </div>
+                            {% endfor %}
+                            <div class="signal-trend-hint">Ask "what's trending?" for details + example posts</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="signal-message-time">{{ insights.outlier_count }} outliers analyzed</div>
                 </div>
             </div>
@@ -946,11 +967,12 @@
                     </div>
                 </div>
                 <div class="signal-guide-section">
-                    <div class="signal-guide-heading">Trend Predictions</div>
-                    <p class="signal-guide-desc">See which content patterns, hooks, and formats are rising or declining across your competitive set.</p>
+                    <div class="signal-guide-heading">Trend Radar</div>
+                    <p class="signal-guide-desc">See which sounds, hashtags, and content patterns are gaining momentum before they peak. Velocity-based -- surfaces fast-growing signals, not just popular ones. Includes links to example posts.</p>
                     <div class="signal-guide-examples">
                         <code>"What's trending?"</code>
-                        <code>"What content patterns are rising?"</code>
+                        <code>"What sounds are hot right now?"</code>
+                        <code>"Show me rising hashtags"</code>
                         <code>"What should I post about this week?"</code>
                     </div>
                 </div>

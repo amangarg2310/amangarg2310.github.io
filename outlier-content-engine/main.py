@@ -588,6 +588,22 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     except Exception as e:
         logger.error(f"Audio tracking failed: {e}")
 
+    # ── 5b. Trend Radar Snapshot ──
+    try:
+        from trend_radar.collector import TrendRadarCollector
+        logger.info("")
+        logger.info("--- TREND RADAR SNAPSHOT ---")
+        radar_collector = TrendRadarCollector(profile.profile_name)
+        radar_result = radar_collector.capture_snapshot()
+        logger.info(
+            f"Trend Radar: {radar_result['sounds_tracked']} sounds, "
+            f"{radar_result['hashtags_tracked']} hashtags tracked"
+        )
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Trend Radar snapshot failed: {e}")
+
     # ── 6. Series Detection Phase ──
     series_data = None
     try:
@@ -656,6 +672,18 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
             "Tip: Set your brand handle in Setup > Your Brand Instagram Handle."
         )
 
+    # ── 7b. Trend Radar Scoring ──
+    trend_radar_data = None
+    try:
+        from trend_radar.scorer import TrendRadarScorer
+        trend_radar_data = TrendRadarScorer(profile.profile_name).get_top_trends(limit=10)
+        if trend_radar_data:
+            logger.info(f"Trend Radar: {len(trend_radar_data)} active trends scored")
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Trend Radar scoring failed: {e}")
+
     # ── 8. Analysis Phase ──
     logger.info("")
     logger.info("--- ANALYSIS PHASE ---")
@@ -668,6 +696,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         own_top_captions=own_top_captions,
         audio_insights=audio_insights,
         series_data=series_data,
+        trend_radar_data=trend_radar_data,
     )
     analysis = analyzer.analyze(outliers, baselines)
 

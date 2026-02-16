@@ -71,6 +71,45 @@ def get_current_user():
     return session.get("user")
 
 
+def get_allowed_emails():
+    """
+    Load the list of allowed email addresses from the config table.
+    Returns a set of lowercase emails, or an empty set (meaning all are allowed).
+    """
+    if not config.DB_PATH.exists():
+        return set()
+
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = 'allowed_emails'"
+        ).fetchone()
+        conn.close()
+
+        if row and row["value"]:
+            return {
+                e.strip().lower()
+                for e in row["value"].split(",")
+                if e.strip()
+            }
+    except Exception:
+        pass
+
+    return set()
+
+
+def is_email_allowed(email: str) -> bool:
+    """
+    Check if an email is authorized to access the platform.
+    If no allowlist is configured, all emails are allowed.
+    """
+    allowed = get_allowed_emails()
+    if not allowed:
+        return True  # No allowlist = open access
+    return email.strip().lower() in allowed
+
+
 def login_required(f):
     """
     Decorator that requires login ONLY when auth is enabled.

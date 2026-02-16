@@ -34,7 +34,7 @@ from flask import (
 from markupsafe import Markup
 
 import config
-from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user
+from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user, is_email_allowed
 from profile_loader import load_profile
 
 app = Flask(__name__)
@@ -680,6 +680,11 @@ def auth_google_callback():
         flash("Failed to authenticate with Google. Please try again.", "danger")
         return redirect(url_for('login_page'))
 
+    # Check if this email is authorized
+    if not is_email_allowed(user_info.get("email", "")):
+        flash("Access denied. Your email is not on the authorized list.", "danger")
+        return redirect(url_for('login_page'))
+
     # Store user in DB and session
     upsert_user(user_info)
     session["user"] = user_info
@@ -750,6 +755,17 @@ def signal_page():
         # Compute per-brand baselines
         brand_baselines = get_competitor_baselines(vertical_name, timeframe)
 
+    # Trend Radar: velocity-based sound/hashtag trends
+    trend_radar_trends = []
+    if vertical_name and not empty_state:
+        try:
+            from trend_radar.scorer import TrendRadarScorer
+            trend_radar_trends = TrendRadarScorer(vertical_name).get_top_trends(limit=10)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"Trend Radar scoring failed: {e}")
+
     # Get competitive set for context display (empty if empty state)
     # Only show brands that actually have data in the database
     competitive_set = []
@@ -776,6 +792,7 @@ def signal_page():
                            insights=insights,
                            pattern_clusters=pattern_clusters,
                            brand_baselines=brand_baselines,
+                           trend_radar_trends=trend_radar_trends,
                            competitive_set=competitive_set,
                            vertical_name=vertical_name,
                            saved_verticals=saved_verticals,
@@ -1300,11 +1317,15 @@ def setup_page():
     own_brand_tt_row = conn.execute(
         "SELECT value FROM config WHERE key = 'own_brand_tiktok'"
     ).fetchone()
+    allowed_emails_row = conn.execute(
+        "SELECT value FROM config WHERE key = 'allowed_emails'"
+    ).fetchone()
     conn.close()
 
     team_emails = ', '.join([e['email'] for e in emails]) if emails else ''
     own_brand_instagram = own_brand_ig_row['value'] if own_brand_ig_row else ''
     own_brand_tiktok = own_brand_tt_row['value'] if own_brand_tt_row else ''
+    allowed_emails = allowed_emails_row['value'] if allowed_emails_row else ''
 
     return render_template('setup.html',
                            apify_token=apify_token['api_key'] if apify_token else '',
@@ -1312,6 +1333,7 @@ def setup_page():
                            tiktok_key=tiktok_key['api_key'] if tiktok_key else '',
                            google_client_id=google_client_id_row['api_key'] if google_client_id_row else '',
                            google_client_secret=google_client_secret_row['api_key'] if google_client_secret_row else '',
+                           allowed_emails=allowed_emails,
                            team_emails=team_emails,
                            own_brand_instagram=own_brand_instagram,
                            own_brand_tiktok=own_brand_tiktok,
@@ -1332,6 +1354,7 @@ def save_setup():
     own_brand_tiktok = request.form.get('own_brand_tiktok', '').strip().lstrip('@')
     google_client_id = request.form.get('google_client_id', '').strip()
     google_client_secret = request.form.get('google_client_secret', '').strip()
+    allowed_emails = request.form.get('allowed_emails', '').strip()
 
     if not apify_token or not openai_key:
         flash("Apify token and OpenAI key are required", "danger")
@@ -1392,6 +1415,16 @@ def save_setup():
             else:
                 # User cleared the field — remove the config entry
                 conn.execute("DELETE FROM config WHERE key = ?", (cfg_key,))
+
+        # Save allowed emails (authorization allowlist)
+        if allowed_emails:
+            conn.execute("""
+                INSERT INTO config (key, value)
+                VALUES ('allowed_emails', ?)
+                ON CONFLICT(key) DO UPDATE SET value = ?
+            """, (allowed_emails, allowed_emails))
+        else:
+            conn.execute("DELETE FROM config WHERE key = 'allowed_emails'")
 
         conn.commit()
         flash("Settings saved.", "success")
@@ -2126,13 +2159,14 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table, add_trend_radar_tables
         run_vertical_migrations()
         add_facebook_handle_column()
         fix_post_unique_constraint()
         fix_vertical_brands_nullable()
         add_scoring_tables()
         add_users_table()
+        add_trend_radar_tables()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 

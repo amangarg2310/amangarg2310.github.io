@@ -112,6 +112,17 @@
             </div>
         </div>
 
+        <div class="settings-form-group">
+            <label class="settings-label">Allowed Emails <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="allowed_emails" class="settings-input"
+                   value="{{ allowed_emails or '' }}"
+                   placeholder="you@gmail.com, teammate@gmail.com">
+            <div class="settings-hint">
+                Comma-separated list of Gmail addresses authorized to access the platform.
+                If left blank, any Google account can log in. When set, only these emails will be granted access.
+            </div>
+        </div>
+
         <!-- Save Button -->
         <div class="settings-actions">
             <button type="submit" class="settings-btn-primary">

@@ -326,9 +326,11 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "show_trends",
             "description": (
-                "Show content trend predictions — which patterns, hooks, and formats "
-                "are rising vs declining. Use when user asks 'what's trending', "
-                "'content predictions', 'what patterns are rising', or "
+                "Show trend predictions — which sounds, hashtags, content patterns, "
+                "hooks, and formats are rising vs declining. Includes Trend Radar "
+                "(velocity-based sound/hashtag detection with example post links). "
+                "Use when user asks 'what's trending', 'trending sounds', "
+                "'what hashtags are hot', 'what patterns are rising', or "
                 "'what should I post about this week'. Requires 2+ analysis runs."
             ),
             "parameters": {
@@ -516,10 +518,13 @@ When user says "optimize it", "improve it", "make it better":
 3. Show the before/after scores
 4. The user can say "optimize again" to iterate further
 
-When user asks "what's trending", "what should I post about":
+When user asks "what's trending", "what sounds are hot", "what should I post about":
 1. Use show_trends — needs 2+ analysis snapshots
-2. Present rising patterns with emphasis
-3. If not enough data, explain they need to run analysis on different days
+2. Present rising content patterns with emphasis
+3. If trend_radar data is present, highlight top trending sounds and hashtags with their velocity
+4. Include example post links (top_post_url) so users can click through to see the actual TikTok posts
+5. Format sounds with a music note icon and hashtags with #
+6. If not enough data, explain they need to run analysis at least twice to see velocity trends
 
 IMPORTANT:
 - NEVER output raw JSON to the user
@@ -1174,7 +1179,7 @@ IMPORTANT:
             return json.dumps({"ok": False, "error": f"Optimization failed: {e}"})
 
     def _handle_show_trends(self, args: Dict, context: Dict) -> str:
-        """Show rising/declining content pattern trends."""
+        """Show rising/declining content pattern trends AND sound/hashtag velocity trends."""
         from trend_analyzer import TrendAnalyzer
 
         active = context.get("active_vertical")
@@ -1182,13 +1187,27 @@ IMPORTANT:
             return json.dumps({"ok": False, "error": "No active category."})
 
         lookback = args.get("lookback_weeks", 4)
+        result = {"ok": True}
 
+        # Existing: content pattern trends
         try:
             ta = TrendAnalyzer(active)
-            trends = ta.get_trends(lookback_weeks=lookback)
-            return json.dumps({"ok": True, **trends})
+            pattern_trends = ta.get_trends(lookback_weeks=lookback)
+            result.update(pattern_trends)
         except Exception as e:
-            return json.dumps({"ok": False, "error": f"Trend analysis failed: {e}"})
+            result["pattern_error"] = str(e)
+
+        # Trend Radar: sound/hashtag velocity trends with example post links
+        try:
+            from trend_radar.scorer import TrendRadarScorer
+            radar = TrendRadarScorer(active).get_top_trends(limit=10)
+            result["trend_radar"] = radar
+        except ImportError:
+            pass
+        except Exception as e:
+            result["radar_error"] = str(e)
+
+        return json.dumps(result)
 
     # ── Dispatch a tool call ────────────────────────────────────────────
 

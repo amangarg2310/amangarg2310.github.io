@@ -464,6 +464,71 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
 }
 
+/* Trend Radar items */
+.signal-trend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    font-size: 13px;
+    color: var(--signal-text-secondary);
+    border-radius: 6px;
+    transition: background 0.15s ease;
+}
+.signal-trend-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.signal-trend-rank {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--signal-cyan);
+    min-width: 20px;
+}
+.signal-trend-icon {
+    color: var(--signal-text-dim);
+    display: flex;
+    align-items: center;
+    min-width: 14px;
+}
+.signal-trend-name {
+    flex: 1;
+    color: var(--signal-text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.signal-trend-velocity {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.signal-trend-rising {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+.signal-trend-peaking {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+.signal-trend-declining {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+.signal-trend-emerging {
+    background: rgba(0, 217, 255, 0.1);
+    color: var(--signal-cyan);
+}
+.signal-trend-hint {
+    font-size: 11px;
+    color: var(--signal-text-dim);
+    margin-top: 6px;
+    padding-left: 4px;
+    font-style: italic;
+}
+
 /* Cluster filter pills (below report) */
 .signal-report-clusters {
     margin-top: 12px;
