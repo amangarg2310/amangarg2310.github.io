@@ -1136,9 +1136,9 @@ h1, h2, h3, h4, h5, h6 {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 120px 40px;
+    padding: 60px 40px;
     text-align: center;
-    min-height: 50vh;
+    min-height: 40vh;
 }
 
 .signal-empty svg {
@@ -1169,11 +1169,16 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 14px;
     border-radius: 8px;
     text-decoration: none;
-    transition: opacity 0.2s;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
+    border: none;
+    cursor: pointer;
 }
 
 .signal-empty-cta:hover {
-    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.25);
+    background: #07b9d5;
 }
 
 .signal-empty-steps {
@@ -2231,6 +2236,13 @@ h1, h2, h3, h4, h5, h6 {
     text-align: center;
     transform: scale(0.9);
     animation: splashEntry 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 80vh;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 40px 20px 20px;
 }
 
 @keyframes splashEntry {
@@ -2246,9 +2258,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .splash-logo {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    margin: 0 auto 32px;
+    margin: 0;
 }
 
 .splash-logo img {
@@ -2280,9 +2292,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .splash-tagline {
-    font-size: 18px;
+    font-size: 20px;
     color: var(--signal-text-secondary);
-    margin-bottom: 40px;
+    margin-bottom: 8px;
+    margin-top: auto;
+    line-height: 1.6;
+    max-width: 100%;
     animation: taglineSlide 0.8s ease-out 0.5s both;
 }
 
