@@ -1229,10 +1229,11 @@ document.getElementById('createCategoryModal').addEventListener('click', functio
     if (e.target === this) closeCreateModal();
 });
 // Open modal when arriving with ?create=1 (e.g. from archived /verticals/create or after setup)
-if (new URLSearchParams(window.location.search).get('create') === '1') {
-    openCreateModal();
-    history.replaceState({}, '', window.location.pathname + (window.location.hash || ''));
-}
+// DISABLED: Auto-popup was intrusive when returning from settings
+// if (new URLSearchParams(window.location.search).get('create') === '1') {
+//     openCreateModal();
+//     history.replaceState({}, '', window.location.pathname + (window.location.hash || ''));
+// }
 
 // Image fallback chain: proxy -> Instagram embed thumbnail -> gradient
 function handleImageError(img, gradientName) {

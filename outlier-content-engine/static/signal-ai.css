@@ -220,6 +220,9 @@ h1, h2, h3, h4, h5, h6 {
     line-height: 1.6;
     color: var(--signal-text-secondary);
     border: 1px solid var(--signal-border-light);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
 }
 
 .signal-message-time {
