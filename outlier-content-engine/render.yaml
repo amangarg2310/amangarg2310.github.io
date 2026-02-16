@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: scoutai
+    env: python
+    buildCommand: "pip install -r requirements.txt && python database_migrations.py"
+    startCommand: "gunicorn dashboard:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: APIFY_API_TOKEN
+        sync: false
+      - key: TIKTOK_RAPIDAPI_KEY
+        sync: false
+      - key: IG_GRAPH_ACCESS_TOKEN
+        sync: false
+      - key: EMAIL_ADDRESS
+        sync: false
+      - key: EMAIL_APP_PASSWORD
+        sync: false
+      - key: EMAIL_RECIPIENTS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FLASK_SECRET_KEY
+        sync: false
+      - key: ACTIVE_VERTICAL
+        value: "Streetwear"
+    disk:
+      name: scoutai-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

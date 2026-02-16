@@ -287,7 +287,7 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
 
         query = """
             SELECT post_id, competitor_name, competitor_handle, platform,
-                   caption, media_type, media_url, post_url, posted_at, likes, comments,
+                   caption, media_type, media_url, posted_at, likes, comments,
                    saves, shares, views, outlier_score, content_tags,
                    weighted_engagement_score, primary_engagement_driver,
                    audio_id, audio_name, ai_analysis
@@ -2027,11 +2027,16 @@ def analysis_status():
 
                     # Calculate time remaining based on actual progress
                     progress_pct = progress_data.get("progress_percent", 0)
-                    if progress_pct > 5:
+                    if progress_pct > 15:
+                        # Use stable estimate based on progress
+                        # Once we're >15% done, lock in the rate to avoid jumps
                         estimated_total = (elapsed / progress_pct) * 100
                         remaining = max(0, estimated_total - elapsed)
+                        # Cap remaining time to prevent unrealistic estimates
+                        remaining = min(remaining, 600)  # Max 10 minutes remaining
                         response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
-                    else:
+                    elif progress_pct > 0:
+                        # Early phase - show estimate based on brand count
                         is_cached = progress_data.get("is_cached", False)
                         if is_cached:
                             response["time_remaining"] = "~1 minute"
@@ -2039,6 +2044,9 @@ def analysis_status():
                             total_brands = progress_data.get("total_brands_ig", 0) + progress_data.get("total_brands_tt", 0)
                             est_minutes = max(1, int((total_brands / 6) * 1.5 + 2))
                             response["time_remaining"] = f"~{est_minutes} minutes"
+                    else:
+                        # No progress yet
+                        response["time_remaining"] = "Starting..."
                 else:
                     # Process died but progress file still says "running"
                     # This is the stuck-screen scenario — treat as completed

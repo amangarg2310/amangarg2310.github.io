@@ -93,7 +93,9 @@ IG_GRAPH_ACCESS_TOKEN = os.getenv("IG_GRAPH_ACCESS_TOKEN")
 
 # ── TikTok Data Collection ──
 TIKTOK_RAPIDAPI_KEY = os.getenv("TIKTOK_RAPIDAPI_KEY", os.getenv("RAPIDAPI_KEY", ""))  # Fallback
-TIKTOK_COLLECTION_SOURCE = os.getenv("TIKTOK_COLLECTION_SOURCE", "rapidapi")
+# Use collection_source from database if available, otherwise fall back to env or "apify"
+_collection_source_db = get_api_key('collection_source')
+TIKTOK_COLLECTION_SOURCE = _collection_source_db or os.getenv("TIKTOK_COLLECTION_SOURCE", "apify")
 
 # ── Email (Gmail SMTP) ──
 SMTP_SERVER = "smtp.gmail.com"
