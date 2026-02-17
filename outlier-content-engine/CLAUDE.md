@@ -197,6 +197,32 @@ outlier-content-engine/
 
 ---
 
+### `scout_agent.py` - Conversational AI Agent
+**Purpose:** GPT-powered chat agent using OpenAI function calling (tools)
+
+**Architecture:**
+- GPT handles natural language understanding
+- Real actions executed by VerticalManager via tool handlers
+- System prompt guides GPT through a step-by-step flow (Steps 1-7)
+
+**GPT Tools (function calling):**
+- `create_category` — Create or reuse a competitive set
+- `delete_category` — Delete category and all brands (for "start fresh")
+- `add_brands` — Add brands with IG/TT/FB handles (paired insertion)
+- `remove_brand` — Remove a brand by any handle
+- `run_analysis` — Launch analysis pipeline in background thread
+- `list_categories` / `show_category` — View categories and brands
+- `score_content` / `optimize_content` — Caption scoring and optimization
+- `show_trends` — Display trend analysis
+
+**Key Design Decisions:**
+- Tool return values include `note` fields that guide GPT's next response
+- System prompt has conditional logic (e.g., 0-brand vs >0-brand category handling)
+- Anti-redundancy rules prevent GPT from re-calling tools unnecessarily
+- All DB connections use WAL mode for concurrent access
+
+---
+
 ### `outlier_detector.py` - Statistical Analysis
 **Algorithm:**
 1. Calculate per-competitor baseline (mean, median, std dev)
@@ -261,6 +287,10 @@ outlier-content-engine/
 5. **Allowed Emails** — Access control allowlist
 
 **Important:** `saveKeysOnly()` sends ALL form fields (including empty optional ones) to prevent backend errors. Missing fields caused "Error saving keys" failures.
+
+**Database Connection:**
+- Uses WAL mode (`PRAGMA journal_mode=WAL`) for concurrent read/write access
+- `busy_timeout=5000` prevents "database is locked" errors during analysis
 
 ---
 

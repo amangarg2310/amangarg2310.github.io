@@ -405,8 +405,9 @@ class ScoutAgent:
         if api_key:
             try:
                 self.client = OpenAI(api_key=api_key)
-            except Exception:
-                pass  # Will return None so dashboard falls back
+            except Exception as e:
+                logger.error(f"OpenAI client initialization failed: {e}")
+                self.client = None
         self.model = "gpt-4o-mini"
         self.vm = VerticalManager()
 
@@ -470,13 +471,19 @@ If the user hasn't named their competitive set yet, start here:
 - If the user already mentioned a category name (e.g., "create a Streetwear set"), use it — don't re-ask.
 - Generic phrases like "the set", "the collection", "the competitive set" are NOT names. Ask for a specific one.
 - Once you have the name, call create_category, then move to Step 2.
-- IMPORTANT: If create_category returns "already_existed: true", the category has brands from a previous session.
-  ALWAYS tell the user: "I found an existing [name] category with N brands: @handle1, @handle2, ...
-  Want to start fresh or keep these and add more?"
-  Never say "all set up" without showing what's already in the category.
+- IMPORTANT: If create_category returns "already_existed: true":
+  - If existing_brand_count > 0: Tell the user what brands are already in it and ask "Want to start fresh or keep these and add more?"
+  - If existing_brand_count == 0: The category is empty. Just say "Got it!" and move directly to Step 2 (ask for brands).
+  - NEVER say brands are "already tracked" or "already in the category" if existing_brand_count is 0.
 - If the user says "start fresh", "start over", "delete it", or "remove everything":
   Call delete_category to remove the old category entirely, THEN call create_category to make a fresh one.
   NEVER create a variant name like "Streetwear2" — always delete the old one and reuse the same name.
+
+CRITICAL RULE — NO REDUNDANT create_category CALLS:
+Once you have called create_category in this conversation and it succeeded (ok: true),
+do NOT call create_category again for the same name. If the user provides brand names next,
+call add_brands with that category name. Check conversation history — if create_category
+was already called, the next tool is ALWAYS add_brands, NEVER create_category again.
 
 STEP 2 — ADD BRANDS:
 "Great! Now let's add some brands. Which brands or handles do you want to track?"
@@ -655,17 +662,26 @@ IMPORTANT:
                     f"@{b.instagram_handle}" for b in existing_vertical.brands
                     if b.instagram_handle
                 ]
+            brand_count = len(existing_brands)
+            if brand_count > 0:
+                note = (
+                    "This category already has brands from a previous session. "
+                    "Tell the user what brands are already in it and ask if they "
+                    "want to start fresh (delete and recreate) or keep these brands."
+                )
+            else:
+                note = (
+                    "Category exists but is empty (no brands). "
+                    "Proceed directly to Step 2 — ask the user which brands to add. "
+                    "Do NOT ask about starting fresh when there are 0 brands."
+                )
             return json.dumps({
                 "ok": True,
                 "already_existed": True,
                 "message": f"Category '{name}' already exists (reusing it).",
-                "existing_brand_count": len(existing_brands),
+                "existing_brand_count": brand_count,
                 "existing_brands": existing_brands,
-                "note": (
-                    "This category already has brands from a previous session. "
-                    "Tell the user what brands are already in it and ask if they "
-                    "want to start fresh (delete and recreate) or keep these brands."
-                ),
+                "note": note,
             })
 
     def _handle_delete_category(self, args: Dict) -> str:
@@ -860,6 +876,13 @@ IMPORTANT:
             "total_brands": total,
             "newly_added_count": len(newly_added_handles),
         }
+
+        # Explicit guidance for GPT
+        if added:
+            result["note"] = (
+                f"Successfully added {len(added)} brand(s) to '{actual_name}'. "
+                "Tell the user which brands were added, then ask about platforms and timeframe."
+            )
 
         # Include handle resolution details so GPT can inform the user
         if resolved:

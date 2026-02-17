@@ -194,19 +194,24 @@ class VerticalManager:
         try:
             # Check if this brand has archived posts in this vertical (from previous removal)
             handle_to_check = instagram_handle or tiktok_handle
-            archived_count = conn.execute("""
-                SELECT COUNT(*) FROM competitor_posts
-                WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ? AND archived = 1
-            """, (vertical_name, handle_to_check)).fetchone()[0]
+            archived_count = 0
+            try:
+                archived_count = conn.execute("""
+                    SELECT COUNT(*) FROM competitor_posts
+                    WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ? AND archived = 1
+                """, (vertical_name, handle_to_check)).fetchone()[0]
 
-            # Unarchive existing posts if found (instant re-add!)
-            if archived_count > 0:
-                conn.execute("""
-                    UPDATE competitor_posts
-                    SET archived = 0
-                    WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ?
-                """, (vertical_name, handle_to_check))
-                logger.info(f"Unarchived {archived_count} posts for @{handle_to_check} in {vertical_name}")
+                # Unarchive existing posts if found (instant re-add!)
+                if archived_count > 0:
+                    conn.execute("""
+                        UPDATE competitor_posts
+                        SET archived = 0
+                        WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ?
+                    """, (vertical_name, handle_to_check))
+                    logger.info(f"Unarchived {archived_count} posts for @{handle_to_check} in {vertical_name}")
+            except sqlite3.OperationalError:
+                # competitor_posts table may not exist yet (created by collectors on first run)
+                pass
 
             # Add brand to vertical
             try:
