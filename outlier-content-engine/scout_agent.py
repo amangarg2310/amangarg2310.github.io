@@ -865,15 +865,11 @@ IMPORTANT:
         # ── Brand-specific filtering (optional) ──
         brand_handles = args.get("brand_handles")  # None, [], or ["nike", "kith"]
 
-        # SMART INCREMENTAL COLLECTION: If brands were just added in this conversation,
-        # only collect data for the NEW brands (not re-pull existing brands)
-        newly_added = context.get("newly_added_brands", [])
-        was_existing_vertical = context.get("was_existing_vertical", False)
-
-        if not brand_handles and newly_added and was_existing_vertical:
-            # User added brands to an existing vertical — only fetch the new ones
-            brand_handles = newly_added
-            logger.info(f"Incremental collection: only fetching {len(brand_handles)} new brands")
+        # Clear newly_added_brands from context to prevent stale filtering
+        # on subsequent analysis calls. Analysis always respects explicit
+        # brand_handles from the user; it never auto-filters.
+        context.pop("newly_added_brands", None)
+        context.pop("was_existing_vertical", None)
 
         # Validate brands exist in category (if specified)
         if brand_handles:
