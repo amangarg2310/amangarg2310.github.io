@@ -1,7 +1,7 @@
 """
 Outlier Content Engine — Main Orchestrator
 
-Loads the active brand profile and runs the full pipeline:
+Loads the active vertical and runs the full pipeline:
   1. Collect competitor posts (Instagram + TikTok)
   2. Collect own-channel posts (for voice learning)
   3. Detect outlier posts (weighted engagement scoring)
@@ -12,8 +12,8 @@ Loads the active brand profile and runs the full pipeline:
   8. Generate and send/save report (HTML email)
 
 Usage:
-  python main.py                    # uses ACTIVE_PROFILE from .env
-  python main.py --profile heritage # override profile from CLI
+  python main.py                          # uses ACTIVE_VERTICAL from .env
+  python main.py --vertical Streetwear    # override vertical from CLI
 """
 
 import argparse
@@ -27,7 +27,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import config
-from profile_loader import load_profile, ProfileValidationError
 from vertical_manager import VerticalManager
 from collectors.instagram import (
     init_database, migrate_database, create_collector,
@@ -56,14 +55,9 @@ def parse_args():
         description="Outlier Content Engine — Competitor Intelligence Platform"
     )
     parser.add_argument(
-        "--profile", "-p",
-        default=None,
-        help="Brand profile name (overrides ACTIVE_PROFILE in .env)",
-    )
-    parser.add_argument(
         "--vertical", "-v",
         default=None,
-        help="Vertical name from database (e.g., Streetwear, Beauty). Overrides --profile.",
+        help="Vertical name from database (e.g., Streetwear, Beauty)",
     )
     parser.add_argument(
         "--skip-collect",
@@ -169,14 +163,13 @@ def _check_credentials(logger):
 
 
 @with_progress_tracking
-def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, brands=None, _progress=None):
+def run_pipeline(vertical_name=None, skip_collect=False, no_email=False, brands=None, _progress=None):
     """
     Run the full outlier detection pipeline.
 
     Can be called from CLI (main()) or from the dashboard.
     Args:
-        profile_name: YAML profile name (legacy)
-        vertical_name: Database vertical name (new system, takes priority)
+        vertical_name: Database vertical name (e.g., "Streetwear")
         skip_collect: Skip data collection phase
         no_email: Save report locally instead of emailing
         brands: Comma-separated brand handles to collect (subset of vertical)
@@ -189,135 +182,118 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     logger.info("OUTLIER CONTENT ENGINE")
     logger.info("=" * 60)
 
-    # ── 1. Load Competitors (Database Vertical or YAML Profile) ──
+    # ── 1. Load Competitors from Database Vertical ──
     ig_competitors = []
     tt_competitors = []
     vertical_display_name = ""
     profile_id = None  # Used for storing posts in database
-    profile = None  # Profile object (real or mock)
+    profile = None  # Profile object (mock for downstream compatibility)
 
-    if vertical_name:
-        # NEW: Load from database vertical
-        vm = VerticalManager()
-        vertical = vm.get_vertical(vertical_name)
+    if not vertical_name:
+        # Fall back to ACTIVE_VERTICAL env var
+        vertical_name = config.ACTIVE_VERTICAL
+    if not vertical_name:
+        logger.error("No vertical specified. Use --vertical <name> or set ACTIVE_VERTICAL env var.")
+        return {"error": "No vertical specified"}
 
-        if not vertical:
-            logger.error(f"Vertical '{vertical_name}' not found in database")
-            return {"error": f"Vertical '{vertical_name}' not found"}
+    vm = VerticalManager()
+    vertical = vm.get_vertical(vertical_name)
 
-        logger.info(f"Running for vertical: {vertical.name}")
-        vertical_display_name = vertical.name
-        profile_id = vertical.name  # Use vertical name as profile_id
+    if not vertical:
+        logger.error(f"Vertical '{vertical_name}' not found in database")
+        return {"error": f"Vertical '{vertical_name}' not found"}
 
-        # Build competitor lists from vertical brands
-        for brand in vertical.brands:
-            if brand.instagram_handle:
-                ig_competitors.append({
-                    "name": brand.brand_name or brand.instagram_handle,
-                    "handle": brand.instagram_handle
-                })
-            if brand.tiktok_handle:
-                tt_competitors.append({
-                    "name": brand.brand_name or brand.tiktok_handle,
-                    "handle": brand.tiktok_handle
-                })
+    logger.info(f"Running for vertical: {vertical.name}")
+    vertical_display_name = vertical.name
+    profile_id = vertical.name  # Use vertical name as profile_id
 
-        logger.info(
-            f"Monitoring {len(ig_competitors)} Instagram + "
-            f"{len(tt_competitors)} TikTok brands"
-        )
+    # Build competitor lists from vertical brands
+    for brand in vertical.brands:
+        if brand.instagram_handle:
+            ig_competitors.append({
+                "name": brand.brand_name or brand.instagram_handle,
+                "handle": brand.instagram_handle
+            })
+        if brand.tiktok_handle:
+            tt_competitors.append({
+                "name": brand.brand_name or brand.tiktok_handle,
+                "handle": brand.tiktok_handle
+            })
 
-        # Create a minimal mock profile for compatibility with downstream code
-        from profile_loader import OutlierSettings, ContentTags
+    logger.info(
+        f"Monitoring {len(ig_competitors)} Instagram + "
+        f"{len(tt_competitors)} TikTok brands"
+    )
 
-        class MockProfile:
-            def __init__(self, name, vertical, profile_name):
-                self.name = name
-                self.vertical = vertical
-                self.profile_name = profile_name
-                self._vm = VerticalManager()
-                self.outlier_settings = OutlierSettings()  # Direct property access
-                self.follower_count = None  # Verticals don't have a single follower count
-                self.description = None
+    # Create a minimal mock profile for compatibility with downstream code
+    from profile_loader import OutlierSettings, ContentTags
 
-            def get_own_handle(self, platform="instagram"):
-                """Read own-brand handle from the config table."""
-                try:
-                    import sqlite3
-                    conn = sqlite3.connect(str(config.DB_PATH))
-                    row = conn.execute(
-                        "SELECT value FROM config WHERE key = ?",
-                        (f"own_brand_{platform}",)
-                    ).fetchone()
-                    conn.close()
-                    return row[0] if row and row[0] else None
-                except Exception:
-                    return None
+    class MockProfile:
+        def __init__(self, name, vertical, profile_name):
+            self.name = name
+            self.vertical = vertical
+            self.profile_name = profile_name
+            self._vm = VerticalManager()
+            self.outlier_settings = OutlierSettings()
+            self.follower_count = None
+            self.description = None
 
-            def get_outlier_thresholds(self):
-                """Return default outlier detection settings."""
-                return self.outlier_settings
+        def get_own_handle(self, platform="instagram"):
+            """Read own-brand handle from the config table."""
+            try:
+                import sqlite3
+                conn = sqlite3.connect(str(config.DB_PATH))
+                row = conn.execute(
+                    "SELECT value FROM config WHERE key = ?",
+                    (f"own_brand_{platform}",)
+                ).fetchone()
+                conn.close()
+                return row[0] if row and row[0] else None
+            except Exception:
+                return None
 
-            def get_content_tags(self):
-                """Return empty content tags."""
-                return ContentTags(themes=[], hook_types=[], formats=[])
+        def get_outlier_thresholds(self):
+            return self.outlier_settings
 
-            def get_competitor_handles(self, platform="instagram"):
-                """Load competitors from database vertical."""
-                vertical_obj = self._vm.get_vertical(self.vertical)
-                if not vertical_obj:
-                    return []
+        def get_content_tags(self):
+            return ContentTags(themes=[], hook_types=[], formats=[])
 
-                results = []
-                for brand in vertical_obj.brands:
-                    if platform == "instagram" and brand.instagram_handle:
-                        results.append({
-                            "name": brand.brand_name or brand.instagram_handle,
-                            "handle": brand.instagram_handle
-                        })
-                    elif platform == "tiktok" and brand.tiktok_handle:
-                        results.append({
-                            "name": brand.brand_name or brand.tiktok_handle,
-                            "handle": brand.tiktok_handle
-                        })
-                    elif platform == "facebook" and getattr(brand, 'facebook_handle', None):
-                        results.append({
-                            "name": brand.brand_name or brand.facebook_handle,
-                            "handle": brand.facebook_handle
-                        })
-                return results
+        def get_competitor_handles(self, platform="instagram"):
+            """Load competitors from database vertical."""
+            vertical_obj = self._vm.get_vertical(self.vertical)
+            if not vertical_obj:
+                return []
 
-            def get_voice_prompt(self):
-                """Return voice prompt for verticals."""
-                own_handle = self.get_own_handle("instagram")
-                if own_handle:
-                    return f"You are a content strategist for @{own_handle}, analyzing the {self.vertical} competitive landscape."
-                return f"Analyzing content for the {self.vertical} vertical."
+            results = []
+            for brand in vertical_obj.brands:
+                if platform == "instagram" and brand.instagram_handle:
+                    results.append({
+                        "name": brand.brand_name or brand.instagram_handle,
+                        "handle": brand.instagram_handle
+                    })
+                elif platform == "tiktok" and brand.tiktok_handle:
+                    results.append({
+                        "name": brand.brand_name or brand.tiktok_handle,
+                        "handle": brand.tiktok_handle
+                    })
+                elif platform == "facebook" and getattr(brand, 'facebook_handle', None):
+                    results.append({
+                        "name": brand.brand_name or brand.facebook_handle,
+                        "handle": brand.facebook_handle
+                    })
+            return results
 
-        profile = MockProfile(
-            name=vertical.name,
-            vertical=vertical.name,
-            profile_name=vertical.name
-        )
-    else:
-        # LEGACY: Load from YAML profile
-        profile_name = profile_name or config.ACTIVE_PROFILE
-        try:
-            profile = load_profile(profile_name)
-        except (FileNotFoundError, ProfileValidationError) as e:
-            logger.error(f"Failed to load profile: {e}")
-            return {"error": str(e)}
+        def get_voice_prompt(self):
+            own_handle = self.get_own_handle("instagram")
+            if own_handle:
+                return f"You are a content strategist for @{own_handle}, analyzing the {self.vertical} competitive landscape."
+            return f"Analyzing content for the {self.vertical} vertical."
 
-        logger.info(f"Running for: {profile.name} ({profile.vertical})")
-        vertical_display_name = profile.name
-        profile_id = profile.profile_name  # Use YAML profile name as profile_id
-        ig_competitors = profile.get_competitor_handles("instagram")
-        tt_competitors = profile.get_competitor_handles("tiktok")
-        logger.info(
-            f"Monitoring {len(ig_competitors)} Instagram + "
-            f"{len(tt_competitors)} TikTok competitors"
-        )
-
+    profile = MockProfile(
+        name=vertical.name,
+        vertical=vertical.name,
+        profile_name=vertical.name
+    )
     # ── 1b. Filter to specific brands (if --brands was provided) ──
     if brands:
         brand_set = {b.strip().lstrip('@').lower() for b in brands.split(',')}
@@ -907,7 +883,6 @@ def main():
     setup_logging()
     args = parse_args()
     result = run_pipeline(
-        profile_name=args.profile,
         vertical_name=args.vertical,
         skip_collect=args.skip_collect,
         no_email=args.no_email,

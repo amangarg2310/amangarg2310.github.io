@@ -84,61 +84,6 @@ def run_vertical_migrations(db_path=None):
     logger.info("Vertical management migrations complete")
 
 
-def migrate_profile_to_vertical(profile_name: str, db_path=None):
-    """
-    Migrate an existing YAML profile to the vertical system.
-    Reads profile YAML and creates corresponding vertical + brands.
-    """
-    from profile_loader import load_profile
-    from datetime import datetime, timezone
-
-    db_path = db_path or config.DB_PATH
-    conn = sqlite3.connect(str(db_path))
-
-    try:
-        profile = load_profile(profile_name)
-        logger.info(f"Migrating profile '{profile_name}' to vertical...")
-
-        # Create vertical
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute("""
-            INSERT OR IGNORE INTO verticals (name, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
-        """, (
-            profile.name,
-            f"{profile.vertical} - Migrated from profile",
-            now,
-            now
-        ))
-
-        # Add all competitors as brands
-        for comp in profile.competitors:
-            instagram = comp.handles.get('instagram')
-            tiktok = comp.handles.get('tiktok')
-
-            if instagram:
-                conn.execute("""
-                    INSERT OR IGNORE INTO vertical_brands
-                    (vertical_name, brand_name, instagram_handle, tiktok_handle, added_at)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    profile.name,
-                    comp.name,
-                    instagram,
-                    tiktok,
-                    now
-                ))
-
-        conn.commit()
-        logger.info(f"Successfully migrated '{profile_name}' with {len(profile.competitors)} brands")
-
-    except Exception as e:
-        logger.error(f"Failed to migrate profile '{profile_name}': {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-
 def seed_api_keys_from_env(db_path=None):
     """
     One-time migration: Move API keys from .env to database.
@@ -714,11 +659,5 @@ if __name__ == "__main__":
     add_vertical_brands_unique_index()
     consolidate_vertical_name_casing()
     seed_api_keys_from_env()
-
-    # Optionally migrate existing profile
-    import sys
-    if len(sys.argv) > 1:
-        profile_name = sys.argv[1]
-        migrate_profile_to_vertical(profile_name)
 
     print("✓ Migrations complete")

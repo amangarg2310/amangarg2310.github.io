@@ -1,10 +1,10 @@
 """
 Global configuration for the Outlier Content Engine.
 
-All brand-specific values come from the active YAML profile.
+Brand-specific values come from the active database vertical.
 This module only holds environment-driven settings and defaults.
 
-API keys can now be stored in database (preferred) or .env (fallback).
+API keys can be stored in database (preferred) or .env (fallback).
 """
 
 import logging
@@ -19,17 +19,13 @@ load_dotenv()
 
 # ── Paths ──
 PROJECT_ROOT = Path(__file__).parent
-PROFILES_DIR = PROJECT_ROOT / "profiles"
 DATA_DIR = PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "content_engine.db"
 
 # Ensure data directory exists
 DATA_DIR.mkdir(exist_ok=True)
 
-# ── Active Profile ──
-ACTIVE_PROFILE = os.getenv("ACTIVE_PROFILE") or None
-
-# ── Active Vertical (new system) ──
+# ── Active Vertical ──
 ACTIVE_VERTICAL = os.getenv("ACTIVE_VERTICAL")
 
 

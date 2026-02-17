@@ -26,7 +26,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-import yaml
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, send_file, Response, session,
@@ -35,7 +34,6 @@ from markupsafe import Markup
 
 import config
 from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user, is_email_allowed
-from profile_loader import load_profile
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(32).hex()
@@ -108,15 +106,6 @@ def md_bold_filter(text):
 
 # ── Helpers ──
 
-def get_available_profiles():
-    """List all available brand profile names."""
-    profiles = []
-    for f in config.PROFILES_DIR.glob("*.yaml"):
-        if f.stem != "_template":
-            profiles.append(f.stem)
-    return sorted(profiles)
-
-
 def get_available_verticals():
     """List all available vertical names."""
     from vertical_manager import VerticalManager
@@ -172,30 +161,8 @@ def needs_setup():
 
 
 def get_active_profile_name():
-    """Get the active profile name from session or env."""
-    return getattr(app, '_active_profile', config.ACTIVE_PROFILE)
-
-
-def get_profile():
-    """Load the active brand profile."""
-    return load_profile(get_active_profile_name())
-
-
-def get_profile_data():
-    """Load raw YAML data for the active profile (for editing)."""
-    profile_name = get_active_profile_name()
-    yaml_path = config.PROFILES_DIR / f"{profile_name}.yaml"
-    with open(yaml_path, "r") as f:
-        return yaml.safe_load(f)
-
-
-def save_profile_data(data):
-    """Write updated profile data back to YAML."""
-    profile_name = get_active_profile_name()
-    yaml_path = config.PROFILES_DIR / f"{profile_name}.yaml"
-    with open(yaml_path, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True,
-                  sort_keys=False)
+    """Get the active vertical name (delegates to vertical system)."""
+    return get_active_vertical_name() or ""
 
 
 def get_db():
@@ -218,11 +185,18 @@ def get_dashboard_stats():
 
     profile_name = get_active_profile_name()
 
-    try:
-        profile = get_profile()
-        stats["competitors"] = len(profile.competitors)
-    except (FileNotFoundError, AttributeError):
-        pass  # Profile not configured yet
+    # Get competitor count from vertical brands in database
+    if profile_name and config.DB_PATH.exists():
+        try:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM vertical_brands WHERE vertical_name = ?",
+                (profile_name,)
+            ).fetchone()
+            stats["competitors"] = row["cnt"] if row else 0
+            conn.close()
+        except sqlite3.OperationalError:
+            pass
 
     if config.DB_PATH.exists():
         try:
@@ -644,8 +618,6 @@ def get_report_files():
 def inject_globals():
     """Make these available in all templates."""
     return {
-        "active_profile": get_active_profile_name(),
-        "available_profiles": get_available_profiles(),
         "active_vertical": get_active_vertical_name(),
         "available_verticals": get_available_verticals(),
         "current_user": get_current_user(),
@@ -736,7 +708,6 @@ def signal_page():
     from insight_generator import generate_insights_for_vertical
     from vertical_manager import VerticalManager
 
-    profile = get_profile()
     competitor = request.args.get("competitor", "")
     platform = request.args.get("platform", "")
     sort_by = request.args.get("sort", "score")
@@ -814,7 +785,6 @@ def signal_page():
                 collection_errors = []
 
     return render_template("signal.html",
-                           profile=profile,
                            outliers=outliers,
                            insights=insights,
                            pattern_clusters=pattern_clusters,
@@ -1196,12 +1166,13 @@ def run_engine():
     skip_collect = request.form.get("skip_collect", "0") == "1"
     vertical_name = request.form.get("vertical_name", "").strip()
 
-    # Prefer vertical (new system) over profile (legacy)
-    if vertical_name:
-        cmd = [sys.executable, "main.py", "--vertical", vertical_name, "--no-email"]
-    else:
-        profile_name = get_active_profile_name()
-        cmd = [sys.executable, "main.py", "--profile", profile_name, "--no-email"]
+    # Use active vertical (fall back to form value or session)
+    if not vertical_name:
+        vertical_name = get_active_vertical_name()
+    if not vertical_name:
+        flash("No vertical selected. Create one in the dashboard first.", "danger")
+        return redirect(url_for("index"))
+    cmd = [sys.executable, "main.py", "--vertical", vertical_name, "--no-email"]
 
     if skip_collect:
         cmd.append("--skip-collect")
@@ -2224,6 +2195,6 @@ if __name__ == "__main__":
 
     print(f"\n  Outlier Content Engine Dashboard")
     print(f"  Running at: http://localhost:{args.port}")
-    print(f"  Active profile: {config.ACTIVE_PROFILE}\n")
+    print(f"  Active vertical: {config.ACTIVE_VERTICAL or 'Not set'}\n")
 
     app.run(host="0.0.0.0", port=args.port, debug=args.debug)
