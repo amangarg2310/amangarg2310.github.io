@@ -571,9 +571,8 @@ def add_trend_radar_tables(db_path=None):
 def add_vertical_brands_unique_index(db_path=None):
     """
     Add a unique index on vertical_brands to prevent duplicate brand entries.
-    Uses a partial unique index: UNIQUE(vertical_name, instagram_handle) WHERE instagram_handle IS NOT NULL
-    and UNIQUE(vertical_name, tiktok_handle) WHERE tiktok_handle IS NOT NULL.
-    Safe to call multiple times.
+    Uses case-insensitive partial unique indexes so "Streetwear"/"streetwear" are treated
+    as the same vertical. Safe to call multiple times.
     """
     db_path = db_path or config.DB_PATH
     conn = sqlite3.connect(str(db_path))
@@ -581,13 +580,14 @@ def add_vertical_brands_unique_index(db_path=None):
     logger.info("Adding unique indexes to vertical_brands...")
 
     # Remove any existing duplicate rows before creating unique index
+    # Use LOWER() for case-insensitive dedup
     try:
         conn.execute("""
             DELETE FROM vertical_brands
             WHERE id NOT IN (
                 SELECT MIN(id)
                 FROM vertical_brands
-                GROUP BY vertical_name, COALESCE(instagram_handle, ''), COALESCE(tiktok_handle, '')
+                GROUP BY LOWER(vertical_name), LOWER(COALESCE(instagram_handle, '')), LOWER(COALESCE(tiktok_handle, ''))
             )
         """)
         dupes_removed = conn.total_changes
@@ -597,30 +597,38 @@ def add_vertical_brands_unique_index(db_path=None):
     except Exception as e:
         logger.warning(f"  Dedup cleanup failed (non-critical): {e}")
 
-    # Create unique index for Instagram handles
+    # Drop old case-sensitive indexes if they exist, then create case-insensitive ones
+    for idx_name in ['idx_vertical_brands_ig_unique', 'idx_vertical_brands_tt_unique']:
+        try:
+            conn.execute(f"DROP INDEX IF EXISTS {idx_name}")
+            conn.commit()
+        except Exception:
+            pass
+
+    # Create case-insensitive unique index for Instagram handles
     try:
         conn.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_vertical_brands_ig_unique
-            ON vertical_brands(vertical_name, instagram_handle)
+            ON vertical_brands(vertical_name COLLATE NOCASE, instagram_handle COLLATE NOCASE)
             WHERE instagram_handle IS NOT NULL
         """)
         conn.commit()
-        logger.info("  Created unique index on (vertical_name, instagram_handle)")
+        logger.info("  Created case-insensitive unique index on (vertical_name, instagram_handle)")
     except sqlite3.OperationalError as e:
         if "already exists" in str(e).lower():
             logger.info("  Instagram unique index already exists")
         else:
             logger.warning(f"  Failed to create IG unique index: {e}")
 
-    # Create unique index for TikTok handles
+    # Create case-insensitive unique index for TikTok handles
     try:
         conn.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_vertical_brands_tt_unique
-            ON vertical_brands(vertical_name, tiktok_handle)
+            ON vertical_brands(vertical_name COLLATE NOCASE, tiktok_handle COLLATE NOCASE)
             WHERE tiktok_handle IS NOT NULL
         """)
         conn.commit()
-        logger.info("  Created unique index on (vertical_name, tiktok_handle)")
+        logger.info("  Created case-insensitive unique index on (vertical_name, tiktok_handle)")
     except sqlite3.OperationalError as e:
         if "already exists" in str(e).lower():
             logger.info("  TikTok unique index already exists")
