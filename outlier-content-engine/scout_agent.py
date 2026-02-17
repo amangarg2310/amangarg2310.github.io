@@ -490,6 +490,23 @@ Users don't always follow the step-by-step flow. Handle shortcuts:
 - "analyze everything on IG for the last 3 months" → User specified platform+timeframe, skip straight to analysis.
 - "go" / "just do it" / "all defaults" → Use defaults (all platforms, 30d) and run.
 
+POST-ANALYSIS FOLLOW-UP (STEP 7):
+After run_analysis is triggered and you've told the user analysis is running,
+offer advanced features they can try while they wait or after results come in:
+
+"Analysis is running — I'll have results shortly! While we wait, here are some
+things you can do next:
+
+• **Trend Analysis** — See what sounds, hashtags, and content patterns are rising or falling. Great for planning your next post.
+• **Score a Caption** — Paste a draft caption and I'll score it 0-100 against what's working for these brands. Free and instant!
+• **Optimize Content** — I can rewrite your caption using patterns from top-performing posts.
+
+Just let me know what sounds interesting, or hang tight for the analysis results!"
+
+Only show this ONCE per analysis run. Don't repeat it on every message.
+If user says "trends" → call show_trends.
+If user says "score this: [caption]" → call score_content.
+
 TERMINOLOGY:
 - Say "category" or "collection" instead of "vertical"
 - "Outliers" = posts with 2x+ normal engagement
@@ -1068,6 +1085,13 @@ IMPORTANT:
             "brand_count": len(brand_handles) if brand_handles else brand_count,
             "message": message,
             "selected_brands": brand_handles if brand_handles else None,
+            "follow_up_hint": (
+                "Analysis is running. Offer the user advanced features they can try: "
+                "Trend Analysis (rising sounds/hashtags/patterns), "
+                "Score a Caption (paste a draft and get 0-100 score), "
+                "or Optimize Content (AI rewrite using top-performing patterns). "
+                "Present these as friendly options."
+            ),
         })
 
     def _handle_set_filters(self, args: Dict, context: Dict) -> str:
