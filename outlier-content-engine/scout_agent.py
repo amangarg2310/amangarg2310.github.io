@@ -1520,13 +1520,20 @@ IMPORTANT:
         messages.append({"role": "user", "content": message})
 
         try:
-            # ── Function-calling loop (max 3 rounds to prevent runaway) ──
-            for _ in range(3):
+            # ── Function-calling loop ──
+            # GPT may chain multiple tool calls (create_category → add_brands →
+            # show_category, etc.) before producing a text response.
+            # 8 rounds is generous headroom; on the final round we force text.
+            max_rounds = 8
+            for i in range(max_rounds):
+                # On the last iteration, force GPT to produce text — no more tools
+                current_tool_choice = "none" if i == max_rounds - 1 else "auto"
+
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     tools=TOOL_DEFINITIONS,
-                    tool_choice="auto",
+                    tool_choice=current_tool_choice,
                     temperature=0.6,
                     max_tokens=800,
                 )
@@ -1585,9 +1592,24 @@ IMPORTANT:
 
                 return (assistant_text, context)
 
-            # Exhausted loop iterations — shouldn't happen normally
+            # Exhausted loop iterations — with tool_choice="none" on the last
+            # round this should be unreachable, but provide a useful fallback.
+            active = context.get("active_vertical")
+            if active:
+                v = self.vm.get_vertical(active)
+                brand_count = len(v.brands) if v else 0
+                return (
+                    f"I've been working on your '{active}' category "
+                    f"({brand_count} brand{'s' if brand_count != 1 else ''}). "
+                    "What would you like to do next? You can say 'analyze' to "
+                    "start, or 'show category' to see what's in there.",
+                    context,
+                )
             return (
-                "I ran into a hiccup processing that. Could you try rephrasing?",
+                "I got a bit tangled up there! Try saying something like:\n"
+                "- 'Create a Streetwear category'\n"
+                "- 'Add @nike and @adidas'\n"
+                "- 'Show my categories'",
                 context,
             )
 
