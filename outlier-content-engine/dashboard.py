@@ -456,12 +456,14 @@ def get_competitor_baselines(vertical_name=None, timeframe="30d"):
 
 
 def get_analyzed_brands_with_data(vertical_name):
-    """Get list of brands from vertical that have actual posts/outliers in database.
+    """Get list of brands from the vertical for display in the chat panel.
 
-    This filters the vertical's brand list to show only brands that were analyzed
-    (i.e., have posts in the database), which is useful when user analyzes a subset.
+    Prefers brands that have actual post data in the database (so post counts
+    and outlier badges are accurate). Falls back to ALL brands in the vertical
+    so the chat panel always shows which brands are being tracked — even before
+    analysis runs or when only a subset was analyzed.
 
-    Returns: List of Brand objects that have data in the database.
+    Returns: List of Brand objects.
     """
     if not vertical_name:
         return []
@@ -474,33 +476,15 @@ def get_analyzed_brands_with_data(vertical_name):
         if not vertical:
             return []
 
-        # Query database to get handles that actually have posts
-        conn = get_db()
-        rows = conn.execute("""
-            SELECT DISTINCT competitor_handle
-            FROM competitor_posts
-            WHERE brand_profile = ?
-        """, (vertical_name,)).fetchall()
-        conn.close()
+        # Always return all brands in the vertical so the competitive set display
+        # is populated even before analysis runs or for brands not yet analyzed.
+        # (Previously this filtered to only analyzed brands, which left the panel
+        # empty when analysis hadn't run or had only run on a subset.)
+        return vertical.brands
 
-        # Build set of handles with data
-        handles_with_data = {row["competitor_handle"] for row in rows}
-
-        # Filter vertical brands to only include those with data
-        filtered_brands = [
-            brand for brand in vertical.brands
-            if (brand.instagram_handle in handles_with_data or
-                brand.tiktok_handle in handles_with_data)
-        ]
-
-        return filtered_brands
     except Exception as e:
-        logger.error(f"Error getting analyzed brands: {e}")
-        # Fallback: return all brands from vertical
-        from vertical_manager import VerticalManager
-        vm = VerticalManager()
-        vertical = vm.get_vertical(vertical_name)
-        return vertical.brands if vertical else []
+        logger.error(f"Error getting brands for vertical: {e}")
+        return []
 
 
 def build_pattern_clusters(outliers):
@@ -784,6 +768,27 @@ def signal_page():
             except (json.JSONDecodeError, TypeError):
                 collection_errors = []
 
+    # Pass chat history so template can re-render previous messages on page reload.
+    # This prevents the chat from appearing to "reset" every time a filter changes
+    # or the page reloads after analysis.
+    chat_history = session.get('chat_context', {}).get('chat_history', [])
+
+    # Read what timeframe was used when data was last collected.
+    # Used to disable the "3 Months" filter pill when data only covers 30 days.
+    collection_timeframe = None
+    if vertical_name and not empty_state:
+        try:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT value FROM config WHERE key = ?",
+                (f"last_collection_timeframe_{vertical_name}",)
+            ).fetchone()
+            conn.close()
+            if row and row["value"]:
+                collection_timeframe = row["value"]
+        except Exception:
+            pass
+
     return render_template("signal.html",
                            outliers=outliers,
                            insights=insights,
@@ -799,7 +804,9 @@ def signal_page():
                            selected_platform=platform,
                            selected_timeframe=timeframe,
                            sort_by=sort_by,
-                           collection_errors=collection_errors)
+                           collection_errors=collection_errors,
+                           chat_history=chat_history,
+                           collection_timeframe=collection_timeframe)
 
 
 @app.route("/api/outliers")
@@ -1705,9 +1712,17 @@ def chat_message():
             response, updated_context = scout.chat(message, context)
 
             if response:
-                # Pop (not get) so flag is consumed once and cleared from persisted context
+                # Pop (not get) so flags are consumed ONCE and cleared from persisted context.
+                # These are one-shot directives — they must fire on the message that set them,
+                # then be gone. Without pop(), stale filter values persist across subsequent
+                # messages and cause unexpected page reloads / broken chat state.
                 analysis_started = updated_context.pop('analysis_started', False)
                 selected_brands = updated_context.pop('selected_brands', None)
+                filter_action = updated_context.pop('filter_action', None)
+                filter_brands = updated_context.pop('filter_brands', None)
+                filter_platform = updated_context.pop('filter_platform', None)
+                filter_timeframe = updated_context.pop('filter_timeframe', None)
+                filter_sort = updated_context.pop('filter_sort', None)
 
                 # If Scout's tools changed the active vertical, sync the app state
                 new_vertical = updated_context.get('active_vertical')
@@ -1715,7 +1730,9 @@ def chat_message():
                     app._active_vertical = new_vertical
                     session['active_vertical'] = new_vertical
 
-                # Persist the full context (including chat_history) in session
+                # Persist the full context (including chat_history) in session.
+                # Transient filter keys have already been popped above so they
+                # won't contaminate future messages.
                 session['chat_context'] = updated_context
                 session.modified = True
 
@@ -1730,15 +1747,15 @@ def chat_message():
                 }
 
                 # Pass filter actions from chatbot to frontend (Phase 4: bidirectional sync)
-                if updated_context.get('filter_action'):
+                if filter_action:
                     result["filter_action"] = True
-                    result["filter_brands"] = updated_context.get('filter_brands', [])
-                if updated_context.get('filter_platform'):
-                    result["filter_platform"] = updated_context['filter_platform']
-                if updated_context.get('filter_timeframe'):
-                    result["filter_timeframe"] = updated_context['filter_timeframe']
-                if updated_context.get('filter_sort'):
-                    result["filter_sort"] = updated_context['filter_sort']
+                    result["filter_brands"] = filter_brands or []
+                if filter_platform:
+                    result["filter_platform"] = filter_platform
+                if filter_timeframe:
+                    result["filter_timeframe"] = filter_timeframe
+                if filter_sort:
+                    result["filter_sort"] = filter_sort
 
                 return jsonify(result)
 

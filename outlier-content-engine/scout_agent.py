@@ -1242,6 +1242,21 @@ IMPORTANT:
         user_platforms = args.get("platforms", "all")
         user_timeframe = args.get("timeframe", "30d")
 
+        # Persist the collection timeframe so the dashboard can disable the
+        # "3 Months" filter pill when data only covers the last 30 days.
+        try:
+            _tconn = sqlite3.connect(str(config.DB_PATH))
+            _tconn.execute("PRAGMA journal_mode=WAL")
+            _tconn.execute("PRAGMA busy_timeout=5000")
+            _tconn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+                (f"last_collection_timeframe_{actual_name}", user_timeframe)
+            )
+            _tconn.commit()
+            _tconn.close()
+        except Exception as tf_err:
+            logger.warning(f"Failed to store collection timeframe: {tf_err}")
+
         if user_platforms and user_platforms != "all":
             context["filter_platform"] = user_platforms
         if user_timeframe:

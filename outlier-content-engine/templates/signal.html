@@ -155,6 +155,17 @@
                 </div>
             </div>
             {% else %}
+            {% if chat_history %}
+            <!-- Re-render prior conversation so chat doesn't appear to reset on page reload -->
+            {% for msg in chat_history %}
+            <div class="signal-message {% if msg.role == 'user' %}signal-message-user{% endif %}">
+                <div class="signal-avatar">{% if msg.role == 'user' %}{{ session.get('user', {}).get('name', 'You')[0]|upper if session.get('user') else 'Y' }}{% else %}S{% endif %}</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">{{ msg.content }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
             <div class="signal-message">
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
@@ -164,6 +175,7 @@
                     <div class="signal-message-time">Just now</div>
                 </div>
             </div>
+            {% endif %}
             {% endif %}
 
             <!-- Competitive Set Display -->
@@ -556,8 +568,9 @@
                     <div class="signal-filter-pills">
                         <button class="signal-pill {% if selected_timeframe == '30d' or not selected_timeframe %}active{% endif %}"
                                 onclick="applyFilter('timeframe', '30d')">30 Days</button>
-                        <button class="signal-pill {% if selected_timeframe == '3mo' %}active{% endif %}"
-                                onclick="applyFilter('timeframe', '3mo')">3 Months</button>
+                        <button class="signal-pill {% if selected_timeframe == '3mo' %}active{% endif %}{% if collection_timeframe == '30d' %} signal-pill-disabled{% endif %}"
+                                onclick="{% if collection_timeframe != '30d' %}applyFilter('timeframe', '3mo'){% endif %}"
+                                {% if collection_timeframe == '30d' %}title="Data collected for last 30 days only — re-run analysis with '3 months' to see this range" style="opacity:0.4;cursor:not-allowed;"{% endif %}>3 Months</button>
                     </div>
                 </div>
 
@@ -2525,6 +2538,13 @@ window.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('analysis_started') === 'true') {
         showAnalysisLoading();
+    }
+
+    // Scroll chat to bottom on load so the most recent messages are visible
+    // (important when chat history is re-rendered from session on page reload)
+    const messagesDiv = document.getElementById('chatMessages');
+    if (messagesDiv) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 });
 

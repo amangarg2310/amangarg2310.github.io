@@ -633,6 +633,25 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Chat Reset, Missing Brands Panel, and Timeframe Filter (multiple files)
+
+**4 bugs fixed:**
+
+1. **Chat appeared to reset on every page reload** (`signal.html`, `dashboard.py`)
+   - Root cause A: `chat_history` was stored in `session['chat_context']` but the template never rendered it — every reload showed a blank "Welcome back" bubble
+   - Root cause B: `filter_timeframe="30d"` set by `run_analysis` was never cleared from the session context. On the next unrelated message (e.g. "run trend radar"), the stale filter was returned to the frontend, triggering `applyFilter('timeframe', '30d')` → `window.location.reload()` before showing the response — wiping the chat
+   - Fix A: `signal_page()` now reads `session['chat_context']['chat_history']` and passes it to the template; `{% if chat_history %}` loop re-renders prior messages on load; chat scrolls to bottom via `DOMContentLoaded`
+   - Fix B: All transient filter keys (`filter_platform`, `filter_timeframe`, `filter_action`, `filter_brands`, `filter_sort`) are now `.pop()`-ped (not `.get()`-ed) from `updated_context` in `chat_message()`, same pattern as `analysis_started` — they fire once then are gone
+
+2. **Competitive set showed no brands in chat panel** (`dashboard.py`)
+   - Root cause: `get_analyzed_brands_with_data()` only returned brands with posts in `competitor_posts`. Before analysis or after partial analysis, the panel was empty
+   - Fix: Now returns ALL brands from the vertical (regardless of post data). The right panel brand pills for filtering still work correctly
+
+3. **"3 Months" filter pill disabled when data is 30-days only** (`scout_agent.py`, `dashboard.py`, `signal.html`)
+   - `_handle_run_analysis()` now writes `"last_collection_timeframe_{vertical}"` to the config table
+   - `signal_page()` reads this value and passes `collection_timeframe` to the template
+   - "3 Months" pill is rendered with `opacity: 0.4`, `cursor: not-allowed`, and a tooltip when `collection_timeframe == "30d"`. If collection was 3mo, both pills are enabled (30d is a valid subset of 3mo data)
+
 ### 2026-02-17: Fix competitor_posts Table Missing on Fresh Deployments (5b86682)
 - `database_migrations.py`: `run_vertical_migrations()` now includes `CREATE TABLE IF NOT EXISTS competitor_posts` with full schema (28 columns + 6 indexes)
 - Root cause: the legacy YAML profile system (removed in `51e345e`) was the only place that created this table at startup. After removal, fresh Render deployments (persistent disk with no prior DB) hit `no such table: competitor_posts` 500 errors on `/api/outliers`
@@ -816,5 +835,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 2.4.0
+**Version:** 2.5.0
 **Maintained by:** Claude Code (AI Assistant)
