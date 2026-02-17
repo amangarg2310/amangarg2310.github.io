@@ -81,6 +81,81 @@
 
         <hr class="settings-divider">
 
+        <!-- Brand Profile -->
+        <div class="settings-card-title">Brand Profile</div>
+        <div class="settings-card-subtitle">Tell us about your brand so AI analysis and content recommendations are tailored to your identity. If you've added your social handles above and have posts, we'll also learn from your top-performing content automatically.</div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Brand Name</label>
+            <input type="text" name="brand_name" id="brandName" class="settings-input"
+                   value="{{ brand_name or '' }}"
+                   placeholder="e.g., Heritage">
+            <div class="settings-hint">
+                Your brand or company name as it should appear in content briefs.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Category / Vertical</label>
+            <input type="text" name="brand_category" id="brandCategory" class="settings-input"
+                   value="{{ brand_category or '' }}"
+                   placeholder="e.g., Premium Streetwear, DTC Beauty, Fitness Apparel">
+            <div class="settings-hint">
+                The market category your brand operates in. Helps the AI understand your competitive context.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Target Audience</label>
+            <input type="text" name="brand_audience" id="brandAudience" class="settings-input"
+                   value="{{ brand_audience or '' }}"
+                   placeholder="e.g., 25-40 year old professionals who value quality and craftsmanship">
+            <div class="settings-hint">
+                Who your content is for. The AI will tailor recommendations to resonate with this audience.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Brand Description / Ethos</label>
+            <textarea name="brand_description" id="brandDescription" class="settings-input"
+                      rows="3" placeholder="e.g., Elevated streetwear rooted in timeless craftsmanship. We bridge heritage design with modern culture, creating pieces that outlast trends.">{{ brand_description or '' }}</textarea>
+            <div class="settings-hint">
+                A short description of what your brand stands for. This shapes the tone and angle of AI-generated content ideas.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Tone &amp; Voice</label>
+            <input type="text" name="brand_tone" id="brandTone" class="settings-input"
+                   value="{{ brand_tone or '' }}"
+                   placeholder="e.g., Sophisticated yet approachable, confident, quality-focused">
+            <div class="settings-hint">
+                How your brand speaks. The AI will write captions and briefs that match this voice.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Core Values / Themes</label>
+            <input type="text" name="brand_values" id="brandValues" class="settings-input"
+                   value="{{ brand_values or '' }}"
+                   placeholder="e.g., Craftsmanship, Authenticity, Timeless design, Community">
+            <div class="settings-hint">
+                Comma-separated values or themes your brand embodies. These guide content recommendations.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Topics to Avoid <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="brand_avoids" id="brandAvoids" class="settings-input"
+                   value="{{ brand_avoids or '' }}"
+                   placeholder="e.g., Politics, controversy, aggressive discounts, clickbait">
+            <div class="settings-hint">
+                Comma-separated topics or styles your brand should never touch. The AI will steer clear of these.
+            </div>
+        </div>
+
+        <hr class="settings-divider">
+
         <!-- Team Emails -->
         <div class="settings-form-group">
             <label class="settings-label">Team Email Distribution</label>

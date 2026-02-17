@@ -237,11 +237,33 @@ def run_pipeline(vertical_name=None, skip_collect=False, no_email=False, brands=
             self.outlier_settings = OutlierSettings()
             self.follower_count = None
             self.description = None
+            self._brand_profile = self._load_brand_profile()
+
+        def _load_brand_profile(self):
+            """Load brand profile fields from the config table."""
+            bp = {}
+            try:
+                conn = sqlite3.connect(str(config.DB_PATH))
+                for key in ['brand_name', 'brand_category', 'brand_audience',
+                            'brand_description', 'brand_tone', 'brand_values',
+                            'brand_avoids']:
+                    row = conn.execute(
+                        "SELECT value FROM config WHERE key = ?", (key,)
+                    ).fetchone()
+                    bp[key] = row[0] if row and row[0] else ''
+                conn.close()
+            except Exception:
+                pass
+            # Use brand_name from profile if set, otherwise fall back to vertical name
+            if bp.get('brand_name'):
+                self.name = bp['brand_name']
+            if bp.get('brand_description'):
+                self.description = bp['brand_description']
+            return bp
 
         def get_own_handle(self, platform="instagram"):
             """Read own-brand handle from the config table."""
             try:
-                import sqlite3
                 conn = sqlite3.connect(str(config.DB_PATH))
                 row = conn.execute(
                     "SELECT value FROM config WHERE key = ?",
@@ -284,10 +306,55 @@ def run_pipeline(vertical_name=None, skip_collect=False, no_email=False, brands=
             return results
 
         def get_voice_prompt(self):
+            """Build a rich brand context prompt from the brand profile fields.
+
+            If the user has filled in brand profile fields in Settings, those
+            are injected into the system prompt so the AI knows who the brand
+            is, its audience, tone, values, and what to avoid.  If social
+            handles are set and posts exist, VoiceAnalyzer supplements this
+            with patterns learned from real content (injected separately by
+            ContentAnalyzer).
+            """
+            bp = self._brand_profile
             own_handle = self.get_own_handle("instagram")
+            parts = []
+
+            # Brand identity header
+            brand_label = bp.get('brand_name') or self.vertical
             if own_handle:
-                return f"You are a content strategist for @{own_handle}, analyzing the {self.vertical} competitive landscape."
-            return f"Analyzing content for the {self.vertical} vertical."
+                parts.append(f"Brand: {brand_label} (@{own_handle})")
+            else:
+                parts.append(f"Brand: {brand_label}")
+
+            if bp.get('brand_category'):
+                parts.append(f"Category: {bp['brand_category']}")
+            else:
+                parts.append(f"Vertical: {self.vertical}")
+
+            if bp.get('brand_description'):
+                parts.append(f"Description: {bp['brand_description']}")
+
+            if bp.get('brand_audience'):
+                parts.append(f"Target audience: {bp['brand_audience']}")
+
+            if bp.get('brand_tone'):
+                parts.append(f"Tone & voice: {bp['brand_tone']}")
+
+            if bp.get('brand_values'):
+                parts.append(f"Core values: {bp['brand_values']}")
+
+            if bp.get('brand_avoids'):
+                parts.append(f"Avoids: {bp['brand_avoids']}")
+
+            # If no brand profile fields are filled, return a minimal prompt
+            if not any(bp.get(k) for k in ['brand_name', 'brand_category',
+                                            'brand_description', 'brand_audience',
+                                            'brand_tone', 'brand_values']):
+                if own_handle:
+                    return f"You are a content strategist for @{own_handle}, analyzing the {self.vertical} competitive landscape."
+                return f"Analyzing content for the {self.vertical} vertical."
+
+            return "\n".join(parts)
 
     profile = MockProfile(
         name=vertical.name,
