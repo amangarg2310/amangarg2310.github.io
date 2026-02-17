@@ -1673,6 +1673,22 @@ def chat_message():
                 'active_vertical': current_vertical,
                 'chat_history': [],
             }
+            # Seed welcome message for new users so GPT has onboarding context.
+            # Without this, GPT doesn't know the user was asked to "describe your niche"
+            # and treats bare words like "streetwear" as brand names instead of category names.
+            if not current_vertical:
+                from vertical_manager import VerticalManager
+                vm_check = VerticalManager()
+                if not vm_check.list_verticals():
+                    session['chat_context']['chat_history'] = [
+                        {
+                            "role": "assistant",
+                            "content": (
+                                "You're all set! Let's create your first competitive set. "
+                                "Pick a template or describe your niche:"
+                            ),
+                        }
+                    ]
 
         context = session['chat_context']
         context['active_vertical'] = current_vertical
