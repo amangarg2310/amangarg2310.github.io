@@ -30,7 +30,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, send_file, Response, session,
 )
-from markupsafe import Markup
+from markupsafe import Markup, escape as _escape_html
 
 import config
 from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user, is_email_allowed
@@ -141,7 +141,8 @@ def md_bold_filter(text):
     import re
     if not text or '**' not in str(text):
         return text
-    return Markup(re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', str(text)))
+    escaped = _escape_html(str(text))
+    return Markup(re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', str(escaped)))
 
 
 # ── Helpers ──
