@@ -207,7 +207,7 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
         engagement_rate = None
         if post.follower_count and post.follower_count > 0:
             total_engagement = (
-                post.likes + post.comments +
+                (post.likes or 0) + (post.comments or 0) +
                 (post.saves or 0) + (post.shares or 0)
             )
             engagement_rate = total_engagement / post.follower_count

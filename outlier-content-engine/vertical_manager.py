@@ -152,19 +152,23 @@ class VerticalManager:
     def delete_vertical(self, name: str) -> bool:
         """Delete a vertical and all its brands."""
         conn = self._get_conn()
+        cursor = conn.cursor()
 
         # Explicitly delete brands first (don't rely on CASCADE — SQLite
         # foreign keys are off by default and we don't enable them)
-        conn.execute("DELETE FROM vertical_brands WHERE vertical_name = ? COLLATE NOCASE", (name,))
-        brands_deleted = conn.total_changes
+        cursor.execute("DELETE FROM vertical_brands WHERE vertical_name = ? COLLATE NOCASE", (name,))
+        brands_deleted = cursor.rowcount
 
         # Delete vertical metadata
-        conn.execute("DELETE FROM verticals WHERE name = ? COLLATE NOCASE", (name,))
-        deleted = conn.total_changes > 0
+        cursor.execute("DELETE FROM verticals WHERE name = ? COLLATE NOCASE", (name,))
+        deleted = cursor.rowcount > 0
 
         # Delete all associated posts (no foreign key, so manual cleanup)
-        conn.execute("DELETE FROM competitor_posts WHERE brand_profile = ? COLLATE NOCASE", (name,))
-        posts_deleted = conn.total_changes
+        try:
+            cursor.execute("DELETE FROM competitor_posts WHERE brand_profile = ? COLLATE NOCASE", (name,))
+            posts_deleted = cursor.rowcount
+        except sqlite3.OperationalError:
+            posts_deleted = 0  # Table may not exist yet
 
         conn.commit()
         conn.close()
