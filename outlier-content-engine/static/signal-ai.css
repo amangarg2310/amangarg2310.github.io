@@ -213,6 +213,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .signal-message-content {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .signal-message-bubble {
@@ -234,6 +236,23 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--signal-text-dim);
     margin-top: 6px;
     padding-left: 4px;
+}
+
+/* User Messages (sent by user) */
+.signal-message-user {
+    flex-direction: row-reverse;
+}
+
+.signal-message-user .signal-avatar {
+    background: var(--signal-bg-tertiary);
+    color: var(--signal-text-secondary);
+    box-shadow: none;
+}
+
+.signal-message-user .signal-message-time {
+    text-align: right;
+    padding-right: 4px;
+    padding-left: 0;
 }
 
 /* ========================================
@@ -403,6 +422,18 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
     color: var(--signal-text-primary);
     letter-spacing: 0.3px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.signal-report-header-left > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.signal-report-header-left > svg {
+    flex-shrink: 0;
 }
 
 .signal-report-meta {
@@ -410,11 +441,14 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 11px;
     color: var(--signal-text-dim);
     font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .signal-report-chevron {
     transition: transform 0.2s ease;
     color: var(--signal-text-dim);
+    flex-shrink: 0;
 }
 
 .signal-report-header.collapsed .signal-report-chevron {
@@ -464,6 +498,8 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--signal-text-secondary);
     line-height: 1.6;
     padding-left: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .signal-report-line strong {
