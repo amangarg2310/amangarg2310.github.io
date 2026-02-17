@@ -1186,14 +1186,10 @@ function resetAllFilters() {
 
 // Template card: send chat message to create category + add brands
 function useTemplate(name, handles) {
-    const input = document.getElementById('chatInput');
-    const msg = 'Create a category called ' + name + ' and add ' + handles;
-    if (input) {
-        input.value = msg;
-        // Auto-submit
-        const form = input.closest('form');
-        if (form) form.dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));
-    }
+    // Send directly via chat — ScoutAgent (GPT) will understand the intent
+    // and create the category + add all brands in one go.
+    const msg = 'Create a ' + name + ' category and add ' + handles;
+    sendChatMessage(msg);
 }
 
 
