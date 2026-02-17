@@ -1,11 +1,16 @@
 """
-Chat Handler - Conversational interface for category management and analysis.
+Chat Handler - Fallback conversational interface when ScoutAgent (GPT) is unavailable.
 
-Handles natural language commands for:
+This is the SECONDARY handler. ScoutAgent (GPT with function calling) is always
+tried first in dashboard.py. This handler only runs when:
+- No OpenAI API key is configured
+- OpenAI API call fails
+
+Handles regex-based command patterns for:
+- Creating categories
 - Viewing categories and brands
-- Adding/removing brands
+- Adding/removing brands (with auto-category-creation)
 - Running analysis
-- Viewing insights
 """
 
 import re
@@ -18,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatHandler:
-    """Handles conversational chat commands."""
+    """Fallback handler for structured chat commands when GPT is unavailable."""
 
     def __init__(self):
         self.vm = VerticalManager()
@@ -26,33 +31,56 @@ class ChatHandler:
 
     def process_message(self, message: str, current_vertical: Optional[str] = None) -> Dict:
         """
-        Process user message and return response with optional actions.
+        Process user message using pattern matching (no AI).
 
         Returns dict with:
         - response: Text response
-        - type: "text", "category_card", "category_list", "error"
+        - type: "text", "category_card", "category_list", "success", "error"
         - data: Optional structured data for UI components
         - actions: Optional list of quick action buttons
-        - _handled: Boolean flag indicating ChatHandler recognized this command
+        - _handled: Boolean flag indicating this handler recognized the command
         """
         message_lower = message.lower().strip()
 
+        # ── Exact command matches (unambiguous) ──
+
         # Category list commands
-        if any(cmd in message_lower for cmd in ["show categories", "list categories", "show collections", "my categories"]):
+        if any(cmd in message_lower for cmd in [
+            "show categories", "list categories", "show collections",
+            "my categories", "show my categories", "list collections"
+        ]):
             result = self._handle_list_categories()
             result['_handled'] = True
             return result
 
-        # Show specific category
-        match = re.search(r'show\s+([a-zA-Z0-9_\s]+)', message_lower)
-        if match:
-            category_name = match.group(1).strip()
-            result = self._handle_show_category(category_name)
-            result['_handled'] = True
-            return result
+        # Help command
+        if message_lower in ("help", "commands", "what can you do"):
+            return {
+                "response": self._help_text(),
+                "type": "text",
+                "_handled": True,
+            }
 
-        # Add brands command: "add @nike @adidas to streetwear"
-        add_match = re.search(r'add\s+([@\w\s,]+?)\s+to\s+([a-zA-Z0-9_\s]+)', message_lower)
+        # ── Create category: "create Streetwear", "create a category called Streetwear" ──
+        create_match = re.match(
+            r'(?:create|make|new)\s+'
+            r'(?:a\s+)?'
+            r'(?:(?:category|collection|set)\s+(?:called\s+|named\s+)?)?'
+            r'(.+?)(?:\s+(?:category|collection|set))?$',
+            message_lower,
+        )
+        if create_match:
+            name = create_match.group(1).strip().title()
+            if name and len(name) < 60:
+                result = self._handle_create_category(name)
+                result['_handled'] = True
+                return result
+
+        # ── Add brands: "add @nike @adidas to Streetwear" ──
+        add_match = re.match(
+            r'add\s+([@\w\s.,&]+?)\s+to\s+([a-zA-Z0-9_&\s]+)$',
+            message_lower,
+        )
         if add_match:
             handles_str = add_match.group(1)
             category_name = add_match.group(2).strip()
@@ -60,8 +88,11 @@ class ChatHandler:
             result['_handled'] = True
             return result
 
-        # Remove brands command: "remove @nike from streetwear"
-        remove_match = re.search(r'remove\s+([@\w\s,]+?)\s+from\s+([a-zA-Z0-9_\s]+)', message_lower)
+        # ── Remove brands: "remove @nike from streetwear" ──
+        remove_match = re.match(
+            r'remove\s+([@\w\s,]+?)\s+from\s+([a-zA-Z0-9_\s]+)$',
+            message_lower,
+        )
         if remove_match:
             handles_str = remove_match.group(1)
             category_name = remove_match.group(2).strip()
@@ -69,21 +100,71 @@ class ChatHandler:
             result['_handled'] = True
             return result
 
-        # If message is just a category name, show that category
+        # ── Show specific category (only match exact known category names) ──
+        # "show Streetwear", "Streetwear" — only if it's an actual existing category
         verticals = self.vm.list_verticals()
-        for vertical in verticals:
-            if vertical.lower() == message_lower:
-                result = self._handle_show_category(vertical)
+        # Check "show X" where X is a known category
+        show_match = re.match(r'show\s+(.+)', message_lower)
+        if show_match:
+            target = show_match.group(1).strip()
+            for v in verticals:
+                if v.lower() == target:
+                    result = self._handle_show_category(v)
+                    result['_handled'] = True
+                    return result
+
+        # Check if message IS a category name
+        for v in verticals:
+            if v.lower() == message_lower:
+                result = self._handle_show_category(v)
                 result['_handled'] = True
                 return result
 
-        # Not a recognized command — let the caller decide how to handle
-        # (e.g., fall through to ScoutAgent or fallback responses)
+        # ── Not recognized → let dashboard try _get_fallback_response ──
         return {
             "response": "",
             "type": "text",
-            "_handled": False
+            "_handled": False,
         }
+
+    def _help_text(self) -> str:
+        return (
+            "Here's what I can help with:\n\n"
+            "**Manage collections:**\n"
+            "• 'create Streetwear' — create a new category\n"
+            "• 'add @nike @adidas to Streetwear' — add brands\n"
+            "• 'show categories' — see all your collections\n"
+            "• 'remove @nike from Streetwear' — remove brands\n\n"
+            "**Analyze content:**\n"
+            "• 'analyze' — run analysis on current collection\n\n"
+            "What would you like to do?"
+        )
+
+    def _handle_create_category(self, name: str) -> Dict:
+        """Create a new category."""
+        try:
+            created = self.vm.create_vertical(name)
+            if created:
+                return {
+                    "response": (
+                        f"Created **{name}** category! "
+                        f"Now add brands to it:\n"
+                        f"• 'add @brand1 @brand2 to {name}'"
+                    ),
+                    "type": "success",
+                    "data": {"category": name},
+                }
+            else:
+                return {
+                    "response": f"**{name}** already exists. Say 'show {name}' to see its brands.",
+                    "type": "text",
+                }
+        except Exception as e:
+            logger.error(f"Error creating category: {e}")
+            return {
+                "response": f"Sorry, I couldn't create '{name}'.",
+                "type": "error",
+            }
 
     def _handle_list_categories(self) -> Dict:
         """List all categories with brand counts."""
@@ -92,40 +173,42 @@ class ChatHandler:
 
             if not verticals:
                 return {
-                    "response": "You don't have any categories yet. Would you like to create one?",
+                    "response": (
+                        "You don't have any categories yet.\n\n"
+                        "Create one with: 'create Streetwear'\n"
+                        "Or add brands directly: 'add @nike @adidas to Streetwear'"
+                    ),
                     "type": "text",
                     "actions": [
                         {"label": "+ Create Category", "action": "create_category"}
-                    ]
+                    ],
                 }
 
-            # Get brand counts for each vertical
             category_data = []
             for v_name in verticals:
                 vertical = self.vm.get_vertical(v_name)
                 brand_count = len(vertical.brands) if vertical else 0
                 category_data.append({
                     "name": v_name,
-                    "brand_count": brand_count
+                    "brand_count": brand_count,
                 })
 
             return {
                 "response": f"You have {len(verticals)} {'category' if len(verticals) == 1 else 'categories'}:",
                 "type": "category_list",
-                "data": category_data
+                "data": category_data,
             }
 
         except Exception as e:
             logger.error(f"Error listing categories: {e}")
             return {
                 "response": "Sorry, I couldn't retrieve your categories.",
-                "type": "error"
+                "type": "error",
             }
 
     def _handle_show_category(self, category_name: str) -> Dict:
         """Show details of a specific category."""
         try:
-            # Try to find the vertical (case-insensitive)
             verticals = self.vm.list_verticals()
             actual_name = None
             for v in verticals:
@@ -135,18 +218,21 @@ class ChatHandler:
 
             if not actual_name:
                 return {
-                    "response": f"I couldn't find a category named '{category_name}'. Try 'show categories' to see all available collections.",
-                    "type": "text"
+                    "response": (
+                        f"I couldn't find a category named '{category_name}'.\n"
+                        "Say 'show categories' to see available collections, "
+                        "or create one with 'create " + category_name.title() + "'."
+                    ),
+                    "type": "text",
                 }
 
             vertical = self.vm.get_vertical(actual_name)
             if not vertical:
                 return {
                     "response": f"Something went wrong loading '{actual_name}'.",
-                    "type": "error"
+                    "type": "error",
                 }
 
-            # Extract handles
             handles = []
             for brand in vertical.brands:
                 if brand.instagram_handle:
@@ -160,45 +246,47 @@ class ChatHandler:
                 "data": {
                     "name": actual_name,
                     "brands": handles,
-                    "brand_count": len(vertical.brands)
+                    "brand_count": len(vertical.brands),
                 },
                 "actions": [
                     {"label": "+ Add Brands", "action": "add_brands", "category": actual_name},
-                    {"label": "Run Analysis", "action": "run_analysis", "category": actual_name}
-                ]
+                    {"label": "Run Analysis", "action": "run_analysis", "category": actual_name},
+                ],
             }
 
         except Exception as e:
             logger.error(f"Error showing category {category_name}: {e}")
             return {
-                "response": f"Sorry, I couldn't load the category '{category_name}'.",
-                "type": "error"
+                "response": f"Sorry, I couldn't load '{category_name}'.",
+                "type": "error",
             }
 
     def _handle_add_brands(self, handles_str: str, category_name: str) -> Dict:
-        """Add brands to a category with intelligent handle discovery."""
+        """Add brands to a category. Auto-creates the category if it doesn't exist."""
         try:
-            # Find the actual vertical name (case-insensitive)
+            # Find or auto-create the category
             verticals = self.vm.list_verticals()
             actual_name = None
+            created_new = False
             for v in verticals:
                 if v.lower() == category_name.lower():
                     actual_name = v
                     break
 
             if not actual_name:
-                return {
-                    "response": f"Category '{category_name}' doesn't exist. Create it first or choose an existing one.",
-                    "type": "text"
-                }
+                # Auto-create the category
+                display_name = category_name.strip().title()
+                self.vm.create_vertical(display_name)
+                actual_name = display_name
+                created_new = True
 
             # Parse input: Extract both @handles and brand names
             items_to_add = self._parse_brand_input(handles_str)
 
             if not items_to_add:
                 return {
-                    "response": "I couldn't find any brands or handles to add. Try: 'add @nike supreme' or 'add nike, adidas'",
-                    "type": "text"
+                    "response": "I couldn't find any brands to add. Try: 'add @nike @adidas to Streetwear'",
+                    "type": "text",
                 }
 
             # Process each item with brand discovery
@@ -208,7 +296,6 @@ class ChatHandler:
 
             for item in items_to_add:
                 if item['type'] == 'handle':
-                    # Direct handle - add as-is
                     handle = item['value']
                     success = self.vm.add_brand(actual_name, instagram_handle=handle)
                     if success:
@@ -217,7 +304,6 @@ class ChatHandler:
                         skipped.append(f"@{handle}")
 
                 elif item['type'] == 'brand_name':
-                    # Brand name - discover official handle
                     brand_name = item['value']
                     discovery = self.brand_discovery.discover_handle(brand_name, platform="instagram")
 
@@ -225,64 +311,55 @@ class ChatHandler:
                         handle = discovery['handle']
                         official_name = discovery['official_name']
 
-                        # Add the discovered handle
                         success = self.vm.add_brand(
                             actual_name,
                             instagram_handle=handle,
-                            brand_name=official_name
+                            brand_name=official_name,
                         )
 
                         if success:
-                            # Format suggestion message
-                            followers = discovery.get('follower_count', 0)
-                            if followers >= 1000000:
-                                follower_str = f"{followers / 1000000:.1f}M followers"
-                            elif followers >= 1000:
-                                follower_str = f"{followers / 1000:.0f}K followers"
-                            else:
-                                follower_str = ""
-
-                            msg = f"@{handle}"
-                            if follower_str:
-                                msg += f" ({follower_str})"
-
-                            added.append(msg)
-                            suggestions.append(f"Added {official_name} as @{handle}")
+                            added.append(f"@{handle}")
+                            suggestions.append(f"{official_name} → @{handle}")
                         else:
                             skipped.append(f"{brand_name} (@{handle})")
                     else:
-                        # Brand not in registry - try as handle
                         success = self.vm.add_brand(actual_name, instagram_handle=brand_name)
                         if success:
                             added.append(f"@{brand_name}")
                         else:
                             skipped.append(brand_name)
 
-            # Update timestamp
             self.vm.update_vertical_timestamp(actual_name)
-
-            # Get updated count
             total_brands = self.vm.get_brand_count(actual_name)
 
-            # Build response
             if not added:
                 return {
                     "response": f"Those brands are already in {actual_name}.",
-                    "type": "text"
+                    "type": "text",
                 }
 
+            # Build response
             response_parts = []
+
+            if created_new:
+                response_parts.append(f"Created **{actual_name}** category.")
+
             if suggestions:
-                response_parts.append("Found official accounts:")
+                response_parts.append("Resolved brand names:")
                 for sugg in suggestions:
                     response_parts.append(f"  • {sugg}")
                 response_parts.append("")
 
             handles_display = ", ".join(added)
-            response_parts.append(f"Added {handles_display} to {actual_name}. Now tracking {total_brands} brand{'s' if total_brands != 1 else ''}.")
+            response_parts.append(
+                f"Added {handles_display} to {actual_name}. "
+                f"Now tracking {total_brands} brand{'s' if total_brands != 1 else ''}."
+            )
 
             if skipped:
                 response_parts.append(f"({len(skipped)} already existed)")
+
+            response_parts.append(f"\nSay 'analyze' to find viral posts!")
 
             return {
                 "response": "\n".join(response_parts),
@@ -290,48 +367,54 @@ class ChatHandler:
                 "data": {
                     "category": actual_name,
                     "added_handles": [h.replace('@', '') for h in added],
-                    "total_brands": total_brands
-                }
+                    "total_brands": total_brands,
+                },
             }
 
         except Exception as e:
             logger.error(f"Error adding brands: {e}")
             return {
                 "response": "Sorry, I couldn't add those brands. Please try again.",
-                "type": "error"
+                "type": "error",
             }
 
     def _parse_brand_input(self, input_str: str) -> List[Dict]:
         """
         Parse user input to detect brand names vs @handles.
 
+        Handles formats like:
+        - "@nike @adidas"
+        - "nike, adidas"
+        - "saintwoods and stussy"
+        - "@nike @stussy @saintwoods"
+
         Returns list of dicts with 'type' ('brand_name' or 'handle') and 'value'.
         """
         items = []
 
-        # Pre-split space-separated @handles: "@nike @adidas" → "@nike,@adidas"
-        # Preserves multi-word brand names (no @) like "Supreme New York"
-        if re.search(r'@[\w.]+\s+@[\w.]', input_str):
-            input_str = re.sub(r'\s+(?=@)', ',', input_str)
+        # Normalize: split "and" / "&" into commas for consistent parsing
+        normalized = re.sub(r'\s+and\s+|\s*&\s*', ', ', input_str, flags=re.IGNORECASE)
 
-        # Split by commas or pipes (preserve multi-word brand names)
-        parts = re.split(r'[,|]+', input_str)
+        # Pre-split space-separated @handles: "@nike @adidas" → "@nike,@adidas"
+        if re.search(r'@[\w.]+\s+@[\w.]', normalized):
+            normalized = re.sub(r'\s+(?=@)', ',', normalized)
+
+        # Split by commas or pipes
+        parts = re.split(r'[,|]+', normalized)
 
         for part in parts:
             part = part.strip()
             if not part:
                 continue
 
-            # Check if it's an @handle
             if part.startswith('@'):
-                handle = part[1:]  # Remove @
+                handle = part[1:]
                 items.append({'type': 'handle', 'value': handle})
             else:
-                # Check if it's a known brand name
                 if self.brand_discovery.is_brand_name(part):
                     items.append({'type': 'brand_name', 'value': part})
                 else:
-                    # Unknown - assume it's a handle without @
+                    # Unknown — assume it's a handle without @
                     items.append({'type': 'handle', 'value': part})
 
         return items
@@ -339,16 +422,14 @@ class ChatHandler:
     def _handle_remove_brands(self, handles_str: str, category_name: str) -> Dict:
         """Remove brands from a category."""
         try:
-            # Extract handles (supports both @handle and bare handle formats)
             items = self._parse_brand_input(handles_str)
             handles = [item['value'] for item in items if item.get('value')]
             if not handles:
                 return {
-                    "response": "I couldn't find any valid handles to remove.",
-                    "type": "text"
+                    "response": "I couldn't find any handles to remove.",
+                    "type": "text",
                 }
 
-            # Find actual vertical name
             verticals = self.vm.list_verticals()
             actual_name = None
             for v in verticals:
@@ -359,46 +440,40 @@ class ChatHandler:
             if not actual_name:
                 return {
                     "response": f"Category '{category_name}' doesn't exist.",
-                    "type": "text"
+                    "type": "text",
                 }
 
-            # Remove brands from database
             removed = 0
-            not_found = 0
             for handle in handles:
-                success = self.vm.remove_brand(actual_name, handle)
-                if success:
+                if self.vm.remove_brand(actual_name, handle):
                     removed += 1
-                else:
-                    not_found += 1
 
             if removed == 0:
                 return {
                     "response": f"No matching brands found in {actual_name}.",
-                    "type": "text"
+                    "type": "text",
                 }
 
-            # Update timestamp
             self.vm.update_vertical_timestamp(actual_name)
-
-            # Get updated count
             total_brands = self.vm.get_brand_count(actual_name)
-
-            handles_display = ", ".join([f"@{h}" for h in handles])
+            handles_display = ", ".join(f"@{h}" for h in handles)
 
             return {
-                "response": f"Removed {handles_display} from {actual_name}. Now tracking {total_brands} brand{'s' if total_brands != 1 else ''}.",
+                "response": (
+                    f"Removed {handles_display} from {actual_name}. "
+                    f"Now tracking {total_brands} brand{'s' if total_brands != 1 else ''}."
+                ),
                 "type": "success",
                 "data": {
                     "category": actual_name,
                     "removed_handles": handles,
-                    "total_brands": total_brands
-                }
+                    "total_brands": total_brands,
+                },
             }
 
         except Exception as e:
             logger.error(f"Error removing brands: {e}")
             return {
-                "response": "Sorry, I couldn't remove those brands. Please try again.",
-                "type": "error"
+                "response": "Sorry, I couldn't remove those brands.",
+                "type": "error",
             }

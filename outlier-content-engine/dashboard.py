@@ -1619,10 +1619,10 @@ def chat_message():
     """Process chat message from user and return Scout's response.
 
     Flow:
-    1. Try ChatHandler for fast local commands (show categories, help).
-    2. Otherwise send to ScoutAgent which uses OpenAI function-calling
-       to understand intent, extract entities, and execute real actions.
-    3. If ScoutAgent is unavailable (no API key), use local fallback.
+    1. Try ScoutAgent FIRST (GPT with function-calling for natural language).
+    2. If ScoutAgent is unavailable (no API key), fall back to ChatHandler
+       for structured command patterns.
+    3. Last resort: keyword-based fallback responses.
     """
     from scout_agent import ScoutAgent
     from chat_handler import ChatHandler
@@ -1635,17 +1635,8 @@ def chat_message():
         if not message:
             return jsonify({"error": "Empty message"}), 400
 
-        # ── Fast-path: ChatHandler for simple structured commands ──
-        chat_handler = ChatHandler()
         current_vertical = get_active_vertical_name()
-        result = chat_handler.process_message(message, current_vertical)
 
-        if result.get('type') in ('category_card', 'category_list', 'success', 'error'):
-            return jsonify(result)
-        if result.get('_handled'):
-            return jsonify(result)
-
-        # ── Main path: ScoutAgent (OpenAI function-calling) ──
         # BYOK: prefer per-request key from header, fall back to DB/env
         byok_openai = request.headers.get('X-OpenAI-Key', '').strip() or None
         admin_mode = request.headers.get('X-Admin-Mode', '').strip() == '1'
@@ -1660,6 +1651,9 @@ def chat_message():
         context['active_vertical'] = current_vertical
         context['admin_mode'] = admin_mode
 
+        # ── PRIMARY: ScoutAgent (GPT with function-calling) ──
+        # GPT understands natural language, creates categories on the fly,
+        # resolves brand names, and drives the full conversational flow.
         try:
             scout = ScoutAgent(openai_key=byok_openai)
             response, updated_context = scout.chat(message, context)
@@ -1704,7 +1698,16 @@ def chat_message():
         except Exception as scout_err:
             logger.warning(f"Scout agent unavailable: {scout_err}")
 
-        # ── Fallback: local responses when AI is unavailable ──
+        # ── FALLBACK: ChatHandler for structured commands ──
+        # Used when ScoutAgent is unavailable (no OpenAI key).
+        # Handles regex-based patterns like "add X to Y", "show categories", etc.
+        chat_handler = ChatHandler()
+        result = chat_handler.process_message(message, current_vertical)
+
+        if result.get('_handled'):
+            return jsonify(result)
+
+        # ── LAST RESORT: keyword-based responses ──
         fallback = _get_fallback_response(message, current_vertical)
         return jsonify({
             "response": fallback,
@@ -1724,77 +1727,86 @@ def chat_message():
 
 
 def _get_fallback_response(message: str, current_vertical: str = None) -> str:
-    """Generate a helpful response when the AI agent is unavailable."""
-    msg = message.lower()
+    """Generate a helpful response when the AI agent is unavailable.
 
-    # Brand suggestion / recommendation queries
+    This is the LAST RESORT — only runs when both ScoutAgent (GPT)
+    and ChatHandler (regex) failed to handle the message.
+    """
+    import re
+    msg = message.lower().strip()
+
+    # ── Detect @handles or brand names that look like the user wants to track ──
+    # e.g. "saintwoods and stussy", "@nike @adidas", "Fear of God Essentials"
+    has_handles = bool(re.search(r'@[\w.]+', message))
+    words = re.split(r'\s+and\s+|\s*,\s*|\s*&\s*', msg)
+    looks_like_brands = (
+        has_handles
+        or (len(words) >= 2 and all(len(w.split()) <= 4 for w in words)
+            and not any(kw in msg for kw in ['help', 'how', 'what', 'show', 'list', 'yes', 'no']))
+    )
+
+    if looks_like_brands:
+        return (
+            f"Looks like you want to track some brands! "
+            f"Just tell me which category to put them in, like:\n\n"
+            f"**'add {message} to Streetwear'**\n\n"
+            f"Or I can create a new category for you:\n"
+            f"**'create Streetwear'** — then add brands to it."
+        )
+
+    # ── Confirmations: "yes", "yeah", "sure", "go", "do it" ──
+    if msg in ('yes', 'yeah', 'sure', 'ok', 'go', 'do it', 'yep', 'go ahead', 'lets go', "let's go"):
+        if current_vertical:
+            return (
+                f"Got it! What would you like to do with **{current_vertical}**?\n\n"
+                f"• 'add @brand1 @brand2 to {current_vertical}' — add brands\n"
+                f"• 'analyze' — find viral posts\n"
+                f"• 'show {current_vertical}' — see current brands"
+            )
+        return (
+            "Great! To get started, create a category and add brands:\n\n"
+            "• 'create Streetwear' — create a new category\n"
+            "• 'add @nike @adidas to Streetwear' — add brands directly\n"
+            "• 'suggest streetwear brands' — get brand ideas"
+        )
+
+    # ── Brand suggestion / recommendation queries ──
     if any(word in msg for word in ['suggest', 'recommend', 'what brands', 'which brands', 'who should',
                                      'ideas for', 'examples', 'good brands']):
-        # Detect category hints from the message
         category_hints = {
             'streetwear': (
-                "Great question! Here are some streetwear brands to consider tracking:\n\n"
+                "Here are some streetwear brands to consider:\n\n"
                 "**High tier:** @nike, @adidas, @jordan, @newbalance\n"
                 "**Mid tier:** @stussy, @supremenewyork, @palaceskateboards, @bape_us\n"
                 "**Up-and-coming:** @corteiz, @broken.planet, @trapstar, @represent\n\n"
-                "Want me to add any of these? Just say something like:\n"
-                "'add @nike @stussy @corteiz to Streetwear'"
+                "Add them with: 'add @nike @stussy @corteiz to Streetwear'"
             ),
             'sneaker': (
                 "Here are some sneaker brands worth tracking:\n\n"
-                "**Major players:** @nike, @adidas, @newbalance, @jordan\n"
+                "**Major:** @nike, @adidas, @newbalance, @jordan\n"
                 "**Mid tier:** @asics, @puma, @reebok, @saucony\n"
-                "**Boutique/Hype:** @salaboratory, @hokaoneone, @onrunning\n\n"
-                "Want me to add some? Just say:\n"
-                "'add @nike @newbalance @hokaoneone to Sneakers'"
+                "**Boutique:** @salaboratory, @hokaoneone, @onrunning\n\n"
+                "Add them with: 'add @nike @newbalance to Sneakers'"
             ),
             'beauty': (
                 "Here are some beauty brands to track:\n\n"
-                "**Major:** @fentybeauty, @maccosmetics, @nyxcosmetics, @maybelline\n"
-                "**DTC/Indie:** @glossier, @milkmakeup, @kosas, @rfrfrfrf\n"
-                "**Skincare:** @theordinary, @cerave, @drunk_elephant, @tatcha\n\n"
-                "Want me to add any? Just say:\n"
-                "'add @glossier @fentybeauty to Beauty'"
-            ),
-            'gaming': (
-                "Here are some gaming brands to track:\n\n"
-                "**Console/Platform:** @playstation, @xbox, @nintendoamerica\n"
-                "**Studios:** @epicgames, @riotgames, @valorant, @callofduty\n"
-                "**Gear/Peripheral:** @razer, @logitechg, @steelseries\n\n"
-                "Want me to add any? Just say:\n"
-                "'add @playstation @xbox to Gaming'"
+                "**Major:** @fentybeauty, @maccosmetics, @nyxcosmetics\n"
+                "**DTC/Indie:** @glossier, @milkmakeup, @kosas\n"
+                "**Skincare:** @theordinary, @cerave, @drunk_elephant\n\n"
+                "Add them with: 'add @glossier @fentybeauty to Beauty'"
             ),
             'fitness': (
                 "Here are some fitness brands to track:\n\n"
-                "**Apparel:** @gymshark, @lululemon, @niketraining, @alphaleteathletics\n"
-                "**Supplements:** @gorilla.mind, @transparentlabs, @ghost_lifestyle\n"
+                "**Apparel:** @gymshark, @lululemon, @niketraining\n"
+                "**Supplements:** @gorilla.mind, @transparentlabs\n"
                 "**Equipment:** @roguefitness, @hyperice, @whoop\n\n"
-                "Want me to add any? Just say:\n"
-                "'add @gymshark @lululemon to Fitness'"
-            ),
-            'fashion': (
-                "Here are some fashion brands to track:\n\n"
-                "**Luxury:** @gucci, @louisvuitton, @balenciaga, @prada\n"
-                "**Contemporary:** @zara, @hm, @uniqlo, @cos\n"
-                "**Emerging:** @jacquemus, @ganni, @coperni, @ambush_official\n\n"
-                "Want me to add any? Just say:\n"
-                "'add @gucci @jacquemus to Fashion'"
+                "Add them with: 'add @gymshark @lululemon to Fitness'"
             ),
             'food': (
                 "Here are some food & beverage brands to track:\n\n"
-                "**Fast food:** @chipotle, @mcdonalds, @wendys, @tacobell\n"
-                "**Beverage:** @redbull, @liquid_death, @poppi, @olipop\n"
-                "**DTC Food:** @magicspoon, @drinkolipop, @midday_squares\n\n"
-                "Want me to add any? Just say:\n"
-                "'add @chipotle @liquid_death to Food & Bev'"
-            ),
-            'tech': (
-                "Here are some tech brands to track:\n\n"
-                "**Big tech:** @apple, @samsung, @google\n"
-                "**Startups/DTC:** @nothing.tech, @analogue, @teenage_engineering\n"
-                "**SaaS/Tools:** @figma, @notion, @linear_app\n\n"
-                "Want me to add any? Just say:\n"
-                "'add @apple @nothing.tech to Tech'"
+                "**Fast food:** @chipotle, @mcdonalds, @wendys\n"
+                "**Beverage:** @redbull, @liquid_death, @poppi, @olipop\n\n"
+                "Add them with: 'add @chipotle @liquid_death to Food & Bev'"
             ),
         }
 
@@ -1802,79 +1814,65 @@ def _get_fallback_response(message: str, current_vertical: str = None) -> str:
             if keyword in msg:
                 return response
 
-        # Generic brand suggestion response
         return (
-            "I'd love to help you find brands to track! To give better suggestions, "
-            "tell me what category or industry you're interested in. For example:\n\n"
+            "I can suggest brands for you! Tell me the category:\n\n"
             "• 'suggest streetwear brands'\n"
-            "• 'what beauty brands should I track?'\n"
-            "• 'recommend gaming brands'\n"
-            "• 'good fitness brands to monitor'\n\n"
-            "Or if you already know the handles, just add them directly:\n"
+            "• 'suggest beauty brands'\n"
+            "• 'suggest fitness brands'\n\n"
+            "Or just add brands directly:\n"
             "'add @brand1 @brand2 to [category name]'"
         )
 
-    # Analysis / insights questions
-    if any(word in msg for word in ['analyze', 'analysis', 'run', 'scan', 'find outliers', 'viral']):
+    # ── Analysis / insights ──
+    if any(word in msg for word in ['analyze', 'analysis', 'scan', 'find outliers', 'viral']):
         if current_vertical:
             return (
-                f"To run an analysis on **{current_vertical}**, you can:\n\n"
-                f"1. Make sure you have brands added to the collection\n"
-                f"2. Say 'analyze' or 'run analysis'\n"
-                f"3. I'll scan all the posts and find the outliers!\n\n"
-                f"Want me to run an analysis on {current_vertical} now?"
+                f"To analyze **{current_vertical}**:\n\n"
+                f"1. Make sure you have brands added\n"
+                f"2. Say 'analyze' or 'run analysis'\n\n"
+                f"Want me to run analysis on {current_vertical} now?"
             )
         return (
-            "To run an analysis, you first need a competitive set with brands to track.\n\n"
-            "**Quick start:**\n"
-            "1. Select or create a competitive set from the dropdown above\n"
-            "2. Add brands: 'add @nike @adidas to Streetwear'\n"
-            "3. Then say 'analyze' to find viral content!"
+            "To run analysis, first create a category with brands:\n\n"
+            "1. 'create Streetwear' — make a category\n"
+            "2. 'add @nike @adidas to Streetwear' — add brands\n"
+            "3. 'analyze' — find viral content!"
         )
 
-    # How-to / getting started questions
+    # ── How-to / getting started ──
     if any(word in msg for word in ['how', 'what do', 'what can', 'get started', 'tutorial', 'guide']):
         return (
-            "Here's how to get the most out of Scout AI:\n\n"
-            "**1. Create a competitive set** - Group brands you want to compare "
-            "(e.g., 'Streetwear' with Nike, Supreme, Stussy)\n\n"
-            "**2. Add brands to track** - Drop in handles like:\n"
-            "   'add @nike @supremenewyork @stussy to Streetwear'\n\n"
-            "**3. Run an analysis** - Say 'analyze' and I'll find posts that are "
-            "performing 2x+ better than normal\n\n"
-            "**4. Browse outliers** - Check the post cards on the right to see "
-            "what content is crushing it!\n\n"
-            "**Try it:** Ask me to suggest brands for a category you're interested in!"
+            "Here's how to get started:\n\n"
+            "**1. Create a category** — 'create Streetwear'\n"
+            "**2. Add brands** — 'add @nike @stussy to Streetwear'\n"
+            "**3. Analyze** — 'analyze' to find viral content\n\n"
+            "Or use a template from the cards above!"
         )
 
-    # Help
+    # ── Help ──
     if any(word in msg for word in ['help', 'commands']):
         return (
-            "Here's what I can help with:\n\n"
-            "**Manage collections:**\n"
-            "• 'show categories' - see all your collections\n"
-            "• 'add @nike @adidas to Streetwear' - add brands\n"
-            "• 'remove @nike from Streetwear' - remove brands\n\n"
-            "**Get suggestions:**\n"
-            "• 'suggest streetwear brands' - get brand recommendations\n"
-            "• 'what beauty brands should I track?' - industry ideas\n\n"
-            "**Analyze content:**\n"
-            "• 'analyze' - run analysis on current collection\n"
-            "• 'find outliers' - same thing!\n\n"
+            "Here's what I can do:\n\n"
+            "**Collections:**\n"
+            "• 'create Streetwear' — create a category\n"
+            "• 'add @nike @adidas to Streetwear' — add brands\n"
+            "• 'show categories' — view collections\n\n"
+            "**Analysis:**\n"
+            "• 'analyze' — find viral posts\n"
+            "• 'suggest streetwear brands' — get ideas\n\n"
             "What would you like to do?"
         )
 
-    # Default conversational response
-    vertical_hint = f" You're currently viewing **{current_vertical}**." if current_vertical else ""
+    # ── Default — be more helpful than just showing commands ──
+    vertical_hint = f" You're viewing **{current_vertical}**." if current_vertical else ""
     return (
         f"I'm here to help you find viral content!{vertical_hint}\n\n"
-        "Here are some things you can try:\n"
-        "• **'suggest streetwear brands'** - get brand recommendations\n"
-        "• **'show categories'** - view your collections\n"
-        "• **'add @nike @adidas to Streetwear'** - track brands\n"
-        "• **'analyze'** - find outlier posts\n"
-        "• **'help'** - see all commands\n\n"
-        "What would you like to do?"
+        "Try something like:\n"
+        "• **'create Streetwear'** — start a new category\n"
+        "• **'add @nike @stussy to Streetwear'** — track brands\n"
+        "• **'suggest streetwear brands'** — get ideas\n"
+        "• **'analyze'** — find outlier posts\n\n"
+        "Or just type brand names and I'll help you set them up!"
     )
 
 
