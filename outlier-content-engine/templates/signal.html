@@ -1558,7 +1558,7 @@ function renderScoreResults(data) {
     const suggs = data.suggestions || [];
     let suggsHtml = '';
     suggs.forEach(s => {
-        suggsHtml += `<div class="signal-scorer-suggestion">${s}</div>`;
+        suggsHtml += `<div class="signal-scorer-suggestion">${escapeHtml(s)}</div>`;
     });
     document.getElementById('scorerSuggestions').innerHTML = suggsHtml;
 }
@@ -1801,6 +1801,12 @@ async function sendChatMessage(message) {
     }
 }
 
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function formatChatText(text) {
     // Convert markdown-style formatting to HTML for chat bubbles
     let html = text
@@ -1888,7 +1894,7 @@ function addCategoryCard(text, data, actions) {
     header.innerHTML = `
         <span class="signal-insight-icon">📁</span>
         <span class="signal-insight-label">COLLECTION</span>
-        <span class="signal-insight-metric">${data.brand_count} brand${data.brand_count !== 1 ? 's' : ''}</span>
+        <span class="signal-insight-metric">${parseInt(data.brand_count) || 0} brand${data.brand_count !== 1 ? 's' : ''}</span>
     `;
     card.appendChild(header);
 
@@ -1977,8 +1983,8 @@ function addCategoryList(text, categories) {
         header.className = 'signal-insight-header';
         header.innerHTML = `
             <span class="signal-insight-icon">📁</span>
-            <span class="signal-insight-label">${cat.name.toUpperCase()}</span>
-            <span class="signal-insight-metric">${cat.brand_count} brand${cat.brand_count !== 1 ? 's' : ''}</span>
+            <span class="signal-insight-label">${escapeHtml(cat.name.toUpperCase())}</span>
+            <span class="signal-insight-metric">${parseInt(cat.brand_count) || 0} brand${cat.brand_count !== 1 ? 's' : ''}</span>
         `;
         catCard.appendChild(header);
 
