@@ -633,6 +633,12 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Chat "Hiccup" on Every Multi-Step Message (0ae7533)
+- `scout_agent.py`: Root cause — GPT function-calling loop was `for _ in range(3)`, but a typical create+add flow requires 2 tool rounds + 1 text round = 3 exactly. Any extra tool call (e.g. `show_category`, `list_categories`) exhausted the budget and fell through to the "I ran into a hiccup" fallback, breaking ALL multi-step interactions.
+  - Increased loop limit from 3 → 8
+  - On final iteration (`i==7`), forces `tool_choice="none"` so GPT MUST produce text — "hiccup" is now unreachable under normal conditions
+  - Replaced useless "hiccup" message with contextual fallback showing active category + suggested next steps
+
 ### 2026-02-17: 9 Crash Fixes + 30 Regression Tests (9950316)
 - `scout_agent.py`:
   - Fixed `tool_calls` NoneType iteration (`if choice.message.tool_calls:` guard)
@@ -748,5 +754,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 1.8.0
+**Version:** 1.9.0
 **Maintained by:** Claude Code (AI Assistant)
