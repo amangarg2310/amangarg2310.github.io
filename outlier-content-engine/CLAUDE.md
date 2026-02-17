@@ -633,6 +633,25 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Vertical Context Loss, Handle Discovery Flow, Silent TikTok Failures (multiple files)
+
+**3 improvements:**
+
+1. **Contextual welcome on session expiry** (`dashboard.py`)
+   - Previously: expired session → GPT had no context → asked "Which brand should we analyze?" again
+   - Fix: when `chat_context` is absent but a vertical exists in DB, seed `chat_history` with: *"Welcome back — you're set up with **Streetwear** (6 brands tracked: @nike…). Want to run an analysis, add brands, or explore results?"*
+   - GPT now knows what vertical + brands are active without the user repeating themselves
+
+2. **Handle discovery: suggest BEFORE saving** (`scout_agent.py`)
+   - Previously: `add_brands` saved to DB immediately, then GPT "confirmed" after the fact — corrections had no path to fix anything
+   - Added `suggest_handles` tool: looks up brand names in registry per platform, returns suggestions with follower counts + verified status, but **does not save anything**
+   - Updated system prompt: (A) brand names → `suggest_handles` → show table → user confirms → `add_brands`; (B) @handles → `add_brands` directly; (C) mixed → suggest for name-only entries
+   - For brands not in registry, GPT explicitly asks user to provide the correct handle
+
+3. **TikTok and Instagram 0-post failures surface to user** (`main.py`)
+   - Previously: zero-post results were only server log warnings — never in `run_stats["errors"]`
+   - Fix: both IG and TikTok zero-post results added to `run_stats["errors"]` so GPT's analysis-complete message can tell the user which handles failed
+
 ### 2026-02-17: Fix Chat Reset, Missing Brands Panel, and Timeframe Filter (multiple files)
 
 **4 bugs fixed:**
@@ -835,5 +854,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 2.5.0
+**Version:** 2.6.0
 **Maintained by:** Claude Code (AI Assistant)

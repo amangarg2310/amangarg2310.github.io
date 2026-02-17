@@ -385,6 +385,40 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_handles",
+            "description": (
+                "Look up official social media handles for brand names WITHOUT saving anything. "
+                "Use this BEFORE add_brands when the user provides brand names (not @handles). "
+                "Returns per-platform handle suggestions and flags unknowns. "
+                "After showing results, ask the user to confirm before calling add_brands."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brand_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Brand names (without @) to look up handles for. "
+                            "E.g. ['Nike', 'Saintwoods', 'Fear of God']"
+                        ),
+                    },
+                    "platforms": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["instagram", "tiktok", "facebook"]},
+                        "description": (
+                            "Which platforms to look up handles for. "
+                            "Defaults to ['instagram', 'tiktok'] if not specified."
+                        ),
+                    },
+                },
+                "required": ["brand_names"],
+            },
+        },
+    },
 ]
 
 
@@ -490,23 +524,38 @@ STEP 2 — ADD BRANDS:
 - Accept brand names WITHOUT @ (e.g., "SaintWoods", "Fear of God Essentials")
 - Accept handles WITH @ (e.g., "@saintwoods", "@essentials")
 - Accept messy mixed input: "@kith — content ops @stussy — nostalgia OG" → extract all handles
-- When calling add_brands, the system auto-resolves brand names to official handles.
-- Just pass whatever the user says — strip @ prefixes and pass as instagram_handles.
-- If the user already provided brands in their first message, skip asking and use those.
+- If the user already provided brands in their first message, skip asking.
+
+HANDLE RESOLUTION (CRITICAL — two-step process when user gives brand names):
+A) If the user provides brand NAMES (no @ prefix, clearly not handles — e.g. "Nike", "Saintwoods"):
+   1. Call suggest_handles with the brand names and the selected platforms.
+   2. Present the results clearly, e.g.:
+      "Here's what I found for each brand:
+       • Nike → IG: @nike ✓ (306M followers) | TT: @nike ✓
+       • Saintwoods → IG: @saintwoods | TT: unknown — what's their TikTok handle?
+       Do these look right?"
+   3. Wait for the user to confirm or correct. If they say "looks good" or "yes":
+      Call add_brands with the confirmed handles.
+   4. DO NOT call add_brands until the user has confirmed the suggestions.
+
+B) If the user provides @handles directly (e.g. "@nike", "@saintwoods"):
+   - Skip suggest_handles entirely.
+   - Call add_brands directly with the provided handles.
+
+C) Mixed input (@handles + brand names together):
+   - Use @handles as-is.
+   - Run suggest_handles only for the bare brand names.
+   - Present combined results and confirm before adding.
 
 STEP 3 — PICK PLATFORMS:
 "What platforms do you want to look at? Instagram, TikTok, Facebook, or all of them?"
+- Ask this BEFORE suggesting handles when possible, so you can look up the right platforms.
 - Wait for their answer. Don't combine this with other questions.
 - Remember their choice for Step 5.
 
 STEP 4 — CONFIRM HANDLES:
-After add_brands returns (it includes resolved_handles), confirm with the user:
-"I found these handles for each platform — do these look right?
-• SaintWoods → @saintwoods
-• Stussy → @stussy
-(If any look off, just let me know and I'll fix it!)"
-- Only show this if brand names were resolved to handles.
-- If user just provided @handles directly, skip this step.
+Already covered in the Handle Resolution section above. Only prompt this step if
+suggest_handles returned results and the user hasn't confirmed yet.
 
 STEP 5 — TIMEFRAME:
 "Last question — what timeframe should the analysis cover? Last 30 days or last 3 months?"
@@ -1503,6 +1552,61 @@ IMPORTANT:
 
     # ── Dispatch a tool call ────────────────────────────────────────────
 
+    def _handle_suggest_handles(self, args: Dict) -> str:
+        """Look up official handles for brand names — does NOT save anything to DB.
+
+        Returns a structured list of suggestions per brand per platform so GPT
+        can present them to the user for confirmation before calling add_brands.
+        """
+        from brand_handle_discovery import BrandHandleDiscovery
+
+        brand_names = args.get("brand_names", [])
+        platforms = args.get("platforms") or ["instagram", "tiktok"]
+
+        if not brand_names:
+            return json.dumps({"ok": False, "error": "No brand names provided."})
+
+        discovery = BrandHandleDiscovery()
+        suggestions = []
+
+        for name in brand_names:
+            name = name.strip()
+            if not name:
+                continue
+
+            brand_entry = {"brand_name": name, "platforms": {}}
+
+            for platform in platforms:
+                result = discovery.discover_handle(name, platform=platform)
+                if result and result.get("handle"):
+                    brand_entry["platforms"][platform] = {
+                        "handle": result["handle"],
+                        "followers": result.get("follower_count", 0),
+                        "verified": result.get("verified", False),
+                        "official_name": result.get("official_name", name),
+                        "notes": result.get("notes", ""),
+                        "status": "found",
+                    }
+                else:
+                    brand_entry["platforms"][platform] = {
+                        "handle": None,
+                        "status": "unknown",
+                        "message": f"No {platform} handle found in registry — user must provide @handle manually",
+                    }
+
+            suggestions.append(brand_entry)
+
+        return json.dumps({
+            "ok": True,
+            "suggestions": suggestions,
+            "note": (
+                "Show each brand and its suggested handles to the user in a clear table/list. "
+                "For 'unknown' entries, ask the user to provide the handle themselves. "
+                "Once the user confirms (or corrects any), call add_brands with the confirmed handles. "
+                "DO NOT call add_brands until the user says the handles look right."
+            ),
+        })
+
     def _dispatch_tool(self, name: str, args: Dict, context: Dict) -> str:
         """Route a tool call to the appropriate handler. Returns JSON string."""
         if name == "create_category":
@@ -1529,6 +1633,8 @@ IMPORTANT:
             return self._handle_optimize_content(args, context)
         elif name == "show_trends":
             return self._handle_show_trends(args, context)
+        elif name == "suggest_handles":
+            return self._handle_suggest_handles(args)
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
 

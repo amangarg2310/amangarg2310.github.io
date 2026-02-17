@@ -1683,10 +1683,11 @@ def chat_message():
                 'active_vertical': current_vertical,
                 'chat_history': [],
             }
-            # Seed welcome message for new users so GPT has onboarding context.
-            # Without this, GPT doesn't know the user was asked to "describe your niche"
-            # and treats bare words like "streetwear" as brand names instead of category names.
+            # Seed chat history so GPT has the right onboarding/continuation context.
             if not current_vertical:
+                # New user with no verticals: seed onboarding prompt so GPT knows
+                # the user was asked to "describe your niche" and treats single words
+                # (e.g. "streetwear") as category names, not brand names.
                 from vertical_manager import VerticalManager
                 vm_check = VerticalManager()
                 if not vm_check.list_verticals():
@@ -1699,6 +1700,37 @@ def chat_message():
                             ),
                         }
                     ]
+            else:
+                # Returning user: session expired but vertical exists in DB.
+                # Seed a contextual greeting so GPT knows what vertical is active
+                # and doesn't ask the user to pick one again.
+                try:
+                    from vertical_manager import VerticalManager
+                    _vm = VerticalManager()
+                    _vertical = _vm.get_vertical(current_vertical)
+                    _brand_count = len(_vertical.brands) if _vertical else 0
+                    _handles = []
+                    if _vertical and _vertical.brands:
+                        _handles = [
+                            f"@{b.instagram_handle}" for b in _vertical.brands[:5]
+                            if b.instagram_handle
+                        ]
+                    _brand_list = (
+                        f" ({', '.join(_handles)}{' and more' if _brand_count > 5 else ''})"
+                        if _handles else ""
+                    )
+                    session['chat_context']['chat_history'] = [
+                        {
+                            "role": "assistant",
+                            "content": (
+                                f"Welcome back — you're set up with **{current_vertical}** "
+                                f"({_brand_count} brand{'s' if _brand_count != 1 else ''} tracked{_brand_list}). "
+                                f"Want to run an analysis, add brands, or explore results?"
+                            ),
+                        }
+                    ]
+                except Exception:
+                    pass  # Non-critical; leave history empty if this fails
 
         context = session['chat_context']
         context['active_vertical'] = current_vertical

@@ -490,6 +490,11 @@ def run_pipeline(vertical_name=None, skip_collect=False, no_email=False, brands=
                                 f"Possible causes: handle not found, API error, "
                                 f"empty profile, or rate limit."
                             )
+                            # Surface to errors so the chat can inform the user
+                            run_stats["errors"].append(
+                                f"Instagram @{result['handle']}: 0 posts collected "
+                                f"(handle not found, private profile, or API rate limit)"
+                            )
                         else:
                             logger.info(
                                 f"  @{result['handle']}: {result['posts']} posts "
@@ -549,6 +554,11 @@ def run_pipeline(vertical_name=None, skip_collect=False, no_email=False, brands=
                                 run_stats["posts_new"] += result["new"]
                                 if result["posts"] == 0:
                                     logger.warning(f"  TikTok @{result['handle']}: 0 posts returned (handle not found, API error, or rate limit)")
+                                    # Surface to errors so the chat can inform the user
+                                    run_stats["errors"].append(
+                                        f"TikTok @{result['handle']}: 0 posts collected "
+                                        f"(handle not found, no TikTok presence, or API rate limit)"
+                                    )
                                 else:
                                     logger.info(f"  @{result['handle']}: {result['posts']} TikTok posts ({result['new']} new)")
                             if _progress and total_brands > 0:
