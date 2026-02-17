@@ -41,9 +41,11 @@ class VerticalManager:
         self.db_path = db_path or config.DB_PATH
 
     def _get_conn(self):
-        """Get database connection with row factory."""
+        """Get database connection with WAL mode for concurrent access."""
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     def list_verticals(self) -> List[str]:
@@ -234,6 +236,22 @@ class VerticalManager:
         finally:
             conn.close()
 
+    def update_brand_tiktok(self, vertical_name: str, tiktok_handle: str) -> bool:
+        """Set the tiktok_handle on a brand matched by instagram_handle or brand name."""
+        conn = self._get_conn()
+        tiktok_handle = tiktok_handle.lstrip('@')
+        conn.execute("""
+            UPDATE vertical_brands
+            SET tiktok_handle = ?
+            WHERE vertical_name = ? COLLATE NOCASE
+              AND (instagram_handle = ? COLLATE NOCASE OR brand_name = ? COLLATE NOCASE)
+              AND (tiktok_handle IS NULL OR tiktok_handle = '')
+        """, (tiktok_handle, vertical_name, tiktok_handle, tiktok_handle))
+        updated = conn.total_changes > 0
+        conn.commit()
+        conn.close()
+        return updated
+
     def remove_brand(self, vertical_name: str, handle: str) -> bool:
         """Remove a brand from a vertical (soft delete - archives posts for instant re-add).
 
@@ -254,8 +272,8 @@ class VerticalManager:
         conn.execute("""
             DELETE FROM vertical_brands
             WHERE vertical_name = ? COLLATE NOCASE
-              AND (instagram_handle = ? OR tiktok_handle = ? OR facebook_handle = ?)
-        """, (vertical_name, handle, handle, handle))
+              AND (instagram_handle = ? COLLATE NOCASE OR tiktok_handle = ? COLLATE NOCASE)
+        """, (vertical_name, handle, handle))
 
         deleted = conn.total_changes > 0
         conn.commit()

@@ -734,6 +734,17 @@ IMPORTANT:
         resolved = []  # Track name→handle resolutions for user feedback
         newly_added_handles = []  # Track actual new brands for incremental collection
         skipped = []
+        # Build paired IG↔TT mapping (same-index handles are paired)
+        paired_tt = {}
+        for i, handle in enumerate(tt_handles):
+            h = handle.strip().lstrip("@")
+            if h and i < len(ig_handles):
+                ig_h = ig_handles[i].strip().lstrip("@")
+                if ig_h:
+                    paired_tt[ig_h.lower()] = h
+        unpaired_tt = [h.strip().lstrip("@") for i, h in enumerate(tt_handles)
+                       if h.strip().lstrip("@") and i >= len(ig_handles)]
+
         for handle in ig_handles:
             handle = handle.strip().lstrip("@")
             if not handle:
@@ -755,9 +766,13 @@ IMPORTANT:
                     })
                     handle = resolved_handle
 
+            # Pair with TikTok handle if provided at same index
+            tt_handle = paired_tt.get(original_input.lower())
+
             try:
                 brand_name = suggestion.get('official_name') if suggestion else None
                 if self.vm.add_brand(actual_name, instagram_handle=handle,
+                                      tiktok_handle=tt_handle,
                                       brand_name=brand_name):
                     added.append(f"@{handle}")
                     newly_added_handles.append(handle)
@@ -767,9 +782,8 @@ IMPORTANT:
                 logger.warning(f"Failed to add @{handle} to {actual_name}: {e}")
                 skipped.append(f"@{handle}")
 
-        # Add TikTok-only handles (with brand name resolution)
-        for handle in tt_handles:
-            handle = handle.strip().lstrip("@")
+        # Add TikTok-only handles (no paired IG handle)
+        for handle in unpaired_tt:
             if not handle:
                 continue
 
@@ -787,10 +801,12 @@ IMPORTANT:
                     })
                     handle = resolved_handle
 
+            # TikTok-only: update existing IG row if brand exists, else skip
+            # (instagram_handle is NOT NULL in schema, so can't insert TT-only)
             try:
                 brand_name = tt_suggestion.get('official_name') if tt_suggestion else None
-                if self.vm.add_brand(actual_name, tiktok_handle=handle,
-                                      brand_name=brand_name):
+                updated = self.vm.update_brand_tiktok(actual_name, handle)
+                if updated:
                     added.append(f"@{handle} (TikTok)")
                     newly_added_handles.append(handle)
                 else:
@@ -969,6 +985,8 @@ IMPORTANT:
 
             conn = sqlite3.connect(str(config.DB_PATH))
             conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
 
             # Get all brands for this vertical
             vertical = self.vm.get_vertical(vertical_name)
@@ -1067,6 +1085,8 @@ IMPORTANT:
         if not is_admin:
             try:
                 conn = sqlite3.connect(str(config.DB_PATH))
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=5000")
 
                 # Check per-category cooldown via verticals.updated_at
                 row = conn.execute(
