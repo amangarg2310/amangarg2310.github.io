@@ -633,6 +633,11 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Chatbot Loop on First Message (c939eaf)
+- `dashboard.py` + `scout_agent.py`: Root cause — when new users type a niche name (e.g. "streetwear") in response to the onboarding prompt, GPT had no context it just asked "describe your niche" (welcome message was HTML-only, not in `chat_history`). Shortcut rules then treated bare words as brand names, causing a loop back to "What should we call this collection?"
+  - Seed `chat_history` with the welcome message for new sessions with no categories
+  - Add niche-vs-brand disambiguation rules to system prompt shortcuts
+
 ### 2026-02-17: Fix Posts Not Showing After Analysis (9ddd2e8)
 - `dashboard.py`: Root cause — active vertical stored only in `app._active_vertical` (in-memory), lost on server restart. Dashboard fell back to querying `brand_profile='heritage'` (hardcoded YAML) instead of the user's actual vertical.
   - Persist active vertical to Flask session (survives restarts)
@@ -772,5 +777,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 2.1.0
+**Version:** 2.2.0
 **Maintained by:** Claude Code (AI Assistant)
