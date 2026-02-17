@@ -118,9 +118,20 @@ class VerticalManager:
         )
 
     def create_vertical(self, name: str, description: str = None) -> bool:
-        """Create a new vertical."""
+        """Create a new vertical. Case-insensitive: 'streetwear' and 'Streetwear' are the same."""
         conn = self._get_conn()
         now = datetime.now(timezone.utc).isoformat()
+
+        # Check for case-insensitive duplicate first (SQLite UNIQUE is case-sensitive,
+        # so "streetwear" and "Streetwear" would both INSERT without this check)
+        existing = conn.execute(
+            "SELECT name FROM verticals WHERE name = ? COLLATE NOCASE",
+            (name,)
+        ).fetchone()
+        if existing:
+            conn.close()
+            logger.warning(f"Vertical '{name}' already exists as '{existing['name']}'")
+            return False
 
         try:
             conn.execute("""

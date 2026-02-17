@@ -123,6 +123,28 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "delete_category",
+            "description": (
+                "Delete an entire category and all its brands. "
+                "Use when user says 'start fresh', 'delete this category', "
+                "'start over', or 'remove this collection entirely'. "
+                "This permanently removes the category, its brands, and all collected posts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Category name to delete.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_categories",
             "description": (
                 "List all existing categories with their brand counts. "
@@ -452,6 +474,9 @@ If the user hasn't named their competitive set yet, start here:
   ALWAYS tell the user: "I found an existing [name] category with N brands: @handle1, @handle2, ...
   Want to start fresh or keep these and add more?"
   Never say "all set up" without showing what's already in the category.
+- If the user says "start fresh", "start over", "delete it", or "remove everything":
+  Call delete_category to remove the old category entirely, THEN call create_category to make a fresh one.
+  NEVER create a variant name like "Streetwear2" — always delete the old one and reuse the same name.
 
 STEP 2 — ADD BRANDS:
 "Great! Now let's add some brands. Which brands or handles do you want to track?"
@@ -517,16 +542,17 @@ TERMINOLOGY:
 
 WHAT YOU CAN DO (use the provided tools):
 1. create_category — create a new competitive set
-2. add_brands — add Instagram/TikTok/Facebook handles to a category (auto-creates if needed)
-3. remove_brands — remove handles from a category
-4. list_categories — show all categories
-5. show_category — show brands in a specific category
-6. run_analysis — scan posts and find outlier content
-7. filter_view — filter dashboard to specific brands (no analysis, instant)
-8. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
-9. score_content — score a content concept (FREE, instant, no LLM)
-10. optimize_content — AI-powered caption improvement
-11. show_trends — show rising/declining content patterns
+2. delete_category — delete an entire category and all its brands (for "start fresh")
+3. add_brands — add Instagram/TikTok/Facebook handles to a category (auto-creates if needed)
+4. remove_brands — remove handles from a category
+5. list_categories — show all categories
+6. show_category — show brands in a specific category
+7. run_analysis — scan posts and find outlier content
+8. filter_view — filter dashboard to specific brands (no analysis, instant)
+9. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
+10. score_content — score a content concept (FREE, instant, no LLM)
+11. optimize_content — AI-powered caption improvement
+12. show_trends — show rising/declining content patterns
 
 INTENT DISAMBIGUATION (CRITICAL):
 When user mentions a brand, determine their TRUE intent:
@@ -642,6 +668,36 @@ IMPORTANT:
                 ),
             })
 
+    def _handle_delete_category(self, args: Dict) -> str:
+        """Delete a category and all its brands. For 'start fresh' requests."""
+        name = args.get("name", "").strip()
+
+        if not name:
+            return json.dumps({"ok": False, "error": "Category name is required."})
+
+        # Case-insensitive lookup
+        actual_name = None
+        for v in self.vm.list_verticals():
+            if v.lower() == name.lower():
+                actual_name = v
+                break
+
+        if not actual_name:
+            return json.dumps({"ok": False, "error": f"Category '{name}' not found."})
+
+        brand_count = self.vm.get_brand_count(actual_name)
+        deleted = self.vm.delete_vertical(actual_name)
+
+        if deleted:
+            return json.dumps({
+                "ok": True,
+                "message": (
+                    f"Deleted category '{actual_name}' and its {brand_count} brands. "
+                    f"You can now create a fresh category with the same name."
+                ),
+            })
+        return json.dumps({"ok": False, "error": f"Failed to delete '{actual_name}'."})
+
     def _handle_add_brands(self, args: Dict, context: Dict) -> str:
         """Add brands to a category (auto-creating it if necessary)."""
         category_name = args.get("category_name", "").strip()
@@ -700,13 +756,15 @@ IMPORTANT:
                     handle = resolved_handle
 
             try:
+                brand_name = suggestion.get('official_name') if suggestion else None
                 if self.vm.add_brand(actual_name, instagram_handle=handle,
-                                      brand_name=suggestion['official_name'] if suggestion else None):
+                                      brand_name=brand_name):
                     added.append(f"@{handle}")
                     newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle}")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to add @{handle} to {actual_name}: {e}")
                 skipped.append(f"@{handle}")
 
         # Add TikTok-only handles (with brand name resolution)
@@ -730,13 +788,15 @@ IMPORTANT:
                     handle = resolved_handle
 
             try:
+                brand_name = tt_suggestion.get('official_name') if tt_suggestion else None
                 if self.vm.add_brand(actual_name, tiktok_handle=handle,
-                                      brand_name=tt_suggestion['official_name'] if tt_suggestion else None):
+                                      brand_name=brand_name):
                     added.append(f"@{handle} (TikTok)")
                     newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle} (TikTok)")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to add @{handle} (TikTok) to {actual_name}: {e}")
                 skipped.append(f"@{handle} (TikTok)")
 
         # Add Facebook-only handles
@@ -750,7 +810,8 @@ IMPORTANT:
                     newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle} (Facebook)")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to add @{handle} (Facebook) to {actual_name}: {e}")
                 skipped.append(f"@{handle} (Facebook)")
 
         self.vm.update_vertical_timestamp(actual_name)
@@ -1345,6 +1406,8 @@ IMPORTANT:
         """Route a tool call to the appropriate handler. Returns JSON string."""
         if name == "create_category":
             return self._handle_create_category(args)
+        elif name == "delete_category":
+            return self._handle_delete_category(args)
         elif name == "add_brands":
             return self._handle_add_brands(args, context)
         elif name == "remove_brands":

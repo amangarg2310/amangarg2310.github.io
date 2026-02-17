@@ -2157,7 +2157,7 @@ if __name__ == "__main__":
         logging.warning(f"Migration check (posts): {e}")
 
     try:
-        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table, add_trend_radar_tables, add_vertical_brands_unique_index
+        from database_migrations import run_vertical_migrations, add_facebook_handle_column, fix_post_unique_constraint, fix_vertical_brands_nullable, add_scoring_tables, add_users_table, add_trend_radar_tables, add_vertical_brands_unique_index, consolidate_vertical_name_casing
         run_vertical_migrations()
         add_facebook_handle_column()
         fix_post_unique_constraint()
@@ -2166,6 +2166,7 @@ if __name__ == "__main__":
         add_users_table()
         add_trend_radar_tables()
         add_vertical_brands_unique_index()
+        consolidate_vertical_name_casing()
     except Exception as e:
         logging.warning(f"Migration check (verticals): {e}")
 
