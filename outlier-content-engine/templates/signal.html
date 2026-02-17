@@ -54,6 +54,7 @@
         <div class="signal-messages" id="chatMessages">
             <!-- Welcome / Onboarding Message -->
             {% if needs_setup %}
+            <div id="setupPrompt">
             <div class="signal-message">
                 <div class="signal-avatar">S</div>
                 <div class="signal-message-content">
@@ -82,6 +83,21 @@
                         <span class="signal-onboarding-hint">Free tiers available for both services</span>
                     </div>
                 </div>
+            </div>
+            </div>
+            <!-- Fallback welcome shown when BYOK keys exist in localStorage -->
+            <div id="byokWelcome" style="display:none;">
+            <div class="signal-message">
+                <div class="signal-avatar">S</div>
+                <div class="signal-message-content">
+                    <div class="signal-message-bubble">
+                        Hey! Welcome to ScoutAI. I find viral social media posts by tracking your competitors.
+                        <br><br>
+                        Your API keys are configured. Let's create your first competitive set — pick a template below or describe your niche:
+                    </div>
+                    <div class="signal-message-time">Just now</div>
+                </div>
+            </div>
             </div>
             {% elif not saved_verticals %}
             <div class="signal-message">
@@ -1110,6 +1126,18 @@
 </div>
 
 <script>
+// ── BYOK: Hide setup prompt if API keys exist in localStorage ──
+(function() {
+    const hasOpenAI = localStorage.getItem('scout_openai_key');
+    const hasApify = localStorage.getItem('scout_apify_token');
+    if (hasOpenAI && hasApify) {
+        const setupPrompt = document.getElementById('setupPrompt');
+        const byokWelcome = document.getElementById('byokWelcome');
+        if (setupPrompt) setupPrompt.style.display = 'none';
+        if (byokWelcome) byokWelcome.style.display = 'block';
+    }
+})();
+
 // User menu toggle
 function toggleUserMenu() {
     const dd = document.getElementById('userDropdown');
