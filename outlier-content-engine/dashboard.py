@@ -292,9 +292,9 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
     if not config.DB_PATH.exists():
         return []
 
-    # CRITICAL FIX: Use vertical_name if provided, otherwise fall back to profile_name
-    # The database stores data by vertical (e.g., 'Streetwear'), not by profile (e.g., 'heritage')
-    brand_profile = vertical_name or get_active_vertical_name() or get_active_profile_name()
+    brand_profile = vertical_name or get_active_vertical_name()
+    if not brand_profile:
+        return []
 
     try:
         conn = get_db()
@@ -318,8 +318,10 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             query += " AND platform = ?"
             params.append(platform)
 
-        # Timeframe filter: filter by actual post date, not just outlier_timeframe window
-        # This ensures we only show posts from the selected time period
+        # Timeframe filter: use collected_at (when post was scraped) to match
+        # the outlier detector's window logic (which also uses collected_at).
+        # posted_at (Instagram publish date) is often NULL or months old,
+        # which would filter out valid outliers that were just collected.
         if timeframe:
             timeframe_days_map = {
                 "30d": 30,
@@ -327,7 +329,7 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             }
             if timeframe in timeframe_days_map:
                 days = timeframe_days_map[timeframe]
-                query += " AND (posted_at IS NULL OR posted_at >= datetime('now', ?))"
+                query += " AND collected_at >= datetime('now', ?)"
                 params.append(f'-{days} days')
 
         if tag:
@@ -442,7 +444,9 @@ def get_competitor_baselines(vertical_name=None, timeframe="30d"):
     if not config.DB_PATH.exists():
         return []
 
-    brand_profile = vertical_name or get_active_vertical_name() or get_active_profile_name()
+    brand_profile = vertical_name or get_active_vertical_name()
+    if not brand_profile:
+        return []
 
     # Map timeframe to lookback days
     days_map = {"30d": 30, "3mo": 90}

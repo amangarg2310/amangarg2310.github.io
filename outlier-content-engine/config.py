@@ -24,7 +24,7 @@ DB_PATH = DATA_DIR / "content_engine.db"
 DATA_DIR.mkdir(exist_ok=True)
 
 # ── Active Profile ──
-ACTIVE_PROFILE = os.getenv("ACTIVE_PROFILE", "heritage")
+ACTIVE_PROFILE = os.getenv("ACTIVE_PROFILE") or None
 
 # ── Active Vertical (new system) ──
 ACTIVE_VERTICAL = os.getenv("ACTIVE_VERTICAL")
