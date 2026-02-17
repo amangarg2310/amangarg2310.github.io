@@ -158,7 +158,10 @@ TOOL_DEFINITIONS = [
             "description": (
                 "Run outlier detection analysis for a category. "
                 "Can analyze ALL brands in the category OR specific brands only. "
-                "Use brand_handles to filter which brands to collect/analyze."
+                "Use brand_handles to filter which brands to collect/analyze. "
+                "IMPORTANT: Before calling this, you should have asked the user "
+                "which platforms and timeframe they want. Pass their preferences "
+                "via the platforms and timeframe parameters."
             ),
             "parameters": {
                 "type": "object",
@@ -177,6 +180,22 @@ TOOL_DEFINITIONS = [
                             "'analyze nike' → ['nike'], "
                             "'kith and noah' → ['kith', 'noah'], "
                             "'analyze everything' → omit this field"
+                        ),
+                    },
+                    "platforms": {
+                        "type": "string",
+                        "enum": ["all", "instagram", "tiktok", "facebook"],
+                        "description": (
+                            "Which platforms to focus on. 'all' collects from all "
+                            "platforms. Defaults to 'all' if user didn't specify."
+                        ),
+                    },
+                    "timeframe": {
+                        "type": "string",
+                        "enum": ["30d", "3mo"],
+                        "description": (
+                            "Timeframe for analysis. '30d' = last 30 days, "
+                            "'3mo' = last 3 months. Defaults to '30d'."
                         ),
                     },
                 },
@@ -419,14 +438,37 @@ PERSONALITY:
 CURRENT STATE:
 {state_block}
 
+GUIDED CONVERSATION FLOW:
+When a user wants to set up tracking, follow this conversational flow:
+
+1. **BRANDS** — The user mentions brand names or handles they want to track.
+   - Accept brand names WITHOUT @ (e.g., "SaintWoods", "Fear of God Essentials")
+   - Accept handles WITH @ (e.g., "@saintwoods", "@essentials")
+   - When calling add_brands, the system will auto-resolve brand names to correct handles.
+   - Just pass whatever the user says — the system handles resolution.
+
+2. **CATEGORY NAME** — If the user didn't provide one, ask:
+   "What should we call this collection? (e.g., 'Streetwear', 'Beauty', etc.)"
+   - If they previously mentioned a category in the conversation, use that one.
+   - If a category doesn't exist yet, add_brands will auto-create it.
+
+3. **CONFIRM BRANDS** — After add_brands returns, tell the user which handles were added.
+   The tool response includes resolved handles. Report them back so the user can verify.
+
+4. **PLATFORMS & TIMEFRAME** — Before analysis, ask (see PRE-ANALYSIS FLOW below).
+
+5. **ANALYZE** — Only run analysis when the user confirms.
+
 CRITICAL RULES FOR HANDLE EXTRACTION:
 - Users often paste messy text with @handles embedded in descriptions, notes, or bullet points.
   Example: "@aimeleondore — aspirational aesthetic @kith — content ops @stussy — nostalgia OG"
   You MUST extract every @handle from such text regardless of surrounding text.
+- Users may also provide plain brand names: "SaintWoods and Fear of God Essentials"
+  → Pass these as instagram_handles: ["saintwoods", "fearofgodessentials"]
+  → The add_brands handler will resolve them to the correct official handles.
 - When calling add_brands, strip the @ prefix from handles.
-- If the user provides handles and a category name in the SAME message, call add_brands immediately — do NOT ask for confirmation.
-- If the user provides handles but no category name, ask which category they belong to. If they previously mentioned a category in the conversation, use that one.
-- If a category doesn't exist yet, add_brands will auto-create it. No need to call create_category first.
+- If the user provides handles/names and a category name in the SAME message, call add_brands immediately — do NOT ask for confirmation of the brands (but still ask platforms/timeframe before analysis).
+- If the user provides handles/names but no category name, ask which category they belong to.
 
 TERMINOLOGY:
 - Say "category" or "collection" instead of "vertical"
@@ -462,8 +504,10 @@ When user mentions a brand, determine their TRUE intent:
 4. FULL CATEGORY: "analyze [category]" or "run analysis"
    → use run_analysis with NO brand_handles
 
-CRITICAL PRE-ANALYSIS VALIDATION:
-Before calling run_analysis, you MUST check if the category has brands:
+CRITICAL PRE-ANALYSIS FLOW:
+Before calling run_analysis, you MUST follow this sequence:
+
+STEP 1 — Validate brands exist:
 1. If user mentions a category name (e.g., "streetwear", "analyze beauty"), first call show_category
 2. Check the brand_count in the response
 3. If brand_count == 0 or category is empty:
@@ -471,7 +515,26 @@ Before calling run_analysis, you MUST check if the category has brands:
    → Instead respond: "This category is empty. What brands should I add to get started?"
    → Suggest next step: "Try: add @brand1 @brand2 to [category]"
    → Wait for user to add brands, then THEY will explicitly say "analyze"
-4. Only call run_analysis if brand_count > 0
+4. Only proceed to Step 2 if brand_count > 0
+
+STEP 2 — Ask about platforms and timeframe:
+Before running analysis, ask the user TWO quick questions:
+1. **Platforms**: "Which platforms should I look at? Instagram, TikTok, Facebook, or all of them?"
+2. **Timeframe**: "And what time window — last 30 days or last 3 months?"
+
+Present these as a quick confirmation, e.g.:
+"Great, {category} has {N} brands ready. Before I scan:
+• **Platforms:** IG, TikTok, Facebook, or all?
+• **Timeframe:** Last 30 days or 3 months?
+
+Or just say 'go' and I'll scan all platforms for the last 30 days."
+
+If the user says "go", "just do it", "all", or similar → use defaults (all platforms, 30d).
+If the user already specified platform/timeframe in their message → use those, don't re-ask.
+Pass the user's choices to run_analysis via the platforms and timeframe parameters.
+
+STEP 3 — Run the analysis:
+Call run_analysis with the appropriate parameters.
 
 CRITICAL: If user says a brand "is already in [category]" and wants to see just that brand
 → They want filter_view, NOT run_analysis
@@ -570,60 +633,49 @@ IMPORTANT:
         existing = self.vm.list_verticals()
         actual_name = None
         was_existing_vertical = False
-        is_recently_recreated = False
         for v in existing:
             if v.lower() == category_name.lower():
                 actual_name = v
                 was_existing_vertical = True
-                # Check if this vertical was recently recreated (within last 10 minutes)
-                # This handles the case where user deleted "Streetwear" and remade it fresh
-                vertical_obj = self.vm.get_vertical(v)
-                if vertical_obj and vertical_obj.created_at:
-                    from datetime import datetime, timezone, timedelta
-                    try:
-                        created = datetime.fromisoformat(vertical_obj.created_at)
-                        if created.tzinfo is None:
-                            created = created.replace(tzinfo=timezone.utc)
-                        age = datetime.now(timezone.utc) - created
-                        if age < timedelta(minutes=10):
-                            is_recently_recreated = True
-                            logger.info(f"Vertical '{v}' was recently recreated ({age.total_seconds():.0f}s ago)")
-
-                            # Compare incoming brands with existing brands
-                            existing_brands = vertical_obj.brands
-                            existing_ig_handles = {b.instagram_handle.lower() for b in existing_brands if b.instagram_handle}
-                            existing_tt_handles = {b.tiktok_handle.lower() for b in existing_brands if b.tiktok_handle}
-
-                            incoming_ig_handles = {h.strip().lstrip("@").lower() for h in ig_handles if h.strip()}
-                            incoming_tt_handles = {h.strip().lstrip("@").lower() for h in tt_handles if h.strip()}
-
-                            # If different brands, delete all existing brands for clean slate
-                            if existing_ig_handles != incoming_ig_handles or existing_tt_handles != incoming_tt_handles:
-                                logger.info(f"Different brands detected - removing {len(existing_brands)} legacy brands from '{v}'")
-                                # Delete all brands from this vertical
-                                conn = self.vm._get_conn()
-                                conn.execute("DELETE FROM vertical_brands WHERE vertical_name = ?", (v,))
-                                conn.commit()
-                                conn.close()
-                                logger.info(f"Cleared legacy brands. Will add {len(incoming_ig_handles) + len(incoming_tt_handles)} new brands.")
-                    except (ValueError, TypeError):
-                        pass
                 break
 
         if not actual_name:
             self.vm.create_vertical(category_name)
             actual_name = category_name
 
+        # Resolve brand names to official handles using BrandHandleDiscovery
+        from brand_handle_discovery import BrandHandleDiscovery
+        discovery = BrandHandleDiscovery()
+
         # Track which brands are new vs already existed
         added = []
+        resolved = []  # Track name→handle resolutions for user feedback
         newly_added_handles = []  # Track actual new brands for incremental collection
         skipped = []
         for handle in ig_handles:
             handle = handle.strip().lstrip("@")
             if not handle:
                 continue
+
+            # Try to resolve brand name → official handle
+            original_input = handle
+            suggestion = discovery.discover_handle(handle, platform="instagram")
+            if suggestion:
+                resolved_handle = suggestion['handle']
+                official_name = suggestion.get('official_name', original_input)
+                if resolved_handle.lower() != handle.lower():
+                    resolved.append({
+                        "input": original_input,
+                        "handle": resolved_handle,
+                        "name": official_name,
+                        "followers": suggestion.get('follower_count', 0),
+                        "verified": suggestion.get('verified', False),
+                    })
+                    handle = resolved_handle
+
             try:
-                if self.vm.add_brand(actual_name, instagram_handle=handle):
+                if self.vm.add_brand(actual_name, instagram_handle=handle,
+                                      brand_name=suggestion['official_name'] if suggestion else None):
                     added.append(f"@{handle}")
                     newly_added_handles.append(handle)
                 else:
@@ -631,13 +683,29 @@ IMPORTANT:
             except Exception:
                 skipped.append(f"@{handle}")
 
-        # Add TikTok-only handles
+        # Add TikTok-only handles (with brand name resolution)
         for handle in tt_handles:
             handle = handle.strip().lstrip("@")
             if not handle:
                 continue
+
+            # Try to resolve brand name → official TikTok handle
+            original_input = handle
+            tt_suggestion = discovery.discover_handle(handle, platform="tiktok")
+            if tt_suggestion:
+                resolved_handle = tt_suggestion['handle']
+                if resolved_handle and resolved_handle.lower() != handle.lower():
+                    resolved.append({
+                        "input": original_input,
+                        "handle": resolved_handle,
+                        "name": tt_suggestion.get('official_name', original_input),
+                        "platform": "tiktok",
+                    })
+                    handle = resolved_handle
+
             try:
-                if self.vm.add_brand(actual_name, tiktok_handle=handle):
+                if self.vm.add_brand(actual_name, tiktok_handle=handle,
+                                      brand_name=tt_suggestion['official_name'] if tt_suggestion else None):
                     added.append(f"@{handle} (TikTok)")
                     newly_added_handles.append(handle)
                 else:
@@ -667,16 +735,25 @@ IMPORTANT:
         # Store newly added brands for smart incremental collection
         context["newly_added_brands"] = newly_added_handles
         context["was_existing_vertical"] = was_existing_vertical
-        context["is_recently_recreated"] = is_recently_recreated
 
-        return json.dumps({
+        result = {
             "ok": True,
             "category": actual_name,
             "added": added,
             "skipped": skipped,
             "total_brands": total,
             "newly_added_count": len(newly_added_handles),
-        })
+        }
+
+        # Include handle resolution details so GPT can inform the user
+        if resolved:
+            result["resolved_handles"] = resolved
+            result["resolution_note"] = (
+                "Some brand names were resolved to official handles. "
+                "Tell the user which handles were used."
+            )
+
+        return json.dumps(result)
 
     def _handle_remove_brands(self, args: Dict) -> str:
         """Remove brands from a category."""
@@ -860,20 +937,11 @@ IMPORTANT:
         # ── Brand-specific filtering (optional) ──
         brand_handles = args.get("brand_handles")  # None, [], or ["nike", "kith"]
 
-        # SMART INCREMENTAL COLLECTION: If brands were just added in this conversation,
-        # only collect data for the NEW brands (not re-pull existing brands)
-        newly_added = context.get("newly_added_brands", [])
-        was_existing_vertical = context.get("was_existing_vertical", False)
-        is_recently_recreated = context.get("is_recently_recreated", False)
-
-        # If vertical was just deleted and recreated, treat all brands as new
-        if is_recently_recreated:
-            logger.info(f"Vertical was recently recreated — fetching all brands fresh")
-            # Don't filter brands, fetch everything
-        elif not brand_handles and newly_added and was_existing_vertical:
-            # User added brands to an existing vertical — only fetch the new ones
-            brand_handles = newly_added
-            logger.info(f"Incremental collection: only fetching {len(brand_handles)} new brands")
+        # Clear newly_added_brands from context to prevent stale filtering
+        # on subsequent analysis calls. Analysis always respects explicit
+        # brand_handles from the user; it never auto-filters.
+        context.pop("newly_added_brands", None)
+        context.pop("was_existing_vertical", None)
 
         # Validate brands exist in category (if specified)
         if brand_handles:
@@ -984,14 +1052,26 @@ IMPORTANT:
 
         context["analysis_started"] = True
 
+        # Apply user's platform/timeframe preferences as dashboard filters
+        user_platforms = args.get("platforms", "all")
+        user_timeframe = args.get("timeframe", "30d")
+
+        if user_platforms and user_platforms != "all":
+            context["filter_platform"] = user_platforms
+        if user_timeframe:
+            context["filter_timeframe"] = user_timeframe
+
         # Build response message based on scope
+        platform_label = user_platforms if user_platforms != "all" else "all platforms"
+        timeframe_label = "last 30 days" if user_timeframe == "30d" else "last 3 months"
+
         if brand_handles:
             handles_str = ", ".join(f"@{h}" for h in brand_handles)
-            message = f"Analyzing {handles_str} from {actual_name}."
+            message = f"Analyzing {handles_str} from {actual_name} ({platform_label}, {timeframe_label})."
             # Store selected brands in context for UI sync
             context["selected_brands"] = brand_handles
         else:
-            message = f"Analyzing all {brand_count} brands in {actual_name}."
+            message = f"Analyzing all {brand_count} brands in {actual_name} ({platform_label}, {timeframe_label})."
 
         return json.dumps({
             "ok": True,
