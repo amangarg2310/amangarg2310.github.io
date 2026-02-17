@@ -568,6 +568,69 @@ def add_trend_radar_tables(db_path=None):
     logger.info("Trend radar migrations complete")
 
 
+def add_vertical_brands_unique_index(db_path=None):
+    """
+    Add a unique index on vertical_brands to prevent duplicate brand entries.
+    Uses a partial unique index: UNIQUE(vertical_name, instagram_handle) WHERE instagram_handle IS NOT NULL
+    and UNIQUE(vertical_name, tiktok_handle) WHERE tiktok_handle IS NOT NULL.
+    Safe to call multiple times.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+
+    logger.info("Adding unique indexes to vertical_brands...")
+
+    # Remove any existing duplicate rows before creating unique index
+    try:
+        conn.execute("""
+            DELETE FROM vertical_brands
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM vertical_brands
+                GROUP BY vertical_name, COALESCE(instagram_handle, ''), COALESCE(tiktok_handle, '')
+            )
+        """)
+        dupes_removed = conn.total_changes
+        if dupes_removed > 0:
+            logger.info(f"  Removed {dupes_removed} duplicate brand entries")
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"  Dedup cleanup failed (non-critical): {e}")
+
+    # Create unique index for Instagram handles
+    try:
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vertical_brands_ig_unique
+            ON vertical_brands(vertical_name, instagram_handle)
+            WHERE instagram_handle IS NOT NULL
+        """)
+        conn.commit()
+        logger.info("  Created unique index on (vertical_name, instagram_handle)")
+    except sqlite3.OperationalError as e:
+        if "already exists" in str(e).lower():
+            logger.info("  Instagram unique index already exists")
+        else:
+            logger.warning(f"  Failed to create IG unique index: {e}")
+
+    # Create unique index for TikTok handles
+    try:
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vertical_brands_tt_unique
+            ON vertical_brands(vertical_name, tiktok_handle)
+            WHERE tiktok_handle IS NOT NULL
+        """)
+        conn.commit()
+        logger.info("  Created unique index on (vertical_name, tiktok_handle)")
+    except sqlite3.OperationalError as e:
+        if "already exists" in str(e).lower():
+            logger.info("  TikTok unique index already exists")
+        else:
+            logger.warning(f"  Failed to create TT unique index: {e}")
+
+    conn.close()
+    logger.info("Vertical brands unique index migration complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
@@ -578,6 +641,7 @@ if __name__ == "__main__":
     add_scoring_tables()
     add_users_table()
     add_trend_radar_tables()
+    add_vertical_brands_unique_index()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile

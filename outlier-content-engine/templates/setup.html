@@ -275,8 +275,9 @@ function saveKeysOnly() {
         redirect: 'manual'
     })
     .then(r => {
-        // Check if the request was successful (status 200-299 or redirect 300-399)
-        if (r.ok || (r.status >= 300 && r.status < 400)) {
+        // redirect: 'manual' converts 302 redirects to opaque responses (type='opaqueredirect', status=0)
+        // Treat opaque redirects as success since our endpoint always redirects on success
+        if (r.ok || r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)) {
             // Save to localStorage
             localStorage.setItem(STORAGE_KEYS.apify, apifyVal);
             localStorage.setItem(STORAGE_KEYS.openai, openaiVal);

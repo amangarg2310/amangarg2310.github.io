@@ -1719,7 +1719,14 @@ async function sendChatMessage(message) {
             if (data.selected_brands && data.selected_brands.length === 1) {
                 redirectUrl += '&competitor=' + encodeURIComponent(data.selected_brands[0]);
             }
-            // For multiple brands or full category, just trigger loading modal without competitor param
+
+            // Include platform/timeframe preferences from chat
+            if (data.filter_platform) {
+                redirectUrl += '&platform=' + encodeURIComponent(data.filter_platform);
+            }
+            if (data.filter_timeframe) {
+                redirectUrl += '&timeframe=' + encodeURIComponent(data.filter_timeframe);
+            }
 
             // Small delay to let user see the message, then redirect
             setTimeout(() => {
