@@ -633,6 +633,30 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: 9 Crash Fixes + 30 Regression Tests (9950316)
+- `scout_agent.py`:
+  - Fixed `tool_calls` NoneType iteration (`if choice.message.tool_calls:` guard)
+  - Fixed `json.loads(None)` TypeError — catch `(JSONDecodeError, TypeError)`, use `arguments or "{}"` fallback
+  - Fixed brand handle resolution KeyError — `suggestion['handle']` → `.get('handle')` with `isinstance(dict)` check
+  - Fixed optimizer KeyError + context corruption — `.get()` with fallback; context only updated after all operations succeed
+- `collectors/instagram.py`: Fixed `None + int` TypeError — `post.likes + post.comments` → `(post.likes or 0)`
+- `collectors/tiktok.py`:
+  - Fixed Apify response KeyError — validate `"data"` key exists before access
+  - Fixed status response KeyError — `status_response.json()["data"]` → `.get("data")` with None check + early return
+  - Fixed dataset ID KeyError/UnboundLocalError — `.get()` with early return on timeout
+- `vertical_manager.py`: Fixed `conn.total_changes` data corruption — switched to `cursor.rowcount` for per-operation counts; wrapped `competitor_posts` DELETE for fresh DBs
+- Added `test_error_handling.py` — 30 new regression tests:
+  - VerticalManager CRUD, fresh-DB regression, case-insensitive duplicates
+  - Engagement calc with None metrics, zero/None follower_count
+  - Scout agent tool dispatch edge cases (None args, missing keys, wrong types)
+  - Dashboard timestamp parsing (ISO, SQLite format, None, empty)
+  - TikTok Apify response validation (missing data, null data, missing fields)
+
+### 2026-02-17: CLAUDE.md Update + Exception Handling Cleanup (1b858ae)
+- `CLAUDE.md`: Updated vertical_brands schema (added `facebook_handle`, WAL mode, ON DELETE CASCADE); added `scout_agent.py` GPT tools section; added 2026-02-17 changelog
+- `dashboard.py`: Eliminated all 6 bare `except:` blocks; narrowed ~20 broad `except Exception` to specific types (`sqlite3.OperationalError`, `OSError`, `(ValueError, TypeError)`, `(FileNotFoundError, AttributeError)`, `(ImportError, sqlite3.Error)`)
+- `scout_agent.py`: OpenAI init failure now logs error instead of silently passing
+
 ### 2026-02-17: WAL Mode, IG+TT Handle Pairing & remove_brand Column Fix (12fd4e3)
 - `vertical_manager.py`: All DB connections now use `PRAGMA journal_mode=WAL` + `busy_timeout=5000`
   - Prevents "database is locked" errors when analysis subprocesses run concurrently with brand operations
@@ -724,5 +748,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 1.7.0
+**Version:** 1.8.0
 **Maintained by:** Claude Code (AI Assistant)
