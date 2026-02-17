@@ -131,6 +131,52 @@ def with_progress_tracking(func):
     return wrapper
 
 
+def _check_credentials(logger):
+    """
+    Run a diagnostic check on API credentials at startup.
+    Logs clear warnings if credentials are missing so failures aren't silent.
+    """
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        rows = conn.execute("SELECT service, api_key FROM api_credentials").fetchall()
+        conn.close()
+    except Exception:
+        rows = []
+
+    if not rows:
+        logger.warning(
+            "CREDENTIAL DIAGNOSTIC: api_credentials table is EMPTY. "
+            "No API keys stored in database."
+        )
+    else:
+        services = [r[0] for r in rows]
+        logger.info(f"Credentials in database: {', '.join(services)}")
+
+    # Check environment variable fallbacks
+    source = config.COLLECTION_SOURCE
+    if source == "apify":
+        key = config.get_api_key('apify')
+        if not key:
+            logger.error(
+                "CREDENTIAL DIAGNOSTIC: APIFY_API_TOKEN is not set in "
+                "database or environment. Collection WILL fail with 0 posts."
+            )
+    elif source == "rapidapi":
+        key = config.get_api_key('rapidapi')
+        if not key:
+            logger.error(
+                "CREDENTIAL DIAGNOSTIC: RAPIDAPI_KEY is not set in "
+                "database or environment. Collection WILL fail with 0 posts."
+            )
+
+    openai_key = config.get_api_key('openai')
+    if not openai_key:
+        logger.warning(
+            "CREDENTIAL DIAGNOSTIC: OPENAI_API_KEY not found. "
+            "AI analysis phase will fail."
+        )
+
+
 @with_progress_tracking
 def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_email=False, brands=None, _progress=None):
     """
@@ -295,6 +341,10 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
     init_database()
     migrate_database()
 
+    # ── 2a. Credential Diagnostic Check ──
+    if not skip_collect:
+        _check_credentials(logger)
+
     # ── 2b. Data Lifecycle Management ──
     if vertical_name:
         from data_lifecycle import DataLifecycleManager
@@ -338,8 +388,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
             collector = create_collector()
         except ValueError as e:
             logger.error(f"Cannot create collector: {e}")
-            logger.info("Tip: Set RAPIDAPI_KEY or APIFY_API_TOKEN in .env")
+            logger.error(
+                "CREDENTIAL CHECK FAILED: No API key found in database "
+                "(api_credentials table) or environment variables."
+            )
+            logger.info("Tip: Set RAPIDAPI_KEY or APIFY_API_TOKEN in .env, "
+                         "or add credentials via the dashboard Setup page.")
             logger.info("Continuing with existing data (if any)...")
+            run_stats["errors"].append(f"Missing API credentials: {e}")
             skip_collect = True
 
         if not skip_collect:
@@ -394,10 +450,17 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                         run_stats["posts_collected"] += result["posts"]
                         run_stats["posts_new"] += result["new"]
                         run_stats["competitors_collected"] += 1
-                        logger.info(
-                            f"  @{result['handle']}: {result['posts']} posts "
-                            f"({result['new']} new)"
-                        )
+                        if result["posts"] == 0:
+                            logger.warning(
+                                f"  @{result['handle']}: 0 posts returned. "
+                                f"Possible causes: handle not found, API error, "
+                                f"empty profile, or rate limit."
+                            )
+                        else:
+                            logger.info(
+                                f"  @{result['handle']}: {result['posts']} posts "
+                                f"({result['new']} new)"
+                            )
 
                     if _progress and total_brands > 0:
                         pct = 5 + int((_completed_count[0] / total_brands) * 60)
@@ -408,6 +471,14 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 f"({run_stats['posts_new']} new) from "
                 f"{run_stats['competitors_collected']} competitors"
             )
+
+            if run_stats["posts_collected"] == 0 and ig_competitors:
+                logger.error(
+                    "ALL Instagram brands returned 0 posts. "
+                    "This usually means API credentials are missing or invalid. "
+                    "Check: 1) api_credentials table  2) RAPIDAPI_KEY/APIFY_API_TOKEN env vars  "
+                    "3) Test a manual API call to verify your key works."
+                )
 
             # ── 3b. TikTok Collection (parallel) ──
             if tt_competitors:
@@ -442,7 +513,10 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                             else:
                                 run_stats["posts_collected"] += result["posts"]
                                 run_stats["posts_new"] += result["new"]
-                                logger.info(f"  @{result['handle']}: {result['posts']} TikTok posts ({result['new']} new)")
+                                if result["posts"] == 0:
+                                    logger.warning(f"  TikTok @{result['handle']}: 0 posts returned (handle not found, API error, or rate limit)")
+                                else:
+                                    logger.info(f"  @{result['handle']}: {result['posts']} TikTok posts ({result['new']} new)")
                             if _progress and total_brands > 0:
                                 pct = 5 + int((_completed_count[0] / total_brands) * 60)
                                 _progress.update(pct, f"Collected @{result['handle']} ({tt_idx+1}/{len(tt_competitors)} TT)")
@@ -450,8 +524,12 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                     logger.info(
                         "TikTok collector not available. Skipping."
                     )
+                except ValueError as e:
+                    logger.error(f"TikTok credentials missing: {e}")
+                    run_stats["errors"].append(f"TikTok credentials missing: {e}")
                 except Exception as e:
                     logger.error(f"TikTok collection failed: {e}")
+                    run_stats["errors"].append(f"TikTok collection failed: {e}")
 
             # ── 3c. Facebook Collection (parallel) ──
             fb_competitors = profile.get_competitor_handles("facebook") if hasattr(profile, 'get_competitor_handles') else []
@@ -495,8 +573,12 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                     logger.info(
                         "Facebook collector not available. Skipping."
                     )
+                except ValueError as e:
+                    logger.error(f"Facebook credentials missing: {e}")
+                    run_stats["errors"].append(f"Facebook credentials missing: {e}")
                 except Exception as e:
                     logger.error(f"Facebook collection failed: {e}")
+                    run_stats["errors"].append(f"Facebook collection failed: {e}")
 
             # ── 3d. Own-Channel Collection ──
             own_handle = profile.get_own_handle("instagram")
