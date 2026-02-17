@@ -603,6 +603,21 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Post-Analysis Follow-Up & Chat/Dashboard Refactor
+- `scout_agent.py`: After analysis starts, chat now proactively offers three advanced features:
+  - **Trend Analysis** — rising/declining sounds, hashtags, patterns
+  - **Score a Caption** — paste a draft, get a 0-100 score instantly
+  - **Optimize Content** — AI rewrite using top-performing patterns
+  - Added as Step 7 in system prompt + `follow_up_hint` in `run_analysis` return
+- `chat_handler.py`: Major refactor (299 lines changed) — improved command routing and response types
+- `dashboard.py`: Refactored route handlers and chat context logic (226 lines changed)
+- `signal.html`: Minor chat UI adjustments
+- `database_migrations.py`: Added `add_vertical_brands_unique_index()` migration
+  - Deduplicates existing `vertical_brands` rows before indexing
+  - Creates partial unique indexes: `UNIQUE(vertical_name, instagram_handle) WHERE instagram_handle IS NOT NULL`
+  - Creates partial unique indexes: `UNIQUE(vertical_name, tiktok_handle) WHERE tiktok_handle IS NOT NULL`
+  - Prevents duplicate brands from being added to the same vertical
+
 ### 2026-02-17: Brand Name Auto-Resolution & Chat UX
 - `scout_agent.py`: Integrated `BrandHandleDiscovery` — users can type "SaintWoods" or "Fear of God Essentials" instead of exact handles
 - `brand_registry.json`: Expanded with saintwoods, kith, aimé leon dore, noah entries
@@ -638,5 +653,5 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Maintained by:** Claude Code (AI Assistant)
