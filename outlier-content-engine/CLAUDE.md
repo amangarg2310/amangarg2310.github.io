@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-The Outlier Content Engine is an AI-powered social media competitive intelligence platform that identifies high-performing "outlier" posts from competitors on Instagram and TikTok. It uses statistical analysis to detect posts that significantly outperform baseline engagement, then leverages GPT-4 to analyze patterns and rewrite concepts in your brand's voice.
+The Outlier Content Engine is an AI-powered social media competitive intelligence platform that identifies high-performing "outlier" posts from competitors on Instagram, TikTok, and Facebook. It uses statistical analysis to detect posts that significantly outperform baseline engagement, then leverages GPT-4 to analyze patterns and rewrite concepts in your brand's voice.
 
 **Tech Stack:** Python (Flask), SQLite, OpenAI GPT-4, Apify/RapidAPI collectors, Jinja2 templates
 
@@ -14,7 +14,7 @@ The Outlier Content Engine is an AI-powered social media competitive intelligenc
 - A "vertical" is a collection of competitor brands to monitor (e.g., "Streetwear" with brands like Nike, Supreme, Adidas)
 - Stored in SQLite tables: `verticals` and `vertical_brands`
 - Managed via `vertical_manager.py`
-- Each vertical has a list of brands with Instagram/TikTok handles
+- Each vertical has a list of brands with Instagram/TikTok/Facebook handles
 
 ### 2. **Brand Profiles**
 - Brand-specific configuration files in `profiles/` directory (YAML format)
@@ -142,6 +142,32 @@ outlier-content-engine/
 
 ---
 
+### `scout_agent.py` - Conversational AI Agent
+**Purpose:** GPT-powered chat agent using OpenAI function calling (tools)
+
+**Architecture:**
+- GPT handles natural language understanding
+- Real actions executed by VerticalManager via tool handlers
+- System prompt guides GPT through a step-by-step flow (Steps 1-7)
+
+**GPT Tools (function calling):**
+- `create_category` — Create or reuse a competitive set
+- `delete_category` — Delete category and all brands (for "start fresh")
+- `add_brands` — Add brands with IG/TT/FB handles (paired insertion)
+- `remove_brand` — Remove a brand by any handle
+- `run_analysis` — Launch analysis pipeline in background thread
+- `list_categories` / `show_category` — View categories and brands
+- `score_content` / `optimize_content` — Caption scoring and optimization
+- `show_trends` — Display trend analysis
+
+**Key Design Decisions:**
+- Tool return values include `note` fields that guide GPT's next response
+- System prompt has conditional logic (e.g., 0-brand vs >0-brand category handling)
+- Anti-redundancy rules prevent GPT from re-calling tools unnecessarily
+- All DB connections use WAL mode for concurrent access
+
+---
+
 ### `outlier_detector.py` - Statistical Analysis
 **Purpose:** Identify posts that significantly outperform baseline
 
@@ -218,30 +244,40 @@ outlier-content-engine/
 ```sql
 -- Verticals (competitive sets)
 CREATE TABLE verticals (
-    name TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
     description TEXT,
-    created_at TEXT,
-    updated_at TEXT
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 -- Brands in each vertical
 CREATE TABLE vertical_brands (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    vertical_name TEXT,
+    vertical_name TEXT NOT NULL,
     brand_name TEXT,
     instagram_handle TEXT,
     tiktok_handle TEXT,
-    notes TEXT,
-    FOREIGN KEY (vertical_name) REFERENCES verticals(name)
+    facebook_handle TEXT,
+    added_at TEXT NOT NULL,
+    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE,
+    UNIQUE(vertical_name, instagram_handle)
 );
 ```
 
 **Key Methods:**
-- `create_vertical(name, description)` - Create new competitive set
-- `add_brand(vertical_name, instagram_handle, tiktok_handle)` - Add brand
-- `remove_brand(vertical_name, handle)` - Remove brand
+- `create_vertical(name, description)` - Create new competitive set (case-insensitive duplicate check)
+- `delete_vertical(name)` - Delete competitive set and all brands (CASCADE)
+- `add_brand(vertical_name, instagram_handle, tiktok_handle, facebook_handle)` - Add brand with paired handles
+- `update_brand_tiktok(vertical_name, tiktok_handle)` - Add TikTok handle to existing brand
+- `update_brand_facebook(vertical_name, facebook_handle)` - Add Facebook handle to existing brand
+- `remove_brand(vertical_name, handle)` - Remove brand by any handle (IG/TT/FB)
 - `list_verticals()` - Get all competitive sets
 - `get_vertical(name)` - Load specific vertical with brands
+
+**Database Connection:**
+- Uses WAL mode (`PRAGMA journal_mode=WAL`) for concurrent read/write access
+- `busy_timeout=5000` prevents "database is locked" errors during analysis
 
 ---
 
@@ -440,21 +476,24 @@ CREATE TABLE outliers (
 
 -- Competitive sets (verticals)
 CREATE TABLE verticals (
-    name TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
     description TEXT,
-    created_at TEXT,
-    updated_at TEXT
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 -- Brands in verticals
 CREATE TABLE vertical_brands (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    vertical_name TEXT,
+    vertical_name TEXT NOT NULL,
     brand_name TEXT,
     instagram_handle TEXT,
     tiktok_handle TEXT,
-    notes TEXT,
-    FOREIGN KEY (vertical_name) REFERENCES verticals(name)
+    facebook_handle TEXT,
+    added_at TEXT NOT NULL,
+    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE,
+    UNIQUE(vertical_name, instagram_handle)
 );
 
 -- Analysis reports
@@ -925,8 +964,45 @@ For questions or issues, please open a GitHub issue or contact the project maint
 
 ---
 
-**Last Updated:** 2026-02-15
+### 2026-02-17: GPT Orchestration Fixes & Platform Parity
 
-**Version:** 1.1.0
+**Critical Bug Fixes:**
+
+1. **GPT Contradictory Response Bug** (`scout_agent.py`)
+   - **Root cause:** When category existed with 0 brands, `create_category` told GPT "has brands from a previous session" — GPT said brands were "already tracked" while also saying "0 brands"
+   - **Fix 1:** `_handle_create_category` returns different `note` for 0-brand vs >0-brand cases
+   - **Fix 2:** System prompt STEP 1 updated — empty categories skip "start fresh?" and proceed to add brands
+   - **Fix 3:** Added "CRITICAL RULE" preventing GPT from redundantly re-calling `create_category`
+   - **Fix 4:** `add_brands` success response includes explicit guidance note for GPT
+
+2. **add_brand Crash on Fresh DB** (`vertical_manager.py`)
+   - `add_brand()` queried `competitor_posts` for archived post unarchiving BEFORE inserting into `vertical_brands`
+   - On fresh DBs (no `competitor_posts` table yet), this threw `OperationalError` and silently skipped ALL brand insertions
+   - Wrapped archived-posts check in try/except so brand insertion always proceeds
+
+3. **Facebook Handle Support** (`vertical_manager.py`, `scout_agent.py`)
+   - Added `facebook_handle TEXT` column to `vertical_brands`
+   - Paired IG/TT/FB handle insertion (same-index handles stored on same DB row)
+   - `update_brand_facebook()` method for FB-only handle updates
+   - `remove_brand()` matches against any handle (IG, TT, or FB)
+
+4. **WAL Mode for Concurrent Access** (`vertical_manager.py`, `scout_agent.py`)
+   - Added `PRAGMA journal_mode=WAL` + `PRAGMA busy_timeout=5000` to all DB connections
+   - Fixes "database is locked" errors when analysis subprocess runs alongside dashboard
+
+5. **Case-Insensitive Category Duplicates** (`vertical_manager.py`)
+   - `create_vertical` uses `COLLATE NOCASE` to prevent "Streetwear" and "streetwear" as separate entries
+   - `delete_category` tool added for "start fresh" flow
+
+**Files Modified:**
+- `scout_agent.py` — GPT orchestration fixes (system prompt, tool responses, anti-redundancy rule)
+- `vertical_manager.py` — WAL mode, facebook_handle, paired handles, remove_brand fixes, add_brand crash fix
+- `database_migrations.py` — facebook_handle column migration
+
+---
+
+**Last Updated:** 2026-02-17
+
+**Version:** 1.2.0
 
 **Maintained by:** Claude Code (AI Assistant)

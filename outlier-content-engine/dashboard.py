@@ -57,7 +57,7 @@ def timeago_filter(timestamp_str):
             # Try parsing with timezone info first
             try:
                 post_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            except:
+            except (ValueError, TypeError):
                 # Fallback to assuming UTC if no timezone
                 post_time = datetime.fromisoformat(timestamp_str).replace(tzinfo=timezone.utc)
         else:
@@ -150,8 +150,8 @@ def needs_setup():
             "SELECT COUNT(*) as cnt FROM api_credentials WHERE service IN ('apify', 'openai') AND api_key IS NOT NULL AND api_key != ''"
         ).fetchone()
         return row['cnt'] < 2  # Need both keys
-    except Exception:
-        return True  # Database not ready
+    except sqlite3.OperationalError:
+        return True  # Table missing or DB not ready
     finally:
         if conn:
             conn.close()
@@ -207,8 +207,8 @@ def get_dashboard_stats():
     try:
         profile = get_profile()
         stats["competitors"] = len(profile.competitors)
-    except Exception:
-        pass
+    except (FileNotFoundError, AttributeError):
+        pass  # Profile not configured yet
 
     if config.DB_PATH.exists():
         try:
@@ -225,8 +225,8 @@ def get_dashboard_stats():
             ).fetchone()
             stats["total_outliers"] = row["cnt"] if row else 0
             conn.close()
-        except Exception:
-            pass
+        except sqlite3.OperationalError:
+            pass  # Tables may not exist yet
 
     # Count report files
     report_files = list(config.DATA_DIR.glob(f"report_{profile_name}_*.html"))
@@ -269,8 +269,8 @@ def get_recent_runs(limit=10):
                 "duration_seconds": round(row["duration_seconds"] or 0, 1),
             })
         return runs
-    except Exception:
-        return []
+    except sqlite3.OperationalError:
+        return []  # Table doesn't exist yet
 
 
 def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_name=None, timeframe=None, tag=None):
@@ -599,8 +599,8 @@ def get_voice_analysis():
 
         conn.close()
         return voice, [dict(row) for row in own_posts]
-    except Exception:
-        return None, []
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
+        return None, []  # Tables not ready or DB error
 
 
 def get_report_files():
@@ -1084,7 +1084,7 @@ def api_budget():
             "percent_used": round((spent / limit) * 100, 1) if limit > 0 else 0,
             "runs_this_month": runs,
         })
-    except Exception:
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
         return jsonify({"spent": 0, "limit": config.MONTHLY_COST_LIMIT_USD, "remaining": config.MONTHLY_COST_LIMIT_USD, "runs_this_month": 0})
 
 
@@ -1242,7 +1242,7 @@ def _is_allowed_image_url(url: str) -> bool:
             if hostname == allowed or hostname.endswith("." + allowed):
                 return True
         return False
-    except Exception:
+    except (ValueError, AttributeError):
         return False
 
 
@@ -1967,13 +1967,13 @@ def cancel_analysis():
             # Clean up files
             try:
                 pid_file.unlink()
-            except:
+            except OSError:
                 pass
 
             try:
                 if progress_file.exists():
                     progress_file.unlink()
-            except:
+            except OSError:
                 pass
 
             return jsonify({"success": True, "message": "Analysis cancelled"})
@@ -1983,7 +1983,7 @@ def cancel_analysis():
             logger.info("Process already ended, cleaning up files")
             try:
                 pid_file.unlink()
-            except:
+            except OSError:
                 pass
             return jsonify({"success": True, "message": "Analysis already stopped"})
 
@@ -2097,13 +2097,13 @@ def analysis_status():
                         conn2.close()
                         cnt = row2[0] if row2 else 0
                         response["message"] = f"Analysis complete! Found {cnt} outlier posts." if cnt else "Analysis complete."
-                    except Exception:
+                    except (sqlite3.OperationalError, sqlite3.DatabaseError):
                         response["message"] = "Analysis complete!"
 
                     # Clean up stale progress file
                     try:
                         progress_file.unlink()
-                    except Exception:
+                    except OSError:
                         pass
 
             elif status == "completed":
@@ -2119,7 +2119,7 @@ def analysis_status():
                 # Clean up completed progress file
                 try:
                     progress_file.unlink()
-                except Exception:
+                except OSError:
                     pass
 
             elif status == "error":
@@ -2130,7 +2130,7 @@ def analysis_status():
                 # Clean up error progress file
                 try:
                     progress_file.unlink()
-                except Exception:
+                except OSError:
                     pass
 
         except Exception as e:
@@ -2153,7 +2153,7 @@ if __name__ == "__main__":
     try:
         from collectors.instagram import migrate_database
         migrate_database()
-    except Exception as e:
+    except (ImportError, sqlite3.Error) as e:
         logging.warning(f"Migration check (posts): {e}")
 
     try:
@@ -2167,7 +2167,7 @@ if __name__ == "__main__":
         add_trend_radar_tables()
         add_vertical_brands_unique_index()
         consolidate_vertical_name_casing()
-    except Exception as e:
+    except (ImportError, sqlite3.Error) as e:
         logging.warning(f"Migration check (verticals): {e}")
 
     print(f"\n  Outlier Content Engine Dashboard")

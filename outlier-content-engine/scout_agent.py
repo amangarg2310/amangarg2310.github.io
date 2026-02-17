@@ -405,8 +405,9 @@ class ScoutAgent:
         if api_key:
             try:
                 self.client = OpenAI(api_key=api_key)
-            except Exception:
-                pass  # Will return None so dashboard falls back
+            except Exception as e:
+                logger.error(f"OpenAI client initialization failed: {e}")
+                self.client = None
         self.model = "gpt-4o-mini"
         self.vm = VerticalManager()
 
