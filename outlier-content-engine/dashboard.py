@@ -31,6 +31,7 @@ from flask import (
     flash, send_file, Response, session,
 )
 from markupsafe import Markup, escape as _escape_html
+from werkzeug.utils import secure_filename
 
 import config
 from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user, is_email_allowed
@@ -1284,9 +1285,13 @@ def run_engine():
 # ── Routes: Reports ──
 
 @app.route("/reports/raw/<filename>")
+@login_required
 def raw_report(filename):
     """Serve raw HTML report for iframe embed."""
+    filename = secure_filename(filename)
     filepath = config.DATA_DIR / filename
+    if not filepath.resolve().is_relative_to(config.DATA_DIR.resolve()):
+        return "Access denied", 403
     if filepath.exists() and filepath.suffix == ".html":
         return Response(filepath.read_text(encoding="utf-8"),
                         mimetype="text/html")
@@ -1294,9 +1299,13 @@ def raw_report(filename):
 
 
 @app.route("/reports/download/<filename>")
+@login_required
 def download_report(filename):
     """Download a report file."""
+    filename = secure_filename(filename)
     filepath = config.DATA_DIR / filename
+    if not filepath.resolve().is_relative_to(config.DATA_DIR.resolve()):
+        return "Access denied", 403
     if filepath.exists() and filepath.suffix == ".html":
         return send_file(filepath, as_attachment=True)
     flash("Report file not found.", "danger")
