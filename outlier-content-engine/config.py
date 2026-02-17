@@ -7,10 +7,13 @@ This module only holds environment-driven settings and defaults.
 API keys can now be stored in database (preferred) or .env (fallback).
 """
 
+import logging
 import os
 import sqlite3
 from pathlib import Path
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -51,9 +54,12 @@ def get_api_key(service: str) -> str:
             conn.close()
 
             if row:
+                logger.debug(f"Found API key for '{service}' in database")
                 return row[0]
-        except Exception:
-            pass  # Database not ready yet, fall back to env
+            else:
+                logger.debug(f"No API key for '{service}' in api_credentials table")
+        except Exception as e:
+            logger.debug(f"Database lookup failed for '{service}': {e}")
 
     # Fall back to environment variables
     env_map = {
@@ -65,7 +71,13 @@ def get_api_key(service: str) -> str:
 
     env_var = env_map.get(service)
     if env_var:
-        return os.getenv(env_var, '')
+        value = os.getenv(env_var, '')
+        if not value:
+            logger.warning(
+                f"API key for '{service}' not found in database or "
+                f"environment variable {env_var}. Collection will fail."
+            )
+        return value
 
     return ''
 
