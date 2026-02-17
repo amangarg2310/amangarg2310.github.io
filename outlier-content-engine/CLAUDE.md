@@ -603,7 +603,26 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
-### 2026-02-17: Facebook Handle Support & Brand Row Pairing Fix
+### 2026-02-17: WAL Mode, IG+TT Handle Pairing & remove_brand Column Fix (12fd4e3)
+- `vertical_manager.py`: All DB connections now use `PRAGMA journal_mode=WAL` + `busy_timeout=5000`
+  - Prevents "database is locked" errors when analysis subprocesses run concurrently with brand operations
+  - Added `update_brand_tiktok()` method for adding TikTok handles to existing brands without creating duplicate rows
+  - Fixed `remove_brand()` to use `COLLATE NOCASE` for case-insensitive handle matching on delete
+- `scout_agent.py`: Fixed paired IG+TT handle insertion — when both lists are provided at matching indices, both handles are stored on the same brand row (separate TT-only insert failed due to `instagram_handle NOT NULL` constraint)
+- Verified: 85 tests across 7 suites (CRUD, brands, cross-category, analysis, filters, edge cases, multi-category) — all pass
+
+### 2026-02-17: Delete Category Tool & Case-Variant Duplicate Prevention (48c0c18)
+- `scout_agent.py`: Added `delete_category` tool so GPT can properly handle "start fresh" requests
+  - Previously GPT had no way to delete a category, leading to workarounds like creating "Streetwear2"
+  - Added tool definition, handler, dispatch, and system prompt guidance ("NEVER create variant names, always delete + recreate")
+  - Fixed `_handle_add_brands` using blanket `except Exception` that silently swallowed real errors — now uses `.get()` for safe key access and logs actual exceptions
+- `vertical_manager.py`: `create_vertical()` now checks `COLLATE NOCASE` before INSERT to prevent `"streetwear"` and `"Streetwear"` coexisting as separate rows
+- `database_migrations.py`: Added `consolidate_vertical_name_casing()` migration
+  - Runs on startup to merge existing case-variant duplicate verticals
+  - Keeps the most recently updated variant; migrates all brands + posts to it; deletes others
+  - Re-runs `add_vertical_brands_unique_index()` after merging to clean up any new duplicates
+
+### 2026-02-17: Facebook Handle Support & Brand Row Pairing Fix (e27a6d6)
 - `vertical_manager.py`: Facebook handles now paired with Instagram handles at the same index (same brand row), consistent with the IG+TT pairing approach
   - `IG+FB` and `IG+TT+FB` combinations now correctly store on a single brand row
   - Added `update_brand_facebook()` method for FB-only handle updates on existing rows (avoids NOT NULL constraint on `instagram_handle`)
@@ -675,5 +694,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Maintained by:** Claude Code (AI Assistant)
