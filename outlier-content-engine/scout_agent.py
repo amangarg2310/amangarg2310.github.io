@@ -1124,10 +1124,12 @@ IMPORTANT:
                 conn.execute("PRAGMA journal_mode=WAL")
                 conn.execute("PRAGMA busy_timeout=5000")
 
-                # Check per-category cooldown via verticals.updated_at
+                # Check per-category cooldown via config table (not verticals.updated_at,
+                # which gets updated by add_brands/remove_brands too)
+                cooldown_key = f"last_analysis_{actual_name}"
                 row = conn.execute(
-                    "SELECT updated_at FROM verticals WHERE name = ?",
-                    (actual_name,)
+                    "SELECT value FROM config WHERE key = ?",
+                    (cooldown_key,)
                 ).fetchone()
                 if row and row[0]:
                     try:
@@ -1200,8 +1202,22 @@ IMPORTANT:
                     timeout=900,  # Increased from 300s to 900s (15 minutes)
                 )
                 if result.returncode == 0:
-                    # Only update cooldown timestamp on successful completion
-                    vm.update_vertical_timestamp(actual_name)
+                    # Record analysis completion time for cooldown tracking
+                    # (uses config table, NOT verticals.updated_at which brand edits touch)
+                    try:
+                        _conn = sqlite3.connect(str(config.DB_PATH))
+                        _conn.execute("PRAGMA journal_mode=WAL")
+                        _conn.execute("PRAGMA busy_timeout=5000")
+                        cooldown_key = f"last_analysis_{actual_name}"
+                        now_iso = datetime.now(timezone.utc).isoformat()
+                        _conn.execute(
+                            "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+                            (cooldown_key, now_iso)
+                        )
+                        _conn.commit()
+                        _conn.close()
+                    except Exception as ts_err:
+                        logger.warning(f"Failed to record analysis timestamp: {ts_err}")
                 else:
                     logger.error(f"Analysis exited with code {result.returncode}: {result.stderr[:500]}")
             except Exception as exc:
