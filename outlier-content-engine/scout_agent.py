@@ -779,10 +779,10 @@ IMPORTANT:
             # Try to resolve brand name → official handle
             original_input = handle
             suggestion = discovery.discover_handle(handle, platform="instagram")
-            if suggestion:
-                resolved_handle = suggestion['handle']
+            if suggestion and isinstance(suggestion, dict):
+                resolved_handle = suggestion.get('handle')
                 official_name = suggestion.get('official_name', original_input)
-                if resolved_handle.lower() != handle.lower():
+                if resolved_handle and resolved_handle.lower() != handle.lower():
                     resolved.append({
                         "input": original_input,
                         "handle": resolved_handle,
@@ -818,8 +818,8 @@ IMPORTANT:
             # Try to resolve brand name → official TikTok handle
             original_input = handle
             tt_suggestion = discovery.discover_handle(handle, platform="tiktok")
-            if tt_suggestion:
-                resolved_handle = tt_suggestion['handle']
+            if tt_suggestion and isinstance(tt_suggestion, dict):
+                resolved_handle = tt_suggestion.get('handle')
                 if resolved_handle and resolved_handle.lower() != handle.lower():
                     resolved.append({
                         "input": original_input,
@@ -1393,12 +1393,16 @@ IMPORTANT:
             optimizer = ContentOptimizer(active)
             optimized = optimizer.optimize(concept, score_data)
 
+            # Validate required keys before proceeding
+            improved_caption = optimized.get("improved_caption", concept.get("caption", ""))
+            improved_hook = optimized.get("improved_hook", concept.get("hook_line", ""))
+
             # Auto-re-score the improved version
             improved_concept = {
-                "caption": optimized["improved_caption"],
-                "hook_line": optimized["improved_hook"],
-                "format": optimized.get("format_recommendation", concept["format"]),
-                "platform": concept["platform"],
+                "caption": improved_caption,
+                "hook_line": improved_hook,
+                "format": optimized.get("format_recommendation", concept.get("format", "")),
+                "platform": concept.get("platform", ""),
             }
             scorer = ContentScorer(active)
             new_score = scorer.score_concept(improved_concept)
@@ -1406,15 +1410,15 @@ IMPORTANT:
                 improved_concept, new_score, parent_score_id=parent_score_id
             )
 
-            # Update context with new score
+            # Update context with new score (only after all operations succeed)
             context["last_score_id"] = new_score_id
             context["last_scored_concept"] = improved_concept
             context["last_score_data"] = new_score
 
             return json.dumps({
                 "ok": True,
-                "improved_caption": optimized["improved_caption"],
-                "improved_hook": optimized["improved_hook"],
+                "improved_caption": improved_caption,
+                "improved_hook": improved_hook,
                 "improvements": optimized.get("improvements", []),
                 "format_recommendation": optimized.get("format_recommendation", ""),
                 "new_overall_score": new_score.get("overall_score", 0),
@@ -1530,15 +1534,15 @@ IMPORTANT:
                 choice = response.choices[0]
 
                 # If GPT wants to call tools, execute them and loop
-                if choice.finish_reason == "tool_calls" or choice.message.tool_calls:
+                if choice.message.tool_calls:
                     # Append the assistant message (contains tool_calls)
                     messages.append(choice.message)
 
                     for tool_call in choice.message.tool_calls:
                         fn_name = tool_call.function.name
                         try:
-                            fn_args = json.loads(tool_call.function.arguments)
-                        except json.JSONDecodeError:
+                            fn_args = json.loads(tool_call.function.arguments or "{}")
+                        except (json.JSONDecodeError, TypeError):
                             fn_args = {}
 
                         logger.info(f"Tool call: {fn_name}({fn_args})")

@@ -231,6 +231,9 @@ class ApifyTikTokCollector(BaseCollector):
                 return []
 
             run_data = response.json()
+            if not run_data or "data" not in run_data or not run_data["data"]:
+                logger.error(f"  TikTok @{handle}: unexpected Apify response: {str(run_data)[:200]}")
+                return []
             run_id = run_data["data"]["id"]
             logger.info(f"  TikTok @{handle}: Apify run started (ID: {run_id})")
 
@@ -253,8 +256,12 @@ class ApifyTikTokCollector(BaseCollector):
                     logger.error(f"Failed to check run status: {status_response.status_code}")
                     return []
 
-                run_info = status_response.json()["data"]
-                status = run_info["status"]
+                status_data = status_response.json()
+                run_info = status_data.get("data") if status_data else None
+                if not run_info:
+                    logger.error(f"  TikTok @{handle}: unexpected status response")
+                    return []
+                status = run_info.get("status", "UNKNOWN")
 
                 if status == "SUCCEEDED":
                     logger.info(f"  TikTok @{handle}: Apify run completed")
@@ -268,7 +275,10 @@ class ApifyTikTokCollector(BaseCollector):
                 return []
 
             # Fetch results from dataset
-            dataset_id = run_info["defaultDatasetId"]
+            dataset_id = run_info.get("defaultDatasetId")
+            if not dataset_id:
+                logger.error(f"  TikTok @{handle}: no dataset ID in run response")
+                return []
             results_response = requests.get(
                 f"{self.base_url}/datasets/{dataset_id}/items",
                 params={"token": self.api_token},
