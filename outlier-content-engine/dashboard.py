@@ -36,7 +36,47 @@ import config
 from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user, is_email_allowed
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(32).hex()
+
+
+def _get_or_create_secret_key() -> str:
+    """Get persistent secret key from DB config table, env var, or generate one.
+
+    Without a stable key, every server restart invalidates all sessions —
+    logging users out and losing the active vertical selection.
+    """
+    # 1. Explicit env var takes priority
+    env_key = os.getenv("FLASK_SECRET_KEY")
+    if env_key:
+        return env_key
+
+    # 2. Try reading from DB
+    db_path = config.DB_PATH
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(str(db_path))
+            row = conn.execute(
+                "SELECT value FROM config WHERE key = 'flask_secret_key'"
+            ).fetchone()
+            if row and row[0]:
+                conn.close()
+                return row[0]
+            # 3. Generate and persist a new key
+            new_key = os.urandom(32).hex()
+            conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES ('flask_secret_key', ?)",
+                (new_key,),
+            )
+            conn.commit()
+            conn.close()
+            return new_key
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Secret key DB lookup failed: {e}")
+
+    # 4. Fallback: ephemeral key (sessions won't survive restart)
+    return os.urandom(32).hex()
+
+
+app.secret_key = _get_or_create_secret_key()
 
 logger = logging.getLogger(__name__)
 
@@ -113,11 +153,25 @@ def get_available_verticals():
     return vm.list_verticals()
 
 
+def _persist_active_vertical(name: str):
+    """Save the active vertical to the DB config table so it survives restarts."""
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES ('last_active_vertical', ?)",
+            (name,),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # Best-effort; session/memory are primary
+
+
 def get_active_vertical_name():
     """Get the active vertical name from session or first available.
 
     Uses Flask session for persistence across server restarts.
-    Falls back to in-memory app state, then first available vertical.
+    Falls back to in-memory app state, then DB config, then first available vertical.
     """
     # In-memory state (set by chat handler within this process)
     if hasattr(app, '_active_vertical') and app._active_vertical:
@@ -129,6 +183,24 @@ def get_active_vertical_name():
     if session.get('active_vertical'):
         app._active_vertical = session['active_vertical']
         return session['active_vertical']
+
+    # DB config state (survives both restart + session expiry)
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = 'last_active_vertical'"
+        ).fetchone()
+        conn.close()
+        if row and row[0]:
+            # Verify the vertical still exists
+            verticals = get_available_verticals()
+            if row[0] in verticals:
+                app._active_vertical = row[0]
+                session['active_vertical'] = row[0]
+                session.modified = True
+                return row[0]
+    except Exception:
+        pass
 
     # Fall back to first available vertical
     verticals = get_available_verticals()
@@ -708,6 +780,7 @@ def signal_page():
         if requested_vertical in verticals:
             app._active_vertical = requested_vertical
             session['active_vertical'] = requested_vertical
+            _persist_active_vertical(requested_vertical)
 
     # Clear active vertical when returning to empty state
     if empty_state and hasattr(app, '_active_vertical'):
@@ -777,17 +850,20 @@ def signal_page():
     # Used to disable the "3 Months" filter pill when data only covers 30 days.
     collection_timeframe = None
     if vertical_name and not empty_state:
+        conn = None
         try:
             conn = get_db()
             row = conn.execute(
                 "SELECT value FROM config WHERE key = ?",
                 (f"last_collection_timeframe_{vertical_name}",)
             ).fetchone()
-            conn.close()
             if row and row["value"]:
                 collection_timeframe = row["value"]
         except Exception:
             pass
+        finally:
+            if conn:
+                conn.close()
 
     return render_template("signal.html",
                            outliers=outliers,
@@ -1160,6 +1236,7 @@ def switch_vertical():
     if vertical_name and vertical_name in verticals:
         app._active_vertical = vertical_name
         session['active_vertical'] = vertical_name
+        _persist_active_vertical(vertical_name)
         flash(f"Switched to vertical: {vertical_name}", "success")
     else:
         flash(f"Vertical '{vertical_name}' not found.", "danger")
@@ -1761,6 +1838,7 @@ def chat_message():
                 if new_vertical and new_vertical != current_vertical:
                     app._active_vertical = new_vertical
                     session['active_vertical'] = new_vertical
+                    _persist_active_vertical(new_vertical)
 
                 # Persist the full context (including chat_history) in session.
                 # Transient filter keys have already been popped above so they

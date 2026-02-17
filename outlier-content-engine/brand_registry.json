@@ -1,6 +1,6 @@
 {
   "_comment": "Brand name to official handle mappings for discovery feature",
-  "_version": "1.0",
+  "_version": "1.1",
   "brands": {
     "nike": {
       "official_name": "Nike",
@@ -12,6 +12,11 @@
       "tiktok": {
         "handle": "nike",
         "follower_count": 5600000,
+        "verified": true
+      },
+      "facebook": {
+        "handle": "nike",
+        "follower_count": 38000000,
         "verified": true
       },
       "alternatives": ["nikesportswear", "nikerunning", "nikesb"]
@@ -28,6 +33,11 @@
         "follower_count": 4200000,
         "verified": true
       },
+      "facebook": {
+        "handle": "adidas",
+        "follower_count": 40000000,
+        "verified": true
+      },
       "alternatives": ["adidasoriginals", "adidasbasketball"]
     },
     "supreme": {
@@ -42,6 +52,11 @@
         "follower_count": 150000,
         "verified": false
       },
+      "facebook": {
+        "handle": "supremenewyork",
+        "follower_count": 5500000,
+        "verified": true
+      },
       "alternatives": ["supreme"],
       "notes": "Common mistake: @supreme is not the official account"
     },
@@ -55,6 +70,11 @@
       "tiktok": {
         "handle": "stussy",
         "follower_count": 285000,
+        "verified": true
+      },
+      "facebook": {
+        "handle": "stussy",
+        "follower_count": 2800000,
         "verified": true
       },
       "alternatives": []
@@ -72,6 +92,12 @@
         "verified": false,
         "notes": "No official TikTok presence"
       },
+      "facebook": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official Facebook page"
+      },
       "alternatives": ["fearofgodessentials"]
     },
     "essentials": {
@@ -87,6 +113,12 @@
         "verified": false,
         "notes": "No official TikTok presence"
       },
+      "facebook": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official Facebook page"
+      },
       "alternatives": ["fearofgodessentials"]
     },
     "off-white": {
@@ -99,6 +131,11 @@
       "tiktok": {
         "handle": "off____white",
         "follower_count": 890000,
+        "verified": true
+      },
+      "facebook": {
+        "handle": "offwhiteofficial",
+        "follower_count": 1800000,
         "verified": true
       },
       "alternatives": ["offwhite", "off_white"]
@@ -115,6 +152,11 @@
         "follower_count": 420000,
         "verified": true
       },
+      "facebook": {
+        "handle": "baboriginal",
+        "follower_count": 3200000,
+        "verified": true
+      },
       "alternatives": ["bapeofficial", "abathingape"]
     },
     "palace": {
@@ -129,6 +171,11 @@
         "follower_count": 0,
         "verified": false
       },
+      "facebook": {
+        "handle": "palaceskateboards",
+        "follower_count": 580000,
+        "verified": true
+      },
       "alternatives": ["palace"]
     },
     "carhartt": {
@@ -141,6 +188,11 @@
       "tiktok": {
         "handle": "carhartt_wip",
         "follower_count": 180000,
+        "verified": true
+      },
+      "facebook": {
+        "handle": "carharttwip",
+        "follower_count": 1200000,
         "verified": true
       },
       "alternatives": ["carhartt", "carharttwip"]
@@ -157,6 +209,12 @@
         "follower_count": 5000,
         "verified": false
       },
+      "facebook": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official Facebook page"
+      },
       "alternatives": ["saint_woods"]
     },
     "kith": {
@@ -169,6 +227,11 @@
       "tiktok": {
         "handle": "kith",
         "follower_count": 450000,
+        "verified": true
+      },
+      "facebook": {
+        "handle": "kithnyc",
+        "follower_count": 280000,
         "verified": true
       },
       "alternatives": ["kithnyc"]
@@ -185,6 +248,12 @@
         "follower_count": 50000,
         "verified": false
       },
+      "facebook": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official Facebook page"
+      },
       "alternatives": ["aime_leon_dore", "aimeeleondore"]
     },
     "noah": {
@@ -198,6 +267,12 @@
         "handle": null,
         "follower_count": 0,
         "verified": false
+      },
+      "facebook": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false,
+        "notes": "No official Facebook page"
       },
       "alternatives": ["noah_clothing", "noahnyc"]
     }

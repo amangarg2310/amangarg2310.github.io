@@ -857,6 +857,12 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
 }
 
+.signal-pill.signal-pill-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* Brand pill with remove mode on long-press */
 .signal-pill.brand-pill {
     position: relative;

@@ -1262,6 +1262,7 @@ IMPORTANT:
                 if result.returncode == 0:
                     # Record analysis completion time for cooldown tracking
                     # (uses config table, NOT verticals.updated_at which brand edits touch)
+                    _conn = None
                     try:
                         _conn = sqlite3.connect(str(config.DB_PATH))
                         _conn.execute("PRAGMA journal_mode=WAL")
@@ -1273,9 +1274,11 @@ IMPORTANT:
                             (cooldown_key, now_iso)
                         )
                         _conn.commit()
-                        _conn.close()
                     except Exception as ts_err:
                         logger.warning(f"Failed to record analysis timestamp: {ts_err}")
+                    finally:
+                        if _conn:
+                            _conn.close()
                 else:
                     logger.error(f"Analysis exited with code {result.returncode}: {result.stderr[:500]}")
             except Exception as exc:
@@ -1293,6 +1296,7 @@ IMPORTANT:
 
         # Persist the collection timeframe so the dashboard can disable the
         # "3 Months" filter pill when data only covers the last 30 days.
+        _tconn = None
         try:
             _tconn = sqlite3.connect(str(config.DB_PATH))
             _tconn.execute("PRAGMA journal_mode=WAL")
@@ -1302,9 +1306,11 @@ IMPORTANT:
                 (f"last_collection_timeframe_{actual_name}", user_timeframe)
             )
             _tconn.commit()
-            _tconn.close()
         except Exception as tf_err:
             logger.warning(f"Failed to store collection timeframe: {tf_err}")
+        finally:
+            if _tconn:
+                _tconn.close()
 
         if user_platforms and user_platforms != "all":
             context["filter_platform"] = user_platforms

@@ -156,12 +156,13 @@
             </div>
             {% else %}
             {% if chat_history %}
-            <!-- Re-render prior conversation so chat doesn't appear to reset on page reload -->
+            <!-- Re-render prior conversation so chat doesn't appear to reset on page reload.
+                 Bubbles use data-raw-text + JS formatChatText() for markdown rendering. -->
             {% for msg in chat_history %}
             <div class="signal-message {% if msg.role == 'user' %}signal-message-user{% endif %}">
                 <div class="signal-avatar">{% if msg.role == 'user' %}{{ session.get('user', {}).get('name', 'You')[0]|upper if session.get('user') else 'Y' }}{% else %}S{% endif %}</div>
                 <div class="signal-message-content">
-                    <div class="signal-message-bubble">{{ msg.content }}</div>
+                    <div class="signal-message-bubble chat-history-raw" data-raw-text="{{ msg.content|e }}">{{ msg.content }}</div>
                 </div>
             </div>
             {% endfor %}
@@ -570,7 +571,7 @@
                                 onclick="applyFilter('timeframe', '30d')">30 Days</button>
                         <button class="signal-pill {% if selected_timeframe == '3mo' %}active{% endif %}{% if collection_timeframe == '30d' %} signal-pill-disabled{% endif %}"
                                 onclick="{% if collection_timeframe != '30d' %}applyFilter('timeframe', '3mo'){% endif %}"
-                                {% if collection_timeframe == '30d' %}title="Data collected for last 30 days only — re-run analysis with '3 months' to see this range" style="opacity:0.4;cursor:not-allowed;"{% endif %}>3 Months</button>
+                                {% if collection_timeframe == '30d' %}title="Data collected for last 30 days only — re-run analysis with '3 months' to see this range"{% endif %}>3 Months</button>
                     </div>
                 </div>
 
@@ -2539,6 +2540,16 @@ window.addEventListener('DOMContentLoaded', function() {
     if (urlParams.get('analysis_started') === 'true') {
         showAnalysisLoading();
     }
+
+    // Process server-rendered chat history bubbles through formatChatText()
+    // so markdown (**bold**, bullets, etc.) renders correctly.
+    document.querySelectorAll('.chat-history-raw').forEach(function(el) {
+        var raw = el.getAttribute('data-raw-text');
+        if (raw && typeof formatChatText === 'function') {
+            el.innerHTML = formatChatText(raw);
+        }
+        el.classList.remove('chat-history-raw');
+    });
 
     // Scroll chat to bottom on load so the most recent messages are visible
     // (important when chat history is re-rendered from session on page reload)
