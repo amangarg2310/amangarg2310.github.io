@@ -1320,6 +1320,17 @@ def setup_page():
     allowed_emails_row = conn.execute(
         "SELECT value FROM config WHERE key = 'allowed_emails'"
     ).fetchone()
+
+    # Get brand profile fields from config table
+    brand_profile_keys = [
+        'brand_name', 'brand_category', 'brand_audience',
+        'brand_description', 'brand_tone', 'brand_values', 'brand_avoids'
+    ]
+    brand_profile = {}
+    for bk in brand_profile_keys:
+        row = conn.execute("SELECT value FROM config WHERE key = ?", (bk,)).fetchone()
+        brand_profile[bk] = row['value'] if row else ''
+
     conn.close()
 
     team_emails = ', '.join([e['email'] for e in emails]) if emails else ''
@@ -1337,7 +1348,8 @@ def setup_page():
                            team_emails=team_emails,
                            own_brand_instagram=own_brand_instagram,
                            own_brand_tiktok=own_brand_tiktok,
-                           vertical_name=get_active_vertical_name())
+                           vertical_name=get_active_vertical_name(),
+                           **brand_profile)
 
 
 @app.route("/setup/save", methods=["POST"])
@@ -1415,6 +1427,22 @@ def save_setup():
             else:
                 # User cleared the field — remove the config entry
                 conn.execute("DELETE FROM config WHERE key = ?", (cfg_key,))
+
+        # Save brand profile fields in config table
+        brand_profile_keys = [
+            'brand_name', 'brand_category', 'brand_audience',
+            'brand_description', 'brand_tone', 'brand_values', 'brand_avoids'
+        ]
+        for bk in brand_profile_keys:
+            bv = request.form.get(bk, '').strip()
+            if bv:
+                conn.execute("""
+                    INSERT INTO config (key, value)
+                    VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = ?
+                """, (bk, bv, bv))
+            else:
+                conn.execute("DELETE FROM config WHERE key = ?", (bk,))
 
         # Save allowed emails (authorization allowlist)
         if allowed_emails:
