@@ -152,22 +152,13 @@ def _check_credentials(logger):
         services = [r[0] for r in rows]
         logger.info(f"Credentials in database: {', '.join(services)}")
 
-    # Check environment variable fallbacks
-    source = config.COLLECTION_SOURCE
-    if source == "apify":
-        key = config.get_api_key('apify')
-        if not key:
-            logger.error(
-                "CREDENTIAL DIAGNOSTIC: APIFY_API_TOKEN is not set in "
-                "database or environment. Collection WILL fail with 0 posts."
-            )
-    elif source == "rapidapi":
-        key = config.get_api_key('rapidapi')
-        if not key:
-            logger.error(
-                "CREDENTIAL DIAGNOSTIC: RAPIDAPI_KEY is not set in "
-                "database or environment. Collection WILL fail with 0 posts."
-            )
+    # Check Apify token
+    key = config.get_api_key('apify')
+    if not key:
+        logger.error(
+            "CREDENTIAL DIAGNOSTIC: APIFY_API_TOKEN is not set in "
+            "database or environment. Collection WILL fail with 0 posts."
+        )
 
     openai_key = config.get_api_key('openai')
     if not openai_key:
@@ -389,10 +380,10 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
         except ValueError as e:
             logger.error(f"Cannot create collector: {e}")
             logger.error(
-                "CREDENTIAL CHECK FAILED: No API key found in database "
+                "CREDENTIAL CHECK FAILED: No Apify API token found in database "
                 "(api_credentials table) or environment variables."
             )
-            logger.info("Tip: Set RAPIDAPI_KEY or APIFY_API_TOKEN in .env, "
+            logger.info("Tip: Set APIFY_API_TOKEN in .env, "
                          "or add credentials via the dashboard Setup page.")
             logger.info("Continuing with existing data (if any)...")
             run_stats["errors"].append(f"Missing API credentials: {e}")
@@ -476,7 +467,7 @@ def run_pipeline(profile_name=None, vertical_name=None, skip_collect=False, no_e
                 logger.error(
                     "ALL Instagram brands returned 0 posts. "
                     "This usually means API credentials are missing or invalid. "
-                    "Check: 1) api_credentials table  2) RAPIDAPI_KEY/APIFY_API_TOKEN env vars  "
+                    "Check: 1) api_credentials table  2) APIFY_API_TOKEN env var  "
                     "3) Test a manual API call to verify your key works."
                 )
 

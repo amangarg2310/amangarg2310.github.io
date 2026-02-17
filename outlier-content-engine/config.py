@@ -38,7 +38,7 @@ def get_api_key(service: str) -> str:
     Get API key from database first, fall back to environment variable.
 
     Args:
-        service: 'rapidapi', 'openai', 'tiktok'
+        service: 'apify', 'openai'
 
     Returns:
         API key string or empty string if not found
@@ -64,9 +64,7 @@ def get_api_key(service: str) -> str:
     # Fall back to environment variables
     env_map = {
         'apify': 'APIFY_API_TOKEN',
-        'rapidapi': 'RAPIDAPI_KEY',
         'openai': 'OPENAI_API_KEY',
-        'tiktok': 'TIKTOK_RAPIDAPI_KEY',
     }
 
     env_var = env_map.get(service)
@@ -94,20 +92,15 @@ MONTHLY_COST_LIMIT_USD = float(os.getenv("MONTHLY_COST_LIMIT_USD", "4.50"))
 COST_PER_1K_INPUT_TOKENS = 0.00015
 COST_PER_1K_OUTPUT_TOKENS = 0.00060
 
-# ── Instagram Data Collection ──
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")  # Fallback, use get_api_key('rapidapi')
+# ── Instagram Data Collection (Apify) ──
 APIFY_API_TOKEN = get_api_key('apify') or os.getenv("APIFY_API_TOKEN")
-COLLECTION_SOURCE = get_api_key('collection_source') or os.getenv("COLLECTION_SOURCE", "apify")
 DEFAULT_POSTS_PER_COMPETITOR = 12
 
 # ── Instagram Graph API (own-channel only, provides saves/shares) ──
 IG_GRAPH_ACCESS_TOKEN = os.getenv("IG_GRAPH_ACCESS_TOKEN")
 
-# ── TikTok Data Collection ──
-TIKTOK_RAPIDAPI_KEY = os.getenv("TIKTOK_RAPIDAPI_KEY", os.getenv("RAPIDAPI_KEY", ""))  # Fallback
-# Use collection_source from database if available, otherwise fall back to env or "apify"
-_collection_source_db = get_api_key('collection_source')
-TIKTOK_COLLECTION_SOURCE = _collection_source_db or os.getenv("TIKTOK_COLLECTION_SOURCE", "apify")
+# ── TikTok Data Collection (Apify) ──
+# Uses the same APIFY_API_TOKEN as Instagram
 
 # ── Email (Gmail SMTP) ──
 SMTP_SERVER = "smtp.gmail.com"

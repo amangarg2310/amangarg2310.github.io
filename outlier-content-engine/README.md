@@ -34,9 +34,7 @@ python main.py
 
 ```bash
 ACTIVE_PROFILE=heritage          # Which brand profile to use
-RAPIDAPI_KEY=your_key            # Primary data source (RapidAPI Instagram scraper)
-APIFY_API_TOKEN=your_token       # Fallback data source (optional)
-COLLECTION_SOURCE=rapidapi       # "rapidapi" or "apify"
+APIFY_API_TOKEN=your_token       # Instagram/TikTok data source (Apify)
 OPENAI_API_KEY=sk-...            # For GPT-4o-mini analysis
 EMAIL_ADDRESS=you@gmail.com      # Sender email
 EMAIL_APP_PASSWORD=xxxx          # Gmail App Password (NOT your regular password)
@@ -53,17 +51,11 @@ Regular Gmail passwords won't work with SMTP. You need an App Password:
 4. Generate a new App Password for "Mail"
 5. Use that 16-character password as `EMAIL_APP_PASSWORD`
 
-### Instagram Data Source
+### Instagram/TikTok Data Source (Apify)
 
-**RapidAPI (recommended for budget):**
-- Sign up at [rapidapi.com](https://rapidapi.com)
-- Subscribe to an Instagram scraper API (many have free tiers with 100-500 req/month)
-- 6 competitors × 1 request/day = ~180 requests/month — fits most free tiers
-
-**Apify (reliable fallback):**
 - Sign up at [apify.com](https://apify.com)
 - ~$5 per 1,000 results
-- More reliable but costs per result
+- Reliable and consistent data across Instagram and TikTok
 
 ## Brand Profiles
 
@@ -137,7 +129,7 @@ outlier-content-engine/
 │   └── _template.yaml      # Blank template for new brands
 ├── collectors/
 │   ├── __init__.py         # BaseCollector interface + CollectedPost dataclass
-│   └── instagram.py        # Instagram data fetcher (RapidAPI / Apify)
+│   └── instagram.py        # Instagram data fetcher (Apify)
 ├── outlier_detector.py     # Statistical outlier detection + content tagging
 ├── analyzer.py             # GPT-4o-mini analysis + brand voice rewriter
 ├── reporter.py             # HTML email report generator
@@ -162,7 +154,7 @@ On the first run, the engine collects posts but may not detect outliers — it n
 
 ## Cost Estimates
 
-- **Instagram data:** $0/month (RapidAPI free tier) or ~$2/month (Apify)
+- **Instagram data:** ~$2/month (Apify)
 - **LLM analysis:** ~$0.03/month (GPT-4o-mini, ~1K tokens/day)
 - **Total:** Under $5/month
 

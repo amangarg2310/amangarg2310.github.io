@@ -5,6 +5,7 @@ Adds tables for verticals, vertical_brands, api_credentials, and email_subscript
 Safe to run multiple times (idempotent).
 """
 
+import os
 import sqlite3
 import logging
 from pathlib import Path
@@ -28,7 +29,7 @@ def run_vertical_migrations(db_path=None):
         -- API credentials (admin-managed)
         CREATE TABLE IF NOT EXISTS api_credentials (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            service TEXT UNIQUE NOT NULL,  -- 'rapidapi', 'openai', 'tiktok'
+            service TEXT UNIQUE NOT NULL,  -- 'apify', 'openai'
             api_key TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -159,26 +160,21 @@ def seed_api_keys_from_env(db_path=None):
     now = datetime.now(timezone.utc).isoformat()
 
     # Migrate keys if they exist in env
-    if config.RAPIDAPI_KEY:
+    apify_token = os.getenv("APIFY_API_TOKEN")
+    if apify_token:
         conn.execute("""
             INSERT INTO api_credentials (service, api_key, created_at, updated_at)
-            VALUES ('rapidapi', ?, ?, ?)
-        """, (config.RAPIDAPI_KEY, now, now))
-        logger.info("  Migrated RAPIDAPI_KEY")
+            VALUES ('apify', ?, ?, ?)
+        """, (apify_token, now, now))
+        logger.info("  Migrated APIFY_API_TOKEN")
 
-    if config.OPENAI_API_KEY:
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
         conn.execute("""
             INSERT INTO api_credentials (service, api_key, created_at, updated_at)
             VALUES ('openai', ?, ?, ?)
-        """, (config.OPENAI_API_KEY, now, now))
+        """, (openai_key, now, now))
         logger.info("  Migrated OPENAI_API_KEY")
-
-    if config.TIKTOK_RAPIDAPI_KEY and config.TIKTOK_RAPIDAPI_KEY != config.RAPIDAPI_KEY:
-        conn.execute("""
-            INSERT INTO api_credentials (service, api_key, created_at, updated_at)
-            VALUES ('tiktok', ?, ?, ?)
-        """, (config.TIKTOK_RAPIDAPI_KEY, now, now))
-        logger.info("  Migrated TIKTOK_RAPIDAPI_KEY")
 
     conn.commit()
     conn.close()

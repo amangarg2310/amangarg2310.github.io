@@ -11,11 +11,7 @@ services:
         value: 10000
       - key: OPENAI_API_KEY
         sync: false
-      - key: RAPIDAPI_KEY
-        sync: false
       - key: APIFY_API_TOKEN
-        sync: false
-      - key: TIKTOK_RAPIDAPI_KEY
         sync: false
       - key: IG_GRAPH_ACCESS_TOKEN
         sync: false

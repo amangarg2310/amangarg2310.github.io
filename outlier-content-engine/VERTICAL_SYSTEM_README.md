@@ -14,7 +14,7 @@ The Outlier Content Engine has been upgraded with a **Vertical Management System
 
 ### 2. **One-Time Setup Flow**
 - `/setup` route for initial API key configuration
-- Store RapidAPI + OpenAI keys in database (not .env)
+- Store Apify + OpenAI keys in database (not .env)
 - Configure team email distribution list
 - No manual YAML editing required
 
@@ -37,7 +37,7 @@ The Outlier Content Engine has been upgraded with a **Vertical Management System
    - You'll be redirected to `/setup` automatically
 
 3. **Enter API Keys**:
-   - RapidAPI Key (for Instagram/TikTok data)
+   - Apify API Token (for Instagram/TikTok data)
    - OpenAI API Key (for AI analysis)
    - Team emails (optional)
 
@@ -81,7 +81,7 @@ The Outlier Content Engine has been upgraded with a **Vertical Management System
 ```sql
 -- API credentials (admin-managed, one-time setup)
 api_credentials
-  - service (rapidapi, openai, tiktok)
+  - service (apify, openai)
   - api_key
   - created_at, updated_at
 
@@ -124,7 +124,7 @@ email_subscriptions
 
 ### Files to Modify (Next Steps):
 - `main.py` - Add `--vertical` flag support
-- `collectors/instagram.py` - Use `config.get_api_key('rapidapi')`
+- `collectors/instagram.py` - Use `config.get_api_key('apify')`
 - `analyzer.py` - Use `config.get_api_key('openai')`
 
 ## Migration from Old System

@@ -6,7 +6,7 @@
 - GitHub account
 - Render account (free tier works)
 - Domain scoutaiapp.com (you already have this)
-- All API keys ready (OpenAI, RapidAPI, Apify, etc.)
+- All API keys ready (OpenAI, Apify)
 
 ### Step 1: Push Code to GitHub
 
@@ -38,12 +38,10 @@ In Render dashboard, go to Environment tab and add these variables:
 
 **Required:**
 - `OPENAI_API_KEY` - Your OpenAI API key
-- `RAPIDAPI_KEY` - Your RapidAPI key
-- `APIFY_API_TOKEN` - Your Apify API token
+- `APIFY_API_TOKEN` - Your Apify API token (Instagram + TikTok)
 - `FLASK_SECRET_KEY` - Generate with: `python -c "import secrets; print(secrets.token_hex(32))"`
 
 **Optional (for full features):**
-- `TIKTOK_RAPIDAPI_KEY` - TikTok data collection
 - `IG_GRAPH_ACCESS_TOKEN` - Instagram Graph API (own channel)
 - `EMAIL_ADDRESS` - Gmail for sending reports
 - `EMAIL_APP_PASSWORD` - Gmail app password
