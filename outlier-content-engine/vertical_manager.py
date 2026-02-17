@@ -65,11 +65,11 @@ class VerticalManager:
         """Load a vertical with all its brands."""
         conn = self._get_conn()
 
-        # Get vertical metadata
+        # Get vertical metadata (COLLATE NOCASE: "streetwear" matches "Streetwear")
         row = conn.execute("""
             SELECT name, description, created_at, updated_at
             FROM verticals
-            WHERE name = ?
+            WHERE name = ? COLLATE NOCASE
         """, (name,)).fetchone()
 
         if not row:
@@ -81,7 +81,7 @@ class VerticalManager:
             brand_rows = conn.execute("""
                 SELECT brand_name, instagram_handle, tiktok_handle, facebook_handle
                 FROM vertical_brands
-                WHERE vertical_name = ?
+                WHERE vertical_name = ? COLLATE NOCASE
                 ORDER BY added_at DESC
             """, (name,)).fetchall()
         except sqlite3.OperationalError:
@@ -89,7 +89,7 @@ class VerticalManager:
             brand_rows = conn.execute("""
                 SELECT brand_name, instagram_handle, tiktok_handle
                 FROM vertical_brands
-                WHERE vertical_name = ?
+                WHERE vertical_name = ? COLLATE NOCASE
                 ORDER BY added_at DESC
             """, (name,)).fetchall()
 
@@ -142,15 +142,15 @@ class VerticalManager:
 
         # Explicitly delete brands first (don't rely on CASCADE — SQLite
         # foreign keys are off by default and we don't enable them)
-        conn.execute("DELETE FROM vertical_brands WHERE vertical_name = ?", (name,))
+        conn.execute("DELETE FROM vertical_brands WHERE vertical_name = ? COLLATE NOCASE", (name,))
         brands_deleted = conn.total_changes
 
         # Delete vertical metadata
-        conn.execute("DELETE FROM verticals WHERE name = ?", (name,))
+        conn.execute("DELETE FROM verticals WHERE name = ? COLLATE NOCASE", (name,))
         deleted = conn.total_changes > 0
 
         # Delete all associated posts (no foreign key, so manual cleanup)
-        conn.execute("DELETE FROM competitor_posts WHERE brand_profile = ?", (name,))
+        conn.execute("DELETE FROM competitor_posts WHERE brand_profile = ? COLLATE NOCASE", (name,))
         posts_deleted = conn.total_changes
 
         conn.commit()
@@ -183,7 +183,7 @@ class VerticalManager:
             handle_to_check = instagram_handle or tiktok_handle
             archived_count = conn.execute("""
                 SELECT COUNT(*) FROM competitor_posts
-                WHERE brand_profile = ? AND competitor_handle = ? AND archived = 1
+                WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ? AND archived = 1
             """, (vertical_name, handle_to_check)).fetchone()[0]
 
             # Unarchive existing posts if found (instant re-add!)
@@ -191,7 +191,7 @@ class VerticalManager:
                 conn.execute("""
                     UPDATE competitor_posts
                     SET archived = 0
-                    WHERE brand_profile = ? AND competitor_handle = ?
+                    WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ?
                 """, (vertical_name, handle_to_check))
                 logger.info(f"Unarchived {archived_count} posts for @{handle_to_check} in {vertical_name}")
 
@@ -235,14 +235,14 @@ class VerticalManager:
         conn.execute("""
             UPDATE competitor_posts
             SET archived = 1
-            WHERE brand_profile = ? AND competitor_handle = ?
+            WHERE brand_profile = ? COLLATE NOCASE AND competitor_handle = ?
         """, (vertical_name, handle))
         posts_archived = conn.total_changes
 
         # Delete brand from vertical_brands table — match any handle column
         conn.execute("""
             DELETE FROM vertical_brands
-            WHERE vertical_name = ?
+            WHERE vertical_name = ? COLLATE NOCASE
               AND (instagram_handle = ? OR tiktok_handle = ? OR facebook_handle = ?)
         """, (vertical_name, handle, handle, handle))
 
@@ -319,7 +319,7 @@ class VerticalManager:
         conn = self._get_conn()
         row = conn.execute("""
             SELECT COUNT(*) as cnt FROM vertical_brands
-            WHERE vertical_name = ?
+            WHERE vertical_name = ? COLLATE NOCASE
         """, (vertical_name,)).fetchone()
         conn.close()
         return row['cnt'] if row else 0
@@ -329,7 +329,7 @@ class VerticalManager:
         conn = self._get_conn()
         now = datetime.now(timezone.utc).isoformat()
         conn.execute("""
-            UPDATE verticals SET updated_at = ? WHERE name = ?
+            UPDATE verticals SET updated_at = ? WHERE name = ? COLLATE NOCASE
         """, (now, name))
         conn.commit()
         conn.close()

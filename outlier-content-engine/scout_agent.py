@@ -448,6 +448,10 @@ If the user hasn't named their competitive set yet, start here:
 - If the user already mentioned a category name (e.g., "create a Streetwear set"), use it — don't re-ask.
 - Generic phrases like "the set", "the collection", "the competitive set" are NOT names. Ask for a specific one.
 - Once you have the name, call create_category, then move to Step 2.
+- IMPORTANT: If create_category returns "already_existed: true", the category has brands from a previous session.
+  ALWAYS tell the user: "I found an existing [name] category with N brands: @handle1, @handle2, ...
+  Want to start fresh or keep these and add more?"
+  Never say "all set up" without showing what's already in the category.
 
 STEP 2 — ADD BRANDS:
 "Great! Now let's add some brands. Which brands or handles do you want to track?"
@@ -617,9 +621,25 @@ IMPORTANT:
         if created:
             return json.dumps({"ok": True, "message": f"Category '{name}' created."})
         else:
+            # Expose what's already in the legacy category so GPT can inform the user
+            existing_vertical = self.vm.get_vertical(name)
+            existing_brands = []
+            if existing_vertical:
+                existing_brands = [
+                    f"@{b.instagram_handle}" for b in existing_vertical.brands
+                    if b.instagram_handle
+                ]
             return json.dumps({
                 "ok": True,
+                "already_existed": True,
                 "message": f"Category '{name}' already exists (reusing it).",
+                "existing_brand_count": len(existing_brands),
+                "existing_brands": existing_brands,
+                "note": (
+                    "This category already has brands from a previous session. "
+                    "Tell the user what brands are already in it and ask if they "
+                    "want to start fresh (delete and recreate) or keep these brands."
+                ),
             })
 
     def _handle_add_brands(self, args: Dict, context: Dict) -> str:
@@ -757,6 +777,23 @@ IMPORTANT:
             result["resolution_note"] = (
                 "Some brand names were resolved to official handles. "
                 "Tell the user which handles were used."
+            )
+
+        # Unambiguous message when ALL brands were skipped (already exist)
+        if not added and skipped:
+            # Get the full existing brand list so GPT can show the user
+            existing_vertical = self.vm.get_vertical(actual_name)
+            existing_handles = []
+            if existing_vertical:
+                existing_handles = [
+                    f"@{b.instagram_handle}" for b in existing_vertical.brands
+                    if b.instagram_handle
+                ]
+            result["warning"] = (
+                f"All requested brands already exist in '{actual_name}'. "
+                f"No new brands were added. "
+                f"Current brands: {', '.join(existing_handles) if existing_handles else 'none'}. "
+                f"Tell the user these brands are already tracked."
             )
 
         return json.dumps(result)
