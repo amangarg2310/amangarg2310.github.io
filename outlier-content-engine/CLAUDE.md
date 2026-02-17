@@ -17,10 +17,9 @@ The Outlier Content Engine is an AI-powered social media competitive intelligenc
 - Each vertical has a list of brands with Instagram/TikTok/Facebook handles
 
 ### 2. **Brand Profiles**
-- Brand-specific configuration files in `profiles/` directory (YAML format)
+- Brand-specific configuration loaded from the database vertical system
 - Contains voice guidelines, target audience, content preferences
-- Example: `profiles/heritage.yaml` for the default "Heritage" brand profile
-- Loaded by `profile_loader.py`
+- Managed via `profile_loader.py` (loads from database)
 
 ### 3. **Outlier Detection**
 - Statistical analysis to identify posts that significantly outperform baseline
@@ -59,9 +58,6 @@ outlier-content-engine/
 ├── config.py                    # Configuration and environment variables
 ├── database_migrations.py       # SQLite schema migrations
 │
-├── profiles/                    # Brand voice profiles (YAML)
-│   └── heritage.yaml
-│
 ├── collectors/                  # Social media data collectors
 │   ├── base.py                 # Base collector interface
 │   ├── instagram.py            # Instagram collection (Apify)
@@ -69,7 +65,7 @@ outlier-content-engine/
 │
 ├── outlier_detector.py         # Statistical outlier detection
 ├── analyzer.py                 # GPT-4 analysis and content rewriting
-├── profile_loader.py           # YAML profile loader
+├── profile_loader.py           # Brand profile loader (database)
 ├── vertical_manager.py         # Competitive set management (CRUD)
 ├── data_lifecycle.py           # 3-day cleanup & blank canvas logic 🆕
 ├── brand_handle_discovery.py   # Brand name → handle mapping
@@ -103,8 +99,8 @@ outlier-content-engine/
 **Purpose:** CLI entry point for running the full analysis pipeline
 
 **Flow:**
-1. Load brand profile from `profiles/<name>.yaml`
-2. Get vertical (competitive set) from database
+1. Load vertical (competitive set) from database
+2. Build brand profile from vertical data
 3. Collect recent posts from Instagram/TikTok
 4. Detect outliers using statistical analysis
 5. Learn brand voice from own top posts (optional)
@@ -335,7 +331,7 @@ class CollectedPost:
     },
     "vocabulary": {
         "formality": "Casual",
-        "distinctive_phrases": ["heritage", "timeless", "classic"]
+        "distinctive_phrases": ["elevated", "timeless", "classic"]
     },
     "opening_patterns": ["Question hook", "Bold statement"],
     "closing_patterns": ["Shop link", "Call to community"],
@@ -568,40 +564,9 @@ DB_PATH=outlier_data.db
 DASHBOARD_PORT=5001
 ```
 
-### Brand Profile (YAML)
+### Brand Profiles (Database)
 
-Example: `profiles/heritage.yaml`
-
-```yaml
-name: Heritage
-vertical: Fashion & Lifestyle
-target_audience: Age 25-45, affluent professionals
-follower_count: 50000
-
-# Voice Guidelines
-voice:
-  tone: Sophisticated yet approachable
-  personality: Timeless, confident, quality-focused
-  language_style: Clear and direct, minimal jargon
-  emoji_usage: Sparingly
-  values:
-    - Craftsmanship
-    - Authenticity
-    - Timeless design
-
-# Outlier Detection Thresholds
-outlier_settings:
-  min_z_score: 1.5
-  min_engagement_multiplier: 2.0
-  top_outliers_to_analyze: 10
-  top_outliers_to_rewrite: 5
-
-# Content Preferences
-content_preferences:
-  formats: [carousel, reel, static]
-  avoid_topics: [Politics, controversy]
-  primary_cta: Shop link
-```
+Brand profiles are loaded from the database vertical system. Each vertical in the `verticals` table has associated brands in `vertical_brands`. The `profile_loader.py` module builds a `BrandProfile` dataclass from this data with default voice config and outlier settings.
 
 ---
 
@@ -668,11 +633,7 @@ cp .env.example .env
 # 3. Run database migrations
 python database_migrations.py
 
-# 4. Create a brand profile
-cp profiles/heritage.yaml profiles/your_brand.yaml
-# Edit your_brand.yaml
-
-# 5. Create a competitive set
+# 4. Create a competitive set
 python -c "from vertical_manager import VerticalManager; vm = VerticalManager(); vm.create_vertical('Streetwear', 'Fashion competitors'); vm.add_brand('Streetwear', instagram_handle='nike')"
 ```
 

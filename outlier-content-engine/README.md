@@ -33,7 +33,7 @@ python main.py
 ### Environment Variables (.env)
 
 ```bash
-ACTIVE_PROFILE=heritage          # Which brand profile to use
+ACTIVE_VERTICAL=Streetwear       # Which vertical to use (must match a dashboard vertical)
 APIFY_API_TOKEN=your_token       # Instagram/TikTok data source (Apify)
 OPENAI_API_KEY=sk-...            # For GPT-4o-mini analysis
 EMAIL_ADDRESS=you@gmail.com      # Sender email
@@ -57,32 +57,28 @@ Regular Gmail passwords won't work with SMTP. You need an App Password:
 - ~$5 per 1,000 results
 - Reliable and consistent data across Instagram and TikTok
 
-## Brand Profiles
+## Verticals (Competitive Sets)
 
-All brand-specific configuration lives in YAML files under `profiles/`. The engine reads `ACTIVE_PROFILE` from `.env` to determine which profile to load.
+Brand configuration is managed through the database vertical system. Create and manage verticals via the web dashboard.
 
-### Switching Brands
+### Switching Verticals
 
 ```bash
 # Edit .env
-ACTIVE_PROFILE=my_new_brand
+ACTIVE_VERTICAL=Streetwear
 
 # Or use CLI flag
-python main.py --profile my_new_brand
+python main.py --vertical Streetwear
 ```
 
-### Creating a New Profile
+### Creating a New Vertical
 
-```bash
-cp profiles/_template.yaml profiles/my_brand.yaml
-# Edit my_brand.yaml with your brand's voice, competitors, and settings
-```
+1. Start the dashboard: `python dashboard.py`
+2. Navigate to the verticals page
+3. Create a new vertical and add brand handles
 
-Each profile defines:
-- **Brand info** — name, vertical, tagline, description
-- **Voice** — tone, language style, themes, things to avoid, example captions
-- **Competitors** — names and platform handles to monitor
-- **Content tags** — themes, hook types, and formats relevant to your vertical
+Each vertical defines:
+- **Brands** — Instagram/TikTok/Facebook handles to monitor
 - **Outlier settings** — engagement multiplier, std dev threshold, lookback window
 
 ## Web Dashboard
@@ -105,15 +101,15 @@ python dashboard.py --port 8080    # custom port
 | **Reports** | View and download generated HTML intelligence reports |
 | **Settings** | Adjust outlier sensitivity with sliders, manage content categories |
 
-The profile switcher in the sidebar lets you swap between brands instantly.
+The vertical switcher in the sidebar lets you swap between competitive sets instantly.
 
 ## CLI Options
 
 ```bash
-python main.py                        # Default: uses ACTIVE_PROFILE from .env
-python main.py --profile heritage     # Override profile
-python main.py --skip-collect         # Skip data collection, analyze existing data
-python main.py --no-email             # Save report locally instead of emailing
+python main.py                          # Default: uses ACTIVE_VERTICAL from .env
+python main.py --vertical Streetwear    # Override vertical
+python main.py --skip-collect           # Skip data collection, analyze existing data
+python main.py --no-email               # Save report locally instead of emailing
 ```
 
 ## Project Structure
@@ -123,10 +119,8 @@ outlier-content-engine/
 ├── main.py                 # Pipeline orchestrator
 ├── dashboard.py            # Flask web dashboard
 ├── config.py               # Environment-driven global settings
-├── profile_loader.py       # YAML profile loader + validation
-├── profiles/
-│   ├── heritage.yaml       # Heritage streetwear brand profile
-│   └── _template.yaml      # Blank template for new brands
+├── profile_loader.py       # Brand profile loader (database)
+├── vertical_manager.py     # Competitive set management (CRUD)
 ├── collectors/
 │   ├── __init__.py         # BaseCollector interface + CollectedPost dataclass
 │   └── instagram.py        # Instagram data fetcher (Apify)

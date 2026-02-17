@@ -122,33 +122,12 @@ email_subscriptions
 - `dashboard.py` - Added vertical management routes
 - `templates/base.html` - Replaced profile switcher with vertical switcher
 
-### Files to Modify (Next Steps):
-- `main.py` - Add `--vertical` flag support
-- `collectors/instagram.py` - Use `config.get_api_key('apify')`
-- `analyzer.py` - Use `config.get_api_key('openai')`
-
-## Migration from Old System
-
-If you have existing YAML profiles:
-
-```bash
-python3 database_migrations.py heritage
-```
-
-This converts the `heritage.yaml` profile into a "Heritage" vertical with all competitors as brands.
-
-## Backward Compatibility
-
-- Old `.env` API keys still work (fallback)
-- YAML profiles can coexist with verticals
-- `main.py --profile` flag still works (for now)
-
-## Next Steps
-
-1. **Update main.py** to accept verticals and generate temporary profiles on-the-fly
-2. **Update collectors** to use `config.get_api_key()` instead of direct env vars
-3. **Test full pipeline** with a vertical
-4. **Migrate existing profiles** if any
+### Modified Files:
+- `main.py` - Uses `--vertical` flag, loads from database
+- `collectors/instagram.py` - Uses `config.get_api_key('apify')`
+- `collectors/tiktok.py` - Uses `config.get_api_key('apify')`
+- `analyzer.py` - Uses `config.get_api_key('openai')`
+- `profile_loader.py` - Loads profiles from database (YAML removed)
 
 ## Benefits
 
