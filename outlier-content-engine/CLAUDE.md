@@ -633,6 +633,11 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix competitor_posts Table Missing on Fresh Deployments (5b86682)
+- `database_migrations.py`: `run_vertical_migrations()` now includes `CREATE TABLE IF NOT EXISTS competitor_posts` with full schema (28 columns + 6 indexes)
+- Root cause: the legacy YAML profile system (removed in `51e345e`) was the only place that created this table at startup. After removal, fresh Render deployments (persistent disk with no prior DB) hit `no such table: competitor_posts` 500 errors on `/api/outliers`
+- Fix ensures the table is created during the build step (`python database_migrations.py`) before gunicorn starts
+
 ### 2026-02-17: Add Dynamic Brand Profile to Settings (2edcdc3)
 - `setup.html`: Added 7 Brand Profile fields (name, category, audience, description, tone, values, topics to avoid) with guidance hints
 - `dashboard.py`: Read/save brand profile fields in `setup_page`/`save_setup`
@@ -811,5 +816,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 2.3.0
+**Version:** 2.4.0
 **Maintained by:** Claude Code (AI Assistant)
