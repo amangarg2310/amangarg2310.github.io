@@ -125,14 +125,28 @@ def get_available_verticals():
 
 
 def get_active_vertical_name():
-    """Get the active vertical name from session or first available."""
+    """Get the active vertical name from session or first available.
+
+    Uses Flask session for persistence across server restarts.
+    Falls back to in-memory app state, then first available vertical.
+    """
+    # In-memory state (set by chat handler within this process)
     if hasattr(app, '_active_vertical') and app._active_vertical:
+        session['active_vertical'] = app._active_vertical
+        session.modified = True
         return app._active_vertical
 
-    # Get first vertical if exists
+    # Session state (survives server restarts via cookie)
+    if session.get('active_vertical'):
+        app._active_vertical = session['active_vertical']
+        return session['active_vertical']
+
+    # Fall back to first available vertical
     verticals = get_available_verticals()
     if verticals:
         app._active_vertical = verticals[0]
+        session['active_vertical'] = verticals[0]
+        session.modified = True
         return verticals[0]
 
     return None
@@ -313,7 +327,7 @@ def get_outlier_posts(competitor=None, platform=None, sort_by="score", vertical_
             }
             if timeframe in timeframe_days_map:
                 days = timeframe_days_map[timeframe]
-                query += " AND posted_at >= datetime('now', ?)"
+                query += " AND (posted_at IS NULL OR posted_at >= datetime('now', ?))"
                 params.append(f'-{days} days')
 
         if tag:
@@ -728,9 +742,18 @@ def signal_page():
     # Check if user wants empty state (after reset)
     empty_state = request.args.get("empty", "").lower() == "true"
 
+    # Accept explicit vertical from URL (used by analysis completion redirect)
+    requested_vertical = request.args.get("vertical", "").strip()
+    if requested_vertical and not empty_state:
+        verticals = get_available_verticals()
+        if requested_vertical in verticals:
+            app._active_vertical = requested_vertical
+            session['active_vertical'] = requested_vertical
+
     # Clear active vertical when returning to empty state
     if empty_state and hasattr(app, '_active_vertical'):
         app._active_vertical = None
+        session.pop('active_vertical', None)
 
     # Get vertical name for queries (unless empty state)
     vertical_name = None if empty_state else get_active_vertical_name()
@@ -1141,6 +1164,7 @@ def api_validate_keys():
 def load_vertical(vertical_name):
     """Load a competitive set (vertical) and redirect to signal page."""
     app._active_vertical = vertical_name
+    session['active_vertical'] = vertical_name
     return redirect(url_for("signal_page"))
 
 
@@ -1154,6 +1178,7 @@ def switch_vertical():
     verticals = get_available_verticals()
     if vertical_name and vertical_name in verticals:
         app._active_vertical = vertical_name
+        session['active_vertical'] = vertical_name
         flash(f"Switched to vertical: {vertical_name}", "success")
     else:
         flash(f"Vertical '{vertical_name}' not found.", "danger")
@@ -1484,6 +1509,7 @@ def create_vertical():
 
     # Set as active vertical
     app._active_vertical = vertical_name
+    session['active_vertical'] = vertical_name
 
     return redirect(url_for('index'))
 
@@ -1601,6 +1627,7 @@ def delete_vertical():
         # Clear active vertical if it was deleted
         if hasattr(app, '_active_vertical') and app._active_vertical == vertical_name:
             app._active_vertical = None
+            session.pop('active_vertical', None)
 
     return redirect(url_for('signal_page', empty='true'))
 
@@ -1667,6 +1694,7 @@ def chat_message():
                 new_vertical = updated_context.get('active_vertical')
                 if new_vertical and new_vertical != current_vertical:
                     app._active_vertical = new_vertical
+                    session['active_vertical'] = new_vertical
 
                 # Persist the full context (including chat_history) in session
                 session['chat_context'] = updated_context
@@ -2058,13 +2086,17 @@ def analysis_status():
 
                     # Calculate time remaining based on actual progress
                     progress_pct = progress_data.get("progress_percent", 0)
-                    if progress_pct > 15:
-                        # Use stable estimate based on progress
-                        # Once we're >15% done, lock in the rate to avoid jumps
+                    if progress_pct >= 65:
+                        # Post-collection phase — analysis/detection is fast
+                        # Give a proportional estimate for the remaining 35%
+                        remaining_pct = 100 - progress_pct
+                        remaining = max(0, int(remaining_pct * 1.5))
+                        response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
+                    elif progress_pct > 5:
+                        # Collection phase — estimate from elapsed time and progress rate
                         estimated_total = (elapsed / progress_pct) * 100
                         remaining = max(0, estimated_total - elapsed)
-                        # Cap remaining time to prevent unrealistic estimates
-                        remaining = min(remaining, 600)  # Max 10 minutes remaining
+                        remaining = min(remaining, 600)  # Cap at 10 minutes
                         response["time_remaining"] = f"{int(remaining // 60)}m {int(remaining % 60)}s"
                     elif progress_pct > 0:
                         # Early phase - show estimate based on brand count

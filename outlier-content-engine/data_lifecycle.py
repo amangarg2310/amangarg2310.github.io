@@ -37,10 +37,10 @@ class DataLifecycleManager:
 
         conn = sqlite3.connect(str(self.db_path))
 
-        # Delete old posts
+        # Delete old posts (preserve flagged outliers so they survive between runs)
         result = conn.execute("""
             DELETE FROM competitor_posts
-            WHERE collected_at < ?
+            WHERE collected_at < ? AND COALESCE(is_outlier, 0) = 0
         """, (cutoff_str,))
         posts_deleted = result.rowcount
 

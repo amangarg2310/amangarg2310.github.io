@@ -287,8 +287,8 @@ class OutlierDetector:
               AND COALESCE(is_own_channel, 0) = 0
         """, (handle, self.profile.profile_name, cutoff)).fetchall()
 
-        if len(rows) < 3:
-            # Need at least 3 data points for meaningful statistics
+        if len(rows) < 2:
+            # Need at least 2 data points for a baseline comparison
             return None
 
         engagements = []
