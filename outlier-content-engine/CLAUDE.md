@@ -633,6 +633,40 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Add Dynamic Brand Profile to Settings (2edcdc3)
+- `setup.html`: Added 7 Brand Profile fields (name, category, audience, description, tone, values, topics to avoid) with guidance hints
+- `dashboard.py`: Read/save brand profile fields in `setup_page`/`save_setup`
+- `main.py`: `MockProfile` loads brand profile from config table; `get_voice_prompt()` builds rich 3-layer context string for AI (manual profile + learned voice + real examples)
+
+### 2026-02-17: Remove Legacy YAML Profile System (51e345e)
+- Removed `profiles/heritage.yaml`, `profiles/_template.yaml`, `ACTIVE_PROFILE`/`PROFILES_DIR` from config
+- Simplified `profile_loader.py` to DB-only (removed yaml loading, validation, build)
+- Removed `--profile` CLI arg and `migrate_profile_to_vertical()` from `database_migrations.py`
+- All brand config now flows exclusively through `verticals`/`vertical_brands` DB tables
+- 11 files changed, -647 lines of dead legacy code removed
+
+### 2026-02-17: Remove Dead RapidAPI Code, Fix Stale Apify Token (b284a86)
+- `collectors/instagram.py`: Fixed stale module-level cached token — collector used empty value if key was saved via dashboard after app start (TikTok already did this correctly)
+- `database_migrations.py`: `seed_api_keys_from_env()` was skipping Apify entirely — primary collection source never seeded from `.env` to DB
+- `collectors/instagram.py`: Added empty-token guard on Apify collector creation (was silently creating collector with empty token → 0 posts)
+- Deleted `RapidAPIInstagramCollector` (~200 lines) and `RapidAPITikTokCollector` (~160 lines)
+- Removed `RAPIDAPI_KEY`, `TIKTOK_RAPIDAPI_KEY`, `COLLECTION_SOURCE` from config
+- Simplified `create_collector()` and `create_tiktok_collector()` to Apify-only
+- 13 files cleaned
+
+### 2026-02-17: Surface Silent Credential Failures (5325607)
+- `config.py`: `get_api_key()` now logs missing/empty keys as warnings
+- `main.py`: Credential diagnostics at startup; missing keys logged as errors; `ValueError` now records in `run_stats["errors"]` instead of silently setting `skip_collect=True`; zero-post results from individual brands flagged distinctly
+
+### 2026-02-17: Fix Outlier Posts Invisible — posted_at vs collected_at Mismatch (99274fc)
+- `dashboard.py`: Timeframe filter was using `posted_at` (Instagram publish date, often NULL or months old) but outlier detector uses `collected_at` (scraped date, always today). Viral posts from 45 days ago were flagged as outliers but filtered out of display. Switched to `collected_at`.
+- Removed hardcoded `heritage` profile fallback — if active vertical is lost, now returns empty results instead of silently querying `brand_profile='heritage'`
+
+### 2026-02-17: Fix Outlier Posts Not Displaying — Vertical Context Lost in Redirect Chain (2673ce6)
+- `signal.html`: Chat analysis redirect didn't include `&vertical=` param; `currentVertical` was `const` (stale null for new users creating verticals via chat) — changed to `let`, updated dynamically from chat responses
+- `dashboard.py`: `/api/outliers` endpoint ignored `?vertical=` query param, falling back to `heritage`
+- `scout_agent.py`: `_handle_run_analysis` didn't set `context["active_vertical"]` so chat response didn't include it for frontend to use
+
 ### 2026-02-17: Fix Chatbot Loop on First Message (c939eaf)
 - `dashboard.py` + `scout_agent.py`: Root cause — when new users type a niche name (e.g. "streetwear") in response to the onboarding prompt, GPT had no context it just asked "describe your niche" (welcome message was HTML-only, not in `chat_history`). Shortcut rules then treated bare words as brand names, causing a loop back to "What should we call this collection?"
   - Seed `chat_history` with the welcome message for new sessions with no categories
@@ -777,5 +811,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 2.2.0
+**Version:** 2.3.0
 **Maintained by:** Claude Code (AI Assistant)
