@@ -737,8 +737,10 @@ def auth_google_callback():
     upsert_user(user_info)
     session["user"] = user_info
 
-    # Redirect to originally requested page
+    # Redirect to originally requested page (validate it's a relative path)
     next_url = session.pop("next_url", None) or url_for('signal_page')
+    if not next_url.startswith('/'):
+        next_url = url_for('signal_page')
     return redirect(next_url)
 
 

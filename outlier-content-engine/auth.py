@@ -122,7 +122,7 @@ def login_required(f):
 
         if not session.get("user"):
             # Store the requested URL for post-login redirect
-            session["next_url"] = request.url
+            session["next_url"] = request.path
             return redirect(url_for("login_page"))
 
         return f(*args, **kwargs)
