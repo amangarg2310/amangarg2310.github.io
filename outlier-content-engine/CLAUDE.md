@@ -633,6 +633,17 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Posts Not Showing After Analysis (9ddd2e8)
+- `dashboard.py`: Root cause — active vertical stored only in `app._active_vertical` (in-memory), lost on server restart. Dashboard fell back to querying `brand_profile='heritage'` (hardcoded YAML) instead of the user's actual vertical.
+  - Persist active vertical to Flask session (survives restarts)
+  - Accept `?vertical=X` query parameter on `/signal` route
+  - Pass vertical name in all analysis completion redirects
+- `outlier_detector.py`: Lowered minimum post count from 3 → 2 (unblocks first-time analysis with small datasets)
+- `data_lifecycle.py`: Protect flagged outlier posts from 3-day data cleanup deletion
+- `signal.html`:
+  - Fix timeframe filter excluding posts with `NULL posted_at`
+  - Fix progress bar: two-phase time estimate, prevent backwards progress
+
 ### 2026-02-17: Fix Cooldown Triggering After Adding Brands (b52f9b6)
 - `scout_agent.py`: Root cause — cooldown check read `verticals.updated_at`, but `add_brands`/`remove_brands` also call `update_vertical_timestamp()`. After creating a category and adding brands, `updated_at` was set to "now", making the cooldown think analysis just ran — blocking the user's first attempt.
   - Fix: cooldown now uses `config` table with per-category keys (`"last_analysis_{vertical}"`) instead of `verticals.updated_at`
@@ -761,5 +772,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 2.0.0
+**Version:** 2.1.0
 **Maintained by:** Claude Code (AI Assistant)
