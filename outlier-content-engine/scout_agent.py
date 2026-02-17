@@ -438,14 +438,37 @@ PERSONALITY:
 CURRENT STATE:
 {state_block}
 
+GUIDED CONVERSATION FLOW:
+When a user wants to set up tracking, follow this conversational flow:
+
+1. **BRANDS** — The user mentions brand names or handles they want to track.
+   - Accept brand names WITHOUT @ (e.g., "SaintWoods", "Fear of God Essentials")
+   - Accept handles WITH @ (e.g., "@saintwoods", "@essentials")
+   - When calling add_brands, the system will auto-resolve brand names to correct handles.
+   - Just pass whatever the user says — the system handles resolution.
+
+2. **CATEGORY NAME** — If the user didn't provide one, ask:
+   "What should we call this collection? (e.g., 'Streetwear', 'Beauty', etc.)"
+   - If they previously mentioned a category in the conversation, use that one.
+   - If a category doesn't exist yet, add_brands will auto-create it.
+
+3. **CONFIRM BRANDS** — After add_brands returns, tell the user which handles were added.
+   The tool response includes resolved handles. Report them back so the user can verify.
+
+4. **PLATFORMS & TIMEFRAME** — Before analysis, ask (see PRE-ANALYSIS FLOW below).
+
+5. **ANALYZE** — Only run analysis when the user confirms.
+
 CRITICAL RULES FOR HANDLE EXTRACTION:
 - Users often paste messy text with @handles embedded in descriptions, notes, or bullet points.
   Example: "@aimeleondore — aspirational aesthetic @kith — content ops @stussy — nostalgia OG"
   You MUST extract every @handle from such text regardless of surrounding text.
+- Users may also provide plain brand names: "SaintWoods and Fear of God Essentials"
+  → Pass these as instagram_handles: ["saintwoods", "fearofgodessentials"]
+  → The add_brands handler will resolve them to the correct official handles.
 - When calling add_brands, strip the @ prefix from handles.
-- If the user provides handles and a category name in the SAME message, call add_brands immediately — do NOT ask for confirmation.
-- If the user provides handles but no category name, ask which category they belong to. If they previously mentioned a category in the conversation, use that one.
-- If a category doesn't exist yet, add_brands will auto-create it. No need to call create_category first.
+- If the user provides handles/names and a category name in the SAME message, call add_brands immediately — do NOT ask for confirmation of the brands (but still ask platforms/timeframe before analysis).
+- If the user provides handles/names but no category name, ask which category they belong to.
 
 TERMINOLOGY:
 - Say "category" or "collection" instead of "vertical"
@@ -620,16 +643,39 @@ IMPORTANT:
             self.vm.create_vertical(category_name)
             actual_name = category_name
 
+        # Resolve brand names to official handles using BrandHandleDiscovery
+        from brand_handle_discovery import BrandHandleDiscovery
+        discovery = BrandHandleDiscovery()
+
         # Track which brands are new vs already existed
         added = []
+        resolved = []  # Track name→handle resolutions for user feedback
         newly_added_handles = []  # Track actual new brands for incremental collection
         skipped = []
         for handle in ig_handles:
             handle = handle.strip().lstrip("@")
             if not handle:
                 continue
+
+            # Try to resolve brand name → official handle
+            original_input = handle
+            suggestion = discovery.discover_handle(handle, platform="instagram")
+            if suggestion:
+                resolved_handle = suggestion['handle']
+                official_name = suggestion.get('official_name', original_input)
+                if resolved_handle.lower() != handle.lower():
+                    resolved.append({
+                        "input": original_input,
+                        "handle": resolved_handle,
+                        "name": official_name,
+                        "followers": suggestion.get('follower_count', 0),
+                        "verified": suggestion.get('verified', False),
+                    })
+                    handle = resolved_handle
+
             try:
-                if self.vm.add_brand(actual_name, instagram_handle=handle):
+                if self.vm.add_brand(actual_name, instagram_handle=handle,
+                                      brand_name=suggestion['official_name'] if suggestion else None):
                     added.append(f"@{handle}")
                     newly_added_handles.append(handle)
                 else:
@@ -637,13 +683,29 @@ IMPORTANT:
             except Exception:
                 skipped.append(f"@{handle}")
 
-        # Add TikTok-only handles
+        # Add TikTok-only handles (with brand name resolution)
         for handle in tt_handles:
             handle = handle.strip().lstrip("@")
             if not handle:
                 continue
+
+            # Try to resolve brand name → official TikTok handle
+            original_input = handle
+            tt_suggestion = discovery.discover_handle(handle, platform="tiktok")
+            if tt_suggestion:
+                resolved_handle = tt_suggestion['handle']
+                if resolved_handle and resolved_handle.lower() != handle.lower():
+                    resolved.append({
+                        "input": original_input,
+                        "handle": resolved_handle,
+                        "name": tt_suggestion.get('official_name', original_input),
+                        "platform": "tiktok",
+                    })
+                    handle = resolved_handle
+
             try:
-                if self.vm.add_brand(actual_name, tiktok_handle=handle):
+                if self.vm.add_brand(actual_name, tiktok_handle=handle,
+                                      brand_name=tt_suggestion['official_name'] if tt_suggestion else None):
                     added.append(f"@{handle} (TikTok)")
                     newly_added_handles.append(handle)
                 else:
@@ -674,14 +736,24 @@ IMPORTANT:
         context["newly_added_brands"] = newly_added_handles
         context["was_existing_vertical"] = was_existing_vertical
 
-        return json.dumps({
+        result = {
             "ok": True,
             "category": actual_name,
             "added": added,
             "skipped": skipped,
             "total_brands": total,
             "newly_added_count": len(newly_added_handles),
-        })
+        }
+
+        # Include handle resolution details so GPT can inform the user
+        if resolved:
+            result["resolved_handles"] = resolved
+            result["resolution_note"] = (
+                "Some brand names were resolved to official handles. "
+                "Tell the user which handles were used."
+            )
+
+        return json.dumps(result)
 
     def _handle_remove_brands(self, args: Dict) -> str:
         """Remove brands from a category."""

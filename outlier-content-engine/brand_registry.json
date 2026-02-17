@@ -144,6 +144,62 @@
         "verified": true
       },
       "alternatives": ["carhartt", "carharttwip"]
+    },
+    "saintwoods": {
+      "official_name": "Saintwoods",
+      "instagram": {
+        "handle": "saintwoods",
+        "follower_count": 170000,
+        "verified": false
+      },
+      "tiktok": {
+        "handle": "saintwoods",
+        "follower_count": 5000,
+        "verified": false
+      },
+      "alternatives": ["saint_woods"]
+    },
+    "kith": {
+      "official_name": "Kith",
+      "instagram": {
+        "handle": "kith",
+        "follower_count": 3200000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "kith",
+        "follower_count": 450000,
+        "verified": true
+      },
+      "alternatives": ["kithnyc"]
+    },
+    "aimeleondore": {
+      "official_name": "Aimé Leon Dore",
+      "instagram": {
+        "handle": "aimeleondore",
+        "follower_count": 1500000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": "aimeleondore",
+        "follower_count": 50000,
+        "verified": false
+      },
+      "alternatives": ["aime_leon_dore", "aimeeleondore"]
+    },
+    "noah": {
+      "official_name": "Noah",
+      "instagram": {
+        "handle": "noahclothing",
+        "follower_count": 400000,
+        "verified": true
+      },
+      "tiktok": {
+        "handle": null,
+        "follower_count": 0,
+        "verified": false
+      },
+      "alternatives": ["noah_clothing", "noahnyc"]
     }
   }
 }
