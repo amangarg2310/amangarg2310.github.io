@@ -1,52 +1,64 @@
-# Outlier Content Engine - Architecture Documentation
+# ScoutAI (Outlier Content Engine) - Architecture Documentation
 
 ## Project Overview
 
-The Outlier Content Engine is an AI-powered social media competitive intelligence platform that identifies high-performing "outlier" posts from competitors on Instagram and TikTok. It uses statistical analysis to detect posts that significantly outperform baseline engagement, then leverages GPT-4 to analyze patterns and rewrite concepts in your brand's voice.
+ScoutAI is an AI-powered competitive intelligence platform that identifies high-performing "outlier" social media posts from competitor brands on Instagram, TikTok, and Facebook. It uses statistical analysis to detect posts that significantly outperform each brand's baseline engagement, then leverages GPT-4 to analyze patterns and rewrite concepts in your brand's voice.
 
-**Tech Stack:** Python (Flask), SQLite, OpenAI GPT-4, Apify/RapidAPI collectors, Jinja2 templates
+**Tech Stack:** Python 3.11, Flask, SQLite, OpenAI GPT-4o-mini, Apify collectors, Jinja2 templates, vanilla JS
+**Deployment:** Render.com (gunicorn, 1GB persistent disk for SQLite)
+**Total Codebase:** ~35,300 lines (Python, HTML, CSS, JS, JSON)
+**Live App:** scoutaiapp.com
 
 ---
 
 ## Core Concepts
 
 ### 1. **Verticals (Competitive Sets)**
-- A "vertical" is a collection of competitor brands to monitor (e.g., "Streetwear" with brands like Nike, Supreme, Adidas)
-- Stored in SQLite tables: `verticals` and `vertical_brands`
+- A "vertical" is a named collection of competitor brands to monitor (e.g., "Streetwear" with @supremenewyork, @nike, etc.)
+- Stored in SQLite: `verticals` and `vertical_brands` tables
 - Managed via `vertical_manager.py`
-- Each vertical has a list of brands with Instagram/TikTok handles
+- Each brand can have Instagram, TikTok, and Facebook handles
 
 ### 2. **Brand Profiles**
-- Brand-specific configuration files in `profiles/` directory (YAML format)
-- Contains voice guidelines, target audience, content preferences
-- Example: `profiles/heritage.yaml` for the default "Heritage" brand profile
-- Loaded by `profile_loader.py`
+- Optional YAML config files in `profiles/` directory
+- Contains voice guidelines, target audience, content preferences, outlier thresholds
+- Loaded by `profile_loader.py`; example: `profiles/heritage.yaml`
 
 ### 3. **Outlier Detection**
-- Statistical analysis to identify posts that significantly outperform baseline
-- Uses z-score (standard deviations above mean) and engagement multipliers
-- Configurable thresholds in brand profiles
-- Core logic in `outlier_detector.py`
+- Statistical analysis: z-score + engagement multipliers, per-platform thresholds
+- Platform weights: Instagram (comments=3x), TikTok (shares=3x), Facebook (shares=4x)
+- Configurable thresholds; core logic in `outlier_detector.py`
 
 ### 4. **Content Collection**
-- Collects recent posts from Instagram and TikTok
-- Pluggable collector system: Apify or RapidAPI
-- Stored in SQLite `posts` table
-- Collectors: `collectors/instagram.py`, `collectors/tiktok.py`
+- Collects recent posts from Instagram, TikTok, and Facebook
+- Primary: Apify actors; fallback: RapidAPI
+- Stored in `competitor_posts` table
+- Collectors: `collectors/instagram.py`, `collectors/tiktok.py`, `collectors/facebook.py`
 
 ### 5. **AI Analysis**
-- GPT-4 analyzes outlier posts and generates brand-specific adaptations
-- Prompts dynamically constructed from brand profile
-- Token usage tracking and monthly budget enforcement
+- GPT-4o-mini analyzes outlier posts and generates brand-specific adaptations
+- Prompts dynamically constructed from brand profile + learned voice patterns
+- Token usage tracking and monthly budget enforcement ($4.50 default)
 - Core logic in `analyzer.py`
 
-### 6. **Data Lifecycle Management** 🆕
-- **3-day auto-cleanup**: Automatically deletes posts older than 3 days
-- **Competitive set tracking**: Detects when brands are added/removed
-- **Blank canvas logic**: Clears data when set changes or >3 days old
-- **Incremental analysis**: Keeps existing outliers + adds new ones (same set within 3 days)
-- **Soft delete**: Removed brands are archived (not deleted) for instant re-add
+### 6. **Scout AI Chat Interface**
+- Natural language commands via OpenAI function calling (e.g., "add SaintWoods to streetwear")
+- `brand_registry.json` maps plain brand names → official handles automatically
+- Fast-path local commands handled by `chat_handler.py` (no API cost)
+- Full intent understanding via `scout_agent.py`
+
+### 7. **Data Lifecycle Management**
+- 3-day auto-cleanup of posts older than N days
+- Competitive set change detection via JSON fingerprinting
+- Blank canvas logic: clears data when set changes or >3 days old
+- Incremental analysis: keeps existing outliers + adds new ones (same set within 3 days)
+- Soft delete: removed brands are archived, not deleted
 - Core logic in `data_lifecycle.py`
+
+### 8. **Google OAuth Authentication**
+- Optional; only enforced when Google credentials are configured in settings
+- Allowlist support (`allowed_emails` in config table) for team access control
+- Stores user login history in `users` table
 
 ---
 
@@ -54,148 +66,176 @@ The Outlier Content Engine is an AI-powered social media competitive intelligenc
 
 ```
 outlier-content-engine/
-├── main.py                      # CLI entry point for running analysis
-├── dashboard.py                 # Flask web dashboard
-├── config.py                    # Configuration and environment variables
-├── database_migrations.py       # SQLite schema migrations
+├── main.py                      # CLI orchestrator for full analysis pipeline
+├── dashboard.py                 # Flask web server (all routes + helpers)
+├── config.py                    # Global config & environment variables
+├── database_migrations.py       # SQLite schema setup & versioning (idempotent)
+├── auth.py                      # Google OAuth 2.0 integration
+├── scout_agent.py               # OpenAI function-calling chat agent
+├── chat_handler.py              # Fast-path local command processor (no API cost)
 │
 ├── profiles/                    # Brand voice profiles (YAML)
-│   └── heritage.yaml
+│   ├── heritage.yaml            # Example brand profile
+│   └── _template.yaml          # Template for new profiles
 │
 ├── collectors/                  # Social media data collectors
-│   ├── base.py                 # Base collector interface
-│   ├── instagram.py            # Instagram collection (Apify/RapidAPI)
-│   └── tiktok.py               # TikTok collection (Apify/RapidAPI)
+│   ├── __init__.py             # Base interface & CollectedPost dataclass
+│   ├── instagram.py            # Instagram (Apify / RapidAPI)
+│   ├── tiktok.py               # TikTok (Apify / RapidAPI)
+│   ├── facebook.py             # Facebook (Apify)
+│   └── instagram_graph.py      # Instagram Graph API (own-channel saves/shares)
 │
-├── outlier_detector.py         # Statistical outlier detection
-├── analyzer.py                 # GPT-4 analysis and content rewriting
-├── profile_loader.py           # YAML profile loader
-├── vertical_manager.py         # Competitive set management (CRUD)
-├── data_lifecycle.py           # 3-day cleanup & blank canvas logic 🆕
-├── brand_handle_discovery.py   # Brand name → handle mapping
-├── insight_generator.py        # Pattern analysis from outliers
-├── voice_learner.py            # Learn brand voice from top posts
-├── audio_analyzer.py           # TikTok audio trend analysis
-├── series_detector.py          # Detect recurring content formats
-├── report_generator.py         # Generate analysis reports
-├── progress_tracker.py         # Real-time progress tracking
+├── outlier_detector.py          # Statistical outlier detection
+├── analyzer.py                  # GPT-4 analysis and content rewriting
+├── profile_loader.py            # YAML profile loader & validator
+├── vertical_manager.py          # Competitive set CRUD
+├── data_lifecycle.py            # 3-day cleanup & blank canvas logic
+├── brand_handle_discovery.py    # Brand name → handle mapping
+├── brand_registry.json          # Known brand → handle mappings (auto-resolution)
+├── insight_generator.py         # Pattern analysis from outliers
+├── voice_analyzer.py            # Learn brand voice from own top posts
+├── content_tagger.py            # Classify posts by theme, hook, format
+├── content_scorer.py            # Score user-submitted content concepts (0-100)
+├── content_optimizer.py         # LLM-powered content improvement suggestions
+├── reporter.py                  # Generate HTML reports & email notifications
+├── progress_tracker.py          # Real-time pipeline progress tracking
+├── gap_analyzer.py              # Content gaps vs. competitors
+├── recommendation_engine.py     # Content recommendations from patterns
 │
-├── templates/                  # Jinja2 HTML templates
-│   ├── signal.html            # Scout AI dashboard (main view)
-│   ├── base.html              # Base layout
-│   ├── verticals.html         # Competitive set management
-│   └── settings.html          # Configuration UI
+├── trend_radar/                 # Trending audio/hashtag tracking
+│   ├── collector.py             # Collect sound/hashtag usage across posts
+│   └── scorer.py                # Velocity-based trend scoring
 │
-├── static/                     # CSS and assets
-│   ├── signal-ai.css          # Main dashboard styles
-│   ├── style.css              # Global styles
-│   └── split-layout.css       # Split-panel layout
+├── templates/                   # Jinja2 HTML templates
+│   ├── signal.html              # Main Scout AI dashboard (chat + outlier grid)
+│   ├── login.html               # Google OAuth login page
+│   ├── setup.html               # API keys & brand configuration UI
+│   ├── base.html                # Base layout template
+│   └── vertical_edit.html       # Competitive set editor
 │
-├── brand_registry.json         # Known brand → handle mappings
-└── outlier_data.db            # SQLite database
+├── static/                      # CSS and static assets
+│   ├── signal-ai.css            # Main dashboard styles (~3,057 lines)
+│   ├── style.css                # Global styles
+│   ├── split-layout.css         # Split-panel layout utilities
+│   └── scoutai-logo-white-trimmed.svg  # App logo
+│
+├── render.yaml                  # Render.com deployment config
+├── requirements.txt             # Python dependencies
+└── data/                        # Runtime data (gitignored)
+    ├── content_engine.db        # SQLite database
+    ├── analysis_progress.json   # Real-time progress tracking
+    ├── analysis.pid             # PID file for cancel support
+    └── lifecycle_config.json    # Competitive set signature + last-run timestamp
 ```
 
 ---
 
 ## Key Files Deep Dive
 
-### `main.py` - Analysis Pipeline
-**Purpose:** CLI entry point for running the full analysis pipeline
+### `dashboard.py` - Web Interface & API Server
+**Purpose:** Flask server for interactive dashboard; all routes, helpers, template context
 
-**Flow:**
-1. Load brand profile from `profiles/<name>.yaml`
-2. Get vertical (competitive set) from database
-3. Collect recent posts from Instagram/TikTok
-4. Detect outliers using statistical analysis
-5. Learn brand voice from own top posts (optional)
-6. Analyze outliers with GPT-4
-7. Generate insights and recommendations
-8. Save report and send email (optional)
+**Key Routes:**
 
-**Key Functions:**
-- `run_outlier_analysis()` - Main orchestration
-- `get_competitive_set()` - Load brands from vertical
-- Uses all core modules in sequence
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/signal` | GET | Main dashboard with chat + outlier posts grid |
+| `/chat/message` | POST | Process natural language commands via Scout AI |
+| `/run` | POST | Trigger analysis pipeline in background thread |
+| `/analysis/stream` | GET | SSE stream for real-time pipeline progress |
+| `/analysis/cancel` | POST | Cancel running analysis via PID file |
+| `/api/outliers` | GET | JSON API for filtered outlier posts (AJAX) |
+| `/api/score-concept` | POST | Score user content concept (0-100) |
+| `/api/optimize-concept` | POST | LLM-powered content optimization |
+| `/api/trends` | GET | Rising/declining content pattern trends |
+| `/api/gap-analysis` | GET | Content gaps vs. competitors |
+| `/api/export/csv` | GET | Export filtered outliers as CSV |
+| `/api/validate_keys` | POST | Live API key validation |
+| `/setup` | GET | API keys & settings page |
+| `/setup/save` | POST | Save API keys, handles, emails, OAuth creds |
+| `/proxy-image` | GET | CORS proxy for social media images (allowlist-protected) |
+| `/auth/google` | GET | Google OAuth redirect |
+| `/auth/google/callback` | GET | OAuth callback handler |
+| `/verticals/create` | POST | Create new vertical with brands |
+| `/verticals/brand/add` | POST | Add single brand to vertical |
+| `/verticals/brand/bulk-add` | POST | Bulk add brands from pasted text |
+| `/verticals/brand/remove` | POST | Remove brand from vertical |
+| `/verticals/delete` | POST | Delete entire vertical |
+
+**Key Helper Functions:**
+- `needs_setup()` — Checks if both apify + openai keys are in `api_credentials` table
+- `get_outlier_posts()` — Filtered query with platform/timeframe/sort/tag params
+- `get_dashboard_stats()` — Overview stats for chat sidebar
+- `auth_enabled()` — Returns True if Google credentials configured
 
 ---
 
-### `dashboard.py` - Web Interface
-**Purpose:** Flask web server for interactive dashboard
+### `scout_agent.py` - Chat AI Agent
+**Purpose:** OpenAI function-calling agent for natural language commands
 
-**Key Routes:**
-- `/signal` - Scout AI dashboard with outlier posts and chat interface
-- `/api/load_vertical/<name>` - Load a competitive set
-- `/chat/message` - Process chat commands (add/remove brands)
-- `/verticals` - Manage competitive sets
-- `/settings` - Configure thresholds and API keys
+**Tools/Functions:**
+- `create_category(name, description)` — Create a new vertical
+- `add_brands(category, ig_handles, tt_handles)` — Add brands (auto-resolves names via `brand_registry.json`)
+- `remove_brand(category, handle)` — Remove brand
+- `list_categories()` — List all verticals
+- `analyze_category(name)` — Trigger analysis pipeline
+- `show_help()` — Show available commands
 
-**Architecture:**
-- Uses SQLite for persistence
-- Server-side rendering with Jinja2
-- Real-time filtering via URL query parameters
-- Chat handler for natural language commands
+**Brand Auto-Resolution:**
+- "SaintWoods" → `@saintwoods`
+- "Supreme" → `@supremenewyork`
+- "Palace" → `@palaceskateboards`
+- "Fear of God Essentials" → `@fearofgod`
+- Unknown brands are passed through as-is (treated as the handle)
 
-**Recent Updates:**
-- Added empty state support (`?empty=true`)
-- Competitive set dropdown for easy switching
-- Reset button clears all brands and chat
+**System Prompt Flow:**
+1. Accept brand names (with or without @)
+2. Ask for category name if not provided
+3. Confirm resolved handles
+4. Ask platforms & timeframe before analysis
+5. Wait for user confirmation
 
 ---
 
 ### `outlier_detector.py` - Statistical Analysis
-**Purpose:** Identify posts that significantly outperform baseline
-
 **Algorithm:**
-1. Calculate baseline metrics per competitor (mean, median, std dev)
-2. Compute z-scores (std devs above mean) for each post
+1. Calculate per-competitor baseline (mean, median, std dev)
+2. Compute z-scores (std devs above mean) per post
 3. Calculate engagement multipliers vs. baseline
-4. Apply configurable thresholds from brand profile
-5. Rank outliers by composite score
+4. Apply platform-specific thresholds:
+   - Instagram: 2.0x multiplier, 1.5 std devs
+   - TikTok: 3.5x multiplier, 2.0 std devs
+   - Facebook: 2.5x multiplier, 1.5 std devs
+5. Weighted engagement score by platform driver
+6. Rank outliers by composite score
 
 **Key Classes:**
-- `OutlierPost` - Data model for an outlier
-- `CompetitorBaseline` - Per-competitor baseline stats
-- `OutlierDetector` - Main detection logic
-
-**Thresholds (configurable in profile):**
-- Minimum z-score: 1.5 (1.5 std devs above mean)
-- Minimum engagement multiplier: 2.0x baseline
-- Top N outliers to analyze: 10
+- `OutlierPost` — Data model with score, primary driver, content tags
+- `CompetitorBaseline` — Per-competitor stats (mean, stdev, quartiles)
+- `OutlierDetector` — Main detection logic
 
 ---
 
 ### `analyzer.py` - GPT-4 Analysis
-**Purpose:** Analyze outlier posts and rewrite concepts in brand voice
-
-**Prompt Construction:**
-- Dynamically built from brand profile
-- Includes learned voice patterns from top posts
-- Real caption examples from brand's own posts
-- Trending audio and content series context
-
 **Output Schema (JSON):**
 ```json
 {
-  "outlier_analysis": [
-    {
-      "post_id": "...",
-      "hook_type": "question|curiosity_gap|shock|...",
-      "hook_breakdown": "Why this hook works",
-      "visual_strategy": "What made the visual work",
-      "emotional_trigger": "Core emotion activated",
-      "content_pattern": "Named framework (e.g., 'Before/After')",
-      "replicability_score": 8
-    }
-  ],
-  "brand_adaptations": [
-    {
-      "adapted_caption": "Rewritten in brand voice",
-      "hook_suggestion": "Opening line concept",
-      "visual_direction": "What the visual should show",
-      "format_suggestion": "reel|carousel|static|story",
-      "brand_fit_score": 8
-    }
-  ],
+  "outlier_analysis": [{
+    "post_id": "...",
+    "hook_type": "question|curiosity_gap|shock|...",
+    "hook_breakdown": "Why this hook works",
+    "visual_strategy": "What made the visual work",
+    "emotional_trigger": "Core emotion activated",
+    "content_pattern": "Named framework (e.g., Before/After)",
+    "replicability_score": 8
+  }],
+  "brand_adaptations": [{
+    "adapted_caption": "Rewritten in brand voice",
+    "hook_suggestion": "Opening line concept",
+    "visual_direction": "What the visual should show",
+    "format_suggestion": "reel|carousel|static|story",
+    "brand_fit_score": 8
+  }],
   "weekly_patterns": {
     "best_content_types": ["..."],
     "trending_themes": ["..."]
@@ -204,271 +244,138 @@ outlier-content-engine/
 }
 ```
 
-**Budget Management:**
-- Tracks token usage in `token_usage` table
-- Monthly cost ceiling (default: $5.00)
-- Returns raw data if budget exceeded
+**Budget Management:** Tracks tokens in `token_usage` table; default $4.50/month ceiling.
 
 ---
 
-### `vertical_manager.py` - Competitive Sets
-**Purpose:** CRUD operations for competitive sets (verticals)
+### `setup.html` - Settings Page
+**Sections:**
+1. **API Keys** — Apify token + OpenAI key (required), TikTok key (optional)
+   - "Validate Keys" button: real-time API validation via `/api/validate_keys`
+   - "Save Keys" button: calls `saveKeysOnly()` → POST to `/setup/save` → redirects to `/signal`
+   - Uses `redirect: 'manual'` + `r.type === 'opaqueredirect'` check for proper success detection
+   - On success, saves to localStorage and redirects to dashboard after 800ms
+2. **Your Brand** — Own Instagram/TikTok handles for voice learning
+3. **Team Emails** — Distribution list for email reports
+4. **Google OAuth** — Optional client ID/secret to enable login
+5. **Allowed Emails** — Access control allowlist
 
-**Database Schema:**
-```sql
--- Verticals (competitive sets)
-CREATE TABLE verticals (
-    name TEXT PRIMARY KEY,
-    description TEXT,
-    created_at TEXT,
-    updated_at TEXT
-);
-
--- Brands in each vertical
-CREATE TABLE vertical_brands (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    vertical_name TEXT,
-    brand_name TEXT,
-    instagram_handle TEXT,
-    tiktok_handle TEXT,
-    notes TEXT,
-    FOREIGN KEY (vertical_name) REFERENCES verticals(name)
-);
-```
-
-**Key Methods:**
-- `create_vertical(name, description)` - Create new competitive set
-- `add_brand(vertical_name, instagram_handle, tiktok_handle)` - Add brand
-- `remove_brand(vertical_name, handle)` - Remove brand
-- `list_verticals()` - Get all competitive sets
-- `get_vertical(name)` - Load specific vertical with brands
+**Important:** `saveKeysOnly()` sends ALL form fields (including empty optional ones) to prevent backend errors. Missing fields caused "Error saving keys" failures.
 
 ---
 
-### `collectors/instagram.py` & `collectors/tiktok.py`
-**Purpose:** Collect recent posts from social platforms
+### `signal.html` - Main Dashboard
+**Layout:** Split-panel (left chat, right outlier grid)
 
-**Apify Collectors (Recommended):**
-- Uses Apify actor API
-- Instagram: `apify~instagram-scraper`
-- TikTok: `clockworks~tiktok-scraper`
-- More reliable than RapidAPI
-- Requires `APIFY_API_TOKEN` in `.env`
+**Left Panel (Scout AI Chat):**
+- Onboarding: shows API key setup prompt if `needs_setup` is True, template picker if no verticals, else "Welcome back"
+- `needs_setup` is hidden client-side if localStorage has both apify + openai keys (BYOK support)
+- Brand baselines collapsible section
+- Insights, patterns, trend radar
 
-**RapidAPI Collectors (Fallback):**
-- Uses RapidAPI marketplace endpoints
-- Instagram: `instagram-scraper-api2`
-- TikTok: `tiktok-scraper7`
-- Requires `RAPIDAPI_KEY` in `.env`
+**Right Panel (Outlier Posts Grid):**
+- Competitive set dropdown to load/switch verticals
+- Filter pills: platform (All/IG/TT/FB), timeframe (30 Days/3 Months), sort (Score/Saves/Shares/Recent)
+- Post cards: media preview, engagement metrics, outlier score gauge, AI analysis, content tags
+- "Create your first competitive set" empty state
 
-**Configuration:**
-Set `COLLECTION_SOURCE=apify` or `rapidapi` in `.env`
-
-**Data Model (CollectedPost):**
-```python
-@dataclass
-class CollectedPost:
-    post_id: str
-    competitor_name: str
-    competitor_handle: str
-    platform: str  # "instagram" or "tiktok"
-    post_url: str
-    media_type: str  # "image", "video", "carousel"
-    caption: Optional[str]
-    likes: int
-    comments: int
-    shares: int
-    views: int
-    saves: int
-    posted_at: Optional[datetime]
-    media_url: Optional[str]
-    hashtags: List[str]
-    follower_count: Optional[int]
-    audio_id: Optional[str]  # TikTok only
-    audio_name: Optional[str]  # TikTok only
-```
-
----
-
-### `voice_learner.py` - Brand Voice Learning
-**Purpose:** Learn brand voice patterns from own top-performing posts
-
-**Process:**
-1. Fetch brand's own Instagram posts
-2. Identify top performers (by engagement rate)
-3. Analyze with GPT-4 to extract voice patterns
-4. Returns structured voice profile
-
-**Output:**
-```python
-{
-    "voice_summary": "Conversational, enthusiastic, emoji-light",
-    "sentence_patterns": {
-        "structure": "Mix of short punchy and longer storytelling",
-        "avg_length": "3-5 sentences"
-    },
-    "vocabulary": {
-        "formality": "Casual",
-        "distinctive_phrases": ["heritage", "timeless", "classic"]
-    },
-    "opening_patterns": ["Question hook", "Bold statement"],
-    "closing_patterns": ["Shop link", "Call to community"],
-    "emoji_usage": "Sparingly, 1-2 per caption",
-    "caption_length": "Medium (80-150 words)",
-    "punctuation_habits": "Period-heavy, occasional exclamation"
-}
-```
-
-**Integration:**
-- Used in `analyzer.py` to build more accurate prompts
-- Helps GPT-4 write in authentic brand voice
-- Optional feature (run with `--learn-voice` flag)
-
----
-
-### `insight_generator.py` - Pattern Analysis
-**Purpose:** Generate high-level insights from detected outliers
-
-**Analyzes:**
-- Best performing content types (video, carousel, static)
-- Optimal posting days/times
-- Trending themes and topics
-- Hook types that work best
-- Recurring content formats (franchises)
-
-**Output Structure:**
-```python
-{
-    "summary": "Text summary of key findings",
-    "patterns": [
-        {
-            "name": "Video Reels Dominate",
-            "pattern_type": "format",
-            "metric": "3.2x avg engagement",
-            "description": "...",
-            "actionable_takeaway": "..."
-        }
-    ],
-    "franchises": [
-        {
-            "name": "Behind the Scenes Series",
-            "description": "...",
-            "retention_score": "High",
-            "post_count": 5
-        }
-    ],
-    "recommendations": [...]
-}
-```
-
----
-
-### `templates/signal.html` - Scout AI Dashboard
-**Purpose:** Main interactive dashboard for viewing and analyzing outliers
-
-**Layout:**
-- **Left Panel:** Chat interface with Scout AI
-  - Welcome message
-  - Current competitive set display
-  - AI-generated insights and patterns
-  - Recommendations
-  - Reset button
-
-- **Right Panel:** Outlier posts grid
-  - Competitive set dropdown (select saved sets)
-  - Filter pills (brands, platform, timeframe, sort)
-  - Post cards with engagement metrics
-  - Visual previews with fallback gradients
-
-**Key Features:**
-1. **Competitive Set Dropdown** - Switch between saved sets
-2. **Empty State** - Shows when no competitive set loaded (`?empty=true`)
-3. **Brand Filter Pills** - Click to filter, long-press to replace
-4. **Reset Button** - Clears all brands and chat, returns to empty state
-5. **Real-time Filtering** - URL-based filter state
-6. **Image Proxy** - `/proxy-image?url=...` for CORS-protected media
-7. **Gradient Fallbacks** - Colorful placeholders when images fail
-
-**Recent Improvements:**
-- Added competitive set management (dropdown + load/reset)
-- Empty state UI with guidance message
-- Reset functionality that truly clears everything
+**Splash Screen:**
+- Shows on first visit per session (sessionStorage flag)
+- 150px logo, "Discover What's Working in Social Media" tagline
+- CSS: `.splash-screen`, `.splash-content`, `.splash-logo`, `.splash-tagline`
 
 ---
 
 ## Database Schema
 
-### Main Tables
+**Database path:** `data/content_engine.db` (set in `config.py` as `DATA_DIR / "content_engine.db"`)
+
+### Core Tables
 
 ```sql
--- Social media posts (collected)
-CREATE TABLE posts (
+-- All collected social media posts
+CREATE TABLE competitor_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id TEXT UNIQUE NOT NULL,
+    post_id TEXT NOT NULL,
+    brand_profile TEXT NOT NULL,        -- vertical name
+    platform TEXT DEFAULT 'instagram',  -- instagram | tiktok | facebook
     competitor_name TEXT,
     competitor_handle TEXT,
-    platform TEXT,
-    post_url TEXT,
-    media_type TEXT,
+    posted_at TEXT,
     caption TEXT,
-    likes INTEGER,
-    comments INTEGER,
+    media_type TEXT,                    -- image | video | carousel
+    media_url TEXT,
+    likes INTEGER DEFAULT 0,
+    comments INTEGER DEFAULT 0,
+    saves INTEGER,
     shares INTEGER,
     views INTEGER,
-    saves INTEGER,
-    posted_at TEXT,
-    collected_at TEXT,
-    media_url TEXT,
-    hashtags TEXT,  -- JSON array
     follower_count INTEGER,
-    audio_id TEXT,
-    audio_name TEXT
-);
-
--- Outlier posts (detected)
-CREATE TABLE outliers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id TEXT,
-    profile_name TEXT,  -- Brand profile name
+    estimated_engagement_rate REAL,
+    is_outlier INTEGER DEFAULT 0,
+    is_own_channel INTEGER DEFAULT 0,
     outlier_score REAL,
-    engagement_multiplier REAL,
-    std_devs_above REAL,
-    detected_at TEXT,
-    content_tags TEXT,  -- JSON array
-    FOREIGN KEY (post_id) REFERENCES posts(post_id)
+    weighted_engagement_score REAL,
+    primary_engagement_driver TEXT,
+    content_tags TEXT,                  -- JSON array
+    audio_id TEXT,                      -- TikTok only
+    audio_name TEXT,                    -- TikTok only
+    ai_analysis TEXT,                   -- JSON from GPT-4
+    collected_at TEXT NOT NULL,
+    archived INTEGER DEFAULT 0,         -- soft delete
+    UNIQUE(post_id, platform, brand_profile)
 );
 
--- Competitive sets (verticals)
+-- Competitive sets
 CREATE TABLE verticals (
-    name TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
     description TEXT,
-    created_at TEXT,
-    updated_at TEXT
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
--- Brands in verticals
+-- Brands in each vertical
 CREATE TABLE vertical_brands (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    vertical_name TEXT,
+    vertical_name TEXT NOT NULL,
     brand_name TEXT,
-    instagram_handle TEXT,
+    instagram_handle TEXT,              -- nullable (TikTok/FB-only brands)
     tiktok_handle TEXT,
-    notes TEXT,
-    FOREIGN KEY (vertical_name) REFERENCES verticals(name)
+    facebook_handle TEXT,
+    added_at TEXT NOT NULL,
+    FOREIGN KEY (vertical_name) REFERENCES verticals(name) ON DELETE CASCADE
 );
+-- Unique indexes: idx_vertical_brands_ig_unique, idx_vertical_brands_tt_unique
 
--- Analysis reports
-CREATE TABLE reports (
+-- API keys (stored in DB, not .env)
+CREATE TABLE api_credentials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    profile_name TEXT,
-    vertical_name TEXT,
-    report_date TEXT,
-    outlier_count INTEGER,
-    report_json TEXT,  -- Full JSON report
-    created_at TEXT
+    service TEXT UNIQUE NOT NULL,       -- apify | openai | tiktok | google_client_id | google_client_secret
+    api_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
--- Token usage tracking
+-- Generic key-value config
+CREATE TABLE config (
+    key TEXT PRIMARY KEY,
+    value TEXT
+    -- Keys: own_brand_instagram, own_brand_tiktok, allowed_emails
+);
+
+-- Google OAuth users
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    google_id TEXT UNIQUE NOT NULL,
+    email TEXT NOT NULL,
+    name TEXT,
+    picture TEXT,
+    created_at TEXT NOT NULL,
+    last_login TEXT NOT NULL
+);
+
+-- LLM token usage & cost tracking
 CREATE TABLE token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT,
@@ -480,453 +387,256 @@ CREATE TABLE token_usage (
     context TEXT
 );
 
--- API keys (encrypted)
-CREATE TABLE api_keys (
-    service TEXT PRIMARY KEY,
-    api_key TEXT NOT NULL,
-    created_at TEXT,
-    updated_at TEXT
+-- Email notification subscribers
+CREATE TABLE email_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vertical_name TEXT,                 -- NULL = all verticals (team-wide)
+    email TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
 );
 
--- Configuration
-CREATE TABLE config (
-    key TEXT PRIMARY KEY,
-    value TEXT,
-    updated_at TEXT
+-- Content concept scoring history
+CREATE TABLE content_scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brand_profile TEXT NOT NULL,
+    concept_text TEXT NOT NULL,
+    hook_line TEXT,
+    format_choice TEXT,
+    platform TEXT,
+    score_data TEXT NOT NULL,           -- JSON breakdown
+    overall_score REAL NOT NULL,        -- 0-100
+    predicted_engagement_range TEXT,
+    optimization_suggestions TEXT,
+    version INTEGER DEFAULT 1,
+    parent_score_id INTEGER,            -- for optimization lineage tracking
+    scored_at TEXT NOT NULL
 );
-```
 
-### Indexes
-
-```sql
-CREATE INDEX idx_posts_competitor ON posts(competitor_handle);
-CREATE INDEX idx_posts_platform ON posts(platform);
-CREATE INDEX idx_posts_posted_at ON posts(posted_at);
-CREATE INDEX idx_outliers_profile ON outliers(profile_name);
-CREATE INDEX idx_outliers_score ON outliers(outlier_score DESC);
+-- Trend radar: time-series sound/hashtag tracking
+CREATE TABLE trend_radar_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brand_profile TEXT NOT NULL,
+    snapshot_timestamp TEXT NOT NULL,
+    item_type TEXT NOT NULL,            -- sound | hashtag
+    item_id TEXT NOT NULL,
+    item_name TEXT,
+    usage_count INTEGER DEFAULT 0,
+    outlier_count INTEGER DEFAULT 0,
+    total_engagement INTEGER DEFAULT 0,
+    avg_engagement REAL DEFAULT 0,
+    top_post_id TEXT,
+    collected_at TEXT NOT NULL,
+    UNIQUE(brand_profile, snapshot_timestamp, item_type, item_id)
+);
 ```
 
 ---
 
 ## Configuration
 
-### Environment Variables (`.env`)
+### Environment Variables / `config.py`
+
+API keys are stored **in the database** (not .env) after being entered via the Settings UI. `config.get_api_key(service)` checks DB first, falls back to env var.
 
 ```bash
-# OpenAI API
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini  # or gpt-4o
-MONTHLY_COST_LIMIT_USD=5.00
+# OpenAI
+OPENAI_API_KEY=sk-...             # fallback if not in DB
+OPENAI_MODEL=gpt-4o-mini
+MONTHLY_COST_LIMIT_USD=4.50
 
-# Collection Source
-COLLECTION_SOURCE=apify  # or rapidapi
-
-# Apify (recommended)
-APIFY_API_TOKEN=apify_api_...
-
-# RapidAPI (fallback)
+# Data Collection
+COLLECTION_SOURCE=apify           # or rapidapi
+APIFY_API_TOKEN=apify_api_...    # fallback if not in DB
 RAPIDAPI_KEY=...
+TIKTOK_RAPIDAPI_KEY=...
 
-# Instagram Collection
-INSTAGRAM_ACCOUNT=your_brand_handle  # For learning voice
+# Google OAuth (optional — enables login page)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
 
-# Email Notifications
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your@email.com
-SMTP_PASSWORD=...
-SMTP_FROM=your@email.com
-SMTP_TO=recipient@email.com
+# Email (Gmail SMTP)
+EMAIL_ADDRESS=your@gmail.com
+EMAIL_APP_PASSWORD=...
+EMAIL_RECIPIENTS=team@company.com
 
-# Database
-DB_PATH=outlier_data.db
+# Flask
+FLASK_SECRET_KEY=...              # auto-generated if missing
 
-# Dashboard
-DASHBOARD_PORT=5001
+# Active defaults
+ACTIVE_VERTICAL=Streetwear        # default vertical on startup
 ```
 
-### Brand Profile (YAML)
-
-Example: `profiles/heritage.yaml`
-
+### Brand Profile (YAML) — `profiles/heritage.yaml`
 ```yaml
 name: Heritage
 vertical: Fashion & Lifestyle
 target_audience: Age 25-45, affluent professionals
-follower_count: 50000
-
-# Voice Guidelines
 voice:
   tone: Sophisticated yet approachable
-  personality: Timeless, confident, quality-focused
   language_style: Clear and direct, minimal jargon
-  emoji_usage: Sparingly
-  values:
-    - Craftsmanship
-    - Authenticity
-    - Timeless design
-
-# Outlier Detection Thresholds
+  themes: [Craftsmanship, Authenticity]
+  avoids: [Politics, Controversy]
 outlier_settings:
   min_z_score: 1.5
   min_engagement_multiplier: 2.0
   top_outliers_to_analyze: 10
-  top_outliers_to_rewrite: 5
-
-# Content Preferences
-content_preferences:
-  formats: [carousel, reel, static]
-  avoid_topics: [Politics, controversy]
-  primary_cta: Shop link
+competitors:
+  - name: Nike
+    handles:
+      instagram: nike
+      tiktok: nike
 ```
 
 ---
 
-## API Endpoints
+## Deployment
 
-### Dashboard Routes
+**Platform:** Render.com
+**Build command:** `pip install -r requirements.txt && python database_migrations.py`
+**Start command:** `gunicorn dashboard:app`
+**Persistent disk:** 1GB mounted at `/opt/render/project/src/data` (SQLite lives here)
 
-**GET `/signal`**
-- Main Scout AI dashboard
-- Query params: `competitor`, `platform`, `timeframe`, `sort`, `tag`, `empty`
-- Returns: HTML with outlier posts and chat interface
+`render.yaml` at repo root configures the above. Secrets (API keys) are set in Render dashboard environment variables; the app also stores them in the database via Settings UI.
 
-**GET `/api/load_vertical/<name>`**
-- Load a competitive set by name
-- Sets active vertical in session
-- Redirects to `/signal`
-
-**POST `/chat/message`**
-- Process natural language chat commands
-- Body: `{"message": "add @nike to streetwear"}`
-- Returns: JSON with response and action data
-
-**GET `/verticals`**
-- List all competitive sets
-- Returns: HTML with vertical management UI
-
-**POST `/verticals/create`**
-- Create new competitive set
-- Body: `{"name": "...", "description": "..."}`
-
-**GET `/verticals/<name>/edit`**
-- Edit competitive set
-- Returns: HTML form with brands list
-
-**POST `/verticals/<name>/brands/add`**
-- Add brand to competitive set
-- Body: `{"instagram_handle": "...", "tiktok_handle": "..."}`
-
-**DELETE `/verticals/<name>/brands/<handle>`**
-- Remove brand from competitive set
-
-**GET `/settings`**
-- Configuration UI
-- Manage API keys, thresholds, content tags
-
-**GET `/proxy-image?url=<encoded_url>`**
-- Proxy for CORS-protected images
-- Returns: Image with proper CORS headers
+**Deployment trigger:** Push to `master` branch on GitHub → Render auto-deploys.
 
 ---
 
-## Running the Application
-
-### Setup
+## Running Locally
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Create .env file
-cp .env.example .env
-# Edit .env with your API keys
-
-# 3. Run database migrations
+# 2. Run database migrations
 python database_migrations.py
 
-# 4. Create a brand profile
-cp profiles/heritage.yaml profiles/your_brand.yaml
-# Edit your_brand.yaml
+# 3. Start web server
+python dashboard.py
+# Open http://localhost:5001/signal
 
-# 5. Create a competitive set
-python -c "from vertical_manager import VerticalManager; vm = VerticalManager(); vm.create_vertical('Streetwear', 'Fashion competitors'); vm.add_brand('Streetwear', instagram_handle='nike')"
+# 4. Enter API keys via Settings UI (/setup)
+#    OR set APIFY_API_TOKEN and OPENAI_API_KEY in .env
 ```
 
-### Run Analysis (CLI)
-
+### CLI Analysis (optional)
 ```bash
-# Basic analysis
+# Run full pipeline for a vertical
 python main.py --vertical Streetwear
 
-# With voice learning
-python main.py --vertical Streetwear --learn-voice
-
 # Skip collection (use existing data)
-python main.py --vertical Streetwear --skip-collect
-
-# With email report
-python main.py --vertical Streetwear --email
-```
-
-### Run Dashboard
-
-```bash
-# Start web server
-python dashboard.py --port 5001
-
-# Open browser
-open http://localhost:5001/signal
+python main.py --vertical Streetwear --skip-collect --no-email
 ```
 
 ---
 
 ## Common Workflows
 
-### 1. Adding a New Competitive Set
-
-**Via CLI:**
-```python
-from vertical_manager import VerticalManager
-
-vm = VerticalManager()
-vm.create_vertical('Streetwear', 'Urban fashion brands')
-vm.add_brand('Streetwear', instagram_handle='nike')
-vm.add_brand('Streetwear', instagram_handle='adidas')
-vm.add_brand('Streetwear', instagram_handle='supremenewyork')
+### Adding a New Competitive Set (via Chat)
+Type in the Scout AI chat:
 ```
-
-**Via Dashboard:**
-1. Go to `/verticals`
-2. Click "Create New Collection"
-3. Enter name and description
-4. Add brands via chat: "add @nike @adidas to streetwear"
-
-### 2. Running Your First Analysis
-
-```bash
-# 1. Make sure you have a vertical created
-python -c "from vertical_manager import VerticalManager; print(VerticalManager().list_verticals())"
-
-# 2. Run analysis
-python main.py --vertical Streetwear --no-email
-
-# 3. View results in dashboard
-python dashboard.py --port 5001
-# Open http://localhost:5001/signal
+"Create a streetwear set with Supreme, Palace, Noah, and Stussy"
 ```
+The agent auto-resolves brand names to handles via `brand_registry.json`.
 
-### 3. Resetting the Dashboard
+### Switching Competitive Sets
+Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
-1. Click the "Reset" button in Scout AI dashboard
-2. This clears all brand filters and chat messages
-3. Shows empty state with dropdown to load saved competitive sets
-4. Select a competitive set from dropdown to load it back
-
-### 4. Switching Competitive Sets
-
-1. Use the "COMPETITIVE SET" dropdown at top of filters
-2. Select a different vertical from the list
-3. Page reloads with new brands and outliers
+### Saving API Keys
+1. Go to `/setup` (Settings icon in top-right)
+2. Enter Apify token and OpenAI key
+3. Click "Save Keys" — saves to database, redirects back to `/signal`
+4. The API key setup prompt in chat disappears on next page load
 
 ---
 
 ## Troubleshooting
 
+### "Error saving keys" on Settings page
+- The `saveKeysOnly()` function must send all form fields (including empty optional ones)
+- Check browser console for the actual server error
+- Verify the database has an `api_credentials` table (run `python database_migrations.py`)
+
+### API key prompt still showing after saving keys
+- `needs_setup()` queries `api_credentials` for both `apify` and `openai` rows
+- Confirm keys exist: `sqlite3 data/content_engine.db "SELECT service FROM api_credentials;"`
+- Client-side: localStorage keys (`scout_apify_token`, `scout_openai_key`) are also checked to hide the prompt
+
 ### No posts collected
-- Check API keys in `.env`
-- Verify handles exist on Instagram/TikTok
+- Verify API keys in Settings are valid (use "Validate Keys" button)
+- Check handles exist on the platform
 - Try switching `COLLECTION_SOURCE` (apify ↔ rapidapi)
-- Check rate limits
 
 ### No outliers detected
 - Lower thresholds in brand profile (`min_z_score`, `min_engagement_multiplier`)
-- Increase lookback period
-- Verify competitors are posting actively
-
-### GPT-4 analysis fails
-- Check `OPENAI_API_KEY` is valid
-- Verify monthly budget not exceeded (check `token_usage` table)
-- Check OpenAI service status
+- Verify competitors are posting actively in the selected timeframe
 
 ### Dashboard not loading
-- Check if port 5001 is available: `lsof -ti:5001`
-- Kill existing process: `lsof -ti:5001 | xargs kill -9`
-- Check `outlier_data.db` exists
+- Check port: `lsof -ti:5001 | xargs kill -9`
 - Run migrations: `python database_migrations.py`
+- Check `data/content_engine.db` exists
 
 ### Images not loading
-- Uses `/proxy-image` endpoint for CORS
-- Falls back to gradient placeholders if all sources fail
+- Uses `/proxy-image` endpoint for CORS; falls back to gradient placeholders
 - Check browser console for CORS errors
 
 ---
 
 ## Architecture Decisions
 
-### Why SQLite?
-- Simple, serverless, single file
-- Perfect for single-user tool
-- Easy backup and portability
-- Sufficient performance for this use case
+**SQLite over PostgreSQL:** Single-user/small-team tool; simple, serverless, single file. Persistent disk on Render handles durability. Could migrate to PostgreSQL for multi-tenant.
 
-### Why Apify over RapidAPI?
-- More reliable and consistent data
-- Better rate limits
-- Official Instagram/TikTok actors
-- Handles pagination automatically
+**API keys in DB, not .env:** Allows runtime configuration via Settings UI without redeployment. `config.get_api_key()` tries DB first, .env second.
 
-### Why GPT-4o-mini?
-- 80% cheaper than GPT-4
-- Fast enough for this use case
-- Good quality for content analysis
-- Budget-friendly for monthly usage
+**Apify over RapidAPI:** More reliable, better rate limits, official actors, handles pagination. RapidAPI is kept as fallback.
 
-### Why Flask over FastAPI?
-- Simpler for server-side rendering
-- Mature template engine (Jinja2)
-- Easier to integrate with existing tools
-- No async complexity needed
+**GPT-4o-mini over GPT-4:** 80% cheaper, fast enough for content analysis, stays within ~$4.50/month budget.
 
-### Why No Frontend Framework?
-- Server-side rendering is faster to build
-- Less complexity and dependencies
-- Easier for AI to maintain
-- Progressive enhancement with vanilla JS
+**Flask over FastAPI:** Server-side rendering is simpler to build and maintain; Jinja2 templates; no async complexity.
+
+**No frontend framework:** Server-side rendering is faster to ship; less dependency surface; easier for AI to maintain; progressive enhancement with vanilla JS.
+
+**`redirect: 'manual'` in fetch:** When browser follows a server redirect automatically, the session cookie set by Flask isn't accessible. Using `manual` + checking `r.type === 'opaqueredirect'` keeps the user on the correct page and allows localStorage updates before redirecting via `window.location.href`.
 
 ---
 
-## Future Improvements
+## Recent Changelog
 
-### Potential Features
-- [ ] Multi-user support with authentication
-- [ ] Real-time updates (WebSocket)
-- [ ] Custom AI models (fine-tuned on brand)
-- [ ] LinkedIn/Twitter/YouTube support
-- [ ] Collaborative features (teams, comments)
-- [ ] A/B testing recommendations
-- [ ] Automated content scheduling
-- [ ] Competitor alerts (new outliers)
-- [ ] Export to Notion/Airtable
+### 2026-02-17: Brand Name Auto-Resolution & Chat UX
+- `scout_agent.py`: Integrated `BrandHandleDiscovery` — users can type "SaintWoods" or "Fear of God Essentials" instead of exact handles
+- `brand_registry.json`: Expanded with saintwoods, kith, aimé leon dore, noah entries
+- Updated system prompt with guided conversational flow (confirm handles before running)
 
-### Technical Debt
-- [ ] Add comprehensive test suite
-- [ ] Implement proper logging framework
-- [ ] Add Redis caching layer
-- [ ] Migrate to PostgreSQL for multi-user
-- [ ] Add API rate limiting
-- [ ] Implement proper error tracking (Sentry)
-- [ ] Add CI/CD pipeline
-- [ ] Containerize with Docker
+### 2026-02-17: Fix Chat Bubble Overflow
+- `signal-ai.css`: Added `min-width: 0` + `overflow: hidden` to `.signal-message-content`
+- Constrained report header elements and added `word-wrap` to report lines
 
----
+### 2026-02-17: Fix Save Keys Error
+- `setup.html`: `saveKeysOnly()` now sends all form fields (was missing optional fields causing backend errors)
+- Added `r.type === 'opaqueredirect'` check for proper success detection with `redirect: 'manual'`
+- Improved error handling: async response parsing, console logging, actual error message display
+- On save success: redirect to `/signal` after 800ms via `window.location.href`
 
-## Contributing
+### 2026-02-16: Fix API Key Prompt Persistence
+- `setup.html`: After successful save, redirect to `/signal` so `needs_setup()` re-evaluates
+- `signal.html` (commit 9c8e5b5): Added client-side BYOK detection — hides setup prompt when localStorage has both keys
+- Polish: Google sign-in page copy ("Welcome back"), refined button hover states
 
-This is a personal project, but contributions are welcome!
+### 2026-02-16: UI Polish Round 2
+- Reverted splash screen to original layout (150px logo, standard centering)
+- `signal-ai.css`: `.signal-chat-subtitle` — removed 48px left margin, added max-width 600px, improved line-height
+- `signal-ai.css`: `.signal-empty` — reduced padding (120px → 60px), min-height (50vh → 40vh)
+- `signal-ai.css`: `.signal-empty-cta` — added transitions, box-shadow, hover glow
 
-**Before submitting:**
-1. Test your changes locally
-2. Update this CLAUDE.md if you change architecture
-3. Follow existing code style
-4. Add docstrings to new functions
-
----
-
-## License
-
-MIT License - See LICENSE file for details
+### 2026-02-15: Data Lifecycle Management & Brand Removal
+- `data_lifecycle.py` (new): 3-day cleanup, competitive set fingerprinting, blank canvas logic
+- Fixed brand removal: posts correctly archived when brands removed from vertical
+- Fixed analysis timer showing "0m 0s"
+- Rewrote cancel endpoint to use PID file directly
 
 ---
 
-## Contact
-
-For questions or issues, please open a GitHub issue or contact the project maintainer.
-
----
-
-## Recent Updates & Changelog
-
-### 2026-02-15: Data Lifecycle Management & Brand Removal Fixes
-
-**Major Features Added:**
-
-1. **3-Day Data Lifecycle System** (`data_lifecycle.py`)
-   - Automatic cleanup of posts older than 3 days
-   - Competitive set change detection via signature fingerprinting
-   - Blank canvas logic: clears data when set changes or is >3 days old
-   - Incremental analysis: keeps existing outliers + adds new ones when re-running same set within 3 days
-   - Integration points in `main.py` (lines 236-249 and 687-698)
-
-2. **Soft Delete Verification**
-   - Fixed brand removal system to properly archive posts when brands are removed
-   - Verified with Stussy brand test: 24 posts correctly archived on removal
-   - System works for ANY brand removal, not just specific cases
-   - Removed brands no longer appear in dashboard results
-
-**Bug Fixes:**
-
-1. **Analysis Timer Showing "0m 0s"** ([scout_agent.py:619](scout_agent.py#L619))
-   - Fixed database query: changed `WHERE handle = ?` to `WHERE competitor_handle = ?`
-   - Added frontend fallback in [signal.html:1703-1706](templates/signal.html#L1703-L1706) to show "Starting..." instead of "0m 0s"
-
-2. **Cancel Button Error** ([dashboard.py:1365-1420](dashboard.py#L1365-L1420))
-   - Rewrote cancel endpoint to use PID file directly instead of scanning processes
-   - Now reliably kills analysis process using `psutil.Process(pid).send_signal(SIGTERM)`
-   - Gracefully handles "already stopped" cases
-
-3. **Removed Brands Still Showing (Nike, Adidas)**
-   - Root cause: Database migrations hadn't been run, so `verticals` and `vertical_brands` tables didn't exist
-   - Fixed by running `run_vertical_migrations()` and `add_archived_column_to_posts()`
-   - Manually archived Nike and Adidas posts: `UPDATE competitor_posts SET archived = 1 WHERE brand_profile = 'Streetwear' AND competitor_handle IN ('nike', 'adidas')`
-   - Created Streetwear vertical with 8 active brands
-
-4. **Timer Display Logic** ([dashboard.py:1451](dashboard.py#L1451))
-   - Removed overly restrictive condition preventing elapsed timer calculation
-   - Timer now updates properly during analysis
-
-**Technical Implementation:**
-
-- **Data Lifecycle Manager Class** with methods:
-  - `cleanup_old_data(days=3)` - Deletes posts older than N days
-  - `get_competitive_set_signature(vertical_name)` - Creates sorted JSON fingerprint of brand handles
-  - `should_clear_data(vertical_name)` - Determines if data should be cleared based on set changes or age
-  - `clear_vertical_data(vertical_name)` - Clears all posts for a vertical (blank canvas)
-  - `save_analysis_info()` - Stores competitive set signature and timestamp for future comparisons
-
-- **Lifecycle Config File**: `data/lifecycle_config.json` tracks:
-  - Competitive set signature (sorted JSON array of handles)
-  - Last analysis timestamp
-  - Number of posts analyzed
-
-**User-Facing Changes:**
-
-1. **First-time visitors** now see a blank canvas (no historical data)
-2. **Re-running same competitive set within 3 days** keeps existing outliers AND adds new outliers from fresh posts
-3. **Different competitive set or >3 days old** shows blank canvas (old data deleted)
-4. **Removed brands** are properly archived and don't appear in results
-5. **Analysis timer** displays correctly during runs
-6. **Cancel button** works reliably without errors
-
-**Files Modified:**
-- [scout_agent.py](scout_agent.py) - Fixed cache check database query
-- [templates/signal.html](templates/signal.html) - Added timer fallback display
-- [dashboard.py](dashboard.py) - Rewrote cancel endpoint, fixed timer logic
-- [main.py](main.py) - Integrated data lifecycle management
-- [data_lifecycle.py](data_lifecycle.py) - NEW FILE: Complete lifecycle management system
-- [CLAUDE.md](CLAUDE.md) - Updated documentation
-
-**Testing Performed:**
-- Verified brand removal with Stussy: 24 posts archived correctly ✅
-- Confirmed Nike and Adidas no longer appear after archiving ✅
-- Tested lifecycle logic: competitive set signatures match/differ correctly ✅
-- Verified timer displays "Starting..." then updates with elapsed time ✅
-- Confirmed cancel button terminates running analysis ✅
-
----
-
-**Last Updated:** 2026-02-15
-
-**Version:** 1.1.0
-
+**Last Updated:** 2026-02-17
+**Version:** 1.3.0
 **Maintained by:** Claude Code (AI Assistant)
