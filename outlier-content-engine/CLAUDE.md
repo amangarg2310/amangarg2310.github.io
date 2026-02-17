@@ -633,6 +633,13 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Cooldown Triggering After Adding Brands (b52f9b6)
+- `scout_agent.py`: Root cause — cooldown check read `verticals.updated_at`, but `add_brands`/`remove_brands` also call `update_vertical_timestamp()`. After creating a category and adding brands, `updated_at` was set to "now", making the cooldown think analysis just ran — blocking the user's first attempt.
+  - Fix: cooldown now uses `config` table with per-category keys (`"last_analysis_{vertical}"`) instead of `verticals.updated_at`
+  - Read side: queries `config` table for the dedicated analysis timestamp
+  - Write side: background thread writes to `config` table only after successful analysis (`returncode == 0`)
+  - Adding/removing brands no longer triggers cooldown; only successful analysis runs set the timer
+
 ### 2026-02-17: Fix Chat "Hiccup" on Every Multi-Step Message (0ae7533)
 - `scout_agent.py`: Root cause — GPT function-calling loop was `for _ in range(3)`, but a typical create+add flow requires 2 tool rounds + 1 text round = 3 exactly. Any extra tool call (e.g. `show_category`, `list_categories`) exhausted the budget and fell through to the "I ran into a hiccup" fallback, breaking ALL multi-step interactions.
   - Increased loop limit from 3 → 8
@@ -754,5 +761,5 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 1.9.0
+**Version:** 2.0.0
 **Maintained by:** Claude Code (AI Assistant)
