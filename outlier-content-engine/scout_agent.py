@@ -1236,6 +1236,7 @@ IMPORTANT:
         thread.start()
 
         context["analysis_started"] = True
+        context["active_vertical"] = actual_name  # Ensure vertical propagates to redirect
 
         # Apply user's platform/timeframe preferences as dashboard filters
         user_platforms = args.get("platforms", "all")

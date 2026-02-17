@@ -839,7 +839,7 @@ def api_outliers():
     sort_by = request.args.get("sort", "score")
     timeframe = request.args.get("timeframe", "") or "30d"
     tag = request.args.get("tag", "")
-    vertical_name = get_active_vertical_name()
+    vertical_name = request.args.get("vertical", "").strip() or get_active_vertical_name()
 
     outliers = get_outlier_posts(
         competitor=competitor or None,

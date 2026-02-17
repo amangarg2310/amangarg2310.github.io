@@ -1127,7 +1127,8 @@
 
 <script>
 // Active vertical name — used by redirects to preserve context across page loads
-const currentVertical = {{ vertical_name|tojson if vertical_name else 'null' }};
+// Uses 'let' so chat responses can update it when user creates/switches verticals
+let currentVertical = {{ vertical_name|tojson if vertical_name else 'null' }};
 
 // ── BYOK: Hide setup prompt if API keys exist in localStorage ──
 (function() {
@@ -1704,6 +1705,12 @@ async function sendChatMessage(message) {
 
         const data = await response.json();
 
+        // Update currentVertical when chat creates/switches the active vertical
+        // This ensures analysis-completion redirects always have the correct vertical
+        if (data.context && data.context.active_vertical) {
+            currentVertical = data.context.active_vertical;
+        }
+
         // Handle analysis started - redirect with appropriate filter params
         if (data.analysis_started) {
             // Show the Scout's response first
@@ -1713,6 +1720,14 @@ async function sendChatMessage(message) {
 
             // Build redirect URL with filter params to sync UI
             let redirectUrl = '/signal?analysis_started=true';
+
+            // Include vertical name so the loading page knows which vertical to track
+            const chatVertical = data.context && data.context.active_vertical;
+            if (chatVertical) {
+                redirectUrl += '&vertical=' + encodeURIComponent(chatVertical);
+            } else if (currentVertical) {
+                redirectUrl += '&vertical=' + encodeURIComponent(currentVertical);
+            }
 
             // If specific brands selected, add competitor param (single brand only for now)
             if (data.selected_brands && data.selected_brands.length === 1) {
