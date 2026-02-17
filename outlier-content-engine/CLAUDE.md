@@ -603,6 +603,19 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ## Recent Changelog
 
+### 2026-02-17: Fix Case-Insensitive Vertical Queries & Category Collision Handling
+Two interacting bugs caused brands to appear "added" but show 0 on query:
+
+- `vertical_manager.py`: All SQL `WHERE vertical_name = ?` clauses now use `COLLATE NOCASE`
+  - Affects `get_vertical`, `get_brand_count`, `add_brand`, `remove_brand`, `delete_vertical`, `update_vertical_timestamp`
+  - Fixes mismatch between cached "streetwear" and DB-stored "Streetwear" returning 0 brands
+- `scout_agent.py`: Fixed `create_category` tool returning `{ok: true}` when category already existed
+  - Now returns `existing_brands` list so GPT can show legacy state to user
+  - Added explicit "all skipped" warning when `add_brands` silently skipped everything via `IntegrityError`
+  - Added system prompt guidance to present existing brands when category already exists
+- `database_migrations.py`: Unique indexes on `vertical_brands` now use `COLLATE NOCASE`
+  - Treats `"Streetwear/stussy"` and `"streetwear/stussy"` as duplicates
+
 ### 2026-02-17: Post-Analysis Follow-Up & Chat/Dashboard Refactor
 - `scout_agent.py`: After analysis starts, chat now proactively offers three advanced features:
   - **Trend Analysis** — rising/declining sounds, hashtags, patterns
@@ -653,5 +666,5 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 ---
 
 **Last Updated:** 2026-02-17
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Maintained by:** Claude Code (AI Assistant)
