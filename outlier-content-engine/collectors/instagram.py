@@ -1,11 +1,7 @@
 """
-Instagram Collector — fetches public competitor post data.
+Instagram Collector — fetches public competitor post data via Apify.
 
-Supports two data sources:
-  1. RapidAPI Instagram scrapers (primary, free tier)
-  2. Apify Instagram Scraper (fallback, pay-per-result)
-
-Uses the abstract BaseCollector interface so sources are swappable.
+Uses the abstract BaseCollector interface.
 """
 
 import json
@@ -247,205 +243,6 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
     return after_count - before_count
 
 
-# ── RapidAPI Instagram Collector ──
-
-class RapidAPIInstagramCollector(BaseCollector):
-    """
-    Fetches Instagram posts via RapidAPI Instagram scrapers.
-
-    Uses the 'instagram-scraper-api2' endpoint (or similar).
-    Free tier typically offers 100-500 requests/month.
-    6 competitors * 1 request/day = ~180 requests/month.
-    """
-
-    API_HOST = "instagram-scraper-api2.p.rapidapi.com"
-    BASE_URL = f"https://{API_HOST}/v1"
-
-    def __init__(self, api_key: str):
-        if not api_key:
-            raise ValueError(
-                "RAPIDAPI_KEY is required. Get one at https://rapidapi.com "
-                "and subscribe to an Instagram scraper API."
-            )
-        self.api_key = api_key
-        self.headers = {
-            "x-rapidapi-key": api_key,
-            "x-rapidapi-host": self.API_HOST,
-        }
-
-    def health_check(self) -> bool:
-        """Test API connectivity."""
-        try:
-            resp = self._make_request("/info", {"username_or_id_or_url": "instagram"})
-            return resp is not None
-        except Exception as e:
-            logger.error(f"RapidAPI health check failed: {e}")
-            return False
-
-    def collect_posts(self, handle: str, competitor_name: str,
-                      count: int = 12) -> List[CollectedPost]:
-        """Fetch recent posts for an Instagram handle."""
-        logger.info(f"  Fetching posts for @{handle} via RapidAPI...")
-
-        # First get profile info for follower count
-        follower_count = self._get_follower_count(handle)
-
-        # Fetch recent posts
-        data = self._make_request("/posts", {
-            "username_or_id_or_url": handle,
-        })
-
-        if not data:
-            logger.warning(f"  No data returned for @{handle}")
-            return []
-
-        posts = self._parse_posts(data, handle, competitor_name,
-                                  follower_count, count)
-        logger.info(f"  Collected {len(posts)} posts from @{handle}")
-        return posts
-
-    def _get_follower_count(self, handle: str) -> Optional[int]:
-        """Fetch follower count from profile info."""
-        try:
-            data = self._make_request("/info", {
-                "username_or_id_or_url": handle,
-            })
-            if data and "data" in data:
-                return data["data"].get("follower_count")
-        except Exception as e:
-            logger.warning(f"  Could not fetch follower count for @{handle}: {e}")
-        return None
-
-    def _make_request(self, endpoint: str, params: dict,
-                      max_retries: int = 3) -> Optional[dict]:
-        """Make an API request with retry logic and rate limit handling."""
-        url = f"{self.BASE_URL}{endpoint}"
-
-        for attempt in range(max_retries):
-            try:
-                resp = requests.get(url, headers=self.headers, params=params,
-                                    timeout=30)
-
-                if resp.status_code == 429:
-                    wait = 2 ** (attempt + 1)
-                    logger.warning(f"  Rate limited, waiting {wait}s...")
-                    time.sleep(wait)
-                    continue
-
-                if resp.status_code == 200:
-                    return resp.json()
-
-                logger.error(
-                    f"  API error {resp.status_code}: {resp.text[:200]}"
-                )
-                return None
-
-            except requests.exceptions.Timeout:
-                logger.warning(f"  Request timeout (attempt {attempt + 1})")
-                time.sleep(2 ** attempt)
-            except requests.exceptions.RequestException as e:
-                logger.error(f"  Request failed: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-
-        return None
-
-    def _parse_posts(self, data: dict, handle: str, competitor_name: str,
-                     follower_count: Optional[int],
-                     limit: int) -> List[CollectedPost]:
-        """Parse RapidAPI response into CollectedPost objects."""
-        posts = []
-        items = data.get("data", {}).get("items", [])
-
-        for item in items[:limit]:
-            try:
-                # Parse timestamp
-                posted_at = None
-                ts = item.get("taken_at")
-                if ts:
-                    posted_at = datetime.fromtimestamp(ts, tz=timezone.utc)
-
-                # Determine media type
-                media_type = self._detect_media_type(item)
-
-                # Extract caption text
-                caption_data = item.get("caption") or {}
-                caption = caption_data.get("text", "") if isinstance(caption_data, dict) else ""
-
-                # Extract hashtags and mentions from caption
-                hashtags = re.findall(r"#(\w+)", caption)
-                mentions = re.findall(r"@(\w+)", caption)
-
-                # Get media URL
-                media_url = (
-                    item.get("image_versions2", {}).get("candidates", [{}])[0].get("url")
-                    or item.get("thumbnail_url")
-                )
-
-                # Extract audio info from Reels/clips
-                audio_id = None
-                audio_name = None
-                music_meta = item.get("music_metadata") or {}
-                music_info = music_meta.get("music_info") or {}
-                if music_info:
-                    audio_id = str(music_info.get("music_id", "")) or None
-                    audio_name = music_info.get("title")
-                if not audio_id:
-                    # Try clips_metadata path
-                    clips_meta = item.get("clips_metadata") or {}
-                    original_sound = clips_meta.get("original_sound_info") or {}
-                    if original_sound:
-                        audio_id = str(original_sound.get("audio_asset_id", "")) or None
-                        audio_name = audio_name or original_sound.get("original_audio_title")
-
-                # saves: try extraction (usually null for competitor posts,
-                # but may be present for own-channel via Graph API)
-                saves_raw = item.get("save_count")
-
-                post = CollectedPost(
-                    post_id=item.get("code", item.get("pk", "")),
-                    competitor_name=competitor_name,
-                    competitor_handle=handle,
-                    platform="instagram",
-                    post_url=f"https://www.instagram.com/p/{item.get('code', '')}/",
-                    media_type=media_type,
-                    caption=caption,
-                    likes=item.get("like_count", 0),
-                    comments=item.get("comment_count", 0),
-                    saves=saves_raw,
-                    shares=item.get("reshare_count"),
-                    views=item.get("play_count") or item.get("view_count"),
-                    posted_at=posted_at,
-                    media_url=media_url,
-                    hashtags=hashtags,
-                    mentioned_accounts=mentions,
-                    follower_count=follower_count,
-                    audio_id=audio_id,
-                    audio_name=audio_name,
-                )
-                posts.append(post)
-
-            except Exception as e:
-                logger.warning(f"  Error parsing post: {e}")
-                continue
-
-        return posts
-
-    def _detect_media_type(self, item: dict) -> str:
-        """Determine post type from API response."""
-        media_type = item.get("media_type", 0)
-        product_type = item.get("product_type", "")
-
-        if product_type == "clips":
-            return "reel"
-        elif media_type == 8:
-            return "carousel"
-        elif media_type == 2:
-            return "video"
-        else:
-            return "image"
-
-
 # ── Apify Instagram Collector ──
 
 class ApifyInstagramCollector(BaseCollector):
@@ -654,25 +451,18 @@ class ApifyInstagramCollector(BaseCollector):
 
 # ── Factory ──
 
-def create_collector(source: Optional[str] = None) -> BaseCollector:
+def create_collector() -> BaseCollector:
     """
-    Create the appropriate Instagram collector based on config.
-
-    Args:
-        source: "rapidapi" or "apify". Defaults to COLLECTION_SOURCE env var.
+    Create an Instagram collector (Apify).
 
     Returns:
-        An Instagram collector instance.
+        An ApifyInstagramCollector instance.
     """
-    source = source or config.COLLECTION_SOURCE
-
-    if source == "rapidapi":
-        # Use get_api_key to check database first, then fall back to env var
-        api_key = config.get_api_key('rapidapi')
-        return RapidAPIInstagramCollector(api_key=api_key)
-    elif source == "apify":
-        return ApifyInstagramCollector(api_token=config.APIFY_API_TOKEN)
-    else:
+    # Fresh DB lookup — don't use stale module-level cached value
+    api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+    if not api_token:
         raise ValueError(
-            f"Unknown collection source: '{source}'. Use 'rapidapi' or 'apify'."
+            "APIFY_API_TOKEN not set in database or environment. "
+            "Add it via the dashboard Setup page or set APIFY_API_TOKEN in .env"
         )
+    return ApifyInstagramCollector(api_token=api_token)

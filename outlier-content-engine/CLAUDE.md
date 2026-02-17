@@ -4,7 +4,7 @@
 
 The Outlier Content Engine is an AI-powered social media competitive intelligence platform that identifies high-performing "outlier" posts from competitors on Instagram, TikTok, and Facebook. It uses statistical analysis to detect posts that significantly outperform baseline engagement, then leverages GPT-4 to analyze patterns and rewrite concepts in your brand's voice.
 
-**Tech Stack:** Python (Flask), SQLite, OpenAI GPT-4, Apify/RapidAPI collectors, Jinja2 templates
+**Tech Stack:** Python (Flask), SQLite, OpenAI GPT-4, Apify collectors, Jinja2 templates
 
 ---
 
@@ -30,7 +30,7 @@ The Outlier Content Engine is an AI-powered social media competitive intelligenc
 
 ### 4. **Content Collection**
 - Collects recent posts from Instagram and TikTok
-- Pluggable collector system: Apify or RapidAPI
+- Collector system powered by Apify
 - Stored in SQLite `posts` table
 - Collectors: `collectors/instagram.py`, `collectors/tiktok.py`
 
@@ -64,8 +64,8 @@ outlier-content-engine/
 │
 ├── collectors/                  # Social media data collectors
 │   ├── base.py                 # Base collector interface
-│   ├── instagram.py            # Instagram collection (Apify/RapidAPI)
-│   └── tiktok.py               # TikTok collection (Apify/RapidAPI)
+│   ├── instagram.py            # Instagram collection (Apify)
+│   └── tiktok.py               # TikTok collection (Apify)
 │
 ├── outlier_detector.py         # Statistical outlier detection
 ├── analyzer.py                 # GPT-4 analysis and content rewriting
@@ -284,21 +284,11 @@ CREATE TABLE vertical_brands (
 ### `collectors/instagram.py` & `collectors/tiktok.py`
 **Purpose:** Collect recent posts from social platforms
 
-**Apify Collectors (Recommended):**
+**Apify Collectors:**
 - Uses Apify actor API
 - Instagram: `apify~instagram-scraper`
 - TikTok: `clockworks~tiktok-scraper`
-- More reliable than RapidAPI
-- Requires `APIFY_API_TOKEN` in `.env`
-
-**RapidAPI Collectors (Fallback):**
-- Uses RapidAPI marketplace endpoints
-- Instagram: `instagram-scraper-api2`
-- TikTok: `tiktok-scraper7`
-- Requires `RAPIDAPI_KEY` in `.env`
-
-**Configuration:**
-Set `COLLECTION_SOURCE=apify` or `rapidapi` in `.env`
+- Requires `APIFY_API_TOKEN` in `.env` or database
 
 **Data Model (CollectedPost):**
 ```python
@@ -557,14 +547,8 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini  # or gpt-4o
 MONTHLY_COST_LIMIT_USD=5.00
 
-# Collection Source
-COLLECTION_SOURCE=apify  # or rapidapi
-
-# Apify (recommended)
+# Apify (Instagram + TikTok data collection)
 APIFY_API_TOKEN=apify_api_...
-
-# RapidAPI (fallback)
-RAPIDAPI_KEY=...
 
 # Instagram Collection
 INSTAGRAM_ACCOUNT=your_brand_handle  # For learning voice
@@ -773,10 +757,9 @@ python dashboard.py --port 5001
 ## Troubleshooting
 
 ### No posts collected
-- Check API keys in `.env`
+- Check `APIFY_API_TOKEN` in `.env` or database (api_credentials table)
 - Verify handles exist on Instagram/TikTok
-- Try switching `COLLECTION_SOURCE` (apify ↔ rapidapi)
-- Check rate limits
+- Check Apify rate limits and account balance
 
 ### No outliers detected
 - Lower thresholds in brand profile (`min_z_score`, `min_engagement_multiplier`)
@@ -809,11 +792,11 @@ python dashboard.py --port 5001
 - Easy backup and portability
 - Sufficient performance for this use case
 
-### Why Apify over RapidAPI?
-- More reliable and consistent data
-- Better rate limits
+### Why Apify?
+- Reliable and consistent data
 - Official Instagram/TikTok actors
 - Handles pagination automatically
+- Single API token for all platforms
 
 ### Why GPT-4o-mini?
 - 80% cheaper than GPT-4

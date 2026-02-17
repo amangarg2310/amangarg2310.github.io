@@ -17,15 +17,9 @@ def test_tiktok_collection():
 
     import config
 
-    rapidapi_key = config.get_api_key('rapidapi')
-    tiktok_key = config.get_api_key('tiktok')
     apify_key = config.get_api_key('apify')
-    collection_source = config.TIKTOK_COLLECTION_SOURCE
 
-    logger.info(f"RapidAPI key: {'✓ Present (' + str(len(rapidapi_key)) + ' chars)' if rapidapi_key else '✗ Missing'}")
-    logger.info(f"TikTok-specific key: {'✓ Present (' + str(len(tiktok_key)) + ' chars)' if tiktok_key else '✗ Missing'}")
     logger.info(f"Apify key: {'✓ Present (' + str(len(apify_key)) + ' chars)' if apify_key else '✗ Missing'}")
-    logger.info(f"Collection source: {collection_source}")
 
     # Check database for TikTok handles
     logger.info("")
@@ -67,11 +61,11 @@ def test_tiktok_collection():
     # Create collector instance
     logger.info("")
     logger.info("=" * 60)
-    logger.info(f"STEP 4: Creating {collection_source} TikTok collector")
+    logger.info("STEP 4: Creating Apify TikTok collector")
     logger.info("=" * 60)
 
     try:
-        collector = create_tiktok_collector(source=collection_source)
+        collector = create_tiktok_collector()
         logger.info(f"✓ Created {collector.__class__.__name__}")
     except Exception as e:
         logger.error(f"✗ Failed to create collector: {e}")
