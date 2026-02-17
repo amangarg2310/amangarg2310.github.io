@@ -734,7 +734,7 @@ IMPORTANT:
         resolved = []  # Track name→handle resolutions for user feedback
         newly_added_handles = []  # Track actual new brands for incremental collection
         skipped = []
-        # Build paired IG↔TT mapping (same-index handles are paired)
+        # Build paired IG↔TT and IG↔FB mappings (same-index handles are paired)
         paired_tt = {}
         for i, handle in enumerate(tt_handles):
             h = handle.strip().lstrip("@")
@@ -743,6 +743,16 @@ IMPORTANT:
                 if ig_h:
                     paired_tt[ig_h.lower()] = h
         unpaired_tt = [h.strip().lstrip("@") for i, h in enumerate(tt_handles)
+                       if h.strip().lstrip("@") and i >= len(ig_handles)]
+
+        paired_fb = {}
+        for i, handle in enumerate(fb_handles):
+            h = handle.strip().lstrip("@")
+            if h and i < len(ig_handles):
+                ig_h = ig_handles[i].strip().lstrip("@")
+                if ig_h:
+                    paired_fb[ig_h.lower()] = h
+        unpaired_fb = [h.strip().lstrip("@") for i, h in enumerate(fb_handles)
                        if h.strip().lstrip("@") and i >= len(ig_handles)]
 
         for handle in ig_handles:
@@ -766,13 +776,15 @@ IMPORTANT:
                     })
                     handle = resolved_handle
 
-            # Pair with TikTok handle if provided at same index
+            # Pair with TikTok/Facebook handles if provided at same index
             tt_handle = paired_tt.get(original_input.lower())
+            fb_handle = paired_fb.get(original_input.lower())
 
             try:
                 brand_name = suggestion.get('official_name') if suggestion else None
                 if self.vm.add_brand(actual_name, instagram_handle=handle,
                                       tiktok_handle=tt_handle,
+                                      facebook_handle=fb_handle,
                                       brand_name=brand_name):
                     added.append(f"@{handle}")
                     newly_added_handles.append(handle)
@@ -815,13 +827,14 @@ IMPORTANT:
                 logger.warning(f"Failed to add @{handle} (TikTok) to {actual_name}: {e}")
                 skipped.append(f"@{handle} (TikTok)")
 
-        # Add Facebook-only handles
-        for handle in fb_handles:
-            handle = handle.strip().lstrip("@")
+        # Add Facebook-only handles (no paired IG handle)
+        # instagram_handle is NOT NULL, so FB-only can only update existing brands
+        for handle in unpaired_fb:
             if not handle:
                 continue
             try:
-                if self.vm.add_brand(actual_name, facebook_handle=handle):
+                updated = self.vm.update_brand_facebook(actual_name, handle)
+                if updated:
                     added.append(f"@{handle} (Facebook)")
                     newly_added_handles.append(handle)
                 else:
