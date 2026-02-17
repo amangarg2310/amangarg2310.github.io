@@ -123,6 +123,28 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "delete_category",
+            "description": (
+                "Delete an entire category and all its brands. "
+                "Use when user says 'start fresh', 'delete this category', "
+                "'start over', or 'remove this collection entirely'. "
+                "This permanently removes the category, its brands, and all collected posts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Category name to delete.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_categories",
             "description": (
                 "List all existing categories with their brand counts. "
@@ -452,6 +474,9 @@ If the user hasn't named their competitive set yet, start here:
   ALWAYS tell the user: "I found an existing [name] category with N brands: @handle1, @handle2, ...
   Want to start fresh or keep these and add more?"
   Never say "all set up" without showing what's already in the category.
+- If the user says "start fresh", "start over", "delete it", or "remove everything":
+  Call delete_category to remove the old category entirely, THEN call create_category to make a fresh one.
+  NEVER create a variant name like "Streetwear2" — always delete the old one and reuse the same name.
 
 STEP 2 — ADD BRANDS:
 "Great! Now let's add some brands. Which brands or handles do you want to track?"
@@ -517,16 +542,17 @@ TERMINOLOGY:
 
 WHAT YOU CAN DO (use the provided tools):
 1. create_category — create a new competitive set
-2. add_brands — add Instagram/TikTok/Facebook handles to a category (auto-creates if needed)
-3. remove_brands — remove handles from a category
-4. list_categories — show all categories
-5. show_category — show brands in a specific category
-6. run_analysis — scan posts and find outlier content
-7. filter_view — filter dashboard to specific brands (no analysis, instant)
-8. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
-9. score_content — score a content concept (FREE, instant, no LLM)
-10. optimize_content — AI-powered caption improvement
-11. show_trends — show rising/declining content patterns
+2. delete_category — delete an entire category and all its brands (for "start fresh")
+3. add_brands — add Instagram/TikTok/Facebook handles to a category (auto-creates if needed)
+4. remove_brands — remove handles from a category
+5. list_categories — show all categories
+6. show_category — show brands in a specific category
+7. run_analysis — scan posts and find outlier content
+8. filter_view — filter dashboard to specific brands (no analysis, instant)
+9. set_filters — change platform (IG/TT/FB), timeframe (30d/3mo), or sort order
+10. score_content — score a content concept (FREE, instant, no LLM)
+11. optimize_content — AI-powered caption improvement
+12. show_trends — show rising/declining content patterns
 
 INTENT DISAMBIGUATION (CRITICAL):
 When user mentions a brand, determine their TRUE intent:
@@ -642,6 +668,36 @@ IMPORTANT:
                 ),
             })
 
+    def _handle_delete_category(self, args: Dict) -> str:
+        """Delete a category and all its brands. For 'start fresh' requests."""
+        name = args.get("name", "").strip()
+
+        if not name:
+            return json.dumps({"ok": False, "error": "Category name is required."})
+
+        # Case-insensitive lookup
+        actual_name = None
+        for v in self.vm.list_verticals():
+            if v.lower() == name.lower():
+                actual_name = v
+                break
+
+        if not actual_name:
+            return json.dumps({"ok": False, "error": f"Category '{name}' not found."})
+
+        brand_count = self.vm.get_brand_count(actual_name)
+        deleted = self.vm.delete_vertical(actual_name)
+
+        if deleted:
+            return json.dumps({
+                "ok": True,
+                "message": (
+                    f"Deleted category '{actual_name}' and its {brand_count} brands. "
+                    f"You can now create a fresh category with the same name."
+                ),
+            })
+        return json.dumps({"ok": False, "error": f"Failed to delete '{actual_name}'."})
+
     def _handle_add_brands(self, args: Dict, context: Dict) -> str:
         """Add brands to a category (auto-creating it if necessary)."""
         category_name = args.get("category_name", "").strip()
@@ -678,6 +734,27 @@ IMPORTANT:
         resolved = []  # Track name→handle resolutions for user feedback
         newly_added_handles = []  # Track actual new brands for incremental collection
         skipped = []
+        # Build paired IG↔TT and IG↔FB mappings (same-index handles are paired)
+        paired_tt = {}
+        for i, handle in enumerate(tt_handles):
+            h = handle.strip().lstrip("@")
+            if h and i < len(ig_handles):
+                ig_h = ig_handles[i].strip().lstrip("@")
+                if ig_h:
+                    paired_tt[ig_h.lower()] = h
+        unpaired_tt = [h.strip().lstrip("@") for i, h in enumerate(tt_handles)
+                       if h.strip().lstrip("@") and i >= len(ig_handles)]
+
+        paired_fb = {}
+        for i, handle in enumerate(fb_handles):
+            h = handle.strip().lstrip("@")
+            if h and i < len(ig_handles):
+                ig_h = ig_handles[i].strip().lstrip("@")
+                if ig_h:
+                    paired_fb[ig_h.lower()] = h
+        unpaired_fb = [h.strip().lstrip("@") for i, h in enumerate(fb_handles)
+                       if h.strip().lstrip("@") and i >= len(ig_handles)]
+
         for handle in ig_handles:
             handle = handle.strip().lstrip("@")
             if not handle:
@@ -699,19 +776,26 @@ IMPORTANT:
                     })
                     handle = resolved_handle
 
+            # Pair with TikTok/Facebook handles if provided at same index
+            tt_handle = paired_tt.get(original_input.lower())
+            fb_handle = paired_fb.get(original_input.lower())
+
             try:
+                brand_name = suggestion.get('official_name') if suggestion else None
                 if self.vm.add_brand(actual_name, instagram_handle=handle,
-                                      brand_name=suggestion['official_name'] if suggestion else None):
+                                      tiktok_handle=tt_handle,
+                                      facebook_handle=fb_handle,
+                                      brand_name=brand_name):
                     added.append(f"@{handle}")
                     newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle}")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to add @{handle} to {actual_name}: {e}")
                 skipped.append(f"@{handle}")
 
-        # Add TikTok-only handles (with brand name resolution)
-        for handle in tt_handles:
-            handle = handle.strip().lstrip("@")
+        # Add TikTok-only handles (no paired IG handle)
+        for handle in unpaired_tt:
             if not handle:
                 continue
 
@@ -729,28 +813,34 @@ IMPORTANT:
                     })
                     handle = resolved_handle
 
+            # TikTok-only: update existing IG row if brand exists, else skip
+            # (instagram_handle is NOT NULL in schema, so can't insert TT-only)
             try:
-                if self.vm.add_brand(actual_name, tiktok_handle=handle,
-                                      brand_name=tt_suggestion['official_name'] if tt_suggestion else None):
+                brand_name = tt_suggestion.get('official_name') if tt_suggestion else None
+                updated = self.vm.update_brand_tiktok(actual_name, handle)
+                if updated:
                     added.append(f"@{handle} (TikTok)")
                     newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle} (TikTok)")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to add @{handle} (TikTok) to {actual_name}: {e}")
                 skipped.append(f"@{handle} (TikTok)")
 
-        # Add Facebook-only handles
-        for handle in fb_handles:
-            handle = handle.strip().lstrip("@")
+        # Add Facebook-only handles (no paired IG handle)
+        # instagram_handle is NOT NULL, so FB-only can only update existing brands
+        for handle in unpaired_fb:
             if not handle:
                 continue
             try:
-                if self.vm.add_brand(actual_name, facebook_handle=handle):
+                updated = self.vm.update_brand_facebook(actual_name, handle)
+                if updated:
                     added.append(f"@{handle} (Facebook)")
                     newly_added_handles.append(handle)
                 else:
                     skipped.append(f"@{handle} (Facebook)")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to add @{handle} (Facebook) to {actual_name}: {e}")
                 skipped.append(f"@{handle} (Facebook)")
 
         self.vm.update_vertical_timestamp(actual_name)
@@ -908,6 +998,8 @@ IMPORTANT:
 
             conn = sqlite3.connect(str(config.DB_PATH))
             conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
 
             # Get all brands for this vertical
             vertical = self.vm.get_vertical(vertical_name)
@@ -1006,6 +1098,8 @@ IMPORTANT:
         if not is_admin:
             try:
                 conn = sqlite3.connect(str(config.DB_PATH))
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=5000")
 
                 # Check per-category cooldown via verticals.updated_at
                 row = conn.execute(
@@ -1345,6 +1439,8 @@ IMPORTANT:
         """Route a tool call to the appropriate handler. Returns JSON string."""
         if name == "create_category":
             return self._handle_create_category(args)
+        elif name == "delete_category":
+            return self._handle_delete_category(args)
         elif name == "add_brands":
             return self._handle_add_brands(args, context)
         elif name == "remove_brands":

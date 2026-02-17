@@ -639,6 +639,72 @@ def add_vertical_brands_unique_index(db_path=None):
     logger.info("Vertical brands unique index migration complete")
 
 
+def consolidate_vertical_name_casing(db_path=None):
+    """
+    Merge verticals that differ only by casing (e.g. 'streetwear' + 'Streetwear').
+    Keeps the most recently updated entry, migrates all brands and posts to it,
+    and deletes the duplicates. Safe to call multiple times.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    logger.info("Checking for case-variant vertical duplicates...")
+
+    # Find groups of verticals that differ only by casing
+    groups = conn.execute("""
+        SELECT LOWER(name) as lower_name, COUNT(*) as cnt
+        FROM verticals
+        GROUP BY LOWER(name)
+        HAVING COUNT(*) > 1
+    """).fetchall()
+
+    if not groups:
+        conn.close()
+        logger.info("  No case-variant duplicates found")
+        return
+
+    for group in groups:
+        lower_name = group['lower_name']
+
+        # Get all variants, keep the most recently updated one
+        variants = conn.execute("""
+            SELECT name, updated_at FROM verticals
+            WHERE LOWER(name) = ?
+            ORDER BY updated_at DESC
+        """, (lower_name,)).fetchall()
+
+        keep_name = variants[0]['name']
+        drop_names = [v['name'] for v in variants[1:]]
+
+        logger.info(f"  Consolidating: keeping '{keep_name}', merging {drop_names}")
+
+        for drop_name in drop_names:
+            # Move brands to the kept vertical name
+            conn.execute("""
+                UPDATE vertical_brands SET vertical_name = ?
+                WHERE vertical_name = ? AND vertical_name != ?
+            """, (keep_name, drop_name, keep_name))
+
+            # Move posts to the kept vertical name
+            conn.execute("""
+                UPDATE competitor_posts SET brand_profile = ?
+                WHERE brand_profile = ? AND brand_profile != ?
+            """, (keep_name, drop_name, keep_name))
+
+            # Delete the duplicate vertical row
+            conn.execute("DELETE FROM verticals WHERE name = ?", (drop_name,))
+
+            logger.info(f"    Merged '{drop_name}' → '{keep_name}'")
+
+    conn.commit()
+    conn.close()
+
+    # Re-run unique index dedup since merging may have created duplicates in vertical_brands
+    add_vertical_brands_unique_index(db_path)
+    logger.info("Vertical name consolidation complete")
+
+
 if __name__ == "__main__":
     # Run all migrations
     logging.basicConfig(level=logging.INFO)
@@ -650,6 +716,7 @@ if __name__ == "__main__":
     add_users_table()
     add_trend_radar_tables()
     add_vertical_brands_unique_index()
+    consolidate_vertical_name_casing()
     seed_api_keys_from_env()
 
     # Optionally migrate existing profile

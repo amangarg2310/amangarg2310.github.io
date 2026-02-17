@@ -41,9 +41,11 @@ class VerticalManager:
         self.db_path = db_path or config.DB_PATH
 
     def _get_conn(self):
-        """Get database connection with row factory."""
+        """Get database connection with WAL mode for concurrent access."""
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     def list_verticals(self) -> List[str]:
@@ -118,9 +120,20 @@ class VerticalManager:
         )
 
     def create_vertical(self, name: str, description: str = None) -> bool:
-        """Create a new vertical."""
+        """Create a new vertical. Case-insensitive: 'streetwear' and 'Streetwear' are the same."""
         conn = self._get_conn()
         now = datetime.now(timezone.utc).isoformat()
+
+        # Check for case-insensitive duplicate first (SQLite UNIQUE is case-sensitive,
+        # so "streetwear" and "Streetwear" would both INSERT without this check)
+        existing = conn.execute(
+            "SELECT name FROM verticals WHERE name = ? COLLATE NOCASE",
+            (name,)
+        ).fetchone()
+        if existing:
+            conn.close()
+            logger.warning(f"Vertical '{name}' already exists as '{existing['name']}'")
+            return False
 
         try:
             conn.execute("""
@@ -223,6 +236,43 @@ class VerticalManager:
         finally:
             conn.close()
 
+    def update_brand_tiktok(self, vertical_name: str, tiktok_handle: str) -> bool:
+        """Set the tiktok_handle on a brand matched by instagram_handle or brand name."""
+        conn = self._get_conn()
+        tiktok_handle = tiktok_handle.lstrip('@')
+        conn.execute("""
+            UPDATE vertical_brands
+            SET tiktok_handle = ?
+            WHERE vertical_name = ? COLLATE NOCASE
+              AND (instagram_handle = ? COLLATE NOCASE OR brand_name = ? COLLATE NOCASE)
+              AND (tiktok_handle IS NULL OR tiktok_handle = '')
+        """, (tiktok_handle, vertical_name, tiktok_handle, tiktok_handle))
+        updated = conn.total_changes > 0
+        conn.commit()
+        conn.close()
+        return updated
+
+    def update_brand_facebook(self, vertical_name: str, facebook_handle: str) -> bool:
+        """Set the facebook_handle on a brand matched by instagram_handle or brand name."""
+        conn = self._get_conn()
+        facebook_handle = facebook_handle.lstrip('@')
+        try:
+            conn.execute("""
+                UPDATE vertical_brands
+                SET facebook_handle = ?
+                WHERE vertical_name = ? COLLATE NOCASE
+                  AND (instagram_handle = ? COLLATE NOCASE OR brand_name = ? COLLATE NOCASE)
+                  AND (facebook_handle IS NULL OR facebook_handle = '')
+            """, (facebook_handle, vertical_name, facebook_handle, facebook_handle))
+            updated = conn.total_changes > 0
+            conn.commit()
+            return updated
+        except sqlite3.OperationalError:
+            # facebook_handle column may not exist in older schemas
+            return False
+        finally:
+            conn.close()
+
     def remove_brand(self, vertical_name: str, handle: str) -> bool:
         """Remove a brand from a vertical (soft delete - archives posts for instant re-add).
 
@@ -240,11 +290,21 @@ class VerticalManager:
         posts_archived = conn.total_changes
 
         # Delete brand from vertical_brands table — match any handle column
-        conn.execute("""
-            DELETE FROM vertical_brands
-            WHERE vertical_name = ? COLLATE NOCASE
-              AND (instagram_handle = ? OR tiktok_handle = ? OR facebook_handle = ?)
-        """, (vertical_name, handle, handle, handle))
+        try:
+            conn.execute("""
+                DELETE FROM vertical_brands
+                WHERE vertical_name = ? COLLATE NOCASE
+                  AND (instagram_handle = ? COLLATE NOCASE
+                       OR tiktok_handle = ? COLLATE NOCASE
+                       OR facebook_handle = ? COLLATE NOCASE)
+            """, (vertical_name, handle, handle, handle))
+        except sqlite3.OperationalError:
+            # facebook_handle column may not exist in older schemas
+            conn.execute("""
+                DELETE FROM vertical_brands
+                WHERE vertical_name = ? COLLATE NOCASE
+                  AND (instagram_handle = ? COLLATE NOCASE OR tiktok_handle = ? COLLATE NOCASE)
+            """, (vertical_name, handle, handle))
 
         deleted = conn.total_changes > 0
         conn.commit()
