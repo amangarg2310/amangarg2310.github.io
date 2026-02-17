@@ -71,11 +71,58 @@ def run_vertical_migrations(db_path=None):
             value TEXT
         );
 
+        -- Competitor posts (main data table)
+        CREATE TABLE IF NOT EXISTS competitor_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id TEXT NOT NULL,
+            brand_profile TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT 'instagram',
+            competitor_name TEXT NOT NULL,
+            competitor_handle TEXT NOT NULL,
+            posted_at TEXT,
+            caption TEXT,
+            media_type TEXT,
+            media_url TEXT,
+            likes INTEGER DEFAULT 0,
+            comments INTEGER DEFAULT 0,
+            saves INTEGER,
+            shares INTEGER,
+            views INTEGER,
+            follower_count INTEGER,
+            estimated_engagement_rate REAL,
+            is_outlier INTEGER DEFAULT 0,
+            outlier_score REAL,
+            content_tags TEXT,
+            collected_at TEXT NOT NULL,
+            is_own_channel INTEGER DEFAULT 0,
+            audio_id TEXT,
+            audio_name TEXT,
+            is_trending_audio INTEGER DEFAULT 0,
+            weighted_engagement_score REAL,
+            primary_engagement_driver TEXT,
+            outlier_timeframe TEXT,
+            ai_analysis TEXT,
+            archived INTEGER DEFAULT 0,
+            UNIQUE(post_id, platform, brand_profile)
+        );
+
         -- Index for faster vertical lookups
         CREATE INDEX IF NOT EXISTS idx_vertical_brands_vertical
             ON vertical_brands(vertical_name);
         CREATE INDEX IF NOT EXISTS idx_email_subs_vertical
             ON email_subscriptions(vertical_name);
+        CREATE INDEX IF NOT EXISTS idx_posts_competitor_date
+            ON competitor_posts(competitor_handle, collected_at);
+        CREATE INDEX IF NOT EXISTS idx_posts_outlier
+            ON competitor_posts(is_outlier);
+        CREATE INDEX IF NOT EXISTS idx_posts_profile
+            ON competitor_posts(brand_profile);
+        CREATE INDEX IF NOT EXISTS idx_posts_own_channel
+            ON competitor_posts(is_own_channel);
+        CREATE INDEX IF NOT EXISTS idx_posts_audio
+            ON competitor_posts(audio_id);
+        CREATE INDEX IF NOT EXISTS idx_posts_archived
+            ON competitor_posts(archived);
     """)
 
     conn.commit()
