@@ -659,7 +659,7 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 1. **Chat appeared to reset on every page reload** (`signal.html`, `dashboard.py`)
    - Root cause A: `chat_history` was stored in `session['chat_context']` but the template never rendered it — every reload showed a blank "Welcome back" bubble
    - Root cause B: `filter_timeframe="30d"` set by `run_analysis` was never cleared from the session context. On the next unrelated message (e.g. "run trend radar"), the stale filter was returned to the frontend, triggering `applyFilter('timeframe', '30d')` → `window.location.reload()` before showing the response — wiping the chat
-   - Fix A: `signal_page()` now reads `session['chat_context']['chat_history']` and passes it to the template; `{% if chat_history %}` loop re-renders prior messages on load; chat scrolls to bottom via `DOMContentLoaded`
+   - Fix A: `signal_page()` now reads `session['chat_context']['chat_history']` and passes it to the template; Jinja2 `if chat_history` loop re-renders prior messages on load; chat scrolls to bottom via `DOMContentLoaded`
    - Fix B: All transient filter keys (`filter_platform`, `filter_timeframe`, `filter_action`, `filter_brands`, `filter_sort`) are now `.pop()`-ped (not `.get()`-ed) from `updated_context` in `chat_message()`, same pattern as `analysis_started` — they fire once then are gone
 
 2. **Competitive set showed no brands in chat panel** (`dashboard.py`)
