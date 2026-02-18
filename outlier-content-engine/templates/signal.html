@@ -1720,6 +1720,19 @@ async function sendChatMessage(message) {
             body: JSON.stringify({ message })
         });
 
+        // Handle auth errors (session expired) — backend returns 401 JSON
+        if (response.status === 401) {
+            addChatMessage("Your session has expired. Please refresh the page to continue.", false);
+            return;
+        }
+
+        // Guard against non-JSON responses (e.g. HTML error pages)
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            addChatMessage("Something went wrong — please refresh the page and try again.", false);
+            return;
+        }
+
         const data = await response.json();
 
         // Update currentVertical when chat creates/switches the active vertical

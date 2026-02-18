@@ -867,14 +867,12 @@ class TestAdvancedAnalysis_SystemIntegrity(unittest.TestCase):
             "show_trends not in TOOL_DEFINITIONS — GPT can't call it!")
 
     def test_chat_history_preserved_after_tool_calls(self):
-        """Updated context preserves chat_history after tool dispatch."""
-        # Verify the chat handler stores context back to session
+        """Updated context is persisted after tool dispatch (DB-backed)."""
+        # Verify the chat handler stores context back via DB helper
         dashboard_path = Path(__file__).parent / "dashboard.py"
         content = dashboard_path.read_text()
-        self.assertIn("session['chat_context'] = updated_context", content,
-            "Chat handler must store updated_context back to session!")
-        self.assertIn("session.modified = True", content,
-            "session.modified must be set after context update!")
+        self.assertIn("_save_chat_context(chat_sid, updated_context)", content,
+            "Chat handler must persist updated_context to DB via _save_chat_context!")
 
 
 # ═══════════════════════════════════════════════════════════════════════
