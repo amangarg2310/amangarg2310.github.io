@@ -83,6 +83,7 @@ def run_vertical_migrations(db_path=None):
             caption TEXT,
             media_type TEXT,
             media_url TEXT,
+            post_url TEXT,
             likes INTEGER DEFAULT 0,
             comments INTEGER DEFAULT 0,
             saves INTEGER,
@@ -554,6 +555,23 @@ def add_trend_radar_tables(db_path=None):
     conn.commit()
     conn.close()
     logger.info("Trend radar migrations complete")
+
+
+def add_post_url_column(db_path=None):
+    """
+    Add post_url column to competitor_posts table.
+    Referenced by trend_radar/scorer.py and outlier_detector.py.
+    Safe to call multiple times.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("ALTER TABLE competitor_posts ADD COLUMN post_url TEXT")
+        conn.commit()
+        logger.info("  Added column: competitor_posts.post_url")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    conn.close()
 
 
 def add_vertical_brands_unique_index(db_path=None):

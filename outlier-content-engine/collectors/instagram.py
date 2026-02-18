@@ -213,6 +213,7 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
             post.competitor_name, post.competitor_handle,
             post.posted_at.isoformat() if post.posted_at else None,
             post.caption, post.media_type, post.media_url,
+            getattr(post, 'post_url', None),
             post.likes, post.comments, post.saves, post.shares,
             post.views, post.follower_count, engagement_rate, now,
             getattr(post, 'audio_id', None),
@@ -224,10 +225,10 @@ def store_posts(posts: List[CollectedPost], profile_name: str,
             INSERT OR IGNORE INTO competitor_posts
             (post_id, brand_profile, platform, competitor_name,
              competitor_handle, posted_at, caption, media_type,
-             media_url, likes, comments, saves, shares, views,
+             media_url, post_url, likes, comments, saves, shares, views,
              follower_count, estimated_engagement_rate, collected_at,
              audio_id, audio_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, rows)
         conn.commit()
     except sqlite3.Error as e:
