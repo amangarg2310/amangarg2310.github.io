@@ -28,18 +28,21 @@
         <!-- Chat Header -->
         <div class="signal-chat-header">
             <div class="signal-brand">
-                <img src="/static/scoutai-logo-white-trimmed.svg" alt="ScoutAI" style="height: 90px; width: auto;">
+                <img src="/static/scoutai-logo-white-trimmed.svg" alt="ScoutAI" style="height: 36px; width: auto;">
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <p class="signal-chat-subtitle">Outliers Identified: {{ outliers|length if outliers else 0 }} posts
-                    <span class="signal-timeframe-context">
-                        {% if selected_timeframe == '3mo' %}
-                            — scored vs each brand's 3-month baseline
-                        {% else %}
-                            — scored vs each brand's 30-day baseline
-                        {% endif %}
+            <div class="signal-outlier-callout">
+                <div class="signal-outlier-callout-content">
+                    <span class="signal-outlier-count">{{ outliers|length if outliers else 0 }}</span>
+                    <span class="signal-outlier-label">Outliers Identified
+                        <span class="signal-timeframe-context">
+                            {% if selected_timeframe == '3mo' %}
+                                — scored vs each brand's 3-month baseline
+                            {% else %}
+                                — scored vs each brand's 30-day baseline
+                            {% endif %}
+                        </span>
                     </span>
-                </p>
+                </div>
                 <button class="signal-chat-reset" onclick="resetChat()" title="Reset conversation">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="1 4 1 10 7 10"></polyline>
@@ -575,21 +578,6 @@
                     </div>
                 </div>
 
-                <!-- Sort Filter -->
-                <div class="signal-filter-group">
-                    <span class="signal-filter-label">SORT</span>
-                    <div class="signal-filter-pills">
-                        <button class="signal-pill {% if sort_by == 'score' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'score')">Score</button>
-                        <button class="signal-pill {% if sort_by == 'saves' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'saves')">Saves</button>
-                        <button class="signal-pill {% if sort_by == 'shares' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'shares')">Shares</button>
-                        <button class="signal-pill {% if sort_by == 'date' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'date')">Recent</button>
-                    </div>
-                </div>
-
                 <!-- Export -->
                 {% if outliers %}
                 <div class="signal-filter-group">
@@ -622,6 +610,23 @@
                     </div>
                 </div>
                 {% endif %}
+            </div>
+
+            <!-- Sort Row (below filters) -->
+            <div class="signal-sort-row">
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">SORT</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill {% if sort_by == 'score' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'score')">Score</button>
+                        <button class="signal-pill {% if sort_by == 'saves' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'saves')">Saves</button>
+                        <button class="signal-pill {% if sort_by == 'shares' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'shares')">Shares</button>
+                        <button class="signal-pill {% if sort_by == 'date' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'date')">Recent</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1714,6 +1719,19 @@ async function sendChatMessage(message) {
             headers: getBYOKHeaders(),
             body: JSON.stringify({ message })
         });
+
+        // Handle auth errors (session expired) — backend returns 401 JSON
+        if (response.status === 401) {
+            addChatMessage("Your session has expired. Please refresh the page to continue.", false);
+            return;
+        }
+
+        // Guard against non-JSON responses (e.g. HTML error pages)
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            addChatMessage("Something went wrong — please refresh the page and try again.", false);
+            return;
+        }
 
         const data = await response.json();
 

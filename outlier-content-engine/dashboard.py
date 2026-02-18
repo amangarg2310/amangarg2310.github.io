@@ -185,6 +185,48 @@ def _persist_active_vertical(name: str):
             conn.close()
 
 
+def _get_chat_context(session_id: str) -> dict:
+    """Load chat context from DB config table (avoids cookie size limits)."""
+    if not session_id:
+        return {}
+    conn = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = ?",
+            (f"chat_ctx_{session_id}",)
+        ).fetchone()
+        if row and row[0]:
+            return json.loads(row[0])
+    except Exception:
+        pass
+    finally:
+        if conn:
+            conn.close()
+    return {}
+
+
+def _save_chat_context(session_id: str, context: dict):
+    """Persist chat context to DB config table (avoids cookie size limits)."""
+    if not session_id:
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+            (f"chat_ctx_{session_id}", json.dumps(context))
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        if conn:
+            conn.close()
+
+
 def get_active_vertical_name():
     """Get the active vertical name from session or first available.
 
@@ -805,9 +847,13 @@ def signal_page():
             session['active_vertical'] = requested_vertical
             _persist_active_vertical(requested_vertical)
 
-    # Clear active vertical when returning to empty state
+    # Clear active vertical and chat context when returning to empty state
     if empty_state and hasattr(app, '_active_vertical'):
         app._active_vertical = None
+        # Clear DB-backed chat context so conversation starts fresh
+        chat_sid = session.pop('chat_session_id', '')
+        if chat_sid:
+            _save_chat_context(chat_sid, {})
         session.pop('active_vertical', None)
 
     # Get vertical name for queries (unless empty state)
@@ -867,7 +913,8 @@ def signal_page():
     # Pass chat history so template can re-render previous messages on page reload.
     # This prevents the chat from appearing to "reset" every time a filter changes
     # or the page reloads after analysis.
-    chat_history = session.get('chat_context', {}).get('chat_history', [])
+    chat_sid = session.get('chat_session_id', '')
+    chat_history = _get_chat_context(chat_sid).get('chat_history', [])
 
     # Read what timeframe was used when data was last collected.
     # Used to disable the "3 Months" filter pill when data only covers 30 days.
@@ -1822,8 +1869,17 @@ def chat_message():
         byok_openai = request.headers.get('X-OpenAI-Key', '').strip() or None
         admin_mode = config.ADMIN_MODE
 
-        if 'chat_context' not in session:
-            session['chat_context'] = {
+        # ── Chat context: stored in DB (not session cookie) to avoid 4KB overflow ──
+        # The cookie only holds a lightweight session ID; actual context lives in DB.
+        import uuid
+        if 'chat_session_id' not in session:
+            session['chat_session_id'] = uuid.uuid4().hex[:12]
+        chat_sid = session['chat_session_id']
+
+        context = _get_chat_context(chat_sid)
+
+        if not context:
+            context = {
                 'active_vertical': current_vertical,
                 'chat_history': [],
             }
@@ -1835,7 +1891,7 @@ def chat_message():
                 from vertical_manager import VerticalManager
                 vm_check = VerticalManager()
                 if not vm_check.list_verticals():
-                    session['chat_context']['chat_history'] = [
+                    context['chat_history'] = [
                         {
                             "role": "assistant",
                             "content": (
@@ -1863,7 +1919,7 @@ def chat_message():
                         f" ({', '.join(_handles)}{' and more' if _brand_count > 5 else ''})"
                         if _handles else ""
                     )
-                    session['chat_context']['chat_history'] = [
+                    context['chat_history'] = [
                         {
                             "role": "assistant",
                             "content": (
@@ -1876,7 +1932,6 @@ def chat_message():
                 except Exception:
                     pass  # Non-critical; leave history empty if this fails
 
-        context = session['chat_context']
         context['active_vertical'] = current_vertical
         context['admin_mode'] = admin_mode
 
@@ -1907,11 +1962,10 @@ def chat_message():
                     session['active_vertical'] = new_vertical
                     _persist_active_vertical(new_vertical)
 
-                # Persist the full context (including chat_history) in session.
+                # Persist the full context (including chat_history) in DB.
                 # Transient filter keys have already been popped above so they
                 # won't contaminate future messages.
-                session['chat_context'] = updated_context
-                session.modified = True
+                _save_chat_context(chat_sid, updated_context)
 
                 result = {
                     "response": response,
@@ -2125,27 +2179,31 @@ def update_chat_context():
     so it can provide contextually relevant responses.
     """
     from flask import session, jsonify
+    import uuid
 
     data = request.get_json()
     if not data:
         return jsonify({"ok": False}), 400
 
-    if "chat_context" not in session:
-        session["chat_context"] = {}
+    # Use DB-backed chat context (same as chat_message)
+    if 'chat_session_id' not in session:
+        session['chat_session_id'] = uuid.uuid4().hex[:12]
+    chat_sid = session['chat_session_id']
+    context = _get_chat_context(chat_sid)
 
     key = data.get("filter_key", "")
     value = data.get("filter_value", "")
 
     if key == "competitor":
-        session["chat_context"]["active_brand_filter"] = value
+        context["active_brand_filter"] = value
     elif key == "platform":
-        session["chat_context"]["active_platform_filter"] = value
+        context["active_platform_filter"] = value
     elif key == "timeframe":
-        session["chat_context"]["active_timeframe_filter"] = value
+        context["active_timeframe_filter"] = value
     elif key == "sort":
-        session["chat_context"]["active_sort_filter"] = value
+        context["active_sort_filter"] = value
 
-    session.modified = True
+    _save_chat_context(chat_sid, context)
     return jsonify({"ok": True})
 
 

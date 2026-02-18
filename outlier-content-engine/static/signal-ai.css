@@ -104,13 +104,13 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Chat Header */
 .signal-chat-header {
-    padding: 32px 40px;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--signal-border);
 }
 
 .signal-brand {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     gap: 12px;
     margin-bottom: 0px;
@@ -147,6 +147,38 @@ h1, h2, h3, h4, h5, h6 {
     margin-left: 0;
     max-width: 600px;
     line-height: 1.5;
+    letter-spacing: 0.01em;
+}
+
+/* Outlier Callout Box */
+.signal-outlier-callout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--signal-bg-tertiary);
+    border: 1px solid var(--signal-border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-top: 12px;
+}
+
+.signal-outlier-callout-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.signal-outlier-count {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--signal-cyan);
+    line-height: 1;
+}
+
+.signal-outlier-label {
+    font-size: 13px;
+    color: var(--signal-text-dim);
+    line-height: 1.4;
     letter-spacing: 0.01em;
 }
 
@@ -792,6 +824,12 @@ h1, h2, h3, h4, h5, h6 {
     gap: 24px;
     flex-wrap: wrap;
     row-gap: 16px;
+}
+
+.signal-sort-row {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--signal-border);
 }
 
 .signal-filter-group {

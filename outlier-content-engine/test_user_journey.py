@@ -817,13 +817,23 @@ class TestChatAgent(unittest.TestCase):
 
     def test_chat_filter_context_not_stale(self):
         """Filter context keys are popped after use (not stale on next message)."""
-        with self.client.session_transaction() as sess:
-            sess['active_vertical'] = 'ChatTest'
-            sess['chat_context'] = {
+        # Pre-seed DB-backed chat context with a filter flag
+        test_sid = 'test_filter1'
+        conn = sqlite3.connect(str(self.db_path))
+        conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+            (f"chat_ctx_{test_sid}", json.dumps({
                 'active_vertical': 'ChatTest',
                 'chat_history': [],
-                'filter_platform': 'tiktok',  # This should be popped
-            }
+                'filter_platform': 'tiktok',
+            }))
+        )
+        conn.commit()
+        conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess['active_vertical'] = 'ChatTest'
+            sess['chat_session_id'] = test_sid
 
         # Mock a simple response
         mock_message = MagicMock()
@@ -847,11 +857,16 @@ class TestChatAgent(unittest.TestCase):
                 content_type='application/json',
                 headers={'X-OpenAI-Key': 'test-key-123'})
 
-        # After first message, filter_platform should have been popped from session
-        with self.client.session_transaction() as sess:
-            ctx = sess.get('chat_context', {})
-            self.assertNotIn('filter_platform', ctx,
-                "filter_platform should be popped after first message")
+        # After first message, filter_platform should have been popped from DB context
+        conn = sqlite3.connect(str(self.db_path))
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = ?",
+            (f"chat_ctx_{test_sid}",)
+        ).fetchone()
+        conn.close()
+        ctx = json.loads(row[0]) if row and row[0] else {}
+        self.assertNotIn('filter_platform', ctx,
+            "filter_platform should be popped after first message")
 
 
 # ══════════════════════════════════════════════════════════════════════
