@@ -15,8 +15,8 @@
         <div class="settings-form-group">
             <label class="settings-label">Apify API Token *</label>
             <div class="settings-input-wrap">
-                <input type="text" name="apify_token" id="apifyToken" class="settings-input"
-                       value="{{ apify_token or '' }}" required
+                <input type="password" name="apify_token" id="apifyToken" class="settings-input"
+                       value="{{ apify_token or '' }}" required autocomplete="off"
                        placeholder="apify_api_...">
                 <span class="settings-validation-badge" id="apifyBadge"></span>
             </div>
@@ -30,8 +30,8 @@
         <div class="settings-form-group">
             <label class="settings-label">OpenAI API Key *</label>
             <div class="settings-input-wrap">
-                <input type="text" name="openai_key" id="openaiKey" class="settings-input"
-                       value="{{ openai_key or '' }}" required
+                <input type="password" name="openai_key" id="openaiKey" class="settings-input"
+                       value="{{ openai_key or '' }}" required autocomplete="off"
                        placeholder="sk-...">
                 <span class="settings-validation-badge" id="openaiBadge"></span>
             </div>
