@@ -1367,13 +1367,30 @@ def _is_allowed_image_url(url: str) -> bool:
         return False
 
 
+import time as _time
+_proxy_rate_limit = {}  # {ip: [timestamp, ...]}
+_PROXY_RATE_LIMIT_MAX = 60  # requests per window
+_PROXY_RATE_LIMIT_WINDOW = 60  # seconds
+_PROXY_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 @app.route("/proxy-image")
 @login_required
 def proxy_image():
     """Proxy external images to bypass CORS restrictions.
 
     Only allows requests to known social media CDN domains to prevent SSRF.
+    Rate limited to 60 requests per minute per IP. Max response size 10MB.
     """
+    # Rate limiting
+    client_ip = request.remote_addr or "unknown"
+    now = _time.time()
+    window = _proxy_rate_limit.setdefault(client_ip, [])
+    window[:] = [t for t in window if now - t < _PROXY_RATE_LIMIT_WINDOW]
+    if len(window) >= _PROXY_RATE_LIMIT_MAX:
+        return "Rate limit exceeded", 429
+    window.append(now)
+
     image_url = request.args.get('url')
     if not image_url:
         return "No URL provided", 400
@@ -1396,6 +1413,8 @@ def proxy_image():
             }, allow_redirects=False)
 
         if response.status_code == 200:
+            if len(response.content) > _PROXY_MAX_RESPONSE_BYTES:
+                return "Response too large", 413
             content_type = response.headers.get('Content-Type', 'image/jpeg')
             if not content_type.startswith(('image/', 'video/')):
                 return "Not a media file", 400
