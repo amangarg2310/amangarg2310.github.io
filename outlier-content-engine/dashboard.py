@@ -1793,7 +1793,7 @@ def chat_message():
 
         # BYOK: prefer per-request key from header, fall back to DB/env
         byok_openai = request.headers.get('X-OpenAI-Key', '').strip() or None
-        admin_mode = request.headers.get('X-Admin-Mode', '').strip() == '1'
+        admin_mode = config.ADMIN_MODE
 
         if 'chat_context' not in session:
             session['chat_context'] = {

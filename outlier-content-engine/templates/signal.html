@@ -1699,10 +1699,8 @@ function getBYOKHeaders() {
     const headers = { 'Content-Type': 'application/json' };
     const openaiKey = localStorage.getItem('scout_openai_key');
     const apifyToken = localStorage.getItem('scout_apify_token');
-    const adminMode = localStorage.getItem('scout_admin_mode');
     if (openaiKey) headers['X-OpenAI-Key'] = openaiKey;
     if (apifyToken) headers['X-Apify-Token'] = apifyToken;
-    if (adminMode === '1') headers['X-Admin-Mode'] = '1';
     return headers;
 }
 
