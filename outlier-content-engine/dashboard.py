@@ -1376,7 +1376,16 @@ def proxy_image():
     try:
         response = requests.get(image_url, timeout=10, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }, allow_redirects=True)
+        }, allow_redirects=False)
+
+        # If redirect, validate the target URL before following
+        if response.status_code in (301, 302, 303, 307, 308):
+            redirect_url = response.headers.get('Location', '')
+            if not _is_allowed_image_url(redirect_url):
+                return "Redirect to disallowed domain", 403
+            response = requests.get(redirect_url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }, allow_redirects=False)
 
         if response.status_code == 200:
             content_type = response.headers.get('Content-Type', 'image/jpeg')
