@@ -53,13 +53,13 @@ def _get_or_create_secret_key() -> str:
     # 2. Try reading from DB
     db_path = config.DB_PATH
     if db_path.exists():
+        conn = None
         try:
             conn = sqlite3.connect(str(db_path))
             row = conn.execute(
                 "SELECT value FROM config WHERE key = 'flask_secret_key'"
             ).fetchone()
             if row and row[0]:
-                conn.close()
                 return row[0]
             # 3. Generate and persist a new key
             new_key = os.urandom(32).hex()
@@ -68,10 +68,12 @@ def _get_or_create_secret_key() -> str:
                 (new_key,),
             )
             conn.commit()
-            conn.close()
             return new_key
         except Exception as e:
             logging.getLogger(__name__).warning(f"Secret key DB lookup failed: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     # 4. Fallback: ephemeral key (sessions won't survive restart)
     return os.urandom(32).hex()
@@ -168,6 +170,7 @@ def get_available_verticals():
 
 def _persist_active_vertical(name: str):
     """Save the active vertical to the DB config table so it survives restarts."""
+    conn = None
     try:
         conn = sqlite3.connect(str(config.DB_PATH))
         conn.execute(
@@ -175,9 +178,11 @@ def _persist_active_vertical(name: str):
             (name,),
         )
         conn.commit()
-        conn.close()
     except Exception:
         pass  # Best-effort; session/memory are primary
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_active_vertical_name():
@@ -198,12 +203,12 @@ def get_active_vertical_name():
         return session['active_vertical']
 
     # DB config state (survives both restart + session expiry)
+    conn = None
     try:
         conn = sqlite3.connect(str(config.DB_PATH))
         row = conn.execute(
             "SELECT value FROM config WHERE key = 'last_active_vertical'"
         ).fetchone()
-        conn.close()
         if row and row[0]:
             # Verify the vertical still exists
             verticals = get_available_verticals()
@@ -214,6 +219,9 @@ def get_active_vertical_name():
                 return row[0]
     except Exception:
         pass
+    finally:
+        if conn:
+            conn.close()
 
     # Fall back to first available vertical
     verticals = get_available_verticals()
@@ -2307,6 +2315,7 @@ def analysis_status():
                     response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
 
                     # Check DB for outliers to give a meaningful message
+                    conn2 = None
                     try:
                         v_name = get_active_vertical_name()
                         conn2 = sqlite3.connect(str(config.DB_PATH))
@@ -2314,11 +2323,13 @@ def analysis_status():
                             "SELECT COUNT(*) as cnt FROM competitor_posts WHERE is_outlier = 1 AND brand_profile = ?",
                             (v_name or "",)
                         ).fetchone()
-                        conn2.close()
                         cnt = row2[0] if row2 else 0
                         response["message"] = f"Analysis complete! Found {cnt} outlier posts." if cnt else "Analysis complete."
                     except (sqlite3.OperationalError, sqlite3.DatabaseError):
                         response["message"] = "Analysis complete!"
+                    finally:
+                        if conn2:
+                            conn2.close()
 
                     # Clean up stale progress file
                     try:
