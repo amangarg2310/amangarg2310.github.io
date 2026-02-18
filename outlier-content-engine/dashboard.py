@@ -1050,6 +1050,7 @@ def api_optimize_concept():
 
 
 @app.route("/api/trends")
+@login_required
 def api_trends():
     """Return rising/declining content pattern trends."""
     from flask import jsonify
@@ -1071,6 +1072,7 @@ def api_trends():
 
 
 @app.route("/api/gap-analysis")
+@login_required
 def api_gap_analysis():
     """Return own-brand gap analysis (what competitors do that brand hasn't tried)."""
     from flask import jsonify
@@ -1090,6 +1092,7 @@ def api_gap_analysis():
 
 
 @app.route("/api/score-history")
+@login_required
 def api_score_history():
     """Return recent content scoring history for the active vertical."""
     from flask import jsonify
@@ -1136,6 +1139,7 @@ def api_score_history():
 
 
 @app.route("/api/budget")
+@login_required
 def api_budget():
     """Return current monthly LLM spend and limit for budget visibility."""
     from flask import jsonify
@@ -1173,6 +1177,7 @@ def api_budget():
 
 
 @app.route("/api/validate_keys", methods=["POST"])
+@login_required
 def api_validate_keys():
     """Live validation of API keys before saving."""
     from flask import jsonify
@@ -1222,6 +1227,7 @@ def api_validate_keys():
 
 
 @app.route("/api/load_vertical/<vertical_name>")
+@login_required
 def load_vertical(vertical_name):
     """Load a competitive set (vertical) and redirect to signal page."""
     app._active_vertical = vertical_name
@@ -1343,6 +1349,7 @@ def _is_allowed_image_url(url: str) -> bool:
 
 
 @app.route("/proxy-image")
+@login_required
 def proxy_image():
     """Proxy external images to bypass CORS restrictions.
 
@@ -1734,6 +1741,7 @@ def delete_vertical():
 # ── Chat Routes (Scout AI Assistant) ──
 
 @app.route("/chat")
+@login_required
 def chat_page():
     """Redirect to Signal page (chat is embedded in Signal)."""
     return redirect(url_for('signal_page'))
@@ -2095,6 +2103,7 @@ def update_chat_context():
 
 
 @app.route("/analysis/stream")
+@login_required
 def analysis_stream():
     """Server-Sent Events stream for real-time analysis progress."""
     import time as _time
@@ -2179,6 +2188,7 @@ def cancel_analysis():
 
 
 @app.route("/analysis/status")
+@login_required
 def analysis_status():
     """Check if analysis is currently running and return detailed progress."""
     from flask import jsonify, session
