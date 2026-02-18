@@ -218,5 +218,5 @@ class ApifyFacebookCollector(BaseCollector):
 
 def create_facebook_collector() -> ApifyFacebookCollector:
     """Factory function for the Facebook collector."""
-    api_token = config.get_api_key("apify") or config.APIFY_API_TOKEN
+    api_token = config.get_api_key("apify")
     return ApifyFacebookCollector(api_token=api_token)

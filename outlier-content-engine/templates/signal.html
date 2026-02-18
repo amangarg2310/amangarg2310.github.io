@@ -28,18 +28,21 @@
         <!-- Chat Header -->
         <div class="signal-chat-header">
             <div class="signal-brand">
-                <img src="/static/scoutai-logo-white-trimmed.svg" alt="ScoutAI" style="height: 90px; width: auto;">
+                <img src="/static/scoutai-logo-white-trimmed.svg" alt="ScoutAI" style="height: 36px; width: auto;">
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <p class="signal-chat-subtitle">Outliers Identified: {{ outliers|length if outliers else 0 }} posts
-                    <span class="signal-timeframe-context">
-                        {% if selected_timeframe == '3mo' %}
-                            — scored vs each brand's 3-month baseline
-                        {% else %}
-                            — scored vs each brand's 30-day baseline
-                        {% endif %}
+            <div class="signal-outlier-callout">
+                <div class="signal-outlier-callout-content">
+                    <span class="signal-outlier-count">{{ outliers|length if outliers else 0 }}</span>
+                    <span class="signal-outlier-label">Outliers Identified
+                        <span class="signal-timeframe-context">
+                            {% if selected_timeframe == '3mo' %}
+                                — scored vs each brand's 3-month baseline
+                            {% else %}
+                                — scored vs each brand's 30-day baseline
+                            {% endif %}
+                        </span>
                     </span>
-                </p>
+                </div>
                 <button class="signal-chat-reset" onclick="resetChat()" title="Reset conversation">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="1 4 1 10 7 10"></polyline>
@@ -156,12 +159,13 @@
             </div>
             {% else %}
             {% if chat_history %}
-            <!-- Re-render prior conversation so chat doesn't appear to reset on page reload -->
+            <!-- Re-render prior conversation so chat doesn't appear to reset on page reload.
+                 Bubbles use data-raw-text + JS formatChatText() for markdown rendering. -->
             {% for msg in chat_history %}
             <div class="signal-message {% if msg.role == 'user' %}signal-message-user{% endif %}">
                 <div class="signal-avatar">{% if msg.role == 'user' %}{{ session.get('user', {}).get('name', 'You')[0]|upper if session.get('user') else 'Y' }}{% else %}S{% endif %}</div>
                 <div class="signal-message-content">
-                    <div class="signal-message-bubble">{{ msg.content }}</div>
+                    <div class="signal-message-bubble chat-history-raw" data-raw-text="{{ msg.content|e }}">{{ msg.content }}</div>
                 </div>
             </div>
             {% endfor %}
@@ -570,22 +574,7 @@
                                 onclick="applyFilter('timeframe', '30d')">30 Days</button>
                         <button class="signal-pill {% if selected_timeframe == '3mo' %}active{% endif %}{% if collection_timeframe == '30d' %} signal-pill-disabled{% endif %}"
                                 onclick="{% if collection_timeframe != '30d' %}applyFilter('timeframe', '3mo'){% endif %}"
-                                {% if collection_timeframe == '30d' %}title="Data collected for last 30 days only — re-run analysis with '3 months' to see this range" style="opacity:0.4;cursor:not-allowed;"{% endif %}>3 Months</button>
-                    </div>
-                </div>
-
-                <!-- Sort Filter -->
-                <div class="signal-filter-group">
-                    <span class="signal-filter-label">SORT</span>
-                    <div class="signal-filter-pills">
-                        <button class="signal-pill {% if sort_by == 'score' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'score')">Score</button>
-                        <button class="signal-pill {% if sort_by == 'saves' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'saves')">Saves</button>
-                        <button class="signal-pill {% if sort_by == 'shares' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'shares')">Shares</button>
-                        <button class="signal-pill {% if sort_by == 'date' %}active{% endif %}"
-                                onclick="applyFilter('sort', 'date')">Recent</button>
+                                {% if collection_timeframe == '30d' %}title="Data collected for last 30 days only — re-run analysis with '3 months' to see this range"{% endif %}>3 Months</button>
                     </div>
                 </div>
 
@@ -621,6 +610,23 @@
                     </div>
                 </div>
                 {% endif %}
+            </div>
+
+            <!-- Sort Row (below filters) -->
+            <div class="signal-sort-row">
+                <div class="signal-filter-group">
+                    <span class="signal-filter-label">SORT</span>
+                    <div class="signal-filter-pills">
+                        <button class="signal-pill {% if sort_by == 'score' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'score')">Score</button>
+                        <button class="signal-pill {% if sort_by == 'saves' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'saves')">Saves</button>
+                        <button class="signal-pill {% if sort_by == 'shares' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'shares')">Shares</button>
+                        <button class="signal-pill {% if sort_by == 'date' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'date')">Recent</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1557,7 +1563,7 @@ function renderScoreResults(data) {
     const suggs = data.suggestions || [];
     let suggsHtml = '';
     suggs.forEach(s => {
-        suggsHtml += `<div class="signal-scorer-suggestion">${s}</div>`;
+        suggsHtml += `<div class="signal-scorer-suggestion">${escapeHtml(s)}</div>`;
     });
     document.getElementById('scorerSuggestions').innerHTML = suggsHtml;
 }
@@ -1698,10 +1704,8 @@ function getBYOKHeaders() {
     const headers = { 'Content-Type': 'application/json' };
     const openaiKey = localStorage.getItem('scout_openai_key');
     const apifyToken = localStorage.getItem('scout_apify_token');
-    const adminMode = localStorage.getItem('scout_admin_mode');
     if (openaiKey) headers['X-OpenAI-Key'] = openaiKey;
     if (apifyToken) headers['X-Apify-Token'] = apifyToken;
-    if (adminMode === '1') headers['X-Admin-Mode'] = '1';
     return headers;
 }
 
@@ -1800,6 +1804,12 @@ async function sendChatMessage(message) {
     }
 }
 
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function formatChatText(text) {
     // Convert markdown-style formatting to HTML for chat bubbles
     let html = text
@@ -1887,7 +1897,7 @@ function addCategoryCard(text, data, actions) {
     header.innerHTML = `
         <span class="signal-insight-icon">📁</span>
         <span class="signal-insight-label">COLLECTION</span>
-        <span class="signal-insight-metric">${data.brand_count} brand${data.brand_count !== 1 ? 's' : ''}</span>
+        <span class="signal-insight-metric">${parseInt(data.brand_count) || 0} brand${data.brand_count !== 1 ? 's' : ''}</span>
     `;
     card.appendChild(header);
 
@@ -1976,8 +1986,8 @@ function addCategoryList(text, categories) {
         header.className = 'signal-insight-header';
         header.innerHTML = `
             <span class="signal-insight-icon">📁</span>
-            <span class="signal-insight-label">${cat.name.toUpperCase()}</span>
-            <span class="signal-insight-metric">${cat.brand_count} brand${cat.brand_count !== 1 ? 's' : ''}</span>
+            <span class="signal-insight-label">${escapeHtml(cat.name.toUpperCase())}</span>
+            <span class="signal-insight-metric">${parseInt(cat.brand_count) || 0} brand${cat.brand_count !== 1 ? 's' : ''}</span>
         `;
         catCard.appendChild(header);
 
@@ -2539,6 +2549,16 @@ window.addEventListener('DOMContentLoaded', function() {
     if (urlParams.get('analysis_started') === 'true') {
         showAnalysisLoading();
     }
+
+    // Process server-rendered chat history bubbles through formatChatText()
+    // so markdown (**bold**, bullets, etc.) renders correctly.
+    document.querySelectorAll('.chat-history-raw').forEach(function(el) {
+        var raw = el.getAttribute('data-raw-text');
+        if (raw && typeof formatChatText === 'function') {
+            el.innerHTML = formatChatText(raw);
+        }
+        el.classList.remove('chat-history-raw');
+    });
 
     // Scroll chat to bottom on load so the most recent messages are visible
     // (important when chat history is re-rendered from session on page reload)

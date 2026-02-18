@@ -30,15 +30,69 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, send_file, Response, session,
 )
-from markupsafe import Markup
+from markupsafe import Markup, escape as _escape_html
+from werkzeug.utils import secure_filename
 
 import config
 from auth import login_required, is_auth_enabled, get_current_user, build_google_auth_url, exchange_code_for_user, upsert_user, is_email_allowed
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(32).hex()
+
+
+def _get_or_create_secret_key() -> str:
+    """Get persistent secret key from DB config table, env var, or generate one.
+
+    Without a stable key, every server restart invalidates all sessions —
+    logging users out and losing the active vertical selection.
+    """
+    # 1. Explicit env var takes priority
+    env_key = os.getenv("FLASK_SECRET_KEY")
+    if env_key:
+        return env_key
+
+    # 2. Try reading from DB
+    db_path = config.DB_PATH
+    if db_path.exists():
+        conn = None
+        try:
+            conn = sqlite3.connect(str(db_path))
+            row = conn.execute(
+                "SELECT value FROM config WHERE key = 'flask_secret_key'"
+            ).fetchone()
+            if row and row[0]:
+                return row[0]
+            # 3. Generate and persist a new key
+            new_key = os.urandom(32).hex()
+            conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES ('flask_secret_key', ?)",
+                (new_key,),
+            )
+            conn.commit()
+            return new_key
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Secret key DB lookup failed: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    # 4. Fallback: ephemeral key (sessions won't survive restart)
+    return os.urandom(32).hex()
+
+
+app.secret_key = _get_or_create_secret_key()
 
 logger = logging.getLogger(__name__)
+
+
+# ── Security Headers ──
+
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
 
 
 # ── Template Filters ──
@@ -101,7 +155,8 @@ def md_bold_filter(text):
     import re
     if not text or '**' not in str(text):
         return text
-    return Markup(re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', str(text)))
+    escaped = _escape_html(str(text))
+    return Markup(re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', str(escaped)))
 
 
 # ── Helpers ──
@@ -113,11 +168,28 @@ def get_available_verticals():
     return vm.list_verticals()
 
 
+def _persist_active_vertical(name: str):
+    """Save the active vertical to the DB config table so it survives restarts."""
+    conn = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES ('last_active_vertical', ?)",
+            (name,),
+        )
+        conn.commit()
+    except Exception:
+        pass  # Best-effort; session/memory are primary
+    finally:
+        if conn:
+            conn.close()
+
+
 def get_active_vertical_name():
     """Get the active vertical name from session or first available.
 
     Uses Flask session for persistence across server restarts.
-    Falls back to in-memory app state, then first available vertical.
+    Falls back to in-memory app state, then DB config, then first available vertical.
     """
     # In-memory state (set by chat handler within this process)
     if hasattr(app, '_active_vertical') and app._active_vertical:
@@ -129,6 +201,27 @@ def get_active_vertical_name():
     if session.get('active_vertical'):
         app._active_vertical = session['active_vertical']
         return session['active_vertical']
+
+    # DB config state (survives both restart + session expiry)
+    conn = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = 'last_active_vertical'"
+        ).fetchone()
+        if row and row[0]:
+            # Verify the vertical still exists
+            verticals = get_available_verticals()
+            if row[0] in verticals:
+                app._active_vertical = row[0]
+                session['active_vertical'] = row[0]
+                session.modified = True
+                return row[0]
+    except Exception:
+        pass
+    finally:
+        if conn:
+            conn.close()
 
     # Fall back to first available vertical
     verticals = get_available_verticals()
@@ -663,8 +756,10 @@ def auth_google_callback():
     upsert_user(user_info)
     session["user"] = user_info
 
-    # Redirect to originally requested page
+    # Redirect to originally requested page (validate it's a relative path)
     next_url = session.pop("next_url", None) or url_for('signal_page')
+    if not next_url.startswith('/'):
+        next_url = url_for('signal_page')
     return redirect(next_url)
 
 
@@ -708,6 +803,7 @@ def signal_page():
         if requested_vertical in verticals:
             app._active_vertical = requested_vertical
             session['active_vertical'] = requested_vertical
+            _persist_active_vertical(requested_vertical)
 
     # Clear active vertical when returning to empty state
     if empty_state and hasattr(app, '_active_vertical'):
@@ -777,17 +873,20 @@ def signal_page():
     # Used to disable the "3 Months" filter pill when data only covers 30 days.
     collection_timeframe = None
     if vertical_name and not empty_state:
+        conn = None
         try:
             conn = get_db()
             row = conn.execute(
                 "SELECT value FROM config WHERE key = ?",
                 (f"last_collection_timeframe_{vertical_name}",)
             ).fetchone()
-            conn.close()
             if row and row["value"]:
                 collection_timeframe = row["value"]
         except Exception:
             pass
+        finally:
+            if conn:
+                conn.close()
 
     return render_template("signal.html",
                            outliers=outliers,
@@ -970,6 +1069,7 @@ def api_optimize_concept():
 
 
 @app.route("/api/trends")
+@login_required
 def api_trends():
     """Return rising/declining content pattern trends."""
     from flask import jsonify
@@ -991,6 +1091,7 @@ def api_trends():
 
 
 @app.route("/api/gap-analysis")
+@login_required
 def api_gap_analysis():
     """Return own-brand gap analysis (what competitors do that brand hasn't tried)."""
     from flask import jsonify
@@ -1010,6 +1111,7 @@ def api_gap_analysis():
 
 
 @app.route("/api/score-history")
+@login_required
 def api_score_history():
     """Return recent content scoring history for the active vertical."""
     from flask import jsonify
@@ -1056,6 +1158,7 @@ def api_score_history():
 
 
 @app.route("/api/budget")
+@login_required
 def api_budget():
     """Return current monthly LLM spend and limit for budget visibility."""
     from flask import jsonify
@@ -1093,6 +1196,7 @@ def api_budget():
 
 
 @app.route("/api/validate_keys", methods=["POST"])
+@login_required
 def api_validate_keys():
     """Live validation of API keys before saving."""
     from flask import jsonify
@@ -1142,6 +1246,7 @@ def api_validate_keys():
 
 
 @app.route("/api/load_vertical/<vertical_name>")
+@login_required
 def load_vertical(vertical_name):
     """Load a competitive set (vertical) and redirect to signal page."""
     app._active_vertical = vertical_name
@@ -1160,6 +1265,7 @@ def switch_vertical():
     if vertical_name and vertical_name in verticals:
         app._active_vertical = vertical_name
         session['active_vertical'] = vertical_name
+        _persist_active_vertical(vertical_name)
         flash(f"Switched to vertical: {vertical_name}", "success")
     else:
         flash(f"Vertical '{vertical_name}' not found.", "danger")
@@ -1206,9 +1312,13 @@ def run_engine():
 # ── Routes: Reports ──
 
 @app.route("/reports/raw/<filename>")
+@login_required
 def raw_report(filename):
     """Serve raw HTML report for iframe embed."""
+    filename = secure_filename(filename)
     filepath = config.DATA_DIR / filename
+    if not filepath.resolve().is_relative_to(config.DATA_DIR.resolve()):
+        return "Access denied", 403
     if filepath.exists() and filepath.suffix == ".html":
         return Response(filepath.read_text(encoding="utf-8"),
                         mimetype="text/html")
@@ -1216,9 +1326,13 @@ def raw_report(filename):
 
 
 @app.route("/reports/download/<filename>")
+@login_required
 def download_report(filename):
     """Download a report file."""
+    filename = secure_filename(filename)
     filepath = config.DATA_DIR / filename
+    if not filepath.resolve().is_relative_to(config.DATA_DIR.resolve()):
+        return "Access denied", 403
     if filepath.exists() and filepath.suffix == ".html":
         return send_file(filepath, as_attachment=True)
     flash("Report file not found.", "danger")
@@ -1253,12 +1367,30 @@ def _is_allowed_image_url(url: str) -> bool:
         return False
 
 
+import time as _time
+_proxy_rate_limit = {}  # {ip: [timestamp, ...]}
+_PROXY_RATE_LIMIT_MAX = 60  # requests per window
+_PROXY_RATE_LIMIT_WINDOW = 60  # seconds
+_PROXY_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 @app.route("/proxy-image")
+@login_required
 def proxy_image():
     """Proxy external images to bypass CORS restrictions.
 
     Only allows requests to known social media CDN domains to prevent SSRF.
+    Rate limited to 60 requests per minute per IP. Max response size 10MB.
     """
+    # Rate limiting
+    client_ip = request.remote_addr or "unknown"
+    now = _time.time()
+    window = _proxy_rate_limit.setdefault(client_ip, [])
+    window[:] = [t for t in window if now - t < _PROXY_RATE_LIMIT_WINDOW]
+    if len(window) >= _PROXY_RATE_LIMIT_MAX:
+        return "Rate limit exceeded", 429
+    window.append(now)
+
     image_url = request.args.get('url')
     if not image_url:
         return "No URL provided", 400
@@ -1269,9 +1401,20 @@ def proxy_image():
     try:
         response = requests.get(image_url, timeout=10, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }, allow_redirects=True)
+        }, allow_redirects=False)
+
+        # If redirect, validate the target URL before following
+        if response.status_code in (301, 302, 303, 307, 308):
+            redirect_url = response.headers.get('Location', '')
+            if not _is_allowed_image_url(redirect_url):
+                return "Redirect to disallowed domain", 403
+            response = requests.get(redirect_url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }, allow_redirects=False)
 
         if response.status_code == 200:
+            if len(response.content) > _PROXY_MAX_RESPONSE_BYTES:
+                return "Response too large", 413
             content_type = response.headers.get('Content-Type', 'image/jpeg')
             if not content_type.startswith(('image/', 'video/')):
                 return "Not a media file", 400
@@ -1645,6 +1788,7 @@ def delete_vertical():
 # ── Chat Routes (Scout AI Assistant) ──
 
 @app.route("/chat")
+@login_required
 def chat_page():
     """Redirect to Signal page (chat is embedded in Signal)."""
     return redirect(url_for('signal_page'))
@@ -1676,7 +1820,7 @@ def chat_message():
 
         # BYOK: prefer per-request key from header, fall back to DB/env
         byok_openai = request.headers.get('X-OpenAI-Key', '').strip() or None
-        admin_mode = request.headers.get('X-Admin-Mode', '').strip() == '1'
+        admin_mode = config.ADMIN_MODE
 
         if 'chat_context' not in session:
             session['chat_context'] = {
@@ -1761,6 +1905,7 @@ def chat_message():
                 if new_vertical and new_vertical != current_vertical:
                     app._active_vertical = new_vertical
                     session['active_vertical'] = new_vertical
+                    _persist_active_vertical(new_vertical)
 
                 # Persist the full context (including chat_history) in session.
                 # Transient filter keys have already been popped above so they
@@ -2005,6 +2150,7 @@ def update_chat_context():
 
 
 @app.route("/analysis/stream")
+@login_required
 def analysis_stream():
     """Server-Sent Events stream for real-time analysis progress."""
     import time as _time
@@ -2089,6 +2235,7 @@ def cancel_analysis():
 
 
 @app.route("/analysis/status")
+@login_required
 def analysis_status():
     """Check if analysis is currently running and return detailed progress."""
     from flask import jsonify, session
@@ -2187,6 +2334,7 @@ def analysis_status():
                     response["time_elapsed"] = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
 
                     # Check DB for outliers to give a meaningful message
+                    conn2 = None
                     try:
                         v_name = get_active_vertical_name()
                         conn2 = sqlite3.connect(str(config.DB_PATH))
@@ -2194,11 +2342,13 @@ def analysis_status():
                             "SELECT COUNT(*) as cnt FROM competitor_posts WHERE is_outlier = 1 AND brand_profile = ?",
                             (v_name or "",)
                         ).fetchone()
-                        conn2.close()
                         cnt = row2[0] if row2 else 0
                         response["message"] = f"Analysis complete! Found {cnt} outlier posts." if cnt else "Analysis complete."
                     except (sqlite3.OperationalError, sqlite3.DatabaseError):
                         response["message"] = "Analysis complete!"
+                    finally:
+                        if conn2:
+                            conn2.close()
 
                     # Clean up stale progress file
                     try:

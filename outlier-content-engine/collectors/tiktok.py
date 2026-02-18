@@ -44,7 +44,12 @@ class ApifyTikTokCollector(BaseCollector):
 
     def collect_posts(self, handle: str, competitor_name: str,
                       count: int = 12) -> List[CollectedPost]:
-        """Fetch recent TikTok posts for a handle using Apify."""
+        """Fetch recent TikTok posts for a handle using Apify.
+
+        Returns an empty list if the profile has 0 posts (legitimate).
+        Raises RuntimeError for API/infrastructure failures so the caller
+        can differentiate "no posts" from "collection error."
+        """
         logger.info(f"  TikTok @{handle}: starting Apify collection...")
 
         # Start actor run
@@ -66,16 +71,15 @@ class ApifyTikTokCollector(BaseCollector):
             )
 
             if response.status_code not in (200, 201):
-                logger.error(
-                    f"Failed to start Apify actor: {response.status_code} "
-                    f"{response.text[:200]}"
+                raise RuntimeError(
+                    f"Apify actor start failed: HTTP {response.status_code}"
                 )
-                return []
 
             run_data = response.json()
             if not run_data or "data" not in run_data or not run_data["data"]:
-                logger.error(f"  TikTok @{handle}: unexpected Apify response: {str(run_data)[:200]}")
-                return []
+                raise RuntimeError(
+                    f"Unexpected Apify response: {str(run_data)[:200]}"
+                )
             run_id = run_data["data"]["id"]
             logger.info(f"  TikTok @{handle}: Apify run started (ID: {run_id})")
 
@@ -95,32 +99,31 @@ class ApifyTikTokCollector(BaseCollector):
                 )
 
                 if status_response.status_code != 200:
-                    logger.error(f"Failed to check run status: {status_response.status_code}")
-                    return []
+                    raise RuntimeError(
+                        f"Run status check failed: HTTP {status_response.status_code}"
+                    )
 
                 status_data = status_response.json()
                 run_info = status_data.get("data") if status_data else None
                 if not run_info:
-                    logger.error(f"  TikTok @{handle}: unexpected status response")
-                    return []
+                    raise RuntimeError("Unexpected status response (no data)")
                 status = run_info.get("status", "UNKNOWN")
 
                 if status == "SUCCEEDED":
                     logger.info(f"  TikTok @{handle}: Apify run completed")
                     break
                 elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
-                    logger.error(f"  TikTok @{handle}: Apify run {status}")
-                    return []
+                    raise RuntimeError(f"Apify run {status}")
 
             else:
-                logger.error(f"  TikTok @{handle}: Apify run timeout")
-                return []
+                raise RuntimeError(
+                    f"Apify run timed out after {max_wait}s"
+                )
 
             # Fetch results from dataset
             dataset_id = run_info.get("defaultDatasetId")
             if not dataset_id:
-                logger.error(f"  TikTok @{handle}: no dataset ID in run response")
-                return []
+                raise RuntimeError("No dataset ID in run response")
             results_response = requests.get(
                 f"{self.base_url}/datasets/{dataset_id}/items",
                 params={"token": self.api_token},
@@ -128,10 +131,9 @@ class ApifyTikTokCollector(BaseCollector):
             )
 
             if results_response.status_code != 200:
-                logger.error(
-                    f"Failed to fetch dataset: {results_response.status_code}"
+                raise RuntimeError(
+                    f"Dataset fetch failed: HTTP {results_response.status_code}"
                 )
-                return []
 
             items = results_response.json()
             posts = self._parse_apify_posts(items, handle, competitor_name, count)
@@ -141,9 +143,10 @@ class ApifyTikTokCollector(BaseCollector):
             )
             return posts
 
+        except RuntimeError:
+            raise  # Propagate infrastructure errors to caller
         except Exception as e:
-            logger.error(f"Error collecting TikTok posts via Apify: {e}")
-            return []
+            raise RuntimeError(f"TikTok collection failed: {e}") from e
 
     def _parse_apify_posts(self, items: List[dict], handle: str,
                           competitor_name: str,
@@ -217,7 +220,7 @@ class ApifyTikTokCollector(BaseCollector):
 
 def create_tiktok_collector() -> BaseCollector:
     """Create a TikTok collector instance (Apify)."""
-    api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+    api_token = config.get_api_key('apify')
     if not api_token:
         raise ValueError(
             "APIFY_API_TOKEN not set in database or environment. "

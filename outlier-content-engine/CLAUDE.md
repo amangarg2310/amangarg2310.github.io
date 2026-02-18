@@ -119,6 +119,10 @@ outlier-content-engine/
 │   ├── split-layout.css         # Split-panel layout utilities
 │   └── scoutai-logo-white-trimmed.svg  # App logo
 │
+├── test_user_journey.py          # 46 end-to-end journey tests (pytest)
+├── test_issue_fixes.py           # 44 regression tests (pytest)
+├── test_error_handling.py        # 30 edge case tests (standalone)
+├── test_scoring_system.py        # 29 scoring pipeline tests (standalone)
 ├── render.yaml                  # Render.com deployment config
 ├── requirements.txt             # Python dependencies
 └── data/                        # Runtime data (gitignored)
@@ -335,6 +339,7 @@ CREATE TABLE competitor_posts (
     caption TEXT,
     media_type TEXT,                    -- image | video | carousel
     media_url TEXT,
+    post_url TEXT,                     -- permalink to the original post
     likes INTEGER DEFAULT 0,
     comments INTEGER DEFAULT 0,
     saves INTEGER,
@@ -631,7 +636,91 @@ Use the "COMPETITIVE SET" dropdown at top of the right panel filters.
 
 ---
 
+## Test Suites
+
+**Total: 149 tests across 3 suites — all passing.**
+
+### `test_user_journey.py` (46 tests, pytest)
+End-to-end user journey tests covering the full pipeline. All external APIs (Apify, OpenAI) are mocked. Uses Flask `test_client()` for HTTP-level testing and real DB migrations for production-equivalent schema.
+
+| Section | Tests | Coverage |
+|---------|-------|----------|
+| Setup Flow | 4 | Page rendering, key save/reject, live DB reads |
+| Vertical & Brand Mgmt | 5 | Create, add all 3 platforms, bulk add, soft delete, cascade |
+| Data Collection (IG/TT/FB) | 6 | Mocked Apify collectors, empty results, TT errors, dedup |
+| Outlier Detection | 2 | 10x engagement flagged, empty dataset safety |
+| Dashboard Rendering | 5 | Signal page, empty state, platform/competitor filters, JSON API |
+| Chat & Agent | 2 | Mocked OpenAI response, filter context popping |
+| Trend Radar & Gap Analysis | 4 | Snapshot capture, scorer, rising/declining, gap detection |
+| Content Scoring | 2 | Score route 0-100, DB persistence |
+| Report Serving | 2 | HTML serving, path traversal blocked |
+| Security Fixes | 14 | All 13 security hardening fixes verified |
+
+### `test_issue_fixes.py` (44 tests, pytest)
+Regression tests for 5 reported issues: vertical CRUD, engagement calc, scout agent tool dispatch, timestamp parsing, Apify response handling.
+
+### `test_error_handling.py` (30 tests, standalone)
+Edge case tests: VerticalManager CRUD, None metrics, scout agent dispatch, timestamp parsing, TikTok Apify validation.
+Run with: `python test_error_handling.py`
+
+### `test_scoring_system.py` (29 tests, standalone)
+Content scoring pipeline: migrations, seed data, scorer (5 dimensions), store/iterate, trend analyzer, gap analyzer, optimizer prompts, Flask route smoke tests, scout agent tool handlers, edge cases.
+Run with: `python test_scoring_system.py`
+
+### Running All Tests
+```bash
+# pytest suites (90 tests)
+python -m pytest test_issue_fixes.py test_user_journey.py -v
+
+# Standalone suites (59 tests)
+python test_error_handling.py
+python test_scoring_system.py
+```
+
+---
+
+## Security Hardening (13 fixes, 2026-02-18)
+
+| # | Fix | File(s) |
+|---|-----|---------|
+| 1 | XSS: `md_bold_filter` escapes HTML before Markup | `dashboard.py` |
+| 2-3 | XSS: `escapeHtml()` utility for innerHTML in signal.html | `templates/signal.html` |
+| 4 | Path traversal: `secure_filename` + `is_relative_to` on report routes | `dashboard.py` |
+| 5 | Open redirect: validate `next_url.startswith('/')` | `auth.py`, `dashboard.py` |
+| 6 | Auth: `@login_required` on 10 unprotected API routes | `dashboard.py` |
+| 7 | Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy | `dashboard.py` |
+| 8 | SSRF: `allow_redirects=False` + redirect URL validation on proxy | `dashboard.py` |
+| 9 | Admin bypass: use `config.ADMIN_MODE` not client header | `dashboard.py`, `signal.html` |
+| 10 | DB leaks: wrap all DB connections in `try/finally` | `dashboard.py` |
+| 11 | API keys: `type="password"` + `autocomplete="off"` on setup inputs | `templates/setup.html` |
+| 12 | Stale config: remove module-level API key caching | `config.py`, collectors, engine |
+| 13 | Rate limiting: per-IP sliding window (60 req/min) + 10MB cap on proxy | `dashboard.py` |
+
+---
+
 ## Recent Changelog
+
+### 2026-02-18: End-to-End User Journey Tests (91bada9)
+- Added `test_user_journey.py` — 46 new tests covering the full user journey from setup to reports
+- Tests cover all 3 platform collectors (mocked Apify), outlier detection, dashboard rendering, chat/agent (mocked OpenAI), trend radar, content scoring, report serving, and all 13 security fixes
+- Fixed pre-existing bug: added missing `post_url` column to `competitor_posts` schema (referenced by `trend_radar/scorer.py` but never added)
+- Updated `store_posts()` in `collectors/instagram.py` to persist `post_url`
+- Added `add_post_url_column()` migration in `database_migrations.py`
+- All 149 tests pass across 3 suites (90 pytest + 30 error handling + 29 scoring)
+
+### 2026-02-18: Security Hardening — 13 Fixes (fe8ab0b → e276268, 11 commits)
+- **XSS Prevention:** `md_bold_filter` now escapes HTML before Markup; added `escapeHtml()` JS utility for all innerHTML in `signal.html` (score suggestions, category names, brand counts)
+- **Path Traversal:** Report routes use `secure_filename` + `is_relative_to` validation
+- **Open Redirect:** `auth.py` stores `request.path` (not full URL); `dashboard.py` validates `next_url.startswith('/')`
+- **Auth Gaps:** Added `@login_required` to 10 unprotected routes (`/api/trends`, `/api/gap-analysis`, `/api/score-history`, `/api/budget`, `/api/validate_keys`, `/api/load_vertical/<name>`, `/proxy-image`, `/chat`, `/analysis/stream`, `/analysis/status`)
+- **Security Headers:** `@app.after_request` adds X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection
+- **SSRF:** Proxy endpoint changed to `allow_redirects=False` with redirect URL domain validation
+- **Admin Bypass:** Removed client-settable `X-Admin-Mode` header; uses `config.ADMIN_MODE` only
+- **DB Connection Leaks:** Wrapped 4 DB helper functions in `try/finally` blocks
+- **API Key Masking:** Setup page inputs changed to `type="password"` with `autocomplete="off"`
+- **Stale Config:** Removed module-level API key caching from `config.py` and all consumers (8 files)
+- **Rate Limiting:** Per-IP sliding window (60 req/min) + 10MB response size cap on `/proxy-image`
+- Each fix committed individually for safe rollback; all 103 existing tests verified between each fix
 
 ### 2026-02-17: Fix Vertical Context Loss, Handle Discovery Flow, Silent TikTok Failures (multiple files)
 
@@ -853,6 +942,6 @@ Two interacting bugs caused brands to appear "added" but show 0 on query:
 
 ---
 
-**Last Updated:** 2026-02-17
-**Version:** 2.6.0
+**Last Updated:** 2026-02-18
+**Version:** 2.7.0
 **Maintained by:** Claude Code (AI Assistant)

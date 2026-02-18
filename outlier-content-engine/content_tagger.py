@@ -32,7 +32,7 @@ class ContentTagger:
     def _get_client(self) -> OpenAI:
         """Lazy-initialize the OpenAI client."""
         if self.client is None:
-            api_key = config.get_api_key('openai') or config.OPENAI_API_KEY
+            api_key = config.get_api_key('openai')
             if not api_key:
                 raise ValueError(
                     "OPENAI_API_KEY is not set. Add it to your .env file or database."
