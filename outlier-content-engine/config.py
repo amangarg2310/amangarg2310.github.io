@@ -77,7 +77,8 @@ def get_api_key(service: str) -> str:
 
 
 # ── OpenAI ──
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Fallback, use get_api_key('openai')
+# OPENAI_API_KEY: use config.get_api_key('openai') for live reads instead of cached value
+OPENAI_API_KEY = None  # Kept for backward compat; callers should use get_api_key('openai')
 OPENAI_MODEL = "gpt-4o-mini"
 OPENAI_MAX_TOKENS = 4096
 OPENAI_TEMPERATURE = 0.7
@@ -89,7 +90,8 @@ COST_PER_1K_INPUT_TOKENS = 0.00015
 COST_PER_1K_OUTPUT_TOKENS = 0.00060
 
 # ── Instagram Data Collection (Apify) ──
-APIFY_API_TOKEN = get_api_key('apify') or os.getenv("APIFY_API_TOKEN")
+# APIFY_API_TOKEN: use config.get_api_key('apify') for live reads instead of cached value
+APIFY_API_TOKEN = None  # Kept for backward compat; callers should use get_api_key('apify')
 DEFAULT_POSTS_PER_COMPETITOR = 12
 
 # ── Instagram Graph API (own-channel only, provides saves/shares) ──

@@ -37,7 +37,7 @@ class ChannelValidator:
             "error": None,
         }
 
-        api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+        api_token = config.get_api_key('apify')
         if not api_token:
             result["error"] = "APIFY_API_TOKEN not configured"
             return result
@@ -85,7 +85,7 @@ class ChannelValidator:
             "error": None,
         }
 
-        api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+        api_token = config.get_api_key('apify')
         if not api_token:
             result["error"] = "APIFY_API_TOKEN not configured"
             return result

@@ -33,7 +33,7 @@ class VoiceAnalyzer:
 
     def _get_client(self) -> OpenAI:
         if self.client is None:
-            self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+            self.client = OpenAI(api_key=config.get_api_key('openai'))
         return self.client
 
     def get_top_own_posts(self, limit: int = 12) -> List[Dict]:

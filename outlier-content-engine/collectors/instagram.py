@@ -459,7 +459,7 @@ def create_collector() -> BaseCollector:
         An ApifyInstagramCollector instance.
     """
     # Fresh DB lookup — don't use stale module-level cached value
-    api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+    api_token = config.get_api_key('apify')
     if not api_token:
         raise ValueError(
             "APIFY_API_TOKEN not set in database or environment. "

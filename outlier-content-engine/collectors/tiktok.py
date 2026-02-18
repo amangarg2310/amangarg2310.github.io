@@ -220,7 +220,7 @@ class ApifyTikTokCollector(BaseCollector):
 
 def create_tiktok_collector() -> BaseCollector:
     """Create a TikTok collector instance (Apify)."""
-    api_token = config.get_api_key('apify') or config.APIFY_API_TOKEN
+    api_token = config.get_api_key('apify')
     if not api_token:
         raise ValueError(
             "APIFY_API_TOKEN not set in database or environment. "

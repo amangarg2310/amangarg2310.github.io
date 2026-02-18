@@ -48,7 +48,7 @@ class ContentAnalyzer:
         """Lazy-initialize the OpenAI client."""
         if self.client is None:
             # Try database first, then environment variable
-            api_key = config.get_api_key('openai') or config.OPENAI_API_KEY
+            api_key = config.get_api_key('openai')
             if not api_key:
                 raise ValueError(
                     "OPENAI_API_KEY is not set. Add it to your .env file or database."
