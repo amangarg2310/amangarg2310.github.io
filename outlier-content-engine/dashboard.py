@@ -82,6 +82,17 @@ app.secret_key = _get_or_create_secret_key()
 logger = logging.getLogger(__name__)
 
 
+# ── Security Headers ──
+
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
+
 # ── Template Filters ──
 
 @app.template_filter('timeago')
