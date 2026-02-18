@@ -114,6 +114,7 @@ def login_required(f):
     """
     Decorator that requires login ONLY when auth is enabled.
     When Google OAuth is not configured, passes through freely.
+    For API/AJAX requests, returns 401 JSON instead of HTML redirect.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -121,7 +122,19 @@ def login_required(f):
             return f(*args, **kwargs)
 
         if not session.get("user"):
-            # Store the requested URL for post-login redirect
+            # API/AJAX requests get JSON 401 (not an HTML redirect that
+            # breaks fetch().json() on the client side).
+            if (request.is_json
+                    or request.content_type == 'application/json'
+                    or 'application/json' in request.headers.get('Accept', '')):
+                from flask import jsonify
+                return jsonify({
+                    "error": "Authentication required",
+                    "type": "auth_required",
+                    "response": "Your session has expired. Please refresh the page to log in again.",
+                }), 401
+
+            # Browser navigation: redirect to login page
             session["next_url"] = request.path
             return redirect(url_for("login_page"))
 
