@@ -12,7 +12,7 @@ interface LocationState {
 export const useLocationStore = create<LocationState>((set) => ({
   lat: null,
   lng: null,
-  city: 'NYC',
+  city: 'Tampa/St. Pete',
   loading: false,
   error: null,
 
@@ -36,9 +36,9 @@ export const useLocationStore = create<LocationState>((set) => ({
         set({
           error: err.message,
           loading: false,
-          // Default to NYC
-          lat: 40.7128,
-          lng: -74.0060,
+          // Default to Tampa/St. Pete
+          lat: 27.9506,
+          lng: -82.4572,
         })
       },
       { enableHighAccuracy: true, timeout: 10000 }

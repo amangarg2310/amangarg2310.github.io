@@ -14,7 +14,7 @@ type BuilderMode = 'swipe' | 'grid'
 export function TierListBuilderPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, _setSelectedCategory] = useState('Pizza')
-  const [selectedCity, _setSelectedCity] = useState('New York, NY')
+  const [selectedCity, _setSelectedCity] = useState('Tampa/St. Pete, FL')
   const [mode, setMode] = useState<BuilderMode>('swipe')
   const [showRestaurants, setShowRestaurants] = useState(false)
   const [showShareCard, setShowShareCard] = useState(false)

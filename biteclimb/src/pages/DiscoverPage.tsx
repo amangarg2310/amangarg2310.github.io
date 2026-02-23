@@ -54,7 +54,7 @@ export function DiscoverPage() {
           <div className="flex items-center gap-2">
             <Link to="/map" className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
               <MapPinIcon size={10} />
-              {lat ? 'Near Me' : 'NYC'}
+              {lat ? 'Near Me' : 'Tampa'}
             </Link>
           </div>
         </div>

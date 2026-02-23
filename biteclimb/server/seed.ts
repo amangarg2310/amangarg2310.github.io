@@ -30,19 +30,19 @@ for (const u of users) {
 }
 
 // ---- Restaurants ----
-// NYC coordinates: 40.7128, -74.0060
+// Tampa/St. Pete coordinates: 27.9506, -82.4572
 const restaurants = [
-  { id: 'r1', name: 'Pasta Emilia', image_url: 'https://images.unsplash.com/photo-1555072956-7758afb20e8f?auto=format&fit=crop&w=800&q=80', neighborhood: 'SoHo', lat: 40.7233, lng: -73.9987, cuisine: 'Italian' },
-  { id: 'r2', name: 'Sushi Palace', image_url: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?auto=format&fit=crop&w=800&q=80', neighborhood: 'Midtown', lat: 40.7549, lng: -73.9840, cuisine: 'Japanese' },
-  { id: 'r3', name: 'Seoul Food', image_url: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=800&q=80', neighborhood: 'K-Town', lat: 40.7475, lng: -73.9868, cuisine: 'Korean' },
-  { id: 'r4', name: 'Ippudo', image_url: 'https://images.unsplash.com/photo-1614563637806-1d0e645e0940?auto=format&fit=crop&w=800&q=80', neighborhood: 'East Village', lat: 40.7308, lng: -73.9894, cuisine: 'Japanese' },
-  { id: 'r5', name: 'Taqueria La Estrella', image_url: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80', neighborhood: 'Jackson Heights', lat: 40.7496, lng: -73.8783, cuisine: 'Mexican' },
-  { id: 'r6', name: 'Thai Diner', image_url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=800&q=80', neighborhood: "Hell's Kitchen", lat: 40.7638, lng: -73.9918, cuisine: 'Thai' },
-  { id: 'r7', name: "Joe's Pizza", image_url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80', neighborhood: 'Greenwich Village', lat: 40.7306, lng: -74.0021, cuisine: 'Italian' },
-  { id: 'r8', name: 'Punjab Deli', image_url: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80', neighborhood: 'Curry Hill', lat: 40.7449, lng: -73.9826, cuisine: 'Indian' },
-  { id: 'r9', name: "Grimaldi's", image_url: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80', neighborhood: 'DUMBO', lat: 40.7026, lng: -73.9934, cuisine: 'Italian' },
-  { id: 'r10', name: "Lombardi's", image_url: 'https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&w=800&q=80', neighborhood: 'NoLita', lat: 40.7216, lng: -73.9956, cuisine: 'Italian' },
-  { id: 'r11', name: 'Artichoke Basille', image_url: 'https://images.unsplash.com/photo-1585238342024-78d387f4a707?auto=format&fit=crop&w=800&q=80', neighborhood: 'East Village', lat: 40.7295, lng: -73.9875, cuisine: 'Italian' },
+  { id: 'r1', name: 'Olivia', image_url: 'https://images.unsplash.com/photo-1555072956-7758afb20e8f?auto=format&fit=crop&w=800&q=80', neighborhood: 'South Tampa', lat: 27.9371, lng: -82.4987, cuisine: 'Italian' },
+  { id: 'r2', name: 'Rocca', image_url: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?auto=format&fit=crop&w=800&q=80', neighborhood: 'Hyde Park', lat: 27.9389, lng: -82.4706, cuisine: 'Japanese' },
+  { id: 'r3', name: 'Ichicoro Ramen', image_url: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=800&q=80', neighborhood: 'Seminole Heights', lat: 27.9863, lng: -82.4590, cuisine: 'Korean' },
+  { id: 'r4', name: 'Ichicoro Ane', image_url: 'https://images.unsplash.com/photo-1614563637806-1d0e645e0940?auto=format&fit=crop&w=800&q=80', neighborhood: 'St. Pete', lat: 27.7711, lng: -82.6340, cuisine: 'Japanese' },
+  { id: 'r5', name: 'Taco Bus', image_url: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80', neighborhood: 'Hillsborough Ave', lat: 27.9616, lng: -82.4528, cuisine: 'Mexican' },
+  { id: 'r6', name: 'Saigon Bay', image_url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=800&q=80', neighborhood: 'Westshore', lat: 27.9530, lng: -82.5268, cuisine: 'Thai' },
+  { id: 'r7', name: 'Eddie & Sams', image_url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80', neighborhood: 'Downtown Tampa', lat: 27.9494, lng: -82.4586, cuisine: 'Italian' },
+  { id: 'r8', name: 'Curry Leaves', image_url: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80', neighborhood: 'Carrollwood', lat: 28.0380, lng: -82.5048, cuisine: 'Indian' },
+  { id: 'r9', name: "Datz", image_url: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80', neighborhood: 'South Tampa', lat: 27.9285, lng: -82.4894, cuisine: 'Italian' },
+  { id: 'r10', name: "Bern's Steak House", image_url: 'https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&w=800&q=80', neighborhood: 'South Howard', lat: 27.9285, lng: -82.4852, cuisine: 'Italian' },
+  { id: 'r11', name: 'The Mermaid Tavern', image_url: 'https://images.unsplash.com/photo-1585238342024-78d387f4a707?auto=format&fit=crop&w=800&q=80', neighborhood: 'St. Pete', lat: 27.7721, lng: -82.6419, cuisine: 'Italian' },
 ]
 
 const insertRestaurant = db.prepare('INSERT INTO restaurants (id, name, image_url, neighborhood, lat, lng, cuisine) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -55,14 +55,14 @@ for (let i = 0; i < restaurants.length; i++) {
 
 // ---- Dishes ----
 const dishes = [
-  { id: 'd1', name: 'Truffle Mushroom Pasta', image_url: 'https://images.unsplash.com/photo-1555072956-7758afb20e8f?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r1', location: 'SoHo, NYC', cuisine: 'Italian', description: 'Handmade fettuccine with wild mushrooms, black truffle, and a creamy parmesan sauce.', price: '$26', lat: 40.7233, lng: -73.9987 },
-  { id: 'd2', name: 'Spicy Tuna Roll', image_url: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r2', location: 'Midtown, NYC', cuisine: 'Japanese', description: 'Fresh spicy tuna with crispy tempura flakes, avocado, and a sriracha drizzle.', price: '$18', lat: 40.7549, lng: -73.9840 },
-  { id: 'd3', name: 'Korean Fried Chicken', image_url: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r3', location: 'K-Town, NYC', cuisine: 'Korean', description: 'Double-fried chicken with a sweet and spicy gochujang glaze, served with pickled radish.', price: '$16', lat: 40.7475, lng: -73.9868 },
-  { id: 'd4', name: 'Tonkotsu Ramen', image_url: 'https://images.unsplash.com/photo-1614563637806-1d0e645e0940?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r4', location: 'East Village, NYC', cuisine: 'Japanese', description: 'Rich pork bone broth with chashu, soft-boiled egg, wood ear mushrooms, and thin noodles.', price: '$19', lat: 40.7308, lng: -73.9894 },
-  { id: 'd5', name: 'Birria Tacos', image_url: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r5', location: 'Jackson Heights, NYC', cuisine: 'Mexican', description: 'Slow-braised beef birria in crispy tortillas with consommé for dipping.', price: '$14', lat: 40.7496, lng: -73.8783 },
-  { id: 'd6', name: 'Pad Thai', image_url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r6', location: "Hell's Kitchen, NYC", cuisine: 'Thai', description: 'Classic stir-fried rice noodles with shrimp, tofu, peanuts, and tamarind sauce.', price: '$17', lat: 40.7638, lng: -73.9918 },
-  { id: 'd7', name: 'Margherita Pizza', image_url: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r7', location: 'Greenwich Village, NYC', cuisine: 'Italian', description: 'Classic Neapolitan-style with San Marzano tomatoes, fresh mozzarella, and basil.', price: '$4', lat: 40.7306, lng: -74.0021 },
-  { id: 'd8', name: 'Butter Chicken', image_url: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r8', location: 'Curry Hill, NYC', cuisine: 'Indian', description: 'Tender chicken in a rich, creamy tomato-based sauce with aromatic spices.', price: '$15', lat: 40.7449, lng: -73.9826 },
+  { id: 'd1', name: 'Truffle Mushroom Pasta', image_url: 'https://images.unsplash.com/photo-1555072956-7758afb20e8f?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r1', location: 'South Tampa', cuisine: 'Italian', description: 'Handmade fettuccine with wild mushrooms, black truffle, and a creamy parmesan sauce.', price: '$26', lat: 27.9371, lng: -82.4987 },
+  { id: 'd2', name: 'Spicy Tuna Roll', image_url: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r2', location: 'Hyde Park, Tampa', cuisine: 'Japanese', description: 'Fresh spicy tuna with crispy tempura flakes, avocado, and a sriracha drizzle.', price: '$18', lat: 27.9389, lng: -82.4706 },
+  { id: 'd3', name: 'Korean Fried Chicken', image_url: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r3', location: 'Seminole Heights, Tampa', cuisine: 'Korean', description: 'Double-fried chicken with a sweet and spicy gochujang glaze, served with pickled radish.', price: '$16', lat: 27.9863, lng: -82.4590 },
+  { id: 'd4', name: 'Tonkotsu Ramen', image_url: 'https://images.unsplash.com/photo-1614563637806-1d0e645e0940?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r4', location: 'St. Pete', cuisine: 'Japanese', description: 'Rich pork bone broth with chashu, soft-boiled egg, wood ear mushrooms, and thin noodles.', price: '$19', lat: 27.7711, lng: -82.6340 },
+  { id: 'd5', name: 'Birria Tacos', image_url: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r5', location: 'Hillsborough Ave, Tampa', cuisine: 'Mexican', description: 'Slow-braised beef birria in crispy tortillas with consommé for dipping.', price: '$14', lat: 27.9616, lng: -82.4528 },
+  { id: 'd6', name: 'Pad Thai', image_url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r6', location: 'Westshore, Tampa', cuisine: 'Thai', description: 'Classic stir-fried rice noodles with shrimp, tofu, peanuts, and tamarind sauce.', price: '$17', lat: 27.9530, lng: -82.5268 },
+  { id: 'd7', name: 'Margherita Pizza', image_url: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r7', location: 'Downtown Tampa', cuisine: 'Italian', description: 'Classic Neapolitan-style with San Marzano tomatoes, fresh mozzarella, and basil.', price: '$4', lat: 27.9494, lng: -82.4586 },
+  { id: 'd8', name: 'Butter Chicken', image_url: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r8', location: 'Carrollwood, Tampa', cuisine: 'Indian', description: 'Tender chicken in a rich, creamy tomato-based sauce with aromatic spices.', price: '$15', lat: 28.0380, lng: -82.5048 },
 ]
 
 const insertDish = db.prepare('INSERT INTO dishes (id, name, image_url, restaurant_id, location, cuisine, description, price, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -191,8 +191,8 @@ insertFav.run('u1', 'd7')
 
 // ---- Tier Lists ----
 const insertTierList = db.prepare('INSERT INTO tier_lists (id, user_id, title, category, city) VALUES (?, ?, ?, ?, ?)')
-insertTierList.run('tl1', 'u1', 'Best Ramen in NYC', 'Ramen', 'New York, NY')
-insertTierList.run('tl2', 'u1', "NYC's Top Burgers", 'Burgers', 'New York, NY')
+insertTierList.run('tl1', 'u1', 'Best Ramen in Tampa Bay', 'Ramen', 'Tampa/St. Pete, FL')
+insertTierList.run('tl2', 'u1', "Tampa Bay's Top Burgers", 'Burgers', 'Tampa/St. Pete, FL')
 
 // ---- Cuisine Preferences for demo user ----
 const insertPref = db.prepare('INSERT INTO user_cuisine_prefs (user_id, cuisine) VALUES (?, ?)')
