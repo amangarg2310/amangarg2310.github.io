@@ -30,9 +30,9 @@ export function DiscoverPage() {
   const featuredDish = dishes.find((d) => d.id === '3')! // KFC - hot right now
 
   return (
-    <div className="max-w-md mx-auto px-4 py-6">
+    <div className="max-w-md mx-auto px-4 py-6 page-enter">
       {/* Header */}
-      <header className="mb-5">
+      <header className="mb-5 animate-fade-in-up">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl font-bold text-neutral-900">biteclimb</h1>
           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">NYC</span>
@@ -41,7 +41,7 @@ export function DiscoverPage() {
       </header>
 
       {/* Search */}
-      <div className="relative mb-5">
+      <div className="relative mb-5 animate-fade-in-up stagger-1">
         <SearchIcon size={18} className="absolute left-3 top-3 text-neutral-400" />
         <input
           type="text"
@@ -53,7 +53,7 @@ export function DiscoverPage() {
       </div>
 
       {/* Cuisine filter chips */}
-      <div className="mb-5 -mx-4 px-4 overflow-x-auto scrollbar-hide">
+      <div className="mb-5 -mx-4 px-4 overflow-x-auto scrollbar-hide animate-fade-in-up stagger-2">
         <div className="flex space-x-2 pb-1">
           {cuisineTypes.map((cuisine) => (
             <button

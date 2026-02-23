@@ -21,8 +21,8 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-6">
-      <header className="flex justify-between items-center mb-6">
+    <div className="max-w-md mx-auto px-4 py-6 page-enter">
+      <header className="flex justify-between items-center mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Profile</h1>
           <p className="text-sm text-neutral-500">biteclimb</p>
@@ -33,7 +33,7 @@ export function ProfilePage() {
       </header>
 
       {/* User info */}
-      <div className="flex items-center mb-6">
+      <div className="flex items-center mb-6 animate-fade-in-up stagger-1">
         <div className="relative mr-4 shrink-0">
           <img
             src={userProfile.avatar}
@@ -60,7 +60,7 @@ export function ProfilePage() {
       </div>
 
       {/* Stats + Streak */}
-      <div className="grid grid-cols-4 gap-2 mb-6">
+      <div className="grid grid-cols-4 gap-2 mb-6 animate-fade-in-up stagger-2">
         <div className="bg-white rounded-xl shadow-sm p-3 text-center">
           <div className="text-lg font-bold text-neutral-900">{userProfile.stats.tierLists}</div>
           <div className="text-[10px] text-neutral-500">Lists</div>
@@ -82,7 +82,7 @@ export function ProfilePage() {
       </div>
 
       {/* Taste DNA */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+      <div className="bg-white rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-3">
         <h2 className="font-semibold mb-3 flex items-center text-sm">
           <span className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-2">
             <span className="text-white text-xs">🧬</span>
@@ -106,7 +106,7 @@ export function ProfilePage() {
       </div>
 
       {/* Achievements / Badges */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+      <div className="bg-white rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-4">
         <h2 className="font-semibold mb-3 flex items-center text-sm">
           <TrophyIcon size={16} className="mr-2 text-yellow-500" />
           Achievements
@@ -136,7 +136,7 @@ export function ProfilePage() {
       </div>
 
       {/* Streak details */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+      <div className="bg-white rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-5">
         <h2 className="font-semibold mb-3 flex items-center text-sm">
           <CalendarIcon size={16} className="mr-2 text-orange-500" />
           Rating Streak

@@ -6,6 +6,7 @@ import { TierListBuilderPage } from './pages/TierListBuilderPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { Navigation } from './components/Navigation'
+import { ScrollToTop } from './components/ScrollToTop'
 
 export default function App() {
   const [onboarded, setOnboarded] = useState(() => {
@@ -23,6 +24,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className="flex flex-col min-h-screen bg-neutral-50">
         <div className="flex-1 pb-16">
           <Routes>
