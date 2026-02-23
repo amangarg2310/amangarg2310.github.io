@@ -1,0 +1,24 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { DiscoverPage } from './pages/DiscoverPage'
+import { DishDetailPage } from './pages/DishDetailPage'
+import { TierListBuilderPage } from './pages/TierListBuilderPage'
+import { ProfilePage } from './pages/ProfilePage'
+import { Navigation } from './components/Navigation'
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <div className="flex flex-col min-h-screen bg-neutral-50">
+        <div className="flex-1 pb-16">
+          <Routes>
+            <Route path="/" element={<DiscoverPage />} />
+            <Route path="/dish/:id" element={<DishDetailPage />} />
+            <Route path="/tier-builder" element={<TierListBuilderPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Routes>
+        </div>
+        <Navigation />
+      </div>
+    </BrowserRouter>
+  )
+}
