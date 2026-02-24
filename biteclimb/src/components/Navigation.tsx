@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { HomeIcon, ListPlusIcon, UserIcon, ActivityIcon } from 'lucide-react'
+import { HomeIcon, ListPlusIcon, UserIcon, ActivityIcon, TrophyIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export function Navigation() {
@@ -7,6 +7,7 @@ export function Navigation() {
     <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md border-t border-neutral-100 dark:border-neutral-800 px-2 py-1.5 z-50">
       <div className="flex justify-around items-center max-w-md mx-auto">
         <NavItem to="/" icon={<HomeIcon size={20} />} label="Discover" />
+        <NavItem to="/rankings" icon={<TrophyIcon size={20} />} label="Rankings" />
         <NavItem to="/feed" icon={<ActivityIcon size={20} />} label="Feed" />
         <NavItem to="/tier-builder" icon={<ListPlusIcon size={20} />} label="Create" />
         <NavItem to="/profile" icon={<UserIcon size={20} />} label="Profile" />

@@ -110,6 +110,13 @@ router.get('/', optionalAuth, (req: AuthRequest, res) => {
       distance = haversineDistance(Number(lat), Number(lng), d.lat as number, d.lng as number)
     }
 
+    // Dish labels
+    const labelRows = db.prepare(`
+      SELECT label, COUNT(*) as count
+      FROM dish_labels WHERE dish_id = ?
+      GROUP BY label ORDER BY count DESC LIMIT 3
+    `).all(d.id) as { label: string; count: number }[]
+
     return {
       id: d.id,
       name: d.name,
@@ -131,6 +138,7 @@ router.get('/', optionalAuth, (req: AuthRequest, res) => {
       distance,
       lat: d.lat,
       lng: d.lng,
+      labels: labelRows,
     }
   })
 
@@ -201,11 +209,21 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res) => {
 
   let userRating: string | null = null
   let isFavorite = false
+  let userLabels: string[] = []
   if (req.userId) {
     const ur = db.prepare('SELECT tier FROM ratings WHERE user_id = ? AND dish_id = ?').get(req.userId, id) as { tier: string } | undefined
     userRating = ur?.tier || null
     isFavorite = !!db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND dish_id = ?').get(req.userId, id)
+    const ulRows = db.prepare('SELECT label FROM dish_labels WHERE user_id = ? AND dish_id = ?').all(req.userId, id) as { label: string }[]
+    userLabels = ulRows.map(r => r.label)
   }
+
+  // Dish labels (crowdsourced)
+  const labelRows = db.prepare(`
+    SELECT label, COUNT(*) as count
+    FROM dish_labels WHERE dish_id = ?
+    GROUP BY label ORDER BY count DESC
+  `).all(id) as { label: string; count: number }[]
 
   res.json({
     id: d.id,
@@ -227,6 +245,8 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res) => {
     similar: similarEnriched,
     user_rating: userRating,
     is_favorite: isFavorite,
+    user_labels: userLabels,
+    labels: labelRows,
     lat: d.lat,
     lng: d.lng,
   })
@@ -303,6 +323,57 @@ router.post('/reviews/:id/helpful', requireAuth, (req: AuthRequest, res) => {
   } else {
     db.prepare('INSERT INTO review_helpful (user_id, review_id) VALUES (?, ?)').run(req.userId, id)
     res.json({ marked: true })
+  }
+})
+
+// ---- Dish Labels ----
+const VALID_LABELS = [
+  'Most Popular',
+  'Best Tasting',
+  'Known For',
+  'Best Looking',
+  'Spiciest',
+  'Best Value',
+  'Most Unique',
+  'Biggest Portion',
+  'Must Try',
+]
+
+// GET /api/dishes/:id/labels
+router.get('/:id/labels', optionalAuth, (req: AuthRequest, res) => {
+  const { id } = req.params
+  const labels = db.prepare(`
+    SELECT label, COUNT(*) as count
+    FROM dish_labels WHERE dish_id = ?
+    GROUP BY label ORDER BY count DESC
+  `).all(id) as { label: string; count: number }[]
+
+  let userLabels: string[] = []
+  if (req.userId) {
+    const rows = db.prepare('SELECT label FROM dish_labels WHERE user_id = ? AND dish_id = ?').all(req.userId, id) as { label: string }[]
+    userLabels = rows.map(r => r.label)
+  }
+
+  res.json({ labels, user_labels: userLabels, valid_labels: VALID_LABELS })
+})
+
+// POST /api/dishes/:id/labels — toggle a label on/off
+router.post('/:id/labels', requireAuth, (req: AuthRequest, res) => {
+  const { id } = req.params
+  const { label } = req.body
+
+  if (!label || !VALID_LABELS.includes(label)) {
+    res.status(400).json({ error: `Invalid label. Must be one of: ${VALID_LABELS.join(', ')}` })
+    return
+  }
+
+  const existing = db.prepare('SELECT id FROM dish_labels WHERE user_id = ? AND dish_id = ? AND label = ?').get(req.userId, id, label) as { id: string } | undefined
+  if (existing) {
+    db.prepare('DELETE FROM dish_labels WHERE id = ?').run(existing.id)
+    res.json({ added: false, label })
+  } else {
+    db.prepare('INSERT INTO dish_labels (id, user_id, dish_id, label) VALUES (?, ?, ?, ?)').run(uuid(), req.userId, id, label)
+    res.json({ added: true, label })
   }
 })
 

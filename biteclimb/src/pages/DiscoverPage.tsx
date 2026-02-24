@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   SearchIcon, MapIcon, ListIcon, TrendingUpIcon, FlameIcon,
-  SparklesIcon, UsersIcon, MapPinIcon, NavigationIcon,
+  SparklesIcon, UsersIcon, MapPinIcon, NavigationIcon, TrophyIcon,
+  ZapIcon,
 } from 'lucide-react'
 import { DishCard } from '../components/DishCard'
 import { TierBadge } from '../components/TierBadge'
@@ -29,6 +30,11 @@ export function DiscoverPage() {
       lat: lat ?? undefined,
       lng: lng ?? undefined,
     }),
+  })
+
+  const { data: challengers = [] } = useQuery({
+    queryKey: ['challengers'],
+    queryFn: () => api.restaurants.challengers(),
   })
 
   const isSearching = searchTerm.length > 0 || selectedCuisine !== 'All'
@@ -149,6 +155,7 @@ export function DiscoverPage() {
                   restaurant={dish.restaurant}
                   ratingCount={dish.rating_count}
                   distance={dish.distance}
+                  labels={dish.labels}
                   size="sm"
                 />
               ))}
@@ -260,6 +267,55 @@ export function DiscoverPage() {
             </section>
           )}
 
+          {/* Challengers */}
+          {challengers.length > 0 && (
+            <section>
+              <h2 className="font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 mb-3">
+                <ZapIcon size={18} className="text-orange-500" />
+                Rising Challengers
+              </h2>
+              {challengers.slice(0, 2).map((c, i) => (
+                <div key={i} className="bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-xl border border-orange-200 dark:border-orange-800 p-3 mb-2">
+                  <div className="flex items-center gap-3">
+                    <Link to={`/restaurant/${c.newcomer.id}`} className="flex-1 text-center">
+                      <span className="text-[8px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-full">NEW</span>
+                      <p className="font-semibold text-xs text-neutral-900 dark:text-neutral-100 mt-1 line-clamp-1">{c.newcomer.name}</p>
+                      <p className="text-[10px] text-neutral-500">{c.newcomer.rating_count} ratings</p>
+                    </Link>
+                    <span className="text-xs font-bold text-neutral-300 shrink-0">vs</span>
+                    <Link to={`/restaurant/${c.incumbent.id}`} className="flex-1 text-center">
+                      <span className="text-[8px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full">KING</span>
+                      <p className="font-semibold text-xs text-neutral-900 dark:text-neutral-100 mt-1 line-clamp-1">{c.incumbent.name}</p>
+                      <p className="text-[10px] text-neutral-500">{c.incumbent.rating_count} ratings</p>
+                    </Link>
+                  </div>
+                  <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2 text-center font-medium">{c.cuisine}: {c.reason}</p>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Best by Cuisine CTA */}
+          <section>
+            <Link
+              to="/rankings"
+              className="block bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800 p-4 hover:shadow-sm transition-all active:scale-[0.98]"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-sm text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                    <TrophyIcon size={16} className="text-yellow-500" />
+                    Best by Cuisine
+                  </h3>
+                  <p className="text-xs text-neutral-500 mt-0.5">See top-ranked restaurants for every cuisine</p>
+                </div>
+                <div className="text-yellow-500">
+                  <TrophyIcon size={24} />
+                </div>
+              </div>
+            </Link>
+          </section>
+
           {/* Explore by Cuisine */}
           <section>
             <h2 className="font-bold text-neutral-900 dark:text-neutral-100 mb-3">Explore by Cuisine</h2>
@@ -297,6 +353,7 @@ export function DiscoverPage() {
                   restaurant={dish.restaurant}
                   ratingCount={dish.rating_count}
                   distance={dish.distance}
+                  labels={dish.labels}
                   size="sm"
                 />
               ))}

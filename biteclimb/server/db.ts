@@ -148,6 +148,20 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS dish_labels (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    dish_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, dish_id, label),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (dish_id) REFERENCES dishes(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_dish_labels_dish ON dish_labels(dish_id);
+  CREATE INDEX IF NOT EXISTS idx_dish_labels_label ON dish_labels(label);
+
   -- FTS for search
   CREATE VIRTUAL TABLE IF NOT EXISTS dishes_fts USING fts5(
     name, cuisine, description, location, restaurant_name,

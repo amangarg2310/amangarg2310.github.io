@@ -53,11 +53,20 @@ export const api = {
       request<{ id: string }>(`/dishes/${id}/reviews`, { method: 'POST', body: JSON.stringify(data) }),
     markHelpful: (reviewId: string) =>
       request<{ marked: boolean }>(`/dishes/reviews/${reviewId}/helpful`, { method: 'POST' }),
+    getLabels: (id: string) =>
+      request<DishLabelsData>(`/dishes/${id}/labels`),
+    toggleLabel: (id: string, label: string) =>
+      request<{ added: boolean; label: string }>(`/dishes/${id}/labels`, { method: 'POST', body: JSON.stringify({ label }) }),
   },
 
   restaurants: {
     list: () => request<RestaurantData[]>('/restaurants'),
     get: (id: string) => request<RestaurantDetailData>(`/restaurants/${id}`),
+    topByCuisine: (cuisine?: string) => {
+      const qs = cuisine ? `?cuisine=${encodeURIComponent(cuisine)}` : ''
+      return request<Record<string, CuisineRankedRestaurant[]>>(`/restaurants/top-by-cuisine${qs}`)
+    },
+    challengers: () => request<ChallengerData[]>('/restaurants/challengers'),
   },
 
   tierLists: {
@@ -106,6 +115,11 @@ export interface UserMeData extends UserData {
   streak: number
 }
 
+export interface DishLabelCount {
+  label: string
+  count: number
+}
+
 export interface DishData {
   id: string
   name: string
@@ -127,11 +141,19 @@ export interface DishData {
   distance: number | null
   lat: number
   lng: number
+  labels?: DishLabelCount[]
 }
 
 export interface DishDetailData extends DishData {
   reviews: ReviewData[]
   similar: SimilarDishData[]
+  user_labels?: string[]
+}
+
+export interface DishLabelsData {
+  labels: DishLabelCount[]
+  user_labels: string[]
+  valid_labels: string[]
 }
 
 export interface ReviewData {
@@ -219,4 +241,54 @@ export interface ActivityData {
   created_at: string
   username: string
   avatar: string
+}
+
+export interface CuisineRankedRestaurant {
+  id: string
+  name: string
+  image_url: string
+  neighborhood: string
+  cuisine: string
+  community_tier: string
+  score: number
+  rating_count: number
+  confidence: number
+  momentum: number
+  recent_ratings: number
+  top_dishes: {
+    id: string
+    name: string
+    image_url: string
+    price: string
+    dish_rating_count: number
+    tier: string
+    labels: DishLabelCount[]
+  }[]
+  is_newcomer: boolean
+  rank: number
+}
+
+export interface ChallengerData {
+  cuisine: string
+  newcomer: {
+    id: string
+    name: string
+    image_url: string
+    neighborhood: string
+    cuisine: string
+    score: number
+    rating_count: number
+    week_ratings: number
+    community_tier: string
+    best_dish: { id: string; name: string; image_url: string } | null
+  }
+  incumbent: {
+    id: string
+    name: string
+    score: number
+    rating_count: number
+    community_tier: string
+    best_dish: { id: string; name: string; image_url: string } | null
+  }
+  reason: string
 }

@@ -4,9 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   MapPinIcon, ChevronLeftIcon, HeartIcon, ShareIcon,
   MessageSquareIcon, ThumbsUpIcon, UsersIcon, ChevronRightIcon,
+  TagIcon, CheckIcon,
 } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { DishCard } from '../components/DishCard'
+import { LABEL_COLORS } from '../components/DishCard'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/authStore'
 import { TIER_CONFIG, TIER_OPTIONS } from '../data/types'
@@ -64,6 +66,20 @@ export function DishDetailPage() {
   const helpfulMutation = useMutation({
     mutationFn: (reviewId: string) => api.dishes.markHelpful(reviewId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dish', id] }),
+  })
+
+  const { data: labelsData } = useQuery({
+    queryKey: ['dish-labels', id],
+    queryFn: () => api.dishes.getLabels(id!),
+    enabled: !!id,
+  })
+
+  const labelMutation = useMutation({
+    mutationFn: (label: string) => api.dishes.toggleLabel(id!, label),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dish-labels', id] })
+      queryClient.invalidateQueries({ queryKey: ['dish', id] })
+    },
   })
 
   if (isLoading) {
@@ -185,6 +201,52 @@ export function DishDetailPage() {
             {worthItPercent > 0 && <span className="text-green-600 font-medium text-xs bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">{worthItPercent}% worth it</span>}
           </div>
         </div>
+
+        {/* Dish Labels */}
+        {dish.labels && dish.labels.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4 animate-fade-in-up stagger-2">
+            {dish.labels.map(l => (
+              <span
+                key={l.label}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full ${LABEL_COLORS[l.label] || 'bg-neutral-100 text-neutral-700'}`}
+              >
+                {l.label} {l.count > 1 && <span className="opacity-60">({l.count})</span>}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Label Voting */}
+        {labelsData && (
+          <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-4 mb-5 animate-fade-in-up stagger-3">
+            <h2 className="font-semibold mb-2 text-sm dark:text-neutral-100 flex items-center gap-1.5">
+              <TagIcon size={14} className="text-purple-500" />
+              What makes this dish stand out?
+            </h2>
+            <p className="text-xs text-neutral-500 mb-3">Tap labels that describe this dish</p>
+            <div className="flex flex-wrap gap-2">
+              {labelsData.valid_labels.map(label => {
+                const isActive = labelsData.user_labels.includes(label)
+                const communityCount = labelsData.labels.find(l => l.label === label)?.count || 0
+                return (
+                  <button
+                    key={label}
+                    onClick={() => { if (isAuthenticated) labelMutation.mutate(label) }}
+                    className={`text-xs px-2.5 py-1.5 rounded-full font-medium transition-all duration-200 flex items-center gap-1 active:scale-95 ${
+                      isActive
+                        ? `${LABEL_COLORS[label] || 'bg-purple-100 text-purple-700'} ring-2 ring-purple-300 dark:ring-purple-600`
+                        : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200'
+                    }`}
+                  >
+                    {isActive && <CheckIcon size={10} />}
+                    {label}
+                    {communityCount > 0 && <span className="opacity-60">({communityCount})</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Ratings */}
         <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-4 mb-5 animate-fade-in-up stagger-3">

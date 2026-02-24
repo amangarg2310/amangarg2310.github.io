@@ -11,6 +11,7 @@ import { OnboardingPage } from './pages/OnboardingPage'
 import { AuthPage } from './pages/AuthPage'
 import { ActivityFeedPage } from './pages/ActivityFeedPage'
 import { MapViewPage } from './pages/MapViewPage'
+import { CuisineRankingsPage } from './pages/CuisineRankingsPage'
 import { Navigation } from './components/Navigation'
 import { ScrollToTop } from './components/ScrollToTop'
 
@@ -78,6 +79,7 @@ function AppContent() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/feed" element={<ActivityFeedPage />} />
             <Route path="/map" element={<MapViewPage />} />
+            <Route path="/rankings" element={<CuisineRankingsPage />} />
             <Route path="/user/:id" element={<ProfilePage />} />
           </Routes>
         </div>

@@ -210,6 +210,51 @@ insertActivity.run(uuid(), 'u7', 'review', 'd4', 'Tonkotsu Ramen', '{"tier":"S"}
 insertActivity.run(uuid(), 'u1', 'tier_list', 'tl1', 'Best Ramen in NYC', '{}', '2026-02-20 16:00:00')
 insertActivity.run(uuid(), 'u6', 'follow', 'u1', 'FoodieQueen', '{}', '2026-02-20 12:00:00')
 
+// ---- Dish Labels ----
+const insertLabel = db.prepare('INSERT INTO dish_labels (id, user_id, dish_id, label) VALUES (?, ?, ?, ?)')
+const labelData = [
+  // Truffle Mushroom Pasta
+  { user_id: 'u1', dish_id: 'd1', label: 'Best Tasting' },
+  { user_id: 'u2', dish_id: 'd1', label: 'Best Tasting' },
+  { user_id: 'u3', dish_id: 'd1', label: 'Best Looking' },
+  { user_id: 'u1', dish_id: 'd1', label: 'Must Try' },
+  { user_id: 'u4', dish_id: 'd1', label: 'Must Try' },
+  // Korean Fried Chicken
+  { user_id: 'u1', dish_id: 'd3', label: 'Most Popular' },
+  { user_id: 'u2', dish_id: 'd3', label: 'Most Popular' },
+  { user_id: 'u5', dish_id: 'd3', label: 'Most Popular' },
+  { user_id: 'u6', dish_id: 'd3', label: 'Spiciest' },
+  { user_id: 'u1', dish_id: 'd3', label: 'Spiciest' },
+  { user_id: 'u3', dish_id: 'd3', label: 'Must Try' },
+  { user_id: 'u7', dish_id: 'd3', label: 'Must Try' },
+  // Margherita Pizza
+  { user_id: 'u1', dish_id: 'd7', label: 'Best Value' },
+  { user_id: 'u2', dish_id: 'd7', label: 'Best Value' },
+  { user_id: 'u3', dish_id: 'd7', label: 'Best Value' },
+  { user_id: 'u4', dish_id: 'd7', label: 'Known For' },
+  { user_id: 'u5', dish_id: 'd7', label: 'Known For' },
+  // Tonkotsu Ramen
+  { user_id: 'u1', dish_id: 'd4', label: 'Best Tasting' },
+  { user_id: 'u7', dish_id: 'd4', label: 'Best Tasting' },
+  { user_id: 'u2', dish_id: 'd4', label: 'Biggest Portion' },
+  // Birria Tacos
+  { user_id: 'u1', dish_id: 'd5', label: 'Most Unique' },
+  { user_id: 'u3', dish_id: 'd5', label: 'Most Unique' },
+  { user_id: 'u4', dish_id: 'd5', label: 'Best Looking' },
+  // Butter Chicken
+  { user_id: 'u1', dish_id: 'd8', label: 'Spiciest' },
+  { user_id: 'u3', dish_id: 'd8', label: 'Best Tasting' },
+  { user_id: 'u6', dish_id: 'd8', label: 'Biggest Portion' },
+  // Spicy Tuna Roll
+  { user_id: 'u1', dish_id: 'd2', label: 'Best Looking' },
+  { user_id: 'u3', dish_id: 'd2', label: 'Best Looking' },
+  { user_id: 'u5', dish_id: 'd2', label: 'Most Unique' },
+]
+
+for (const l of labelData) {
+  insertLabel.run(uuid(), l.user_id, l.dish_id, l.label)
+}
+
 console.log('Database seeded successfully!')
 console.log(`  ${users.length} users`)
 console.log(`  ${restaurants.length} restaurants`)
@@ -217,3 +262,4 @@ console.log(`  ${dishes.length} dishes`)
 console.log(`  ${ratingData.length} ratings`)
 console.log(`  ${reviewData.length} reviews`)
 console.log(`  ${followData.length} follows`)
+console.log(`  ${labelData.length} dish labels`)
