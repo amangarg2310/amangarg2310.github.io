@@ -27,10 +27,11 @@ interface DishCardProps {
   distance?: number | null
   size?: 'sm' | 'md' | 'lg'
   labels?: { label: string; count: number }[]
+  price?: string
 }
 
 export function DishCard({
-  id, name, imageUrl, tier, location, restaurant, ratingCount, distance, size = 'md', labels,
+  id, name, imageUrl, tier, location, restaurant, ratingCount, distance, size = 'md', labels, price,
 }: DishCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false)
 
@@ -68,8 +69,13 @@ export function DishCard({
         )}
       </div>
       <div className={size === 'sm' ? 'p-2' : 'p-3'}>
-        <h3 className={`font-semibold text-neutral-900 dark:text-neutral-100 line-clamp-1 ${size === 'sm' ? 'text-xs' : 'text-sm'}`}>{name}</h3>
-        <p className={`text-neutral-500 ${size === 'sm' ? 'text-[10px] mb-1' : 'text-sm mb-2'}`}>{restaurant}</p>
+        <div className="flex items-start justify-between gap-1 mb-0.5">
+          <h3 className={`font-semibold text-neutral-900 dark:text-neutral-100 line-clamp-1 ${size === 'sm' ? 'text-xs' : 'text-sm'}`}>{name}</h3>
+          {price && (
+            <span className={`font-semibold text-neutral-700 dark:text-neutral-300 shrink-0 ${size === 'sm' ? 'text-[10px]' : 'text-xs'}`}>{price}</span>
+          )}
+        </div>
+        <p className={`text-neutral-500 ${size === 'sm' ? 'text-[10px] mb-1' : 'text-xs mb-1.5'}`}>{restaurant}</p>
         <div className="flex items-center justify-between">
           <div className={`flex items-center text-neutral-400 ${size === 'sm' ? 'text-[10px]' : 'text-xs'}`}>
             <MapPinIcon size={size === 'sm' ? 10 : 14} className="mr-0.5 shrink-0" />

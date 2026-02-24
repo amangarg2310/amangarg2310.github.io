@@ -57,6 +57,16 @@ export const api = {
       request<DishLabelsData>(`/dishes/${id}/labels`),
     toggleLabel: (id: string, label: string) =>
       request<{ added: boolean; label: string }>(`/dishes/${id}/labels`, { method: 'POST', body: JSON.stringify({ label }) }),
+    topByCuisine: (cuisine?: string) => {
+      const qs = cuisine && cuisine !== 'All' ? `?cuisine=${encodeURIComponent(cuisine)}` : ''
+      return request<DishRankingData[]>(`/dishes/top-by-cuisine${qs}`)
+    },
+    getMatchup: (cuisine: string) =>
+      request<MatchupData>(`/dishes/matchup?cuisine=${encodeURIComponent(cuisine)}`),
+    submitMatchup: (data: { dish_a_id: string; dish_b_id: string; winner_id: string | null; cuisine: string }) =>
+      request<{ success: boolean; dish_a_elo: number | null; dish_b_elo: number | null }>('/dishes/matchup', { method: 'POST', body: JSON.stringify(data) }),
+    eloRankings: (cuisine: string) =>
+      request<EloRankingDish[]>(`/dishes/elo-rankings?cuisine=${encodeURIComponent(cuisine)}`),
   },
 
   restaurants: {
@@ -67,6 +77,7 @@ export const api = {
       return request<Record<string, CuisineRankedRestaurant[]>>(`/restaurants/top-by-cuisine${qs}`)
     },
     challengers: () => request<ChallengerData[]>('/restaurants/challengers'),
+    rising: () => request<RisingRestaurantData[]>('/restaurants/rising'),
   },
 
   tierLists: {
@@ -148,6 +159,10 @@ export interface DishDetailData extends DishData {
   reviews: ReviewData[]
   similar: SimilarDishData[]
   user_labels?: string[]
+  elo_score?: number | null
+  matches_played?: number
+  cuisine_elo_rank?: number | null
+  cuisine_elo_total?: number | null
 }
 
 export interface DishLabelsData {
@@ -192,7 +207,87 @@ export interface RestaurantData {
 }
 
 export interface RestaurantDetailData extends RestaurantData {
-  dishes: { id: string; name: string; image_url: string; cuisine: string; price: string; location: string; rating_count: number }[]
+  dishes: {
+    id: string
+    name: string
+    image_url: string
+    cuisine: string
+    price: string
+    location: string
+    rating_count: number
+    tier: string
+    labels: DishLabelCount[]
+    bayesian_score: number
+    observed_score: number
+    worth_it_pct: number
+    elo_score?: number
+    matches_played?: number
+  }[]
+}
+
+export interface RisingRestaurantData {
+  id: string
+  name: string
+  image_url: string
+  cuisine: string
+  community_tier: string
+  velocity: number
+  week_ratings: number
+  top_dish: {
+    id: string
+    name: string
+    image_url: string
+    tier: string
+    labels: DishLabelCount[]
+  } | null
+}
+
+export interface DishRankingData {
+  id: string
+  name: string
+  image_url: string
+  restaurant_id: string
+  restaurant_name: string
+  cuisine: string
+  price: string
+  tier: string
+  labels: DishLabelCount[]
+  bayesian_score: number
+  observed_score: number
+  composite_score: number
+  rating_count: number
+  elo_score: number
+  matches_played: number
+  cuisine_rank: number
+  worth_it_pct: number
+}
+
+export interface MatchupDish {
+  id: string
+  name: string
+  image_url: string
+  restaurant_name: string
+  price: string
+  tier: string
+  elo_score: number
+  matches_played: number
+}
+
+export interface MatchupData {
+  dish_a: MatchupDish
+  dish_b: MatchupDish
+}
+
+export interface EloRankingDish {
+  cuisine_rank: number
+  dish_id: string
+  name: string
+  image_url: string
+  restaurant_name: string
+  price: string
+  tier: string
+  elo_score: number
+  matches_played: number
 }
 
 export interface TierListData {
@@ -250,11 +345,11 @@ export interface CuisineRankedRestaurant {
   neighborhood: string
   cuisine: string
   community_tier: string
-  score: number
+  bayesian_score: number
+  observed_score: number
   rating_count: number
-  confidence: number
-  momentum: number
   recent_ratings: number
+  velocity: number
   top_dishes: {
     id: string
     name: string
@@ -266,6 +361,10 @@ export interface CuisineRankedRestaurant {
   }[]
   is_newcomer: boolean
   rank: number
+  // Legacy compat fields (may be present in old responses)
+  score?: number
+  confidence?: number
+  momentum?: number
 }
 
 export interface ChallengerData {

@@ -12,6 +12,8 @@ import { AuthPage } from './pages/AuthPage'
 import { ActivityFeedPage } from './pages/ActivityFeedPage'
 import { MapViewPage } from './pages/MapViewPage'
 import { CuisineRankingsPage } from './pages/CuisineRankingsPage'
+import { RestaurantDetailPage } from './pages/RestaurantDetailPage'
+import { MatchupPage } from './pages/MatchupPage'
 import { Navigation } from './components/Navigation'
 import { ScrollToTop } from './components/ScrollToTop'
 
@@ -80,6 +82,8 @@ function AppContent() {
             <Route path="/feed" element={<ActivityFeedPage />} />
             <Route path="/map" element={<MapViewPage />} />
             <Route path="/rankings" element={<CuisineRankingsPage />} />
+            <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
+            <Route path="/matchup" element={<MatchupPage />} />
             <Route path="/user/:id" element={<ProfilePage />} />
           </Routes>
         </div>

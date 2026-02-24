@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react'
-import { useParams, Navigate, useNavigate } from 'react-router-dom'
+import { useParams, Navigate, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   MapPinIcon, ChevronLeftIcon, HeartIcon, ShareIcon,
   MessageSquareIcon, ThumbsUpIcon, UsersIcon, ChevronRightIcon,
-  TagIcon, CheckIcon,
+  TagIcon, CheckIcon, SwordsIcon, TrophyIcon,
 } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { DishCard } from '../components/DishCard'
@@ -194,12 +194,43 @@ export function DishDetailPage() {
 
         <p className="text-neutral-600 dark:text-neutral-400 text-sm mb-4 animate-fade-in-up stagger-1">{dish.description}</p>
 
-        <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 mb-5 animate-fade-in-up stagger-2">
+        <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 mb-3 animate-fade-in-up stagger-2">
           <span className="text-lg font-bold dark:text-neutral-100">{dish.price}</span>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-neutral-500 flex items-center gap-1"><UsersIcon size={14} /> {dish.rating_count}</span>
             {worthItPercent > 0 && <span className="text-green-600 font-medium text-xs bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">{worthItPercent}% worth it</span>}
           </div>
+        </div>
+
+        {/* ELO rank + Compare CTA */}
+        <div className="flex items-center gap-2 mb-5 animate-fade-in-up stagger-2">
+          {dish.cuisine_elo_rank && dish.cuisine_elo_total && (
+            <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-lg px-3 py-2 flex-1">
+              <TrophyIcon size={14} className="text-purple-500 shrink-0" />
+              <div>
+                <p className="text-[10px] text-purple-500 font-medium">H2H Rank</p>
+                <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                  #{dish.cuisine_elo_rank} of {dish.cuisine_elo_total} {dish.cuisine}
+                </p>
+              </div>
+            </div>
+          )}
+          {dish.matches_played !== undefined && dish.matches_played > 0 && (
+            <div className="flex items-center gap-1.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-100 dark:border-neutral-700 rounded-lg px-3 py-2">
+              <SwordsIcon size={14} className="text-neutral-400 shrink-0" />
+              <div>
+                <p className="text-[10px] text-neutral-400 font-medium">Matches</p>
+                <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">{dish.matches_played}</p>
+              </div>
+            </div>
+          )}
+          <Link
+            to={`/matchup?cuisine=${encodeURIComponent(dish.cuisine || '')}`}
+            className="flex items-center gap-1.5 bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-semibold hover:bg-purple-700 active:scale-95 transition-all shrink-0"
+          >
+            <SwordsIcon size={12} />
+            Compare
+          </Link>
         </div>
 
         {/* Dish Labels */}

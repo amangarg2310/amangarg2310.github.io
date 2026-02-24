@@ -63,6 +63,14 @@ const dishes = [
   { id: 'd6', name: 'Pad Thai', image_url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r6', location: 'Westshore, Tampa', cuisine: 'Thai', description: 'Classic stir-fried rice noodles with shrimp, tofu, peanuts, and tamarind sauce.', price: '$17', lat: 27.9530, lng: -82.5268 },
   { id: 'd7', name: 'Margherita Pizza', image_url: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r7', location: 'Downtown Tampa', cuisine: 'Italian', description: 'Classic Neapolitan-style with San Marzano tomatoes, fresh mozzarella, and basil.', price: '$4', lat: 27.9494, lng: -82.4586 },
   { id: 'd8', name: 'Butter Chicken', image_url: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r8', location: 'Carrollwood, Tampa', cuisine: 'Indian', description: 'Tender chicken in a rich, creamy tomato-based sauce with aromatic spices.', price: '$15', lat: 28.0380, lng: -82.5048 },
+  // New dishes for better "What to order here?" coverage
+  { id: 'd9',  name: 'Cacio e Pepe', image_url: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r1', location: 'South Tampa', cuisine: 'Italian', description: 'Roman classic: tonnarelli pasta with aged Pecorino, Parmigiano, and cracked black pepper.', price: '$22', lat: 27.9371, lng: -82.4987 },
+  { id: 'd10', name: 'Osso Buco', image_url: 'https://images.unsplash.com/photo-1574484284002-952d92456975?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r1', location: 'South Tampa', cuisine: 'Italian', description: 'Braised veal shanks with gremolata and saffron risotto. Weekend special.', price: '$34', lat: 27.9371, lng: -82.4987 },
+  { id: 'd11', name: 'Pepperoni Pizza', image_url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r7', location: 'Downtown Tampa', cuisine: 'Italian', description: 'Wood-fired with cup-and-char pepperoni, fresh mozzarella, and San Marzano sauce.', price: '$16', lat: 27.9494, lng: -82.4586 },
+  { id: 'd12', name: 'Garlic Knots', image_url: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r7', location: 'Downtown Tampa', cuisine: 'Italian', description: 'House-made dough knots tossed in garlic butter, fresh parsley, and Parmesan.', price: '$8', lat: 27.9494, lng: -82.4586 },
+  { id: 'd13', name: 'Spicy Miso Ramen', image_url: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r3', location: 'Seminole Heights, Tampa', cuisine: 'Korean', description: 'Rich miso-based broth with doubanjiang, chashu pork, and a soft-boiled egg.', price: '$17', lat: 27.9863, lng: -82.4590 },
+  { id: 'd14', name: 'Chicken Tikka Masala', image_url: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r8', location: 'Carrollwood, Tampa', cuisine: 'Indian', description: 'Charred chicken tikka simmered in a spiced tomato cream sauce. Served with basmati rice.', price: '$16', lat: 28.0380, lng: -82.5048 },
+  { id: 'd15', name: 'Garlic Naan', image_url: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=800&q=80', restaurant_id: 'r8', location: 'Carrollwood, Tampa', cuisine: 'Indian', description: 'Tandoor-baked flatbread brushed with garlic butter and fresh coriander.', price: '$4', lat: 28.0380, lng: -82.5048 },
 ]
 
 const insertDish = db.prepare('INSERT INTO dishes (id, name, image_url, restaurant_id, location, cuisine, description, price, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -83,7 +91,14 @@ const dishImages = [
   { dish_id: 'd5', images: ['https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80'] },
   { dish_id: 'd6', images: ['https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=800&q=80'] },
   { dish_id: 'd7', images: ['https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=80'] },
-  { dish_id: 'd8', images: ['https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd8',  images: ['https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd9',  images: ['https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd10', images: ['https://images.unsplash.com/photo-1574484284002-952d92456975?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd11', images: ['https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd12', images: ['https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd13', images: ['https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd14', images: ['https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=800&q=80'] },
+  { dish_id: 'd15', images: ['https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=800&q=80'] },
 ]
 
 const insertDishImage = db.prepare('INSERT INTO dish_images (id, dish_id, image_url, sort_order) VALUES (?, ?, ?, ?)')
@@ -145,6 +160,37 @@ const ratingData: { user_id: string; dish_id: string; tier: string }[] = [
   { user_id: 'u3', dish_id: 'd8', tier: 'A' },
   { user_id: 'u4', dish_id: 'd8', tier: 'S' },
   { user_id: 'u6', dish_id: 'd8', tier: 'B' },
+  // Cacio e Pepe (Olivia)
+  { user_id: 'u1', dish_id: 'd9', tier: 'A' },
+  { user_id: 'u2', dish_id: 'd9', tier: 'S' },
+  { user_id: 'u3', dish_id: 'd9', tier: 'A' },
+  { user_id: 'u4', dish_id: 'd9', tier: 'A' },
+  // Osso Buco (Olivia)
+  { user_id: 'u1', dish_id: 'd10', tier: 'S' },
+  { user_id: 'u3', dish_id: 'd10', tier: 'S' },
+  { user_id: 'u5', dish_id: 'd10', tier: 'A' },
+  // Pepperoni Pizza (Eddie & Sams)
+  { user_id: 'u1', dish_id: 'd11', tier: 'A' },
+  { user_id: 'u2', dish_id: 'd11', tier: 'S' },
+  { user_id: 'u4', dish_id: 'd11', tier: 'A' },
+  { user_id: 'u6', dish_id: 'd11', tier: 'A' },
+  // Garlic Knots (Eddie & Sams)
+  { user_id: 'u1', dish_id: 'd12', tier: 'B' },
+  { user_id: 'u3', dish_id: 'd12', tier: 'A' },
+  { user_id: 'u5', dish_id: 'd12', tier: 'B' },
+  // Spicy Miso Ramen (Ichicoro)
+  { user_id: 'u1', dish_id: 'd13', tier: 'S' },
+  { user_id: 'u2', dish_id: 'd13', tier: 'S' },
+  { user_id: 'u7', dish_id: 'd13', tier: 'S' },
+  { user_id: 'u4', dish_id: 'd13', tier: 'A' },
+  // Chicken Tikka Masala (Curry Leaves)
+  { user_id: 'u1', dish_id: 'd14', tier: 'A' },
+  { user_id: 'u4', dish_id: 'd14', tier: 'S' },
+  { user_id: 'u6', dish_id: 'd14', tier: 'A' },
+  // Garlic Naan (Curry Leaves)
+  { user_id: 'u3', dish_id: 'd15', tier: 'B' },
+  { user_id: 'u4', dish_id: 'd15', tier: 'A' },
+  { user_id: 'u6', dish_id: 'd15', tier: 'B' },
 ]
 
 const insertRating = db.prepare('INSERT INTO ratings (id, user_id, dish_id, tier) VALUES (?, ?, ?, ?)')
@@ -249,6 +295,23 @@ const labelData = [
   { user_id: 'u1', dish_id: 'd2', label: 'Best Looking' },
   { user_id: 'u3', dish_id: 'd2', label: 'Best Looking' },
   { user_id: 'u5', dish_id: 'd2', label: 'Most Unique' },
+  // Cacio e Pepe
+  { user_id: 'u2', dish_id: 'd9', label: 'Best Tasting' },
+  { user_id: 'u1', dish_id: 'd9', label: 'Best Value' },
+  // Osso Buco
+  { user_id: 'u1', dish_id: 'd10', label: 'Best Tasting' },
+  { user_id: 'u3', dish_id: 'd10', label: 'Most Unique' },
+  // Pepperoni Pizza
+  { user_id: 'u2', dish_id: 'd11', label: 'Most Popular' },
+  { user_id: 'u4', dish_id: 'd11', label: 'Most Popular' },
+  // Spicy Miso Ramen
+  { user_id: 'u1', dish_id: 'd13', label: 'Spiciest' },
+  { user_id: 'u2', dish_id: 'd13', label: 'Spiciest' },
+  { user_id: 'u7', dish_id: 'd13', label: 'Must Try' },
+  // Chicken Tikka Masala
+  { user_id: 'u1', dish_id: 'd14', label: 'Best Tasting' },
+  { user_id: 'u4', dish_id: 'd14', label: 'Most Popular' },
+  { user_id: 'u6', dish_id: 'd14', label: 'Most Popular' },
 ]
 
 for (const l of labelData) {

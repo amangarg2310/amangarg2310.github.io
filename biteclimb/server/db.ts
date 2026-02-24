@@ -162,6 +162,30 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_dish_labels_dish ON dish_labels(dish_id);
   CREATE INDEX IF NOT EXISTS idx_dish_labels_label ON dish_labels(label);
 
+  CREATE TABLE IF NOT EXISTS dish_elo (
+    dish_id TEXT PRIMARY KEY,
+    elo_score REAL DEFAULT 1500,
+    matches_played INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (dish_id) REFERENCES dishes(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS elo_matches (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    dish_a_id TEXT NOT NULL,
+    dish_b_id TEXT NOT NULL,
+    winner_id TEXT,
+    cuisine TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (dish_a_id) REFERENCES dishes(id),
+    FOREIGN KEY (dish_b_id) REFERENCES dishes(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_elo_matches_user ON elo_matches(user_id);
+  CREATE INDEX IF NOT EXISTS idx_elo_matches_cuisine ON elo_matches(cuisine);
+
   -- FTS for search
   CREATE VIRTUAL TABLE IF NOT EXISTS dishes_fts USING fts5(
     name, cuisine, description, location, restaurant_name,
