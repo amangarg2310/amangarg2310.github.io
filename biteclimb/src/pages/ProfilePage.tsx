@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   SettingsIcon, EditIcon, ListIcon,
   FlameIcon, TrophyIcon, LogOutIcon, MoonIcon, SunIcon,
+  BookOpenIcon, CheckCircle2Icon, CameraIcon,
 } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { api } from '../api/client'
@@ -25,6 +27,7 @@ export function ProfilePage() {
   const { isDark, setTheme, theme } = useThemeStore()
   const userId = routeId || currentUser?.id
   const isOwnProfile = !routeId || routeId === currentUser?.id
+  const [activeTab, setActiveTab] = useState<'ratings' | 'diary'>('ratings')
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['user-profile', userId],
@@ -36,6 +39,12 @@ export function ProfilePage() {
     queryKey: ['me'],
     queryFn: () => api.auth.me(),
     enabled: isOwnProfile,
+  })
+
+  const { data: diaryEntries } = useQuery({
+    queryKey: ['checkins', 'mine'],
+    queryFn: () => api.checkins.mine({ limit: 50 }),
+    enabled: isOwnProfile && activeTab === 'diary',
   })
 
   const profileData = isOwnProfile && meData ? { ...profile, ...meData } : profile
@@ -53,6 +62,17 @@ export function ProfilePage() {
   const tasteDna = profileData.taste_dna || []
   const maxDna = Math.max(...tasteDna.map(d => d.count), 1)
   const streak = typeof profileData.streak === 'number' ? profileData.streak : 0
+  const checkinCount = (profileData as Record<string, unknown>).checkin_count as number ?? 0
+
+  // Group diary entries by date
+  const diaryByDate: Record<string, typeof diaryEntries> = {}
+  if (diaryEntries) {
+    for (const entry of diaryEntries) {
+      const date = new Date(entry.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      if (!diaryByDate[date]) diaryByDate[date] = []
+      diaryByDate[date]!.push(entry)
+    }
+  }
 
   return (
     <div className="max-w-md mx-auto px-4 py-6 page-enter">
@@ -91,11 +111,12 @@ export function ProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-2 mb-6 animate-fade-in-up stagger-2">
-        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-3 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.tier_lists ?? 0}</div><div className="text-[10px] text-neutral-500">Lists</div></div>
-        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-3 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.dishes_rated ?? 0}</div><div className="text-[10px] text-neutral-500">Rated</div></div>
-        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-3 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.followers ?? 0}</div><div className="text-[10px] text-neutral-500">Followers</div></div>
-        <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-xl shadow-sm p-3 text-center text-white"><div className="text-lg font-bold flex items-center justify-center gap-0.5"><FlameIcon size={16} /> {streak}</div><div className="text-[10px] text-white/80">Day Streak</div></div>
+      <div className="grid grid-cols-5 gap-1.5 mb-6 animate-fade-in-up stagger-2">
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{checkinCount}</div><div className="text-[10px] text-neutral-500">Check-ins</div></div>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.dishes_rated ?? 0}</div><div className="text-[10px] text-neutral-500">Rated</div></div>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.tier_lists ?? 0}</div><div className="text-[10px] text-neutral-500">Lists</div></div>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.followers ?? 0}</div><div className="text-[10px] text-neutral-500">Followers</div></div>
+        <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-xl shadow-sm p-2.5 text-center text-white"><div className="text-lg font-bold flex items-center justify-center gap-0.5"><FlameIcon size={14} /> {streak}</div><div className="text-[10px] text-white/80">Streak</div></div>
       </div>
 
       {/* Taste DNA */}
@@ -135,9 +156,27 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Recent Ratings */}
-      {profile?.recent_ratings && profile.recent_ratings.length > 0 && (
-        <div className="mb-6 animate-fade-in-up stagger-5">
+      {/* Ratings / Diary Toggle */}
+      {isOwnProfile && (
+        <div className="flex gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-xl p-1 mb-4 animate-fade-in-up stagger-5">
+          <button
+            onClick={() => setActiveTab('ratings')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'ratings' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}
+          >
+            <ListIcon size={14} /> Ratings
+          </button>
+          <button
+            onClick={() => setActiveTab('diary')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'diary' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}
+          >
+            <BookOpenIcon size={14} /> Food Diary
+          </button>
+        </div>
+      )}
+
+      {/* Recent Ratings Tab */}
+      {activeTab === 'ratings' && profile?.recent_ratings && profile.recent_ratings.length > 0 && (
+        <div className="mb-6 animate-fade-in-up">
           <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><ListIcon size={16} className="mr-2 text-purple-500" />Recently Rated</h2>
           <div className="space-y-2">
             {profile.recent_ratings.map(rating => (
@@ -148,6 +187,51 @@ export function ProfilePage() {
               </Link>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Food Diary Tab */}
+      {activeTab === 'diary' && isOwnProfile && (
+        <div className="mb-6 animate-fade-in-up">
+          <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><BookOpenIcon size={16} className="mr-2 text-purple-500" />Food Diary</h2>
+          {!diaryEntries || diaryEntries.length === 0 ? (
+            <div className="bg-white dark:bg-neutral-800 rounded-xl p-6 text-center">
+              <CheckCircle2Icon size={32} className="mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
+              <p className="text-sm text-neutral-500">No check-ins yet</p>
+              <p className="text-xs text-neutral-400 mt-1">Check in when you try a dish to start your food diary</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(diaryByDate).map(([date, entries]) => (
+                <div key={date}>
+                  <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-2">{date}</h3>
+                  <div className="space-y-2">
+                    {entries!.map(entry => (
+                      <Link key={entry.id} to={`/dish/${entry.dish_id}`} className="flex items-start bg-white dark:bg-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="h-12 w-12 rounded-lg overflow-hidden mr-3 shrink-0">
+                          <img src={entry.photo_url || entry.dish_image} alt={entry.dish_name} className="h-full w-full object-cover" loading="lazy" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-1">{entry.dish_name}</h3>
+                            {entry.tier && <TierBadge tier={entry.tier as TierType} size="sm" showEmoji={false} />}
+                          </div>
+                          <p className="text-xs text-neutral-500">{entry.restaurant_name}</p>
+                          {entry.notes && <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1 line-clamp-2">{entry.notes}</p>}
+                          {entry.photo_url && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <CameraIcon size={10} className="text-neutral-400" />
+                              <span className="text-[10px] text-neutral-400">Photo attached</span>
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

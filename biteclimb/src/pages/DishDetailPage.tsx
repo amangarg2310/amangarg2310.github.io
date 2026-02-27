@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   MapPinIcon, ChevronLeftIcon, HeartIcon, ShareIcon,
   MessageSquareIcon, ThumbsUpIcon, UsersIcon, ChevronRightIcon,
-  TagIcon, CheckIcon, SwordsIcon, TrophyIcon,
+  TagIcon, CheckIcon, SwordsIcon, TrophyIcon, CheckCircle2Icon,
 } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { DishCard } from '../components/DishCard'
@@ -79,6 +79,24 @@ export function DishDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dish-labels', id] })
       queryClient.invalidateQueries({ queryKey: ['dish', id] })
+    },
+  })
+
+  const [showCheckinForm, setShowCheckinForm] = useState(false)
+  const [checkinNotes, setCheckinNotes] = useState('')
+  const [checkinPhoto, setCheckinPhoto] = useState('')
+  const [checkinSuccess, setCheckinSuccess] = useState(false)
+
+  const checkinMutation = useMutation({
+    mutationFn: (data: { photo_url?: string; notes?: string }) => api.dishes.checkin(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dish', id] })
+      queryClient.invalidateQueries({ queryKey: ['checkins'] })
+      setCheckinSuccess(true)
+      setShowCheckinForm(false)
+      setCheckinNotes('')
+      setCheckinPhoto('')
+      setTimeout(() => setCheckinSuccess(false), 2000)
     },
   })
 
@@ -200,6 +218,63 @@ export function DishDetailPage() {
             <span className="text-neutral-500 flex items-center gap-1"><UsersIcon size={14} /> {dish.rating_count}</span>
             {worthItPercent > 0 && <span className="text-green-600 font-medium text-xs bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">{worthItPercent}% worth it</span>}
           </div>
+        </div>
+
+        {/* Check-In */}
+        <div className="mb-4 animate-fade-in-up stagger-2">
+          {checkinSuccess ? (
+            <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 animate-scale-in">
+              <CheckCircle2Icon size={18} className="text-green-500" />
+              <span className="text-sm font-medium text-green-700 dark:text-green-300">Checked in!</span>
+              {!dish.user_rating && <span className="text-xs text-green-600 dark:text-green-400 ml-auto">Now rate it below</span>}
+            </div>
+          ) : showCheckinForm ? (
+            <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-4 animate-scale-in">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold dark:text-neutral-100">Log Check-In</h3>
+                <button onClick={() => setShowCheckinForm(false)} className="text-xs text-neutral-400">Cancel</button>
+              </div>
+              <input
+                type="text"
+                placeholder="Paste a photo link (optional)"
+                value={checkinPhoto}
+                onChange={(e) => setCheckinPhoto(e.target.value)}
+                className="w-full p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500 mb-2"
+              />
+              <textarea
+                placeholder="Quick notes — what'd you think? (optional)"
+                value={checkinNotes}
+                onChange={(e) => setCheckinNotes(e.target.value.slice(0, 280))}
+                className="w-full p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none h-16"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-neutral-400">{checkinNotes.length}/280</span>
+                <button
+                  onClick={() => checkinMutation.mutate({ photo_url: checkinPhoto || undefined, notes: checkinNotes || undefined })}
+                  disabled={checkinMutation.isPending}
+                  className="bg-purple-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-purple-700 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {checkinMutation.isPending ? 'Logging...' : 'Log Check-In'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => isAuthenticated && setShowCheckinForm(true)}
+                className="flex items-center gap-2 bg-purple-600 text-white rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all"
+              >
+                <CheckCircle2Icon size={16} />
+                Check In
+              </button>
+              {dish.checkin_count > 0 && (
+                <span className="text-xs text-neutral-500">{dish.checkin_count} check-in{dish.checkin_count !== 1 ? 's' : ''}</span>
+              )}
+              {dish.user_checkin_count > 0 && (
+                <span className="text-xs text-purple-500 font-medium">You: {dish.user_checkin_count}x</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ELO rank + Compare CTA */}

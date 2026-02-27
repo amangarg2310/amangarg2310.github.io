@@ -5,6 +5,7 @@ import dishRoutes from './routes/dishRoutes.js'
 import restaurantRoutes from './routes/restaurantRoutes.js'
 import tierListRoutes from './routes/tierListRoutes.js'
 import userRoutes from './routes/userRoutes.js'
+import checkinRoutes from './routes/checkinRoutes.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -24,6 +25,7 @@ app.use('/api/restaurants', restaurantRoutes)
 app.use('/api/tier-lists', tierListRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/feed', userRoutes)
+app.use('/api/checkins', checkinRoutes)
 
 app.listen(PORT, () => {
   console.log(`biteclimb API running on http://localhost:${PORT}`)

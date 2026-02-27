@@ -672,15 +672,20 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res) => {
     tier: computeTier(s.id as string),
   }))
 
+  // Check-in counts
+  const checkinCount = (db.prepare('SELECT COUNT(*) as count FROM checkins WHERE dish_id = ?').get(id) as { count: number }).count
+
   let userRating: string | null = null
   let isFavorite = false
   let userLabels: string[] = []
+  let userCheckinCount = 0
   if (req.userId) {
     const ur = db.prepare('SELECT tier FROM ratings WHERE user_id = ? AND dish_id = ?').get(req.userId, id) as { tier: string } | undefined
     userRating = ur?.tier || null
     isFavorite = !!db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND dish_id = ?').get(req.userId, id)
     const ulRows = db.prepare('SELECT label FROM dish_labels WHERE user_id = ? AND dish_id = ?').all(req.userId, id) as { label: string }[]
     userLabels = ulRows.map(r => r.label)
+    userCheckinCount = (db.prepare('SELECT COUNT(*) as count FROM checkins WHERE user_id = ? AND dish_id = ?').get(req.userId, id) as { count: number }).count
   }
 
   // Dish labels (crowdsourced)
@@ -738,6 +743,8 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res) => {
     matches_played: matchesPlayed,
     cuisine_elo_rank: cuisineEloRank,
     cuisine_elo_total: cuisineEloTotal,
+    checkin_count: checkinCount,
+    user_checkin_count: userCheckinCount,
   })
 })
 
@@ -800,6 +807,123 @@ router.post('/:id/reviews', requireAuth, (req: AuthRequest, res) => {
   )
 
   res.status(201).json({ id: reviewId })
+})
+
+// ---- Check-In ----
+
+// POST /api/dishes/:id/checkin — Log that you ate this dish
+router.post('/:id/checkin', requireAuth, (req: AuthRequest, res) => {
+  const id = req.params.id as string
+  const { photo_url, notes } = req.body as { photo_url?: string; notes?: string }
+
+  // Validate
+  if (notes && notes.length > 280) {
+    res.status(400).json({ error: 'Notes must be 280 characters or less' })
+    return
+  }
+
+  const dish = db.prepare(`
+    SELECT d.name, d.restaurant_id, r.name as restaurant_name
+    FROM dishes d JOIN restaurants r ON d.restaurant_id = r.id
+    WHERE d.id = ?
+  `).get(id) as { name: string; restaurant_id: string; restaurant_name: string } | undefined
+
+  if (!dish) {
+    res.status(404).json({ error: 'Dish not found' })
+    return
+  }
+
+  const checkinId = uuid()
+  db.prepare(`
+    INSERT INTO checkins (id, user_id, dish_id, restaurant_id, photo_url, notes)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(checkinId, req.userId, id, dish.restaurant_id, photo_url || '', notes || '')
+
+  // Log activity
+  db.prepare('INSERT INTO activity (id, user_id, type, target_id, target_name, meta) VALUES (?, ?, ?, ?, ?, ?)').run(
+    uuid(), req.userId, 'check_in', id, dish.name,
+    JSON.stringify({ restaurant_id: dish.restaurant_id, restaurant_name: dish.restaurant_name, photo_url: photo_url || '', notes: notes || '' })
+  )
+
+  const checkinCount = (db.prepare('SELECT COUNT(*) as count FROM checkins WHERE dish_id = ?').get(id) as { count: number }).count
+
+  res.status(201).json({ id: checkinId, checkin_count: checkinCount })
+})
+
+// ---- Create Dish ----
+
+// POST /api/dishes — Create a new user-submitted dish
+router.post('/', requireAuth, (req: AuthRequest, res) => {
+  const { name, restaurant_id, cuisine, price, description, image_url } = req.body as {
+    name?: string; restaurant_id?: string; cuisine?: string; price?: string; description?: string; image_url?: string
+  }
+
+  if (!name || name.length < 2 || name.length > 100) {
+    res.status(400).json({ error: 'Name must be 2-100 characters' })
+    return
+  }
+  if (!restaurant_id) {
+    res.status(400).json({ error: 'restaurant_id is required' })
+    return
+  }
+
+  const restaurant = db.prepare('SELECT id, name, cuisine, lat, lng, neighborhood FROM restaurants WHERE id = ?').get(restaurant_id) as {
+    id: string; name: string; cuisine: string; lat: number; lng: number; neighborhood: string
+  } | undefined
+  if (!restaurant) {
+    res.status(404).json({ error: 'Restaurant not found' })
+    return
+  }
+
+  const dishId = uuid()
+  const dishCuisine = cuisine || restaurant.cuisine
+  const dishLocation = restaurant.neighborhood || ''
+
+  db.prepare(`
+    INSERT INTO dishes (id, name, image_url, restaurant_id, location, cuisine, description, price, lat, lng, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(dishId, name, image_url || '', restaurant_id, dishLocation, dishCuisine, description || '', price || '', restaurant.lat, restaurant.lng, req.userId)
+
+  // Insert into FTS
+  try {
+    const maxRowid = (db.prepare('SELECT MAX(rowid) as m FROM dishes_fts').get() as { m: number | null })?.m ?? 0
+    db.prepare('INSERT INTO dishes_fts(rowid, name, cuisine, description, location, restaurant_name) VALUES (?, ?, ?, ?, ?, ?)').run(
+      maxRowid + 1, name, dishCuisine, description || '', dishLocation, restaurant.name
+    )
+  } catch { /* FTS insert failure is non-critical */ }
+
+  res.status(201).json({ id: dishId, name })
+})
+
+// PUT /api/dishes/:id — Edit a user-created dish (creator only)
+router.put('/:id', requireAuth, (req: AuthRequest, res) => {
+  const id = req.params.id as string
+  const dish = db.prepare('SELECT created_by FROM dishes WHERE id = ?').get(id) as { created_by: string | null } | undefined
+  if (!dish) {
+    res.status(404).json({ error: 'Dish not found' })
+    return
+  }
+  if (dish.created_by !== req.userId) {
+    res.status(403).json({ error: 'Only the creator can edit this dish' })
+    return
+  }
+
+  const { name, price, description, image_url, cuisine } = req.body
+  const updates: string[] = []
+  const params: unknown[] = []
+
+  if (name !== undefined) { updates.push('name = ?'); params.push(name) }
+  if (price !== undefined) { updates.push('price = ?'); params.push(price) }
+  if (description !== undefined) { updates.push('description = ?'); params.push(description) }
+  if (image_url !== undefined) { updates.push('image_url = ?'); params.push(image_url) }
+  if (cuisine !== undefined) { updates.push('cuisine = ?'); params.push(cuisine) }
+
+  if (updates.length > 0) {
+    params.push(id)
+    db.prepare(`UPDATE dishes SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+  }
+
+  res.json({ success: true })
 })
 
 // ---- Dish Labels ----

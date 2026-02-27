@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Link, useParams, Navigate, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeftIcon, MapPinIcon, UsersIcon, StarIcon,
   ChevronRightIcon, TrendingUpIcon, SwordsIcon,
+  CheckCircle2Icon, PlusCircleIcon,
 } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { api } from '../api/client'
+import { useAuthStore } from '../stores/authStore'
 import { TIER_CONFIG, TIER_OPTIONS } from '../data/types'
 import { LABEL_COLORS } from '../components/DishCard'
 import type { TierType } from '../data/types'
@@ -27,13 +29,45 @@ const LABEL_ICONS: Record<string, string> = {
 export function RestaurantDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [sortMode, setSortMode] = useState<'rating' | 'elo'>('rating')
+  const [checkinDishId, setCheckinDishId] = useState<string | null>(null)
+  const [checkinSuccess, setCheckinSuccess] = useState<string | null>(null)
+  const [showAddDish, setShowAddDish] = useState(false)
+  const [newDishName, setNewDishName] = useState('')
+  const [newDishPrice, setNewDishPrice] = useState('')
+  const [newDishDesc, setNewDishDesc] = useState('')
+  const [newDishImage, setNewDishImage] = useState('')
 
   const { data: restaurant, isLoading } = useQuery({
     queryKey: ['restaurant', id],
     queryFn: () => api.restaurants.get(id!),
     enabled: !!id,
+  })
+
+  const checkinMutation = useMutation({
+    mutationFn: (dishId: string) => api.dishes.checkin(dishId, {}),
+    onSuccess: (_data, dishId) => {
+      setCheckinDishId(null)
+      setCheckinSuccess(dishId)
+      queryClient.invalidateQueries({ queryKey: ['restaurant', id] })
+      setTimeout(() => setCheckinSuccess(null), 1500)
+    },
+  })
+
+  const addDishMutation = useMutation({
+    mutationFn: (data: { name: string; restaurant_id: string; price?: string; description?: string; image_url?: string }) =>
+      api.dishes.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['restaurant', id] })
+      setShowAddDish(false)
+      setNewDishName('')
+      setNewDishPrice('')
+      setNewDishDesc('')
+      setNewDishImage('')
+    },
   })
 
   if (isLoading) {
@@ -226,8 +260,21 @@ export function RestaurantDetailPage() {
                     </div>
                   </div>
 
-                  {/* Tier badge + arrow */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isAuthenticated && (
+                      checkinSuccess === dish.id ? (
+                        <span className="text-green-500"><CheckCircle2Icon size={16} /></span>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); checkinMutation.mutate(dish.id) }}
+                          className="p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-400 hover:text-purple-600 active:scale-90 transition-all"
+                          title="Check in"
+                        >
+                          <CheckCircle2Icon size={14} />
+                        </button>
+                      )
+                    )}
                     <TierBadge tier={dish.tier as TierType} size="sm" showEmoji={false} />
                     <ChevronRightIcon size={14} className="text-neutral-300" />
                   </div>
@@ -236,6 +283,51 @@ export function RestaurantDetailPage() {
             })
           )}
         </div>
+
+        {/* Add a Dish */}
+        {isAuthenticated && (
+          <div className="mb-4">
+            {showAddDish ? (
+              <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-4 animate-scale-in">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold dark:text-neutral-100">Add a Dish</h3>
+                  <button onClick={() => setShowAddDish(false)} className="text-xs text-neutral-400">Cancel</button>
+                </div>
+                <input type="text" placeholder="Dish name *" value={newDishName} onChange={(e) => setNewDishName(e.target.value)} className="w-full p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500 mb-2" />
+                <div className="flex gap-2 mb-2">
+                  <input type="text" placeholder="Price (e.g. $15)" value={newDishPrice} onChange={(e) => setNewDishPrice(e.target.value)} className="flex-1 p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <input type="text" placeholder="Image URL (optional)" value={newDishImage} onChange={(e) => setNewDishImage(e.target.value)} className="flex-1 p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <textarea placeholder="Description (optional)" value={newDishDesc} onChange={(e) => setNewDishDesc(e.target.value)} className="w-full p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none h-14 mb-2" />
+                <button
+                  onClick={() => {
+                    if (newDishName.trim().length >= 2) {
+                      addDishMutation.mutate({
+                        name: newDishName.trim(),
+                        restaurant_id: id!,
+                        price: newDishPrice || undefined,
+                        description: newDishDesc || undefined,
+                        image_url: newDishImage || undefined,
+                      })
+                    }
+                  }}
+                  disabled={newDishName.trim().length < 2 || addDishMutation.isPending}
+                  className="w-full bg-purple-600 text-white text-sm py-2.5 rounded-lg font-medium hover:bg-purple-700 active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {addDishMutation.isPending ? 'Adding...' : 'Add Dish'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAddDish(true)}
+                className="flex items-center gap-2 w-full justify-center py-3 border-2 border-dashed border-neutral-200 dark:border-neutral-700 rounded-xl text-sm text-neutral-500 hover:text-purple-600 hover:border-purple-300 dark:hover:border-purple-700 transition-colors active:scale-[0.98]"
+              >
+                <PlusCircleIcon size={16} />
+                Add a dish to this menu
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Confidence note */}
         {sortedDishes.length > 0 && (

@@ -207,6 +207,35 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_activity_created ON activity(created_at);
   CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
   CREATE INDEX IF NOT EXISTS idx_tier_lists_user ON tier_lists(user_id);
+
+  -- Check-ins: "I ate this" atomic action
+  CREATE TABLE IF NOT EXISTS checkins (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    dish_id TEXT NOT NULL,
+    restaurant_id TEXT NOT NULL,
+    photo_url TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (dish_id) REFERENCES dishes(id),
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_checkins_user ON checkins(user_id);
+  CREATE INDEX IF NOT EXISTS idx_checkins_dish ON checkins(dish_id);
+  CREATE INDEX IF NOT EXISTS idx_checkins_created ON checkins(created_at);
 `)
+
+// Schema migrations — idempotent ALTER TABLE calls for existing databases
+const migrations = [
+  'ALTER TABLE restaurants ADD COLUMN created_by TEXT DEFAULT NULL',
+  'ALTER TABLE dishes ADD COLUMN created_by TEXT DEFAULT NULL',
+  'ALTER TABLE tier_list_items ADD COLUMN dish_id TEXT DEFAULT NULL',
+]
+
+for (const sql of migrations) {
+  try { db.exec(sql) } catch { /* column already exists */ }
+}
 
 export default db

@@ -68,7 +68,8 @@ router.get('/me', requireAuth, (req: AuthRequest, res) => {
       (SELECT COUNT(*) FROM ratings WHERE user_id = u.id) as dishes_rated,
       (SELECT COUNT(*) FROM tier_lists WHERE user_id = u.id) as tier_lists,
       (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers,
-      (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following
+      (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following,
+      (SELECT COUNT(*) FROM checkins WHERE user_id = u.id) as checkin_count
     FROM users u WHERE u.id = ?
   `).get(req.userId) as Record<string, unknown> | undefined
 

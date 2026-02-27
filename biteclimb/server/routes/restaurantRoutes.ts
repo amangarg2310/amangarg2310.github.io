@@ -1,6 +1,7 @@
 import { Router } from 'express'
+import { v4 as uuid } from 'uuid'
 import db from '../db.js'
-import { optionalAuth } from '../auth.js'
+import { requireAuth, optionalAuth } from '../auth.js'
 import type { AuthRequest } from '../auth.js'
 
 const router = Router()
@@ -273,6 +274,70 @@ router.get('/rising', optionalAuth, (_req: AuthRequest, res) => {
   })
 
   res.json(enriched)
+})
+
+// POST /api/restaurants — Create a new user-submitted restaurant
+router.post('/', requireAuth, (req: AuthRequest, res) => {
+  const { name, cuisine, neighborhood, lat, lng, image_url } = req.body as {
+    name?: string; cuisine?: string; neighborhood?: string; lat?: number; lng?: number; image_url?: string
+  }
+
+  if (!name || name.length < 2 || name.length > 100) {
+    res.status(400).json({ error: 'Name must be 2-100 characters' })
+    return
+  }
+  if (!cuisine) {
+    res.status(400).json({ error: 'Cuisine is required' })
+    return
+  }
+
+  const id = uuid()
+  db.prepare(`
+    INSERT INTO restaurants (id, name, image_url, neighborhood, lat, lng, cuisine, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, name, image_url || '', neighborhood || '', lat ?? 0, lng ?? 0, cuisine, req.userId)
+
+  // Insert into FTS
+  try {
+    const maxRowid = (db.prepare('SELECT MAX(rowid) as m FROM restaurants_fts').get() as { m: number | null })?.m ?? 0
+    db.prepare('INSERT INTO restaurants_fts(rowid, name, neighborhood, cuisine) VALUES (?, ?, ?, ?)').run(
+      maxRowid + 1, name, neighborhood || '', cuisine
+    )
+  } catch { /* FTS insert failure is non-critical */ }
+
+  res.status(201).json({ id, name })
+})
+
+// PUT /api/restaurants/:id — Edit a user-created restaurant (creator only)
+router.put('/:id', requireAuth, (req: AuthRequest, res) => {
+  const id = req.params.id as string
+  const restaurant = db.prepare('SELECT created_by FROM restaurants WHERE id = ?').get(id) as { created_by: string | null } | undefined
+  if (!restaurant) {
+    res.status(404).json({ error: 'Restaurant not found' })
+    return
+  }
+  if (restaurant.created_by !== req.userId) {
+    res.status(403).json({ error: 'Only the creator can edit this restaurant' })
+    return
+  }
+
+  const { name, cuisine, neighborhood, lat, lng, image_url } = req.body
+  const updates: string[] = []
+  const params: unknown[] = []
+
+  if (name !== undefined) { updates.push('name = ?'); params.push(name) }
+  if (cuisine !== undefined) { updates.push('cuisine = ?'); params.push(cuisine) }
+  if (neighborhood !== undefined) { updates.push('neighborhood = ?'); params.push(neighborhood) }
+  if (lat !== undefined) { updates.push('lat = ?'); params.push(lat) }
+  if (lng !== undefined) { updates.push('lng = ?'); params.push(lng) }
+  if (image_url !== undefined) { updates.push('image_url = ?'); params.push(image_url) }
+
+  if (updates.length > 0) {
+    params.push(id)
+    db.prepare(`UPDATE restaurants SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+  }
+
+  res.json({ success: true })
 })
 
 // GET /api/restaurants/:id

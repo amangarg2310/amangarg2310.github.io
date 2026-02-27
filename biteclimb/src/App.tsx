@@ -14,6 +14,7 @@ import { MapViewPage } from './pages/MapViewPage'
 import { CuisineRankingsPage } from './pages/CuisineRankingsPage'
 import { RestaurantDetailPage } from './pages/RestaurantDetailPage'
 import { MatchupPage } from './pages/MatchupPage'
+import { AddRestaurantPage } from './pages/AddRestaurantPage'
 import { Navigation } from './components/Navigation'
 import { ScrollToTop } from './components/ScrollToTop'
 
@@ -84,6 +85,7 @@ function AppContent() {
             <Route path="/rankings" element={<CuisineRankingsPage />} />
             <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
             <Route path="/matchup" element={<MatchupPage />} />
+            <Route path="/add-restaurant" element={<AddRestaurantPage />} />
             <Route path="/user/:id" element={<ProfilePage />} />
           </Routes>
         </div>

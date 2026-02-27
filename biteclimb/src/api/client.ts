@@ -67,6 +67,10 @@ export const api = {
       request<{ success: boolean; dish_a_elo: number | null; dish_b_elo: number | null }>('/dishes/matchup', { method: 'POST', body: JSON.stringify(data) }),
     eloRankings: (cuisine: string) =>
       request<EloRankingDish[]>(`/dishes/elo-rankings?cuisine=${encodeURIComponent(cuisine)}`),
+    checkin: (id: string, data: { photo_url?: string; notes?: string }) =>
+      request<{ id: string; checkin_count: number }>(`/dishes/${id}/checkin`, { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: { name: string; restaurant_id: string; cuisine?: string; price?: string; description?: string; image_url?: string }) =>
+      request<{ id: string; name: string }>('/dishes', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   restaurants: {
@@ -78,6 +82,8 @@ export const api = {
     },
     challengers: () => request<ChallengerData[]>('/restaurants/challengers'),
     rising: () => request<RisingRestaurantData[]>('/restaurants/rising'),
+    create: (data: { name: string; cuisine: string; neighborhood?: string; lat?: number; lng?: number; image_url?: string }) =>
+      request<{ id: string; name: string }>('/restaurants', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   tierLists: {
@@ -86,8 +92,12 @@ export const api = {
       return request<TierListData[]>(`/tier-lists${qs}`)
     },
     get: (id: string) => request<TierListDetailData>(`/tier-lists/${id}`),
-    create: (data: { title: string; category?: string; city?: string; items?: { restaurant_id: string; tier: string; sort_order?: number }[] }) =>
+    create: (data: { title: string; category?: string; city?: string; items?: { dish_id?: string; restaurant_id?: string; tier: string; sort_order?: number }[] }) =>
       request<{ id: string }>('/tier-lists', { method: 'POST', body: JSON.stringify(data) }),
+    autoGenerate: (cuisine?: string) => {
+      const qs = cuisine ? `?cuisine=${encodeURIComponent(cuisine)}` : ''
+      return request<{ tier: string; dish_id: string; name: string; image_url: string; restaurant_name: string; price: string }[]>(`/tier-lists/auto-generate${qs}`)
+    },
     update: (id: string, data: Record<string, unknown>) =>
       request<{ success: boolean }>(`/tier-lists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) =>
@@ -99,6 +109,15 @@ export const api = {
     toggleFollow: (id: string) =>
       request<{ is_following: boolean }>(`/users/${id}/follow`, { method: 'POST' }),
     activity: (id: string) => request<ActivityData[]>(`/users/${id}/activity`),
+  },
+
+  checkins: {
+    mine: (params?: { limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams()
+      if (params?.limit) qs.set('limit', String(params.limit))
+      if (params?.offset) qs.set('offset', String(params.offset))
+      return request<CheckinData[]>(`/checkins/me?${qs}`)
+    },
   },
 
   feed: () => request<ActivityData[]>('/feed'),
@@ -124,6 +143,7 @@ export interface UserMeData extends UserData {
   taste_dna: { cuisine: string; count: number }[]
   favorites: string[]
   streak: number
+  checkin_count: number
 }
 
 export interface DishLabelCount {
@@ -163,6 +183,8 @@ export interface DishDetailData extends DishData {
   matches_played?: number
   cuisine_elo_rank?: number | null
   cuisine_elo_total?: number | null
+  checkin_count: number
+  user_checkin_count: number
 }
 
 export interface DishLabelsData {
@@ -305,7 +327,33 @@ export interface TierListData {
 }
 
 export interface TierListDetailData extends TierListData {
-  items: { tier: string; sort_order: number; restaurant_id: string; name: string; image_url: string; neighborhood: string }[]
+  items: TierListItemData[]
+}
+
+export interface TierListItemData {
+  tier: string
+  sort_order: number
+  dish_id?: string
+  restaurant_id?: string
+  name: string
+  image_url: string
+  neighborhood?: string
+  restaurant_name?: string
+  price?: string
+}
+
+export interface CheckinData {
+  id: string
+  dish_id: string
+  restaurant_id: string
+  photo_url: string
+  notes: string
+  created_at: string
+  dish_name: string
+  dish_image: string
+  cuisine: string
+  restaurant_name: string
+  tier: string | null
 }
 
 export interface UserProfileData {

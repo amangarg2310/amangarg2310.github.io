@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   SearchIcon, MapIcon, ListIcon, TrendingUpIcon, FlameIcon,
   SparklesIcon, UsersIcon, MapPinIcon, NavigationIcon, TrophyIcon,
-  ZapIcon, SwordsIcon,
+  ZapIcon, SwordsIcon, PlusCircleIcon,
 } from 'lucide-react'
 import { DishCard } from '../components/DishCard'
 import { TierBadge } from '../components/TierBadge'
@@ -165,6 +165,13 @@ export function DiscoverPage() {
                   <SearchIcon size={32} className="mx-auto mb-2 opacity-40" />
                   <p className="font-medium">No dishes found</p>
                   <p className="text-sm mt-1">Try a different search or cuisine</p>
+                  <Link
+                    to="/add-restaurant"
+                    className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all"
+                  >
+                    <PlusCircleIcon size={14} />
+                    Add a Restaurant
+                  </Link>
                 </div>
               )}
             </div>
@@ -380,6 +387,18 @@ export function DiscoverPage() {
                 />
               ))}
             </div>
+          </section>
+
+          {/* Can't find it? */}
+          <section className="text-center py-4">
+            <p className="text-sm text-neutral-500 mb-2">Can't find what you're looking for?</p>
+            <Link
+              to="/add-restaurant"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 text-white rounded-full text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all"
+            >
+              <PlusCircleIcon size={14} />
+              Add a Restaurant
+            </Link>
           </section>
         </div>
       )}
