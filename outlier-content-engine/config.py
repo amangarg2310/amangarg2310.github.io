@@ -92,7 +92,7 @@ COST_PER_1K_OUTPUT_TOKENS = 0.00060
 # ── Instagram Data Collection (Apify) ──
 # APIFY_API_TOKEN: use config.get_api_key('apify') for live reads instead of cached value
 APIFY_API_TOKEN = None  # Kept for backward compat; callers should use get_api_key('apify')
-DEFAULT_POSTS_PER_COMPETITOR = 12
+DEFAULT_POSTS_PER_COMPETITOR = 50
 
 # ── Instagram Graph API (own-channel only, provides saves/shares) ──
 IG_GRAPH_ACCESS_TOKEN = os.getenv("IG_GRAPH_ACCESS_TOKEN")
