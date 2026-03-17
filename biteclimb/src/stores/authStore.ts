@@ -29,14 +29,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await get().fetchMe()
     // Use the basic user data if fetchMe didn't populate
     if (!get().user) {
-      set({ user: { ...user, created_at: '', dishes_rated: 0, tier_lists: 0, followers: 0, following: 0, cuisine_prefs: [], taste_dna: [], favorites: [], streak: 0 } })
+      set({ user: { ...user, created_at: '', products_rated: 0, tier_lists: 0, followers: 0, following: 0, category_prefs: [], taste_dna: [], favorites: [], streak: 0, try_count: 0 } })
     }
   },
 
   signup: async (email, username, password) => {
     const { token, user } = await api.auth.signup({ email, username, password })
     localStorage.setItem('biteclimb_token', token)
-    set({ token, isAuthenticated: true, user: { ...user, created_at: '', dishes_rated: 0, tier_lists: 0, followers: 0, following: 0, cuisine_prefs: [], taste_dna: [], favorites: [], streak: 0 } })
+    set({ token, isAuthenticated: true, user: { ...user, created_at: '', products_rated: 0, tier_lists: 0, followers: 0, following: 0, category_prefs: [], taste_dna: [], favorites: [], streak: 0, try_count: 0 } })
   },
 
   logout: () => {

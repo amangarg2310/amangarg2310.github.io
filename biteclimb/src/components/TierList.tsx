@@ -8,7 +8,7 @@ interface TierListItem {
   name: string
   imageUrl: string
   tier: TierType
-  restaurant: string
+  brand: string
 }
 
 interface TierListProps {
@@ -36,7 +36,7 @@ export function TierList({ title, items, author, showViewAll = true }: TierListP
         {items.map((item, index) => (
           <Link
             key={item.id}
-            to={`/dish/${item.id}`}
+            to={`/product/${item.id}`}
             className="flex items-center bg-neutral-50 rounded-lg p-2 hover:bg-neutral-100 transition-colors"
           >
             <div className="mr-3 font-medium text-neutral-400">{index + 1}</div>
@@ -45,7 +45,7 @@ export function TierList({ title, items, author, showViewAll = true }: TierListP
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-medium text-neutral-900 line-clamp-1">{item.name}</h3>
-              <p className="text-xs text-neutral-500">{item.restaurant}</p>
+              <p className="text-xs text-neutral-500">{item.brand}</p>
             </div>
             <TierBadge tier={item.tier} size="sm" showEmoji={false} />
           </Link>

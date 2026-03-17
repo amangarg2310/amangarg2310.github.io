@@ -2,19 +2,20 @@ import { useState, useRef } from 'react'
 import { useParams, Navigate, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  MapPinIcon, ChevronLeftIcon, HeartIcon, ShareIcon,
+  ChevronLeftIcon, HeartIcon, ShareIcon,
   MessageSquareIcon, ThumbsUpIcon, UsersIcon, ChevronRightIcon,
   TagIcon, CheckIcon, SwordsIcon, TrophyIcon, CheckCircle2Icon,
+  ShieldCheckIcon, UsersRoundIcon,
 } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
-import { DishCard } from '../components/DishCard'
-import { LABEL_COLORS } from '../components/DishCard'
+import { ProductCard } from '../components/ProductCard'
+import { LABEL_COLORS } from '../components/ProductCard'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/authStore'
 import { TIER_CONFIG, TIER_OPTIONS } from '../data/types'
 import type { TierType } from '../data/types'
 
-export function DishDetailPage() {
+export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -32,17 +33,17 @@ export function DishDetailPage() {
   const [imgSwipeOffset, setImgSwipeOffset] = useState(0)
   const [imgSwiping, setImgSwiping] = useState(false)
 
-  const { data: dish, isLoading } = useQuery({
-    queryKey: ['dish', id],
-    queryFn: () => api.dishes.get(id!),
+  const { data: product, isLoading } = useQuery({
+    queryKey: ['product', id],
+    queryFn: () => api.products.get(id!),
     enabled: !!id,
   })
 
   const rateMutation = useMutation({
-    mutationFn: ({ tier }: { tier: string }) => api.dishes.rate(id!, tier),
+    mutationFn: ({ tier }: { tier: string }) => api.products.rate(id!, tier),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dish', id] })
-      queryClient.invalidateQueries({ queryKey: ['dishes'] })
+      queryClient.invalidateQueries({ queryKey: ['product', id] })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
       setSubmitted(true)
       setShowEmoji(true)
       setTimeout(() => setShowEmoji(false), 800)
@@ -50,53 +51,53 @@ export function DishDetailPage() {
   })
 
   const favoriteMutation = useMutation({
-    mutationFn: () => api.dishes.toggleFavorite(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dish', id] }),
+    mutationFn: () => api.products.toggleFavorite(id!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['product', id] }),
   })
 
   const reviewMutation = useMutation({
-    mutationFn: (data: { tier: string; text: string }) => api.dishes.addReview(id!, data),
+    mutationFn: (data: { tier: string; text: string }) => api.products.addReview(id!, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dish', id] })
+      queryClient.invalidateQueries({ queryKey: ['product', id] })
       setShowReviewForm(false)
       setReviewText('')
     },
   })
 
   const helpfulMutation = useMutation({
-    mutationFn: (reviewId: string) => api.dishes.markHelpful(reviewId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dish', id] }),
+    mutationFn: (reviewId: string) => api.products.markHelpful(reviewId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['product', id] }),
   })
 
   const { data: labelsData } = useQuery({
-    queryKey: ['dish-labels', id],
-    queryFn: () => api.dishes.getLabels(id!),
+    queryKey: ['product-labels', id],
+    queryFn: () => api.products.getLabels(id!),
     enabled: !!id,
   })
 
   const labelMutation = useMutation({
-    mutationFn: (label: string) => api.dishes.toggleLabel(id!, label),
+    mutationFn: (label: string) => api.products.toggleLabel(id!, label),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dish-labels', id] })
-      queryClient.invalidateQueries({ queryKey: ['dish', id] })
+      queryClient.invalidateQueries({ queryKey: ['product-labels', id] })
+      queryClient.invalidateQueries({ queryKey: ['product', id] })
     },
   })
 
-  const [showCheckinForm, setShowCheckinForm] = useState(false)
-  const [checkinNotes, setCheckinNotes] = useState('')
-  const [checkinPhoto, setCheckinPhoto] = useState('')
-  const [checkinSuccess, setCheckinSuccess] = useState(false)
+  const [showTryForm, setShowTryForm] = useState(false)
+  const [tryNotes, setTryNotes] = useState('')
+  const [tryPhoto, setTryPhoto] = useState('')
+  const [trySuccess, setTrySuccess] = useState(false)
 
-  const checkinMutation = useMutation({
-    mutationFn: (data: { photo_url?: string; notes?: string }) => api.dishes.checkin(id!, data),
+  const tryMutation = useMutation({
+    mutationFn: (data: { photo_url?: string; notes?: string }) => api.products.markTried(id!, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dish', id] })
-      queryClient.invalidateQueries({ queryKey: ['checkins'] })
-      setCheckinSuccess(true)
-      setShowCheckinForm(false)
-      setCheckinNotes('')
-      setCheckinPhoto('')
-      setTimeout(() => setCheckinSuccess(false), 2000)
+      queryClient.invalidateQueries({ queryKey: ['product', id] })
+      queryClient.invalidateQueries({ queryKey: ['tries'] })
+      setTrySuccess(true)
+      setShowTryForm(false)
+      setTryNotes('')
+      setTryPhoto('')
+      setTimeout(() => setTrySuccess(false), 2000)
     },
   })
 
@@ -113,16 +114,16 @@ export function DishDetailPage() {
     )
   }
 
-  if (!dish) return <Navigate to="/" replace />
+  if (!product) return <Navigate to="/" replace />
 
-  const images = dish.images.length > 0 ? dish.images : [dish.image_url]
-  const worthItPercent = dish.rating_count > 0
-    ? Math.round(((dish.ratings.S + dish.ratings.A) / dish.rating_count) * 100)
+  const images = product.images.length > 0 ? product.images : [product.image_url]
+  const worthItPercent = product.rating_count > 0
+    ? Math.round(((product.ratings.S + product.ratings.A) / product.rating_count) * 100)
     : 0
 
   const handleLike = () => {
     if (!isAuthenticated) return
-    if (!dish.is_favorite) {
+    if (!product.is_favorite) {
       setHeartAnimating(true)
       setTimeout(() => setHeartAnimating(false), 400)
     }
@@ -137,8 +138,8 @@ export function DishDetailPage() {
   const handleShare = async () => {
     if (navigator.share) {
       await navigator.share({
-        title: `${dish.name} - biteclimb`,
-        text: `Check out ${dish.name} at ${dish.restaurant}! Rated ${dish.tier}-tier on biteclimb`,
+        title: `${product.name} - biteclimb`,
+        text: `Check out ${product.name} by ${product.brand}! Rated ${product.tier}-tier on biteclimb`,
         url: window.location.href,
       }).catch(() => {})
     } else {
@@ -155,6 +156,9 @@ export function DishDetailPage() {
     setImgSwipeOffset(0)
   }
 
+  // Seed tier / community indicator
+  const ratingLabel = product.rating_count < 5 ? 'Consensus' : 'Community'
+
   return (
     <div className="pb-20 page-enter">
       <div className="relative h-72 w-full overflow-hidden"
@@ -163,7 +167,7 @@ export function DishDetailPage() {
         onTouchEnd={images.length > 1 ? handleImgTouchEnd : undefined}
       >
         {!imageLoaded && <div className="absolute inset-0 skeleton" />}
-        <img src={images[activeImageIndex]} alt={dish.name}
+        <img src={images[activeImageIndex]} alt={product.name}
           className={`h-full w-full object-cover transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           style={imgSwiping ? { transform: `translateX(${imgSwipeOffset}px)` } : undefined}
           onLoad={() => setImageLoaded(true)}
@@ -188,8 +192,8 @@ export function DishDetailPage() {
           <ChevronLeftIcon size={24} />
         </button>
         <div className="absolute top-4 right-4 flex space-x-2">
-          <button className={`backdrop-blur-sm rounded-full p-2 transition-all ${dish.is_favorite ? 'bg-red-500 text-white' : 'bg-black/30 text-white'} ${heartAnimating ? 'animate-heart-pulse' : ''}`} onClick={handleLike} aria-label="Save to favorites">
-            <HeartIcon size={20} fill={dish.is_favorite ? 'currentColor' : 'none'} />
+          <button className={`backdrop-blur-sm rounded-full p-2 transition-all ${product.is_favorite ? 'bg-red-500 text-white' : 'bg-black/30 text-white'} ${heartAnimating ? 'animate-heart-pulse' : ''}`} onClick={handleLike} aria-label="Save to favorites">
+            <HeartIcon size={20} fill={product.is_favorite ? 'currentColor' : 'none'} />
           </button>
           <button onClick={handleShare} className="bg-black/30 backdrop-blur-sm rounded-full p-2 text-white active:scale-90 transition-transform" aria-label="Share">
             <ShareIcon size={20} />
@@ -200,78 +204,98 @@ export function DishDetailPage() {
       <div className="max-w-md mx-auto px-4">
         <div className="flex items-start justify-between mt-4 mb-2 animate-fade-in-up">
           <div className="flex-1 min-w-0 mr-3">
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{dish.name}</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{product.name}</h1>
             <div className="flex items-center text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-              <span className="font-medium mr-2">{dish.restaurant}</span>
-              <span className="flex items-center"><MapPinIcon size={14} className="mr-0.5" />{dish.location}</span>
+              <Link to={`/brand/${product.brand_id}`} className="font-medium mr-2 hover:text-purple-600 transition-colors">{product.brand}</Link>
+              <span className="text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded-full">{product.category}</span>
             </div>
-            {dish.distance !== null && <span className="text-xs text-blue-600 font-medium">{dish.distance.toFixed(1)} mi away</span>}
           </div>
-          <TierBadge tier={dish.tier as TierType} size="lg" />
+          <TierBadge tier={product.tier as TierType} size="lg" />
         </div>
 
-        <p className="text-neutral-600 dark:text-neutral-400 text-sm mb-4 animate-fade-in-up stagger-1">{dish.description}</p>
+        {/* Seed tier / Community indicator */}
+        <div className="flex items-center gap-2 mb-2 animate-fade-in-up stagger-1">
+          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+            ratingLabel === 'Consensus'
+              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+          }`}>
+            {ratingLabel === 'Consensus' ? <ShieldCheckIcon size={12} /> : <UsersRoundIcon size={12} />}
+            {ratingLabel} Rating
+          </span>
+          {product.friends_rated_count > 0 && (
+            <span className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
+              <UsersIcon size={12} />
+              {product.friends_rated_count} friend{product.friends_rated_count !== 1 ? 's' : ''} rated this
+            </span>
+          )}
+        </div>
+
+        <p className="text-neutral-600 dark:text-neutral-400 text-sm mb-4 animate-fade-in-up stagger-1">{product.description}</p>
 
         <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 mb-3 animate-fade-in-up stagger-2">
-          <span className="text-lg font-bold dark:text-neutral-100">{dish.price}</span>
+          <div className="flex items-center gap-2">
+            {product.price_range && <span className="text-lg font-bold dark:text-neutral-100">{product.price_range}</span>}
+            {product.size && <span className="text-sm text-neutral-500">{product.size}</span>}
+          </div>
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-neutral-500 flex items-center gap-1"><UsersIcon size={14} /> {dish.rating_count}</span>
+            <span className="text-neutral-500 flex items-center gap-1"><UsersIcon size={14} /> {product.rating_count}</span>
             {worthItPercent > 0 && <span className="text-green-600 font-medium text-xs bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">{worthItPercent}% worth it</span>}
           </div>
         </div>
 
-        {/* Check-In */}
+        {/* I've Tried This */}
         <div className="mb-4 animate-fade-in-up stagger-2">
-          {checkinSuccess ? (
+          {trySuccess ? (
             <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 animate-scale-in">
               <CheckCircle2Icon size={18} className="text-green-500" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-300">Checked in!</span>
-              {!dish.user_rating && <span className="text-xs text-green-600 dark:text-green-400 ml-auto">Now rate it below</span>}
+              <span className="text-sm font-medium text-green-700 dark:text-green-300">Marked as tried!</span>
+              {!product.user_rating && <span className="text-xs text-green-600 dark:text-green-400 ml-auto">Now rate it below</span>}
             </div>
-          ) : showCheckinForm ? (
+          ) : showTryForm ? (
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-4 animate-scale-in">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold dark:text-neutral-100">Log Check-In</h3>
-                <button onClick={() => setShowCheckinForm(false)} className="text-xs text-neutral-400">Cancel</button>
+                <h3 className="text-sm font-semibold dark:text-neutral-100">I've Tried This</h3>
+                <button onClick={() => setShowTryForm(false)} className="text-xs text-neutral-400">Cancel</button>
               </div>
               <input
                 type="text"
                 placeholder="Paste a photo link (optional)"
-                value={checkinPhoto}
-                onChange={(e) => setCheckinPhoto(e.target.value)}
+                value={tryPhoto}
+                onChange={(e) => setTryPhoto(e.target.value)}
                 className="w-full p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500 mb-2"
               />
               <textarea
-                placeholder="Quick notes — what'd you think? (optional)"
-                value={checkinNotes}
-                onChange={(e) => setCheckinNotes(e.target.value.slice(0, 280))}
+                placeholder="Quick notes -- what'd you think? (optional)"
+                value={tryNotes}
+                onChange={(e) => setTryNotes(e.target.value.slice(0, 280))}
                 className="w-full p-2.5 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-transparent dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none h-16"
               />
               <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-neutral-400">{checkinNotes.length}/280</span>
+                <span className="text-xs text-neutral-400">{tryNotes.length}/280</span>
                 <button
-                  onClick={() => checkinMutation.mutate({ photo_url: checkinPhoto || undefined, notes: checkinNotes || undefined })}
-                  disabled={checkinMutation.isPending}
+                  onClick={() => tryMutation.mutate({ photo_url: tryPhoto || undefined, notes: tryNotes || undefined })}
+                  disabled={tryMutation.isPending}
                   className="bg-purple-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-purple-700 active:scale-95 transition-all disabled:opacity-50"
                 >
-                  {checkinMutation.isPending ? 'Logging...' : 'Log Check-In'}
+                  {tryMutation.isPending ? 'Saving...' : "I've Tried This"}
                 </button>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-3">
               <button
-                onClick={() => isAuthenticated && setShowCheckinForm(true)}
+                onClick={() => isAuthenticated && setShowTryForm(true)}
                 className="flex items-center gap-2 bg-purple-600 text-white rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all"
               >
                 <CheckCircle2Icon size={16} />
-                Check In
+                I've Tried This
               </button>
-              {dish.checkin_count > 0 && (
-                <span className="text-xs text-neutral-500">{dish.checkin_count} check-in{dish.checkin_count !== 1 ? 's' : ''}</span>
+              {product.try_count > 0 && (
+                <span className="text-xs text-neutral-500">{product.try_count} {product.try_count !== 1 ? 'tries' : 'try'}</span>
               )}
-              {dish.user_checkin_count > 0 && (
-                <span className="text-xs text-purple-500 font-medium">You: {dish.user_checkin_count}x</span>
+              {product.user_try_count > 0 && (
+                <span className="text-xs text-purple-500 font-medium">You: {product.user_try_count}x</span>
               )}
             </div>
           )}
@@ -279,28 +303,28 @@ export function DishDetailPage() {
 
         {/* ELO rank + Compare CTA */}
         <div className="flex items-center gap-2 mb-5 animate-fade-in-up stagger-2">
-          {dish.cuisine_elo_rank && dish.cuisine_elo_total && (
+          {product.category_elo_rank && product.category_elo_total && (
             <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-lg px-3 py-2 flex-1">
               <TrophyIcon size={14} className="text-purple-500 shrink-0" />
               <div>
                 <p className="text-[10px] text-purple-500 font-medium">H2H Rank</p>
                 <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                  #{dish.cuisine_elo_rank} of {dish.cuisine_elo_total} {dish.cuisine}
+                  #{product.category_elo_rank} of {product.category_elo_total} {product.category}
                 </p>
               </div>
             </div>
           )}
-          {dish.matches_played !== undefined && dish.matches_played > 0 && (
+          {product.matches_played !== undefined && product.matches_played > 0 && (
             <div className="flex items-center gap-1.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-100 dark:border-neutral-700 rounded-lg px-3 py-2">
               <SwordsIcon size={14} className="text-neutral-400 shrink-0" />
               <div>
                 <p className="text-[10px] text-neutral-400 font-medium">Matches</p>
-                <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">{dish.matches_played}</p>
+                <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">{product.matches_played}</p>
               </div>
             </div>
           )}
           <Link
-            to={`/matchup?cuisine=${encodeURIComponent(dish.cuisine || '')}`}
+            to={`/matchup?category=${encodeURIComponent(product.category || '')}`}
             className="flex items-center gap-1.5 bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-semibold hover:bg-purple-700 active:scale-95 transition-all shrink-0"
           >
             <SwordsIcon size={12} />
@@ -308,10 +332,10 @@ export function DishDetailPage() {
           </Link>
         </div>
 
-        {/* Dish Labels */}
-        {dish.labels && dish.labels.length > 0 && (
+        {/* Product Labels */}
+        {product.labels && product.labels.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4 animate-fade-in-up stagger-2">
-            {dish.labels.map(l => (
+            {product.labels.map(l => (
               <span
                 key={l.label}
                 className={`text-xs font-semibold px-2.5 py-1 rounded-full ${LABEL_COLORS[l.label] || 'bg-neutral-100 text-neutral-700'}`}
@@ -327,9 +351,9 @@ export function DishDetailPage() {
           <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-4 mb-5 animate-fade-in-up stagger-3">
             <h2 className="font-semibold mb-2 text-sm dark:text-neutral-100 flex items-center gap-1.5">
               <TagIcon size={14} className="text-purple-500" />
-              What makes this dish stand out?
+              What makes this product stand out?
             </h2>
-            <p className="text-xs text-neutral-500 mb-3">Tap labels that describe this dish</p>
+            <p className="text-xs text-neutral-500 mb-3">Tap labels that describe this product</p>
             <div className="flex flex-wrap gap-2">
               {labelsData.valid_labels.map(label => {
                 const isActive = labelsData.user_labels.includes(label)
@@ -359,8 +383,8 @@ export function DishDetailPage() {
           <h2 className="font-semibold mb-3 text-sm dark:text-neutral-100">Community Ratings</h2>
           <div className="space-y-2">
             {TIER_OPTIONS.map((tier) => {
-              const count = dish.ratings[tier] || 0
-              const pct = dish.rating_count > 0 ? Math.round((count / dish.rating_count) * 100) : 0
+              const count = product.ratings[tier] || 0
+              const pct = product.rating_count > 0 ? Math.round((count / product.rating_count) * 100) : 0
               return (
                 <div key={tier} className="flex items-center">
                   <TierBadge tier={tier} size="sm" showEmoji={false} />
@@ -375,11 +399,11 @@ export function DishDetailPage() {
         {/* Rate */}
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-xl p-4 mb-5 animate-fade-in-up stagger-4 relative overflow-hidden">
           {showEmoji && selectedTier && <div className="absolute top-2 left-1/2 -translate-x-1/2 text-2xl animate-float-up pointer-events-none">{TIER_CONFIG[selectedTier].emoji}</div>}
-          <h2 className="font-semibold mb-1 text-sm dark:text-neutral-100">{dish.user_rating ? `You rated this ${dish.user_rating}-tier` : "What's your rating?"}</h2>
-          <p className="text-xs text-neutral-500 mb-3">Tap a tier to rate this dish</p>
+          <h2 className="font-semibold mb-1 text-sm dark:text-neutral-100">{product.user_rating ? `You rated this ${product.user_rating}-tier` : "What's your rating?"}</h2>
+          <p className="text-xs text-neutral-500 mb-3">Tap a tier to rate this product</p>
           <div className="flex justify-between gap-1">
             {TIER_OPTIONS.map((tier) => (
-              <button key={tier} onClick={() => { setSelectedTier(tier); setSubmitted(false) }} className={`flex-1 py-2.5 rounded-lg transition-all duration-200 flex flex-col items-center ${(selectedTier === tier || (!selectedTier && dish.user_rating === tier)) ? 'bg-white dark:bg-neutral-800 shadow-md scale-105' : 'hover:bg-white/50 active:scale-95'}`}>
+              <button key={tier} onClick={() => { setSelectedTier(tier); setSubmitted(false) }} className={`flex-1 py-2.5 rounded-lg transition-all duration-200 flex flex-col items-center ${(selectedTier === tier || (!selectedTier && product.user_rating === tier)) ? 'bg-white dark:bg-neutral-800 shadow-md scale-105' : 'hover:bg-white/50 active:scale-95'}`}>
                 <TierBadge tier={tier} size="sm" showEmoji={false} />
                 <span className="text-[10px] text-neutral-500 mt-1">{TIER_CONFIG[tier].label}</span>
               </button>
@@ -393,7 +417,7 @@ export function DishDetailPage() {
         {/* Reviews */}
         <div className="mb-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-sm dark:text-neutral-100">Reviews ({dish.reviews?.length || 0})</h2>
+            <h2 className="font-semibold text-sm dark:text-neutral-100">Reviews ({product.reviews?.length || 0})</h2>
             <button onClick={() => setShowReviewForm(!showReviewForm)} className="text-xs font-medium text-purple-600 flex items-center gap-0.5 active:scale-95 transition-transform"><MessageSquareIcon size={14} /> Write a review</button>
           </div>
           {showReviewForm && (
@@ -404,7 +428,7 @@ export function DishDetailPage() {
             </div>
           )}
           <div className="space-y-3">
-            {dish.reviews?.map((review) => (
+            {product.reviews?.map((review) => (
               <div key={review.id} className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700 p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <img src={review.avatar} alt={review.username} className="w-8 h-8 rounded-full object-cover" />
@@ -418,14 +442,14 @@ export function DishDetailPage() {
         </div>
 
         {/* Similar */}
-        {dish.similar && dish.similar.length > 0 && (
+        {product.similar && product.similar.length > 0 && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3"><h2 className="font-semibold text-sm dark:text-neutral-100">You Might Also Like</h2><ChevronRightIcon size={16} className="text-neutral-400" /></div>
             <div className="-mx-4 px-4 overflow-x-auto scrollbar-hide">
               <div className="flex gap-3 pb-1">
-                {dish.similar.map((d) => (
+                {product.similar.map((d) => (
                   <div key={d.id} className="shrink-0 w-40">
-                    <DishCard id={d.id} name={d.name} imageUrl={d.image_url} tier={d.tier as TierType} location={d.location} restaurant={d.restaurant || d.restaurant_name} ratingCount={d.rating_count} size="sm" />
+                    <ProductCard id={d.id} name={d.name} imageUrl={d.image_url} tier={d.tier as TierType} brand={d.brand || d.brand_name} category={d.category} ratingCount={d.rating_count} size="sm" />
                   </div>
                 ))}
               </div>

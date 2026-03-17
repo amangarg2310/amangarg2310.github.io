@@ -26,6 +26,14 @@ function getActivityText(type: string, targetName: string, meta: string) {
   }
 }
 
+function getActivityLink(type: string, targetId: string) {
+  switch (type) {
+    case 'follow': return `/user/${targetId}`
+    case 'tier_list': return '/tier-builder'
+    default: return `/product/${targetId}`
+  }
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
@@ -46,7 +54,7 @@ export function ActivityFeedPage() {
     <div className="max-w-md mx-auto px-4 py-6 page-enter">
       <header className="mb-5 animate-fade-in-up">
         <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Activity</h1>
-        <p className="text-neutral-500 text-sm">See what your food friends are up to</p>
+        <p className="text-neutral-500 text-sm">See what your friends are rating</p>
       </header>
 
       {isLoading ? (
@@ -55,14 +63,14 @@ export function ActivityFeedPage() {
         <div className="text-center py-12 text-neutral-500">
           <UserPlusIcon size={32} className="mx-auto mb-2 opacity-40" />
           <p className="font-medium">No activity yet</p>
-          <p className="text-sm mt-1">Follow other foodies to see their activity here</p>
+          <p className="text-sm mt-1">Follow other users to see their activity here</p>
         </div>
       ) : (
         <div className="space-y-2">
           {activities.map((activity, i) => (
             <Link
               key={activity.id}
-              to={activity.type === 'follow' ? `/user/${activity.target_id}` : activity.type === 'tier_list' ? '/tier-builder' : `/dish/${activity.target_id}`}
+              to={getActivityLink(activity.type, activity.target_id)}
               className={`flex items-center gap-3 bg-white dark:bg-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow animate-fade-in-up stagger-${Math.min(i + 1, 8)}`}
             >
               <img src={activity.avatar} alt={activity.username} className="w-10 h-10 rounded-full object-cover shrink-0" />

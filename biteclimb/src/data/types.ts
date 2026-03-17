@@ -19,41 +19,41 @@ export const TIER_CONFIG: Record<TierType, TierConfig> = {
 
 export const TIER_OPTIONS: TierType[] = ['S', 'A', 'B', 'C', 'D', 'F']
 
-export interface Dish {
+export interface Product {
   id: string
   name: string
   imageUrl: string
   images?: string[]
   tier: TierType
-  location: string
-  restaurant: string
+  brand: string
+  brandId: string
+  categoryId: string
+  category: string
   ratingCount: number
-  cuisine: string
   description?: string
-  price?: string
+  priceRange?: string
+  size?: string
   ratings?: Record<TierType, number>
-  trendingDelta?: number // positive = trending up
+  trendingDelta?: number
   todayRatings?: number
+  seedTier?: string | null
+  friendsRatedCount?: number
 }
 
-export interface Review {
-  id: string
-  dishId: string
-  userName: string
-  userAvatar: string
-  tier: TierType
-  text: string
-  date: string
-  helpful: number
-}
-
-export interface Restaurant {
+export interface Brand {
   id: string
   name: string
-  imageUrl: string
-  neighborhood: string
+  logoUrl: string
   communityTier: TierType
   ratingCount: number
+}
+
+export interface Category {
+  id: string
+  name: string
+  slug: string
+  emoji: string
+  productCount?: number
 }
 
 export interface UserProfile {
@@ -62,23 +62,13 @@ export interface UserProfile {
   bio: string
   stats: {
     tierLists: number
-    dishesRated: number
+    productsRated: number
     followers: number
   }
-  badges: Array<{
-    name: string
-    icon: string
-    level: number
-    progress: number
-    maxProgress: number
-  }>
   tasteDNA: Record<string, number>
-  streak: {
-    current: number
-    best: number
-  }
+  streak: { current: number; best: number }
   joinedDate: string
-  foodPersonality: string
+  productPersonality: string
 }
 
 export interface UserTierList {
@@ -86,4 +76,15 @@ export interface UserTierList {
   title: string
   imageUrl: string
   count: number
+}
+
+export interface Review {
+  id: string
+  productId: string
+  userName: string
+  userAvatar: string
+  tier: TierType
+  text: string
+  date: string
+  helpful: number
 }

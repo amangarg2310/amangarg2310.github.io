@@ -12,13 +12,15 @@ import { useAuthStore } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
 import type { TierType } from '../data/types'
 
-const CUISINE_COLORS: Record<string, string> = {
-  Italian: 'bg-red-400',
-  Japanese: 'bg-blue-400',
-  Korean: 'bg-orange-400',
-  Mexican: 'bg-green-400',
-  Thai: 'bg-yellow-400',
-  Indian: 'bg-purple-400',
+const CATEGORY_COLORS: Record<string, string> = {
+  Snacks: 'bg-red-400',
+  Drinks: 'bg-blue-400',
+  Cereal: 'bg-orange-400',
+  Candy: 'bg-green-400',
+  Frozen: 'bg-yellow-400',
+  Dairy: 'bg-purple-400',
+  Bakery: 'bg-pink-400',
+  Sauces: 'bg-teal-400',
 }
 
 export function ProfilePage() {
@@ -42,8 +44,8 @@ export function ProfilePage() {
   })
 
   const { data: diaryEntries } = useQuery({
-    queryKey: ['checkins', 'mine'],
-    queryFn: () => api.checkins.mine({ limit: 50 }),
+    queryKey: ['tries', 'mine'],
+    queryFn: () => api.tries.mine({ limit: 50 }),
     enabled: isOwnProfile && activeTab === 'diary',
   })
 
@@ -62,7 +64,7 @@ export function ProfilePage() {
   const tasteDna = profileData.taste_dna || []
   const maxDna = Math.max(...tasteDna.map(d => d.count), 1)
   const streak = typeof profileData.streak === 'number' ? profileData.streak : 0
-  const checkinCount = (profileData as Record<string, unknown>).checkin_count as number ?? 0
+  const tryCount = (profileData as Record<string, unknown>).try_count as number ?? 0
 
   // Group diary entries by date
   const diaryByDate: Record<string, typeof diaryEntries> = {}
@@ -104,7 +106,7 @@ export function ProfilePage() {
           <h2 className="text-xl font-semibold dark:text-neutral-100">{profileData.username}</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2">{profileData.bio || 'No bio yet'}</p>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">{profileData.food_personality}</span>
+            <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">{profileData.product_personality}</span>
             <span className="text-xs text-neutral-400">Since {new Date(profileData.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
           </div>
         </div>
@@ -112,8 +114,8 @@ export function ProfilePage() {
 
       {/* Stats */}
       <div className="grid grid-cols-5 gap-1.5 mb-6 animate-fade-in-up stagger-2">
-        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{checkinCount}</div><div className="text-[10px] text-neutral-500">Check-ins</div></div>
-        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.dishes_rated ?? 0}</div><div className="text-[10px] text-neutral-500">Rated</div></div>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{tryCount}</div><div className="text-[10px] text-neutral-500">Tries</div></div>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.products_rated ?? 0}</div><div className="text-[10px] text-neutral-500">Rated</div></div>
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.tier_lists ?? 0}</div><div className="text-[10px] text-neutral-500">Lists</div></div>
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.followers ?? 0}</div><div className="text-[10px] text-neutral-500">Followers</div></div>
         <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-xl shadow-sm p-2.5 text-center text-white"><div className="text-lg font-bold flex items-center justify-center gap-0.5"><FlameIcon size={14} /> {streak}</div><div className="text-[10px] text-white/80">Streak</div></div>
@@ -123,13 +125,13 @@ export function ProfilePage() {
       {tasteDna.length > 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-3">
           <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-2"><span className="text-white text-xs">🧬</span></span>Your Taste DNA
+            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-2"><span className="text-white text-xs">&#129516;</span></span>Your Taste DNA
           </h2>
           <div className="space-y-2.5">
-            {tasteDna.map(({ cuisine, count }) => (
-              <div key={cuisine} className="flex items-center gap-2">
-                <span className="text-xs text-neutral-600 dark:text-neutral-400 w-20 shrink-0">{cuisine}</span>
-                <div className="flex-1 h-3 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${CUISINE_COLORS[cuisine] || 'bg-neutral-400'} transition-all duration-500`} style={{ width: `${(count / maxDna) * 100}%` }} /></div>
+            {tasteDna.map(({ category, count }) => (
+              <div key={category} className="flex items-center gap-2">
+                <span className="text-xs text-neutral-600 dark:text-neutral-400 w-20 shrink-0">{category}</span>
+                <div className="flex-1 h-3 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${CATEGORY_COLORS[category] || 'bg-neutral-400'} transition-all duration-500`} style={{ width: `${(count / maxDna) * 100}%` }} /></div>
                 <span className="text-xs text-neutral-400 w-8 text-right">{count}</span>
               </div>
             ))}
@@ -142,13 +144,13 @@ export function ProfilePage() {
         <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><TrophyIcon size={16} className="mr-2 text-yellow-500" />Achievements</h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { name: 'First Bite', icon: '🍽️', progress: Math.min(profileData.dishes_rated ?? 0, 1), max: 1 },
-            { name: 'Tier Master', icon: '🏆', progress: Math.min(profileData.tier_lists ?? 0, 5), max: 5 },
-            { name: 'Social Foodie', icon: '👥', progress: Math.min(profileData.followers ?? 0, 10), max: 10 },
-            { name: 'Streak King', icon: '🔥', progress: Math.min(streak, 7), max: 7 },
+            { name: 'First Try', icon: '&#128230;', progress: Math.min(profileData.products_rated ?? 0, 1), max: 1 },
+            { name: 'Tier Master', icon: '&#127942;', progress: Math.min(profileData.tier_lists ?? 0, 5), max: 5 },
+            { name: 'Tastemaker', icon: '&#128101;', progress: Math.min(profileData.followers ?? 0, 10), max: 10 },
+            { name: 'Streak King', icon: '&#128293;', progress: Math.min(streak, 7), max: 7 },
           ].map(badge => (
             <div key={badge.name} className="bg-neutral-50 dark:bg-neutral-700 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-2"><span className="text-2xl">{badge.icon}</span><div className="text-sm font-medium dark:text-neutral-100">{badge.name}</div></div>
+              <div className="flex items-center gap-2 mb-2"><span className="text-2xl" dangerouslySetInnerHTML={{ __html: badge.icon }} /><div className="text-sm font-medium dark:text-neutral-100">{badge.name}</div></div>
               <div className="h-1.5 bg-neutral-200 dark:bg-neutral-600 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style={{ width: `${(badge.progress / badge.max) * 100}%` }} /></div>
               <p className="text-[10px] text-neutral-400 mt-1">{badge.progress}/{badge.max}</p>
             </div>
@@ -169,7 +171,7 @@ export function ProfilePage() {
             onClick={() => setActiveTab('diary')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'diary' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}
           >
-            <BookOpenIcon size={14} /> Food Diary
+            <BookOpenIcon size={14} /> Try Diary
           </button>
         </div>
       )}
@@ -180,9 +182,9 @@ export function ProfilePage() {
           <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><ListIcon size={16} className="mr-2 text-purple-500" />Recently Rated</h2>
           <div className="space-y-2">
             {profile.recent_ratings.map(rating => (
-              <Link key={rating.dish_id} to={`/dish/${rating.dish_id}`} className="flex items-center bg-white dark:bg-neutral-800 rounded-xl p-2.5 shadow-sm hover:shadow-md transition-shadow">
+              <Link key={rating.product_id} to={`/product/${rating.product_id}`} className="flex items-center bg-white dark:bg-neutral-800 rounded-xl p-2.5 shadow-sm hover:shadow-md transition-shadow">
                 <div className="h-12 w-12 rounded-lg overflow-hidden mr-3 shrink-0"><img src={rating.image_url} alt={rating.name} className="h-full w-full object-cover" loading="lazy" /></div>
-                <div className="flex-1 min-w-0"><h3 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-1">{rating.name}</h3><p className="text-xs text-neutral-500">{rating.restaurant_name}</p></div>
+                <div className="flex-1 min-w-0"><h3 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-1">{rating.name}</h3><p className="text-xs text-neutral-500">{rating.brand_name}</p></div>
                 <TierBadge tier={rating.tier as TierType} size="sm" showEmoji={false} />
               </Link>
             ))}
@@ -190,15 +192,15 @@ export function ProfilePage() {
         </div>
       )}
 
-      {/* Food Diary Tab */}
+      {/* Try Diary Tab */}
       {activeTab === 'diary' && isOwnProfile && (
         <div className="mb-6 animate-fade-in-up">
-          <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><BookOpenIcon size={16} className="mr-2 text-purple-500" />Food Diary</h2>
+          <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><BookOpenIcon size={16} className="mr-2 text-purple-500" />Try Diary</h2>
           {!diaryEntries || diaryEntries.length === 0 ? (
             <div className="bg-white dark:bg-neutral-800 rounded-xl p-6 text-center">
               <CheckCircle2Icon size={32} className="mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
-              <p className="text-sm text-neutral-500">No check-ins yet</p>
-              <p className="text-xs text-neutral-400 mt-1">Check in when you try a dish to start your food diary</p>
+              <p className="text-sm text-neutral-500">No tries yet</p>
+              <p className="text-xs text-neutral-400 mt-1">Mark products as tried to start your diary</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -207,16 +209,16 @@ export function ProfilePage() {
                   <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-2">{date}</h3>
                   <div className="space-y-2">
                     {entries!.map(entry => (
-                      <Link key={entry.id} to={`/dish/${entry.dish_id}`} className="flex items-start bg-white dark:bg-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+                      <Link key={entry.id} to={`/product/${entry.product_id}`} className="flex items-start bg-white dark:bg-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
                         <div className="h-12 w-12 rounded-lg overflow-hidden mr-3 shrink-0">
-                          <img src={entry.photo_url || entry.dish_image} alt={entry.dish_name} className="h-full w-full object-cover" loading="lazy" />
+                          <img src={entry.photo_url || entry.product_image} alt={entry.product_name} className="h-full w-full object-cover" loading="lazy" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-1">{entry.dish_name}</h3>
+                            <h3 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-1">{entry.product_name}</h3>
                             {entry.tier && <TierBadge tier={entry.tier as TierType} size="sm" showEmoji={false} />}
                           </div>
-                          <p className="text-xs text-neutral-500">{entry.restaurant_name}</p>
+                          <p className="text-xs text-neutral-500">{entry.brand_name}</p>
                           {entry.notes && <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1 line-clamp-2">{entry.notes}</p>}
                           {entry.photo_url && (
                             <div className="flex items-center gap-1 mt-1">

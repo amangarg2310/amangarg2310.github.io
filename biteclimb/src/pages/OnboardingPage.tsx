@@ -1,33 +1,27 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ChevronRightIcon, SparklesIcon } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { TIER_OPTIONS } from '../data/types'
+import { api } from '../api/client'
 
 interface OnboardingPageProps {
   onComplete: () => void
 }
 
-const CUISINE_OPTIONS = [
-  { label: 'Italian', emoji: '🍝' },
-  { label: 'Japanese', emoji: '🍣' },
-  { label: 'Korean', emoji: '🍗' },
-  { label: 'Mexican', emoji: '🌮' },
-  { label: 'Chinese', emoji: '🥡' },
-  { label: 'Thai', emoji: '🍜' },
-  { label: 'Indian', emoji: '🍛' },
-  { label: 'American', emoji: '🍔' },
-  { label: 'Mediterranean', emoji: '🥙' },
-  { label: 'Vietnamese', emoji: '🍲' },
-]
-
 export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const [step, setStep] = useState(0)
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [slideDirection, setSlideDirection] = useState<'right' | 'left'>('right')
 
-  const toggleCuisine = (cuisine: string) => {
-    setSelectedCuisines((prev) =>
-      prev.includes(cuisine) ? prev.filter((c) => c !== cuisine) : [...prev, cuisine]
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.categories.list(),
+  })
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     )
   }
 
@@ -49,17 +43,17 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         <div key="welcome" className="flex flex-col items-center justify-center min-h-screen px-8 text-center animate-fade-in">
           <div className="mb-8">
             <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce-in">
-              <span className="text-3xl">🍽️</span>
+              <span className="text-3xl">&#128230;</span>
             </div>
             <h1 className="text-3xl font-bold text-neutral-900 mb-2 animate-fade-in-up stagger-1">biteclimb</h1>
-            <p className="text-neutral-500 animate-fade-in-up stagger-2">Rank your way through the best food in your city</p>
+            <p className="text-neutral-500 animate-fade-in-up stagger-2">Rank your way through the best grocery products</p>
           </div>
 
           <div className="space-y-3 mb-12 w-full max-w-xs">
             {[
-              { icon: <SparklesIcon size={20} className="text-purple-600" />, bg: 'bg-purple-100', title: 'Discover S-tier dishes', sub: 'Find the best food near you' },
-              { icon: <span className="text-lg">🔥</span>, bg: 'bg-pink-100', title: 'Build tier lists', sub: "Rate and rank dishes you've tried" },
-              { icon: <span className="text-lg">🏆</span>, bg: 'bg-blue-100', title: 'Climb the ranks', sub: 'Earn badges and share your taste' },
+              { icon: <SparklesIcon size={20} className="text-purple-600" />, bg: 'bg-purple-100', title: 'Discover S-tier products', sub: 'Find the best products in every category' },
+              { icon: <span className="text-lg">&#128293;</span>, bg: 'bg-pink-100', title: 'Build tier lists', sub: "Rate and rank products you've tried" },
+              { icon: <span className="text-lg">&#127942;</span>, bg: 'bg-blue-100', title: 'Climb the ranks', sub: 'Earn badges and share your taste' },
             ].map((item, i) => (
               <div key={i} className={`flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm text-left animate-fade-in-up stagger-${i + 3}`}>
                 <div className={`w-10 h-10 ${item.bg} rounded-lg flex items-center justify-center shrink-0`}>
@@ -83,28 +77,28 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       )}
 
       {step === 1 && (
-        <div key="cuisines" className={`flex flex-col min-h-screen px-6 pt-16 pb-24 ${animClass}`}>
+        <div key="categories" className={`flex flex-col min-h-screen px-6 pt-16 pb-24 ${animClass}`}>
           <div className="mb-6">
             <p className="text-sm text-purple-600 font-medium mb-1">Step 1 of 2</p>
-            <h2 className="text-2xl font-bold text-neutral-900 mb-1">What do you love to eat?</h2>
-            <p className="text-neutral-500 text-sm">Pick at least 3 cuisines you enjoy</p>
+            <h2 className="text-2xl font-bold text-neutral-900 mb-1">What categories do you love?</h2>
+            <p className="text-neutral-500 text-sm">Pick at least 3 categories you enjoy</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 mb-auto">
-            {CUISINE_OPTIONS.map(({ label, emoji }, i) => (
+            {categories.map((cat, i) => (
               <button
-                key={label}
-                onClick={() => toggleCuisine(label)}
+                key={cat.id}
+                onClick={() => toggleCategory(cat.name)}
                 className={`flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all duration-200 text-left active:scale-[0.97] animate-fade-in-up stagger-${Math.min(i + 1, 8)} ${
-                  selectedCuisines.includes(label)
+                  selectedCategories.includes(cat.name)
                     ? 'border-purple-500 bg-purple-50 shadow-sm'
                     : 'border-neutral-200 bg-white hover:border-neutral-300'
                 }`}
               >
-                <span className="text-2xl">{emoji}</span>
-                <span className="font-medium text-sm flex-1">{label}</span>
-                {selectedCuisines.includes(label) && (
-                  <span className="text-purple-600 font-bold animate-bounce-in">✓</span>
+                <span className="text-2xl">{cat.emoji}</span>
+                <span className="font-medium text-sm flex-1">{cat.name}</span>
+                {selectedCategories.includes(cat.name) && (
+                  <span className="text-purple-600 font-bold animate-bounce-in">&#10003;</span>
                 )}
               </button>
             ))}
@@ -113,14 +107,14 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
           <div className="fixed bottom-6 left-6 right-6 max-w-[calc(28rem-3rem)] mx-auto">
             <button
               onClick={() => goForward(2)}
-              disabled={selectedCuisines.length < 3}
+              disabled={selectedCategories.length < 3}
               className={`w-full py-3.5 rounded-xl font-medium transition-all flex items-center justify-center gap-1 shadow-lg ${
-                selectedCuisines.length >= 3
+                selectedCategories.length >= 3
                   ? 'bg-purple-600 text-white hover:bg-purple-700 active:scale-[0.97]'
                   : 'bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none'
               }`}
             >
-              Continue ({selectedCuisines.length}/3 min) <ChevronRightIcon size={18} />
+              Continue ({selectedCategories.length}/3 min) <ChevronRightIcon size={18} />
             </button>
           </div>
         </div>
@@ -131,7 +125,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
           <div className="mb-6">
             <p className="text-sm text-purple-600 font-medium mb-1">Step 2 of 2</p>
             <h2 className="text-2xl font-bold text-neutral-900 mb-1">How tiers work</h2>
-            <p className="text-neutral-500 text-sm">Rate dishes from S (best) to F (worst)</p>
+            <p className="text-neutral-500 text-sm">Rate products from S (best) to F (worst)</p>
           </div>
 
           <div className="space-y-2.5 mb-auto">

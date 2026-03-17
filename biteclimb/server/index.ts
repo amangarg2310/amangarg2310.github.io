@@ -1,11 +1,12 @@
 import express from 'express'
 import cors from 'cors'
 import authRoutes from './routes/authRoutes.js'
-import dishRoutes from './routes/dishRoutes.js'
-import restaurantRoutes from './routes/restaurantRoutes.js'
+import productRoutes from './routes/productRoutes.js'
+import brandRoutes from './routes/brandRoutes.js'
+import categoryRoutes from './routes/categoryRoutes.js'
 import tierListRoutes from './routes/tierListRoutes.js'
 import userRoutes from './routes/userRoutes.js'
-import checkinRoutes from './routes/checkinRoutes.js'
+import triesRoutes from './routes/triesRoutes.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -20,12 +21,13 @@ app.get('/api/health', (_req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes)
-app.use('/api/dishes', dishRoutes)
-app.use('/api/restaurants', restaurantRoutes)
+app.use('/api/products', productRoutes)
+app.use('/api/brands', brandRoutes)
+app.use('/api/categories', categoryRoutes)
 app.use('/api/tier-lists', tierListRoutes)
+app.use('/api/tries', triesRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/feed', userRoutes)
-app.use('/api/checkins', checkinRoutes)
 
 app.listen(PORT, () => {
   console.log(`biteclimb API running on http://localhost:${PORT}`)
