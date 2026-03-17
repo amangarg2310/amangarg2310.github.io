@@ -1,23 +1,27 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { ChevronRightIcon, SparklesIcon } from 'lucide-react'
 import { TierBadge } from '../components/TierBadge'
 import { TIER_OPTIONS } from '../data/types'
-import { api } from '../api/client'
 
 interface OnboardingPageProps {
   onComplete: () => void
 }
 
+const CATEGORY_OPTIONS = [
+  { label: 'Chips & Snacks', emoji: '🍿' },
+  { label: 'Cookies & Crackers', emoji: '🍪' },
+  { label: 'Ice Cream & Frozen', emoji: '🍦' },
+  { label: 'Candy & Chocolate', emoji: '🍫' },
+  { label: 'Beverages', emoji: '🥤' },
+  { label: 'Cereal & Breakfast', emoji: '🥣' },
+  { label: 'Cleaning & Household', emoji: '🧹' },
+  { label: 'Personal Care', emoji: '🧴' },
+]
+
 export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const [step, setStep] = useState(0)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [slideDirection, setSlideDirection] = useState<'right' | 'left'>('right')
-
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => api.categories.list(),
-  })
 
   const toggleCategory = (category: string) => {
     setSelectedCategories((prev) =>
@@ -43,17 +47,17 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         <div key="welcome" className="flex flex-col items-center justify-center min-h-screen px-8 text-center animate-fade-in">
           <div className="mb-8">
             <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce-in">
-              <span className="text-3xl">&#128230;</span>
+              <span className="text-3xl">📦</span>
             </div>
             <h1 className="text-3xl font-bold text-neutral-900 mb-2 animate-fade-in-up stagger-1">biteclimb</h1>
-            <p className="text-neutral-500 animate-fade-in-up stagger-2">Rank your way through the best grocery products</p>
+            <p className="text-neutral-500 animate-fade-in-up stagger-2">Rank your way through the best products</p>
           </div>
 
           <div className="space-y-3 mb-12 w-full max-w-xs">
             {[
-              { icon: <SparklesIcon size={20} className="text-purple-600" />, bg: 'bg-purple-100', title: 'Discover S-tier products', sub: 'Find the best products in every category' },
-              { icon: <span className="text-lg">&#128293;</span>, bg: 'bg-pink-100', title: 'Build tier lists', sub: "Rate and rank products you've tried" },
-              { icon: <span className="text-lg">&#127942;</span>, bg: 'bg-blue-100', title: 'Climb the ranks', sub: 'Earn badges and share your taste' },
+              { icon: <SparklesIcon size={20} className="text-purple-600" />, bg: 'bg-purple-100', title: 'Discover top-rated products', sub: 'Find the best products across every category' },
+              { icon: <span className="text-lg">🔥</span>, bg: 'bg-pink-100', title: 'Build tier lists', sub: "Rate and rank products you've tried" },
+              { icon: <span className="text-lg">🏆</span>, bg: 'bg-blue-100', title: 'Climb the ranks', sub: 'Earn badges and share your taste' },
             ].map((item, i) => (
               <div key={i} className={`flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm text-left animate-fade-in-up stagger-${i + 3}`}>
                 <div className={`w-10 h-10 ${item.bg} rounded-lg flex items-center justify-center shrink-0`}>
@@ -80,25 +84,25 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         <div key="categories" className={`flex flex-col min-h-screen px-6 pt-16 pb-24 ${animClass}`}>
           <div className="mb-6">
             <p className="text-sm text-purple-600 font-medium mb-1">Step 1 of 2</p>
-            <h2 className="text-2xl font-bold text-neutral-900 mb-1">What categories do you love?</h2>
-            <p className="text-neutral-500 text-sm">Pick at least 3 categories you enjoy</p>
+            <h2 className="text-2xl font-bold text-neutral-900 mb-1">What products interest you?</h2>
+            <p className="text-neutral-500 text-sm">Pick at least 3 categories you care about</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 mb-auto">
-            {categories.map((cat, i) => (
+            {CATEGORY_OPTIONS.map(({ label, emoji }, i) => (
               <button
-                key={cat.id}
-                onClick={() => toggleCategory(cat.name)}
+                key={label}
+                onClick={() => toggleCategory(label)}
                 className={`flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all duration-200 text-left active:scale-[0.97] animate-fade-in-up stagger-${Math.min(i + 1, 8)} ${
-                  selectedCategories.includes(cat.name)
+                  selectedCategories.includes(label)
                     ? 'border-purple-500 bg-purple-50 shadow-sm'
                     : 'border-neutral-200 bg-white hover:border-neutral-300'
                 }`}
               >
-                <span className="text-2xl">{cat.emoji}</span>
-                <span className="font-medium text-sm flex-1">{cat.name}</span>
-                {selectedCategories.includes(cat.name) && (
-                  <span className="text-purple-600 font-bold animate-bounce-in">&#10003;</span>
+                <span className="text-2xl">{emoji}</span>
+                <span className="font-medium text-sm flex-1">{label}</span>
+                {selectedCategories.includes(label) && (
+                  <span className="text-purple-600 font-bold animate-bounce-in">✓</span>
                 )}
               </button>
             ))}
@@ -156,7 +160,6 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         </div>
       )}
 
-      {/* Step dots */}
       {step > 0 && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 flex gap-1.5">
           {[1, 2].map((s) => (

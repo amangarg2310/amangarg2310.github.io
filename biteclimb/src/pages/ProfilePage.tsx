@@ -13,14 +13,14 @@ import { useThemeStore } from '../stores/themeStore'
 import type { TierType } from '../data/types'
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Snacks: 'bg-red-400',
-  Drinks: 'bg-blue-400',
-  Cereal: 'bg-orange-400',
-  Candy: 'bg-green-400',
-  Frozen: 'bg-yellow-400',
-  Dairy: 'bg-purple-400',
-  Bakery: 'bg-pink-400',
-  Sauces: 'bg-teal-400',
+  'Chips & Snacks': 'bg-orange-400',
+  'Cookies & Crackers': 'bg-yellow-400',
+  'Ice Cream & Frozen': 'bg-blue-400',
+  'Candy & Chocolate': 'bg-pink-400',
+  'Beverages': 'bg-green-400',
+  'Cereal & Breakfast': 'bg-purple-400',
+  'Cleaning & Household': 'bg-teal-400',
+  'Personal Care': 'bg-indigo-400',
 }
 
 export function ProfilePage() {
@@ -66,7 +66,6 @@ export function ProfilePage() {
   const streak = typeof profileData.streak === 'number' ? profileData.streak : 0
   const tryCount = (profileData as Record<string, unknown>).try_count as number ?? 0
 
-  // Group diary entries by date
   const diaryByDate: Record<string, typeof diaryEntries> = {}
   if (diaryEntries) {
     for (const entry of diaryEntries) {
@@ -96,7 +95,6 @@ export function ProfilePage() {
         </div>
       </header>
 
-      {/* User info */}
       <div className="flex items-center mb-6 animate-fade-in-up stagger-1">
         <div className="relative mr-4 shrink-0">
           <img src={profileData.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80'} alt={profileData.username} className="w-20 h-20 rounded-full object-cover ring-2 ring-purple-100 dark:ring-purple-900" />
@@ -112,23 +110,21 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-5 gap-1.5 mb-6 animate-fade-in-up stagger-2">
-        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{tryCount}</div><div className="text-[10px] text-neutral-500">Tries</div></div>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{tryCount}</div><div className="text-[10px] text-neutral-500">Tried</div></div>
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.products_rated ?? 0}</div><div className="text-[10px] text-neutral-500">Rated</div></div>
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.tier_lists ?? 0}</div><div className="text-[10px] text-neutral-500">Lists</div></div>
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-2.5 text-center"><div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">{profileData.followers ?? 0}</div><div className="text-[10px] text-neutral-500">Followers</div></div>
         <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-xl shadow-sm p-2.5 text-center text-white"><div className="text-lg font-bold flex items-center justify-center gap-0.5"><FlameIcon size={14} /> {streak}</div><div className="text-[10px] text-white/80">Streak</div></div>
       </div>
 
-      {/* Taste DNA */}
       {tasteDna.length > 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-3">
           <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-2"><span className="text-white text-xs">&#129516;</span></span>Your Taste DNA
+            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-2"><span className="text-white text-xs">🧬</span></span>Your Taste DNA
           </h2>
           <div className="space-y-2.5">
-            {tasteDna.map(({ category, count }) => (
+            {tasteDna.map(({ category, count }: { category: string; count: number }) => (
               <div key={category} className="flex items-center gap-2">
                 <span className="text-xs text-neutral-600 dark:text-neutral-400 w-20 shrink-0">{category}</span>
                 <div className="flex-1 h-3 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${CATEGORY_COLORS[category] || 'bg-neutral-400'} transition-all duration-500`} style={{ width: `${(count / maxDna) * 100}%` }} /></div>
@@ -139,18 +135,17 @@ export function ProfilePage() {
         </div>
       )}
 
-      {/* Achievements */}
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-4">
         <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><TrophyIcon size={16} className="mr-2 text-yellow-500" />Achievements</h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { name: 'First Try', icon: '&#128230;', progress: Math.min(profileData.products_rated ?? 0, 1), max: 1 },
-            { name: 'Tier Master', icon: '&#127942;', progress: Math.min(profileData.tier_lists ?? 0, 5), max: 5 },
-            { name: 'Tastemaker', icon: '&#128101;', progress: Math.min(profileData.followers ?? 0, 10), max: 10 },
-            { name: 'Streak King', icon: '&#128293;', progress: Math.min(streak, 7), max: 7 },
+            { name: 'First Try', icon: '📦', progress: Math.min(profileData.products_rated ?? 0, 1), max: 1 },
+            { name: 'Tier Master', icon: '🏆', progress: Math.min(profileData.tier_lists ?? 0, 5), max: 5 },
+            { name: 'Social Explorer', icon: '👥', progress: Math.min(profileData.followers ?? 0, 10), max: 10 },
+            { name: 'Streak King', icon: '🔥', progress: Math.min(streak, 7), max: 7 },
           ].map(badge => (
             <div key={badge.name} className="bg-neutral-50 dark:bg-neutral-700 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-2"><span className="text-2xl" dangerouslySetInnerHTML={{ __html: badge.icon }} /><div className="text-sm font-medium dark:text-neutral-100">{badge.name}</div></div>
+              <div className="flex items-center gap-2 mb-2"><span className="text-2xl">{badge.icon}</span><div className="text-sm font-medium dark:text-neutral-100">{badge.name}</div></div>
               <div className="h-1.5 bg-neutral-200 dark:bg-neutral-600 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style={{ width: `${(badge.progress / badge.max) * 100}%` }} /></div>
               <p className="text-[10px] text-neutral-400 mt-1">{badge.progress}/{badge.max}</p>
             </div>
@@ -158,25 +153,17 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Ratings / Diary Toggle */}
       {isOwnProfile && (
         <div className="flex gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-xl p-1 mb-4 animate-fade-in-up stagger-5">
-          <button
-            onClick={() => setActiveTab('ratings')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'ratings' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}
-          >
+          <button onClick={() => setActiveTab('ratings')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'ratings' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}>
             <ListIcon size={14} /> Ratings
           </button>
-          <button
-            onClick={() => setActiveTab('diary')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'diary' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}
-          >
+          <button onClick={() => setActiveTab('diary')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${activeTab === 'diary' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm' : 'text-neutral-500'}`}>
             <BookOpenIcon size={14} /> Try Diary
           </button>
         </div>
       )}
 
-      {/* Recent Ratings Tab */}
       {activeTab === 'ratings' && profile?.recent_ratings && profile.recent_ratings.length > 0 && (
         <div className="mb-6 animate-fade-in-up">
           <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><ListIcon size={16} className="mr-2 text-purple-500" />Recently Rated</h2>
@@ -192,7 +179,6 @@ export function ProfilePage() {
         </div>
       )}
 
-      {/* Try Diary Tab */}
       {activeTab === 'diary' && isOwnProfile && (
         <div className="mb-6 animate-fade-in-up">
           <h2 className="font-semibold mb-3 flex items-center text-sm dark:text-neutral-100"><BookOpenIcon size={16} className="mr-2 text-purple-500" />Try Diary</h2>
@@ -237,7 +223,6 @@ export function ProfilePage() {
         </div>
       )}
 
-      {/* Theme */}
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm p-4 mb-6 animate-fade-in-up stagger-6">
         <h2 className="font-semibold mb-3 text-sm dark:text-neutral-100">Appearance</h2>
         <div className="flex gap-2">
