@@ -111,30 +111,50 @@ def _fetch_transcript_supadata(video_id: str) -> str:
         return ""
 
     video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    # Try official Python SDK first (handles auth/headers properly)
+    try:
+        from supadata import Supadata
+        client = Supadata(api_key=api_key)
+        transcript = client.youtube.transcript(url=video_url)
+        if transcript and transcript.content:
+            # content is a list of TranscriptEntry objects
+            text = " ".join(
+                entry.text if hasattr(entry, 'text') else str(entry)
+                for entry in transcript.content
+            )
+            if text.strip():
+                logger.info(f"Got transcript via Supadata SDK for {video_id}")
+                return text
+    except ImportError:
+        logger.info("Supadata SDK not installed, trying raw HTTP")
+    except Exception as e:
+        logger.warning(f"Supadata SDK failed for {video_id}: {e}")
+
+    # Fallback: raw HTTP with browser-like headers
     api_url = f"https://api.supadata.ai/v1/transcript?url={urllib.request.quote(video_url, safe='')}&mode=native"
     try:
         req = urllib.request.Request(api_url, headers={
             'x-api-key': api_key,
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         })
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode())
 
-        # Supadata returns {content: [...segments...], lang: "en"}
         content = data.get('content', '')
 
-        # If content is a string, return directly
         if isinstance(content, str) and content.strip():
-            logger.info(f"Got transcript via Supadata for {video_id}")
+            logger.info(f"Got transcript via Supadata HTTP for {video_id}")
             return content
 
-        # If content is a list of segments [{text, offset, duration}]
         if isinstance(content, list) and content:
             text = " ".join(
                 s.get('text', '') if isinstance(s, dict) else str(s)
                 for s in content
             )
             if text.strip():
-                logger.info(f"Got transcript via Supadata for {video_id}")
+                logger.info(f"Got transcript via Supadata HTTP for {video_id}")
                 return text
 
     except urllib.error.HTTPError as e:
@@ -143,9 +163,9 @@ def _fetch_transcript_supadata(video_id: str) -> str:
             body = e.read().decode()
         except Exception:
             pass
-        logger.warning(f"Supadata API error for {video_id}: HTTP {e.code} - {body}")
+        logger.warning(f"Supadata HTTP error for {video_id}: HTTP {e.code} - {body}")
     except Exception as e:
-        logger.warning(f"Supadata transcript fetch failed for {video_id}: {e}")
+        logger.warning(f"Supadata HTTP failed for {video_id}: {e}")
 
     return ""
 

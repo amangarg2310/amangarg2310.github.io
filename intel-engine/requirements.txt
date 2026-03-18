@@ -3,4 +3,5 @@ flask>=3.0.0
 gunicorn>=21.2.0
 python-dotenv>=1.0.0
 youtube-transcript-api>=1.0.0
+supadata>=1.0.0
 markdown>=3.5.0
