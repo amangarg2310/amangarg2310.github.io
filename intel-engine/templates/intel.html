@@ -12,7 +12,7 @@
 
     <!-- ── Navigation ── -->
     <nav class="intel-nav">
-        <a href="{{ url_for('intel_page') }}" class="intel-nav-brand">
+        <a href="{{ url_for('index') }}" class="intel-nav-brand">
             <div class="intel-nav-logo">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/>
@@ -22,8 +22,15 @@
             <span class="intel-nav-title">Intelligence</span>
         </a>
         <div class="intel-nav-links">
-            <a href="{{ url_for('intel_page') }}" class="intel-nav-link {% if not domain %}active{% endif %}">Home</a>
-            <a href="{{ url_for('signal_page') }}" class="intel-nav-link">Scout AI</a>
+            <a href="{{ url_for('index') }}" class="intel-nav-link {% if not domain %}active{% endif %}">Home</a>
+            {% if domains %}
+            {% for d in domains[:4] %}
+            <a href="{{ url_for('domain_page', domain_name=d.name) }}"
+               class="intel-nav-link {% if domain and domain.name == d.name %}active{% endif %}">
+                {{ d.icon }} {{ d.name }}
+            </a>
+            {% endfor %}
+            {% endif %}
         </div>
     </nav>
 
@@ -50,7 +57,7 @@
     </div>
 
     <div class="intel-detail">
-        <a href="{{ url_for('intel_page') }}" class="intel-back">
+        <a href="{{ url_for('index') }}" class="intel-back">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -87,8 +94,12 @@
             </div>
         </div>
 
-        <!-- Synthesis -->
+        <!-- Auto-Generated Brief / Synthesis -->
         {% if synthesis %}
+        <div class="intel-brief-header">
+            <h2 class="intel-brief-title">Knowledge Brief</h2>
+            <span class="intel-brief-version">v{{ synthesis.version }} &middot; {{ synthesis.source_count }} sources &middot; {{ synthesis.insight_count }} insights</span>
+        </div>
         <div class="intel-synthesis intel-animate-in">
             {{ synthesis_html | safe }}
         </div>
@@ -151,7 +162,7 @@
         </div>
         <div class="intel-domains-grid">
             {% for d in domains %}
-            <a href="{{ url_for('intel_domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in" style="animation-delay: {{ loop.index0 * 0.06 }}s">
+            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in" style="animation-delay: {{ loop.index0 * 0.06 }}s">
                 <span class="intel-domain-icon">{{ d.icon }}</span>
                 <div class="intel-domain-name">{{ d.name }}</div>
                 <div class="intel-domain-desc">{{ d.description or 'Knowledge base' }}</div>
@@ -175,7 +186,7 @@
             {% endfor %}
         </div>
     </div>
-    {% elif not domains %}
+    {% else %}
     <div class="intel-empty">
         <div class="intel-empty-icon">📚</div>
         <div class="intel-empty-title">Your knowledge base is empty</div>
@@ -196,7 +207,6 @@ const urlInput = document.getElementById('urlInput');
 const ingestBtn = document.getElementById('ingestBtn');
 const statusCard = document.getElementById('statusCard');
 
-// Submit on Enter
 if (urlInput) {
     urlInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') ingestVideo();
@@ -215,13 +225,11 @@ function ingestVideo() {
         return;
     }
 
-    // Disable input
     urlInput.disabled = true;
     ingestBtn.disabled = true;
     ingestBtn.innerHTML = '<div class="intel-spinner white"></div>';
 
-    // Start ingestion
-    fetch('/api/intel/ingest', {
+    fetch('/api/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url }),
@@ -238,7 +246,6 @@ function ingestVideo() {
             resetInput();
             return;
         }
-        // Start polling
         pollStatus(data.video_id);
     })
     .catch(err => {
@@ -249,17 +256,16 @@ function ingestVideo() {
 
 function pollStatus(videoId) {
     const interval = setInterval(() => {
-        fetch(`/api/intel/status/${videoId}`)
+        fetch(`/api/status/${videoId}`)
             .then(r => r.json())
             .then(data => {
                 showStatus(data.status, data.title || 'Processing...', data.step, data.progress, data.domain);
 
                 if (data.status === 'complete') {
                     clearInterval(interval);
-                    // Redirect to the domain page after a brief pause
                     setTimeout(() => {
                         if (data.domain) {
-                            window.location.href = `/intel/domain/${encodeURIComponent(data.domain)}`;
+                            window.location.href = `/domain/${encodeURIComponent(data.domain)}`;
                         } else {
                             window.location.reload();
                         }
@@ -294,18 +300,13 @@ function showStatus(status, title, step, progress, domain) {
         fillClass = 'error';
     }
 
-    let stepText = step || '';
-    if (domain && status === 'processing') {
-        stepText = step;
-    }
-
     statusCard.innerHTML = `
         <div class="intel-status-card">
             <div class="intel-status-header">
                 <div class="intel-status-icon ${iconClass}">${iconContent}</div>
                 <div class="intel-status-info">
                     <div class="intel-status-title">${escapeHtml(title)}</div>
-                    <div class="intel-status-step">${escapeHtml(stepText)}</div>
+                    <div class="intel-status-step">${escapeHtml(step || '')}</div>
                 </div>
             </div>
             <div class="intel-progress-track">
@@ -350,17 +351,14 @@ function sendChat() {
     const domainId = {{ domain.id if domain else 'null' }};
     if (!domainId) return;
 
-    // Clear empty state
     const emptyEl = chatMessages.querySelector('.intel-chat-empty');
     if (emptyEl) emptyEl.remove();
 
-    // Add user message
     addChatMessage('user', question);
     chatInput.value = '';
     chatInput.disabled = true;
     chatSendBtn.disabled = true;
 
-    // Add typing indicator
     const typingEl = document.createElement('div');
     typingEl.className = 'intel-chat-msg assistant';
     typingEl.id = 'typingIndicator';
@@ -377,19 +375,16 @@ function sendChat() {
     chatMessages.appendChild(typingEl);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    fetch('/api/intel/query', {
+    fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain_id: domainId, question: question }),
     })
     .then(r => r.json())
     .then(data => {
-        // Remove typing indicator
         const ti = document.getElementById('typingIndicator');
         if (ti) ti.remove();
-
         addChatMessage('assistant', data.answer || 'No answer available.');
-
         chatInput.disabled = false;
         chatSendBtn.disabled = false;
         chatInput.focus();
@@ -397,7 +392,6 @@ function sendChat() {
     .catch(err => {
         const ti = document.getElementById('typingIndicator');
         if (ti) ti.remove();
-
         addChatMessage('assistant', 'Something went wrong. Please try again.');
         chatInput.disabled = false;
         chatSendBtn.disabled = false;
@@ -410,11 +404,10 @@ function addChatMessage(role, content) {
 
     const label = role === 'user' ? 'You' : 'Intelligence';
 
-    // Simple markdown: **bold**, *italic*, bullet lists
     let html = escapeHtml(content);
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // Convert lines starting with - to list items
+
     const lines = html.split('\n');
     let inList = false;
     let processed = '';

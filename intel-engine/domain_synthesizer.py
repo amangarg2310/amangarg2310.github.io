@@ -2,16 +2,12 @@
 Domain synthesis — compounds knowledge as new videos are ingested.
 
 After each new video is processed, the synthesizer:
-1. Loads the existing synthesis for the domain (if any)
+1. Loads the existing synthesis for the domain
 2. Loads all new insights from the just-processed video
 3. Sends both to GPT to create an updated, comprehensive synthesis
 4. Stores the new synthesis with an incremented version number
-
-This is the "compounding knowledge" engine — each new video enriches
-the domain's understanding rather than just adding to a list.
 """
 
-import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -53,18 +49,12 @@ def get_current_synthesis(domain_id: int, db_path=None) -> dict | None:
     db_path = db_path or config.DB_PATH
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-
     row = conn.execute(
-        """SELECT id, content, source_count, insight_count, version
-           FROM intel_syntheses WHERE domain_id = ?
-           ORDER BY version DESC LIMIT 1""",
+        "SELECT id, content, source_count, insight_count, version FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
         (domain_id,),
     ).fetchone()
     conn.close()
-
-    if row:
-        return dict(row)
-    return None
+    return dict(row) if row else None
 
 
 def get_domain_insights_for_source(source_id: int, db_path=None) -> list[dict]:
@@ -72,37 +62,21 @@ def get_domain_insights_for_source(source_id: int, db_path=None) -> list[dict]:
     db_path = db_path or config.DB_PATH
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-
     rows = conn.execute(
-        """SELECT title, content, insight_type, actionability, key_quotes
-           FROM intel_insights WHERE source_id = ?
-           ORDER BY chunk_index""",
+        "SELECT title, content, insight_type, actionability, key_quotes FROM insights WHERE source_id = ? ORDER BY chunk_index",
         (source_id,),
     ).fetchall()
     conn.close()
-
     return [dict(r) for r in rows]
 
 
 def synthesize_domain(domain_id: int, source_id: int, video_title: str, channel: str, db_path=None) -> str:
-    """
-    Create or update the domain synthesis after a new video is processed.
-
-    Args:
-        domain_id: The domain to synthesize
-        source_id: The source that was just processed (for its insights)
-        video_title: Title of the just-processed video
-        channel: Channel name
-
-    Returns:
-        The new synthesis content
-    """
+    """Create or update the domain synthesis after a new video is processed."""
     db_path = db_path or config.DB_PATH
     api_key = config.get_api_key('openai')
     if not api_key:
         raise ValueError("OpenAI API key not configured")
 
-    # Get existing synthesis
     current = get_current_synthesis(domain_id, db_path)
 
     if current:
@@ -112,10 +86,8 @@ def synthesize_domain(domain_id: int, source_id: int, video_title: str, channel:
         existing_section = "No existing synthesis yet — this is the first video for this domain. Create a comprehensive foundation."
         next_version = 1
 
-    # Get new insights
     new_insights_data = get_domain_insights_for_source(source_id, db_path)
     if not new_insights_data:
-        logger.warning(f"No insights found for source {source_id}")
         return current['content'] if current else ""
 
     new_insights_text = "\n".join(
@@ -124,20 +96,15 @@ def synthesize_domain(domain_id: int, source_id: int, video_title: str, channel:
         for i in new_insights_data
     )
 
-    # Get domain name
     conn = sqlite3.connect(str(db_path))
-    domain_row = conn.execute("SELECT name FROM intel_domains WHERE id = ?", (domain_id,)).fetchone()
+    domain_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
     domain_name = domain_row[0] if domain_row else "Unknown"
-    conn.close()
 
-    # Get total counts
-    conn = sqlite3.connect(str(db_path))
     source_count = conn.execute(
-        "SELECT COUNT(*) FROM intel_sources WHERE domain_id = ? AND status = 'processed'",
-        (domain_id,),
+        "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'", (domain_id,)
     ).fetchone()[0]
     insight_count = conn.execute(
-        "SELECT COUNT(*) FROM intel_insights WHERE domain_id = ?", (domain_id,)
+        "SELECT COUNT(*) FROM insights WHERE domain_id = ?", (domain_id,)
     ).fetchone()[0]
     conn.close()
 
@@ -161,23 +128,18 @@ def synthesize_domain(domain_id: int, source_id: int, video_title: str, channel:
 
     synthesis_content = response.choices[0].message.content.strip()
 
-    # Store new synthesis
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        """INSERT INTO intel_syntheses (domain_id, content, source_count, insight_count, version, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (domain_id, synthesis_content, source_count, insight_count, next_version, now),
     )
-
-    # Update domain counts
     conn.execute(
-        "UPDATE intel_domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+        "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
         (source_count, insight_count, now, domain_id),
     )
-
     conn.commit()
     conn.close()
 
-    logger.info(f"Created synthesis v{next_version} for domain '{domain_name}' ({source_count} sources, {insight_count} insights)")
+    logger.info(f"Created synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
     return synthesis_content

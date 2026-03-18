@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: intel-engine
+    env: python
+    rootDir: intel-engine
+    buildCommand: "pip install -r requirements.txt && python migrations.py"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FLASK_SECRET_KEY
+        sync: false
+    disk:
+      name: intel-data
+      mountPath: /opt/render/project/src/intel-engine/data
+      sizeGB: 1

@@ -1,7 +1,7 @@
 """
-Intelligence pipeline — the full automated flow from YouTube URL to synthesized knowledge.
+Intelligence pipeline — full automated flow from YouTube URL to synthesized knowledge.
 
-This is what runs when a user pastes a URL. Everything is automated:
+This runs when a user pastes a URL. Everything is automated:
 1. Ingest video (metadata + transcript)
 2. Store source in database
 3. Chunk transcript
@@ -9,11 +9,8 @@ This is what runs when a user pastes a URL. Everything is automated:
 5. Auto-detect domain
 6. Store insights
 7. Re-synthesize domain knowledge
-
-Designed to run in a background thread so the UI stays responsive.
 """
 
-import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -26,7 +23,7 @@ from domain_synthesizer import synthesize_domain
 
 logger = logging.getLogger(__name__)
 
-# In-memory status tracking for the UI to poll
+# In-memory status tracking for UI polling
 _pipeline_status = {}
 
 
@@ -56,12 +53,11 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
     db_path = db_path or config.DB_PATH
     if not db_path.exists():
         return None
-
     try:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT id, video_id, title, status, domain_id FROM intel_sources WHERE video_id = ?",
+            "SELECT id, video_id, title, status, domain_id FROM sources WHERE video_id = ?",
             (video_id,),
         ).fetchone()
         conn.close()
@@ -73,30 +69,19 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
 def run_pipeline(url: str, db_path=None) -> dict:
     """
     Run the full intelligence pipeline for a YouTube URL.
-
-    This is the main entry point — called from the Flask route in a background thread.
-
-    Args:
-        url: YouTube video URL
-
-    Returns:
-        dict with: video_id, title, domain_name, insights_count, status
+    Called from Flask route in a background thread.
     """
     db_path = db_path or config.DB_PATH
-
-    # Extract video ID first for status tracking
     video_id = extract_video_id(url)
     if not video_id:
         return {'status': 'error', 'error': 'Invalid YouTube URL'}
 
-    # Check if already processed
     existing = check_already_ingested(video_id, db_path)
     if existing and existing['status'] == 'processed':
         _update_status(video_id, 'already_exists', 'Already processed', 100,
                        title=existing.get('title', ''))
         return {
-            'status': 'already_exists',
-            'video_id': video_id,
+            'status': 'already_exists', 'video_id': video_id,
             'title': existing.get('title', ''),
             'message': 'This video has already been processed.',
         }
@@ -108,22 +93,19 @@ def run_pipeline(url: str, db_path=None) -> dict:
         _update_status(video_id, 'processing', 'Got transcript', 25,
                        title=video.title, channel=video.channel)
 
-        # Step 2: Store source in database
+        # Step 2: Store source
         now = datetime.now(timezone.utc).isoformat()
         conn = sqlite3.connect(str(db_path))
-
         conn.execute("""
-            INSERT OR REPLACE INTO intel_sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, thumbnail, duration_seconds, transcript, status, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?)
         """, (video.video_id, url, video.title, video.channel, video.thumbnail,
               video.duration_seconds, video.transcript, now))
         conn.commit()
-
-        source_row = conn.execute(
-            "SELECT id FROM intel_sources WHERE video_id = ?", (video.video_id,)
-        ).fetchone()
-        source_id = source_row[0]
+        source_id = conn.execute(
+            "SELECT id FROM sources WHERE video_id = ?", (video.video_id,)
+        ).fetchone()[0]
         conn.close()
 
         # Step 3: Chunk transcript
@@ -140,25 +122,21 @@ def run_pipeline(url: str, db_path=None) -> dict:
         domain_id = domain_result['domain_id']
         domain_name = domain_result['domain_name']
 
-        # Update source with domain
         conn = sqlite3.connect(str(db_path))
-        conn.execute(
-            "UPDATE intel_sources SET domain_id = ? WHERE id = ?", (domain_id, source_id)
-        )
+        conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
         conn.commit()
         conn.close()
 
         _update_status(video_id, 'processing', f'Domain: {domain_name}', 50,
                        title=video.title, channel=video.channel, domain=domain_name)
 
-        # Step 5: Extract insights from each chunk
+        # Step 5: Extract insights
         all_insights = []
         for i, chunk in enumerate(chunks):
             progress = 50 + int((i / max(len(chunks), 1)) * 25)
             _update_status(video_id, 'processing',
                            f'Extracting insights ({i+1}/{len(chunks)})...', progress,
                            title=video.title, channel=video.channel, domain=domain_name)
-
             insights = extract_insights(chunk, chunk_index=i)
             all_insights.extend(insights)
 
@@ -169,7 +147,7 @@ def run_pipeline(url: str, db_path=None) -> dict:
         conn = sqlite3.connect(str(db_path))
         for insight in all_insights:
             conn.execute("""
-                INSERT INTO intel_insights
+                INSERT INTO insights
                 (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -185,16 +163,15 @@ def run_pipeline(url: str, db_path=None) -> dict:
         conn.commit()
         conn.close()
 
-        # Step 7: Re-synthesize domain knowledge
+        # Step 7: Re-synthesize
         _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
                        title=video.title, channel=video.channel, domain=domain_name)
-
         synthesize_domain(domain_id, source_id, video.title, video.channel, db_path)
 
         # Mark as processed
         conn = sqlite3.connect(str(db_path))
         conn.execute(
-            "UPDATE intel_sources SET status = 'processed', processed_at = ? WHERE id = ?",
+            "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
             (datetime.now(timezone.utc).isoformat(), source_id),
         )
         conn.commit()
@@ -207,12 +184,9 @@ def run_pipeline(url: str, db_path=None) -> dict:
         logger.info(f"Pipeline complete: {video.title} → {domain_name} ({len(all_insights)} insights)")
 
         return {
-            'status': 'complete',
-            'video_id': video_id,
-            'title': video.title,
-            'channel': video.channel,
-            'domain_name': domain_name,
-            'domain_id': domain_id,
+            'status': 'complete', 'video_id': video_id,
+            'title': video.title, 'channel': video.channel,
+            'domain_name': domain_name, 'domain_id': domain_id,
             'insights_count': len(all_insights),
             'is_new_domain': domain_result.get('is_new', False),
         }
@@ -220,21 +194,14 @@ def run_pipeline(url: str, db_path=None) -> dict:
     except Exception as e:
         logger.error(f"Pipeline failed for {url}: {e}", exc_info=True)
         _update_status(video_id, 'error', 'Failed', 0, error=str(e))
-
-        # Mark source as failed if it was stored
         try:
             conn = sqlite3.connect(str(db_path))
             conn.execute(
-                "UPDATE intel_sources SET status = 'error', error_message = ? WHERE video_id = ?",
+                "UPDATE sources SET status = 'error', error_message = ? WHERE video_id = ?",
                 (str(e), video_id),
             )
             conn.commit()
             conn.close()
         except Exception:
             pass
-
-        return {
-            'status': 'error',
-            'video_id': video_id,
-            'error': str(e),
-        }
+        return {'status': 'error', 'video_id': video_id, 'error': str(e)}

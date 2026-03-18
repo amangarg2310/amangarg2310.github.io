@@ -1,9 +1,6 @@
 """
-Domain detection — automatically classifies video content into knowledge domains.
-
-Uses GPT to analyze the video title, channel, and first chunk of transcript to
-determine which domain the content belongs to. Creates new domains automatically
-when content doesn't fit existing ones.
+Domain detection — auto-classifies video content into knowledge domains.
+Creates new domains when content doesn't fit existing ones.
 """
 
 import json
@@ -18,36 +15,21 @@ import config
 logger = logging.getLogger(__name__)
 
 DOMAIN_ICONS = {
-    "product marketing": "📦",
-    "growth": "📈",
-    "sales": "💰",
-    "engineering": "⚙️",
-    "design": "🎨",
-    "data science": "📊",
-    "ai & machine learning": "🤖",
-    "leadership": "👑",
-    "startups": "🚀",
-    "finance": "💵",
-    "content creation": "🎬",
-    "social media": "📱",
-    "seo": "🔍",
-    "copywriting": "✍️",
-    "psychology": "🧠",
-    "productivity": "⏱️",
-    "health & fitness": "💪",
-    "cooking": "🍳",
-    "music": "🎵",
-    "programming": "💻",
-    "education": "📖",
-    "science": "🔬",
-    "business strategy": "♟️",
-    "entrepreneurship": "🏗️",
-    "investing": "📉",
-    "real estate": "🏠",
-    "career development": "🎯",
-    "communication": "🗣️",
-    "negotiation": "🤝",
-    "customer success": "🌟",
+    "product marketing": "📦", "growth": "📈", "sales": "💰",
+    "engineering": "⚙️", "design": "🎨", "data science": "📊",
+    "ai & machine learning": "🤖", "leadership": "👑", "startups": "🚀",
+    "finance": "💵", "content creation": "🎬", "social media": "📱",
+    "seo": "🔍", "copywriting": "✍️", "psychology": "🧠",
+    "productivity": "⏱️", "health & fitness": "💪", "cooking": "🍳",
+    "music": "🎵", "programming": "💻", "education": "📖",
+    "science": "🔬", "business strategy": "♟️", "entrepreneurship": "🏗️",
+    "investing": "📉", "real estate": "🏠", "career development": "🎯",
+    "communication": "🗣️", "negotiation": "🤝", "customer success": "🌟",
+    "devops": "🔧", "cybersecurity": "🔒", "blockchain": "⛓️",
+    "gaming": "🎮", "photography": "📷", "writing": "📝",
+    "mathematics": "🔢", "philosophy": "💭", "history": "🏛️",
+    "marketing": "📣", "branding": "🏷️", "analytics": "📈",
+    "ux design": "✨", "web development": "🌐", "mobile development": "📱",
 }
 
 DETECTION_PROMPT = """You are a domain classifier. Given a video's title, channel, and transcript excerpt, determine which knowledge domain this content belongs to.
@@ -56,7 +38,7 @@ DETECTION_PROMPT = """You are a domain classifier. Given a video's title, channe
 
 RULES:
 1. If the content clearly fits an existing domain, return that domain name EXACTLY as listed.
-2. If the content is a genuinely new topic not covered by any existing domain, create a concise new domain name (2-4 words, Title Case).
+2. If the content is a genuinely new topic, create a concise new domain name (2-4 words, Title Case).
 3. Be specific but not too narrow — "Product Marketing" is good, "Product Marketing for SaaS B2B Companies" is too narrow.
 4. Domain names should be professional and clear.
 
@@ -69,16 +51,15 @@ Return ONLY a JSON object:
 
 
 def get_existing_domains(db_path=None) -> list[dict]:
-    """Get all existing domains from the database."""
+    """Get all existing domains."""
     db_path = db_path or config.DB_PATH
     if not db_path.exists():
         return []
-
     try:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT name, description, source_count FROM intel_domains ORDER BY source_count DESC"
+            "SELECT name, description, source_count FROM domains ORDER BY source_count DESC"
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -87,17 +68,7 @@ def get_existing_domains(db_path=None) -> list[dict]:
 
 
 def detect_domain(title: str, channel: str, transcript_excerpt: str, db_path=None) -> dict:
-    """
-    Detect or create the appropriate domain for video content.
-
-    Args:
-        title: Video title
-        channel: Channel name
-        transcript_excerpt: First ~500 words of transcript
-
-    Returns:
-        dict with: domain_name, description, is_new, domain_id
-    """
+    """Detect or create the appropriate domain for video content."""
     api_key = config.get_api_key('openai')
     if not api_key:
         raise ValueError("OpenAI API key not configured")
@@ -105,12 +76,14 @@ def detect_domain(title: str, channel: str, transcript_excerpt: str, db_path=Non
     existing = get_existing_domains(db_path)
 
     if existing:
-        domain_list = "\n".join(f"- {d['name']} ({d['source_count']} videos): {d['description'] or 'No description'}" for d in existing)
+        domain_list = "\n".join(
+            f"- {d['name']} ({d['source_count']} videos): {d['description'] or 'No description'}"
+            for d in existing
+        )
         existing_section = f"EXISTING DOMAINS:\n{domain_list}\n"
     else:
         existing_section = "No existing domains yet — you must create a new one.\n"
 
-    # Truncate transcript for prompt
     words = transcript_excerpt.split()[:500]
     excerpt = " ".join(words)
 
@@ -122,9 +95,7 @@ def detect_domain(title: str, channel: str, transcript_excerpt: str, db_path=Non
             {"role": "system", "content": "You classify content into knowledge domains. Return only valid JSON."},
             {"role": "user", "content": DETECTION_PROMPT.format(
                 existing_domains_section=existing_section,
-                title=title,
-                channel=channel,
-                excerpt=excerpt,
+                title=title, channel=channel, excerpt=excerpt,
             )},
         ],
         temperature=0.2,
@@ -139,17 +110,12 @@ def detect_domain(title: str, channel: str, transcript_excerpt: str, db_path=Non
         content = content.strip()
 
     result = json.loads(content)
-    domain_name = result['domain']
-    description = result.get('description', '')
-    is_new = result.get('is_new', True)
-
-    # Ensure domain exists in database
-    domain_id = ensure_domain_exists(domain_name, description, db_path)
+    domain_id = ensure_domain_exists(result['domain'], result.get('description', ''), db_path)
 
     return {
-        'domain_name': domain_name,
-        'description': description,
-        'is_new': is_new,
+        'domain_name': result['domain'],
+        'description': result.get('description', ''),
+        'is_new': result.get('is_new', True),
         'domain_id': domain_id,
     }
 
@@ -160,18 +126,16 @@ def ensure_domain_exists(name: str, description: str = "", db_path=None) -> int:
     conn = sqlite3.connect(str(db_path))
     now = datetime.now(timezone.utc).isoformat()
 
-    # Check if exists (case-insensitive)
     row = conn.execute(
-        "SELECT id FROM intel_domains WHERE name = ? COLLATE NOCASE", (name,)
+        "SELECT id FROM domains WHERE name = ? COLLATE NOCASE", (name,)
     ).fetchone()
 
     if row:
         domain_id = row[0]
     else:
-        # Pick an icon
         icon = DOMAIN_ICONS.get(name.lower(), "📚")
         cursor = conn.execute(
-            "INSERT INTO intel_domains (name, description, icon, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO domains (name, description, icon, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
             (name, description, icon, now, now),
         )
         domain_id = cursor.lastrowid

@@ -447,6 +447,28 @@
     color: var(--intel-text-secondary);
 }
 
+/* ── Knowledge Brief Header ── */
+.intel-brief-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.intel-brief-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--intel-text);
+    margin: 0;
+}
+
+.intel-brief-version {
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+    font-weight: 500;
+}
+
 /* ── Synthesis Card ── */
 .intel-synthesis {
     background: var(--intel-surface);

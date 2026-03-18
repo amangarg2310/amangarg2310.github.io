@@ -1,8 +1,5 @@
 """
 YouTube video ingestion — fetch metadata and transcript from a YouTube URL.
-
-Handles URL parsing, metadata extraction via yt-dlp, and transcript fetching
-via youtube-transcript-api. No LLM calls here — pure data acquisition.
 """
 
 import logging
@@ -75,7 +72,6 @@ def fetch_transcript(video_id: str) -> str:
         return " ".join(entry['text'] for entry in transcript_list)
     except Exception as e:
         logger.warning(f"Could not fetch transcript for {video_id}: {e}")
-        # Try auto-generated captions
         try:
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
             return " ".join(entry['text'] for entry in transcript_list)
@@ -84,29 +80,15 @@ def fetch_transcript(video_id: str) -> str:
 
 
 def ingest_video(url: str) -> VideoMeta:
-    """
-    Full ingestion pipeline for a single YouTube video.
-
-    Args:
-        url: YouTube video URL
-
-    Returns:
-        VideoMeta with all extracted data
-
-    Raises:
-        ValueError: If URL is invalid or video_id can't be extracted
-    """
+    """Full ingestion: URL → metadata + transcript."""
     video_id = extract_video_id(url)
     if not video_id:
         raise ValueError(f"Could not extract video ID from URL: {url}")
 
     logger.info(f"Ingesting video: {video_id}")
-
-    # Fetch metadata
     meta = fetch_video_metadata(video_id)
-
-    # Fetch transcript
     transcript = fetch_transcript(video_id)
+
     if not transcript:
         raise ValueError(f"No transcript available for video: {video_id}")
 
@@ -122,11 +104,7 @@ def ingest_video(url: str) -> VideoMeta:
 
 
 def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
-    """
-    Split transcript into overlapping chunks for processing.
-
-    Uses word-based splitting as a proxy for tokens (~1.3 words/token).
-    """
+    """Split transcript into overlapping chunks for processing."""
     words = transcript.split()
     max_words = int(max_tokens * 1.3)
     overlap_words = int(overlap * 1.3)
@@ -140,7 +118,6 @@ def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200
         end = start + max_words
         chunk = " ".join(words[start:end])
         chunks.append(chunk)
-
         if end >= len(words):
             break
         start = end - overlap_words

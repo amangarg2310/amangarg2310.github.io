@@ -2,12 +2,13 @@
 
 ## Repository Structure
 
-This is a monorepo hosted on GitHub Pages containing two projects:
+This is a monorepo hosted on GitHub Pages containing three projects:
 
 ```
-├── biteclimb/          # Community-driven product tier ranking app
+├── biteclimb/               # Community-driven product tier ranking app
 ├── outlier-content-engine/  # AI-powered competitive intelligence platform (ScoutAI)
-└── render.yaml         # Render.com deployment config
+├── intel-engine/            # Domain Intelligence Engine — YouTube knowledge platform
+└── render.yaml              # Render.com deployment config
 ```
 
 ---
@@ -56,8 +57,41 @@ See `outlier-content-engine/CLAUDE.md` for detailed documentation.
 
 ---
 
+## Domain Intelligence Engine
+
+**What it is:** Paste a YouTube URL → automatically extracts insights, detects the knowledge domain, and builds a compounding knowledge base. Each new video enriches existing domain synthesis.
+
+**Tech Stack:** Python 3.11, Flask, SQLite, OpenAI GPT-4o-mini, yt-dlp, youtube-transcript-api
+
+### Key Commands
+
+```bash
+cd intel-engine
+pip install -r requirements.txt
+python migrations.py    # Create database tables
+python app.py           # Run at http://localhost:5002
+```
+
+### Architecture
+
+- **Pipeline** (`pipeline.py`): URL → ingest → chunk → extract insights → detect domain → synthesize
+- **Backend** (`app.py`): Flask web server with API endpoints
+- **Frontend** (`templates/intel.html`, `static/intel.css`): Apple-inspired minimal UI
+- **Database:** SQLite with tables: domains, sources, insights, syntheses
+
+### How It Works
+
+1. User pastes a YouTube URL
+2. `youtube_ingest.py` fetches metadata + transcript via yt-dlp
+3. `insight_extractor.py` sends chunks to GPT → structured insights
+4. `domain_detector.py` auto-classifies into existing or new domain
+5. `domain_synthesizer.py` merges new insights with existing synthesis
+6. Knowledge compounds — each video makes the domain smarter
+
+---
+
 ## Development Notes
 
 - The BiteClimb frontend proxies API requests to `localhost:3001` in dev mode
 - SQLite databases are file-based and gitignored
-- Both projects deploy independently on Render.com
+- All three projects deploy independently on Render.com
