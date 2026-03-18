@@ -8,6 +8,7 @@ After each new source is processed, the synthesizer:
 4. Stores the new synthesis with an incremented version number
 """
 
+import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -173,11 +174,14 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     synthesis_content = response.choices[0].message.content.strip()
 
+    # Generate suggested questions
+    suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
+
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (domain_id, synthesis_content, source_count, insight_count, next_version, now),
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
     )
     conn.execute(
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
@@ -298,11 +302,13 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     synthesis_content = response.choices[0].message.content.strip()
 
+    suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
+
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (domain_id, synthesis_content, source_count, insight_count, next_version, now),
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
     )
     conn.execute(
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
@@ -313,3 +319,32 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     logger.info(f"Full re-synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
     return synthesis_content
+
+
+def _generate_suggested_questions(client: OpenAI, domain_name: str, synthesis: str) -> str:
+    """Generate 3 suggested starter questions based on the synthesis content."""
+    try:
+        # Use first ~1000 words of synthesis for context
+        excerpt = " ".join(synthesis.split()[:1000])
+        response = client.chat.completions.create(
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "Generate exactly 3 questions a learner would ask about this knowledge base. Return a JSON array of 3 strings. Questions should be specific and actionable, not generic."},
+                {"role": "user", "content": f"Domain: {domain_name}\n\nKnowledge:\n{excerpt}\n\nReturn ONLY a JSON array of 3 question strings:"},
+            ],
+            temperature=0.5,
+            max_tokens=300,
+        )
+        content = response.choices[0].message.content.strip()
+        # Strip markdown
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+        questions = json.loads(content)
+        if isinstance(questions, list) and len(questions) >= 1:
+            return json.dumps(questions[:3])
+    except Exception as e:
+        logger.warning(f"Failed to generate suggested questions: {e}")
+    return "[]"

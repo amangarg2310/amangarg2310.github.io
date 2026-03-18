@@ -30,6 +30,13 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_MAX_TOKENS = 4096
 OPENAI_TEMPERATURE = 0.3
 
+# ── Embeddings ──
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+EMBEDDING_DIMENSION = 1536
+
+# ── Anthropic (for visual generation) ──
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+
 
 def get_api_key(service: str) -> str:
     """Get API key from database first, fall back to environment variable."""
@@ -48,6 +55,7 @@ def get_api_key(service: str) -> str:
 
     env_map = {
         'openai': 'OPENAI_API_KEY',
+        'anthropic': 'ANTHROPIC_API_KEY',
     }
     env_var = env_map.get(service)
     if env_var:

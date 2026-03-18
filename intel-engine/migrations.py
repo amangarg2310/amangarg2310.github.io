@@ -106,9 +106,52 @@ def run_migrations(db_path=None):
     _add_column(conn, "sources", "file_path", "TEXT")
     _add_column(conn, "sources", "original_filename", "TEXT")
 
+    # Schema evolution — vector embeddings for RAG
+    _add_column(conn, "insights", "embedding", "TEXT")
+
+    # Schema evolution — visual generation + suggested questions
+    _add_column(conn, "syntheses", "visual_html", "TEXT")
+    _add_column(conn, "syntheses", "suggested_questions", "TEXT")
+
     conn.commit()
+
+    # FTS5 virtual table for keyword search (separate from executescript)
+    _create_fts5(conn)
+
     conn.close()
     logger.info("Migrations complete")
+
+
+def _create_fts5(conn):
+    """Create FTS5 virtual table and sync triggers for keyword search."""
+    try:
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS insights_fts USING fts5(
+                title, content, content=insights, content_rowid=id
+            )
+        """)
+        # Triggers to keep FTS in sync
+        conn.executescript("""
+            CREATE TRIGGER IF NOT EXISTS insights_fts_insert AFTER INSERT ON insights BEGIN
+                INSERT INTO insights_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+            END;
+            CREATE TRIGGER IF NOT EXISTS insights_fts_delete AFTER DELETE ON insights BEGIN
+                INSERT INTO insights_fts(insights_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+            END;
+            CREATE TRIGGER IF NOT EXISTS insights_fts_update AFTER UPDATE ON insights BEGIN
+                INSERT INTO insights_fts(insights_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+                INSERT INTO insights_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+            END;
+        """)
+        conn.commit()
+        # Backfill FTS for any existing insights not yet indexed
+        conn.execute("""
+            INSERT OR IGNORE INTO insights_fts(rowid, title, content)
+            SELECT id, title, content FROM insights
+        """)
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning(f"FTS5 setup: {e}")
 
 
 def _add_column(conn, table: str, column: str, definition: str):

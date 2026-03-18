@@ -5,6 +5,7 @@ Creates new domains when content doesn't fit existing ones.
 
 import json
 import logging
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -109,7 +110,23 @@ def detect_domain(title: str, channel: str, transcript_excerpt: str, db_path=Non
             content = content[:-3]
         content = content.strip()
 
-    result = json.loads(content)
+    # Parse with fallback
+    result = None
+    try:
+        result = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        # Try regex extraction
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            try:
+                result = json.loads(match.group())
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    if not result or not isinstance(result, dict) or 'domain' not in result:
+        logger.warning(f"Domain detection failed to parse response, using fallback. Response: {content[:200]}")
+        result = {'domain': 'General Knowledge', 'description': 'Uncategorized knowledge', 'is_new': True}
+
     domain_id = ensure_domain_exists(result['domain'], result.get('description', ''), db_path)
 
     return {

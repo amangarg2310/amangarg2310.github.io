@@ -4,6 +4,7 @@ Insight extraction — GPT extracts structured insights from transcript chunks.
 
 import json
 import logging
+import re
 from openai import OpenAI
 
 import config
@@ -59,23 +60,65 @@ def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
             max_tokens=4000,
         )
 
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
+        raw_content = response.choices[0].message.content.strip()
+        insights = _parse_insights_json(raw_content, chunk_index)
 
-        insights = json.loads(content)
+        # Validate and filter insights
+        valid = []
         for insight in insights:
+            if not isinstance(insight, dict):
+                continue
+            if not insight.get('title') or not insight.get('content'):
+                continue
             insight['chunk_index'] = chunk_index
+            valid.append(insight)
 
-        logger.info(f"Extracted {len(insights)} insights from chunk {chunk_index}")
-        return insights
+        logger.info(f"Extracted {len(valid)} insights from chunk {chunk_index}")
+        return valid
 
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.warning(f"Failed to parse GPT response for chunk {chunk_index}: {e}")
-        return []
     except Exception as e:
         logger.error(f"Insight extraction failed for chunk {chunk_index}: {e}")
         return []
+
+
+def _parse_insights_json(content: str, chunk_index: int) -> list:
+    """Parse GPT response as JSON array with multiple fallback strategies."""
+    # Strip markdown code fences
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+    # Strategy 1: direct JSON parse
+    try:
+        result = json.loads(content)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return [result]  # Single insight, wrap in array
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Strategy 2: regex extract JSON array
+    match = re.search(r'\[.*\]', content, re.DOTALL)
+    if match:
+        try:
+            result = json.loads(match.group())
+            if isinstance(result, list):
+                return result
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Strategy 3: regex extract JSON object (single insight)
+    match = re.search(r'\{.*\}', content, re.DOTALL)
+    if match:
+        try:
+            result = json.loads(match.group())
+            if isinstance(result, dict):
+                return [result]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    logger.warning(f"All JSON parse strategies failed for chunk {chunk_index}. Response: {content[:200]}...")
+    return []

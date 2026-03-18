@@ -16,6 +16,8 @@ import logging
 import os
 import re
 import sqlite3
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,11 +27,14 @@ from youtube_ingest import ingest_video, chunk_transcript, extract_video_id
 from insight_extractor import extract_insights
 from domain_detector import detect_domain
 from domain_synthesizer import synthesize_domain, resynthesize_domain_full
+from embeddings import batch_generate_embeddings, serialize_embedding
 
 logger = logging.getLogger(__name__)
 
-# In-memory status tracking for UI polling
+# In-memory status tracking for UI polling (thread-safe)
 _pipeline_status = {}
+_status_lock = threading.Lock()
+_STATUS_TTL_SECONDS = 600  # Prune entries older than 10 minutes
 
 SOURCE_TYPE_ICONS = {
     'youtube': '🎥',
@@ -44,23 +49,69 @@ SOURCE_TYPE_ICONS = {
 
 def get_pipeline_status(video_id: str) -> dict:
     """Get the current processing status for a source."""
-    return _pipeline_status.get(video_id, {
-        'status': 'unknown',
-        'step': '',
-        'progress': 0,
-        'error': None,
-    })
+    with _status_lock:
+        _prune_old_statuses()
+        return _pipeline_status.get(video_id, {
+            'status': 'unknown',
+            'step': '',
+            'progress': 0,
+            'error': None,
+        })
 
 
 def _update_status(video_id: str, status: str, step: str, progress: int, error: str = None, **extra):
-    """Update in-memory status for UI polling."""
-    _pipeline_status[video_id] = {
-        'status': status,
-        'step': step,
-        'progress': progress,
-        'error': error,
-        **extra,
-    }
+    """Update in-memory status for UI polling (thread-safe)."""
+    with _status_lock:
+        _pipeline_status[video_id] = {
+            'status': status,
+            'step': step,
+            'progress': progress,
+            'error': error,
+            '_timestamp': time.time(),
+            **extra,
+        }
+
+
+def _prune_old_statuses():
+    """Remove status entries older than TTL (called under lock)."""
+    now = time.time()
+    expired = [k for k, v in _pipeline_status.items()
+               if now - v.get('_timestamp', 0) > _STATUS_TTL_SECONDS
+               and v.get('status') in ('complete', 'error', 'unknown', 'already_exists')]
+    for k in expired:
+        del _pipeline_status[k]
+
+
+def is_processing(video_id: str) -> bool:
+    """Check if a source is currently being processed (idempotency check)."""
+    with _status_lock:
+        entry = _pipeline_status.get(video_id)
+        return entry is not None and entry.get('status') == 'processing'
+
+
+def _embed_insights(conn, source_id: int):
+    """Generate and store embeddings for all insights from a source."""
+    try:
+        rows = conn.execute(
+            "SELECT id, title, content FROM insights WHERE source_id = ? AND embedding IS NULL",
+            (source_id,),
+        ).fetchall()
+        if not rows:
+            return
+
+        texts = [f"{r[1]} {r[2]}" for r in rows]
+        embeddings = batch_generate_embeddings(texts)
+
+        for row, emb in zip(rows, embeddings):
+            if emb:
+                conn.execute(
+                    "UPDATE insights SET embedding = ? WHERE id = ?",
+                    (serialize_embedding(emb), row[0]),
+                )
+        conn.commit()
+        logger.info(f"Embedded {sum(1 for e in embeddings if e)} insights for source {source_id}")
+    except Exception as e:
+        logger.warning(f"Embedding generation failed for source {source_id}: {e}")
 
 
 def check_already_ingested(video_id: str, db_path=None) -> dict | None:
@@ -454,6 +505,11 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
             (now, source_id),
         )
         conn.commit()
+
+        # Generate embeddings for new insights
+        _update_status(video_id, 'processing', 'Generating embeddings...', 75,
+                       title=source['title'], channel=source['channel'])
+        _embed_insights(conn, source_id)
         conn.close()
 
         # Re-synthesize the full domain
@@ -560,6 +616,11 @@ def _run_shared_pipeline(
             now,
         ))
     conn.commit()
+
+    # Step 6.5: Generate embeddings for insights
+    _update_status(video_id, 'processing', 'Generating embeddings...', 82,
+                   title=title, channel=channel, domain=domain_name)
+    _embed_insights(conn, source_id)
     conn.close()
 
     # Step 7: Re-synthesize

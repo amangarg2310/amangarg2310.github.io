@@ -131,6 +131,7 @@ def domain_page(domain_name):
         ).fetchone()
         synthesis = dict(synthesis_row) if synthesis_row else None
         synthesis_html = ""
+        suggested_questions = []
         if synthesis and md:
             try:
                 synthesis_html = md.markdown(
@@ -141,6 +142,13 @@ def domain_page(domain_name):
                 synthesis_html = f"<p>{synthesis['content']}</p>"
         elif synthesis:
             synthesis_html = f"<p>{synthesis['content']}</p>"
+
+        if synthesis and synthesis.get('suggested_questions'):
+            import json
+            try:
+                suggested_questions = json.loads(synthesis['suggested_questions'])
+            except (json.JSONDecodeError, TypeError):
+                suggested_questions = []
 
         # Sources with insight counts and source_type
         sources = [dict(r) for r in conn.execute("""
@@ -166,6 +174,7 @@ def domain_page(domain_name):
                            domain=domain,
                            synthesis=synthesis,
                            synthesis_html=synthesis_html,
+                           suggested_questions=suggested_questions,
                            sources=sources,
                            domains=domains)
 
@@ -541,8 +550,117 @@ def api_query():
     if not domain_id or not question:
         return jsonify({"answer": "Please provide a question.", "sources_used": 0})
 
-    result = query_domain(int(domain_id), question)
+    try:
+        result = query_domain(int(domain_id), question)
+    except (ValueError, TypeError):
+        return jsonify({"answer": "Invalid domain.", "sources_used": 0})
     return jsonify(result)
+
+
+@app.route("/api/backfill-embeddings", methods=["POST"])
+def api_backfill_embeddings():
+    """Generate embeddings for all insights missing them."""
+    from embeddings import batch_generate_embeddings, serialize_embedding
+
+    conn = None
+    try:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT id, title, content FROM insights WHERE embedding IS NULL"
+        ).fetchall()
+
+        if not rows:
+            return jsonify({"status": "ok", "message": "All insights already have embeddings", "count": 0})
+
+        total = 0
+        batch_size = 10
+        for i in range(0, len(rows), batch_size):
+            batch = rows[i:i + batch_size]
+            texts = [f"{r['title']} {r['content']}" for r in batch]
+            embeddings = batch_generate_embeddings(texts)
+
+            for row, emb in zip(batch, embeddings):
+                if emb:
+                    conn.execute(
+                        "UPDATE insights SET embedding = ? WHERE id = ?",
+                        (serialize_embedding(emb), row['id']),
+                    )
+                    total += 1
+            conn.commit()
+
+        return jsonify({"status": "ok", "message": f"Generated {total} embeddings", "count": total})
+
+    except Exception as e:
+        logger.error(f"Backfill embeddings failed: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/generate-visual/<int:domain_id>", methods=["POST"])
+def api_generate_visual(domain_id):
+    """Generate an interactive HTML/SVG visual from domain synthesis using Claude."""
+    from visual_generator import generate_visual
+
+    conn = None
+    try:
+        conn = get_db()
+
+        # Get latest synthesis
+        synthesis_row = conn.execute(
+            "SELECT id, content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+            (domain_id,),
+        ).fetchone()
+
+        if not synthesis_row:
+            return jsonify({"error": "No synthesis found for this domain"}), 404
+
+        synthesis = dict(synthesis_row)
+
+        # Generate visual via Claude
+        html = generate_visual(synthesis['content'])
+        if not html:
+            return jsonify({"error": "Visual generation failed. Check that ANTHROPIC_API_KEY is configured."}), 500
+
+        # Cache in database
+        conn.execute(
+            "UPDATE syntheses SET visual_html = ? WHERE id = ?",
+            (html, synthesis['id']),
+        )
+        conn.commit()
+
+        return jsonify({"status": "ok", "html": html})
+
+    except Exception as e:
+        logger.error(f"Visual generation failed: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/visual/<int:domain_id>")
+def api_visual(domain_id):
+    """Return cached visual HTML for a domain."""
+    conn = None
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT visual_html FROM syntheses WHERE domain_id = ? AND visual_html IS NOT NULL ORDER BY version DESC LIMIT 1",
+            (domain_id,),
+        ).fetchone()
+
+        if not row or not row['visual_html']:
+            return jsonify({"html": None})
+
+        return jsonify({"html": row['visual_html']})
+
+    except Exception as e:
+        return jsonify({"html": None})
+    finally:
+        if conn:
+            conn.close()
 
 
 # ── Entry Point ──
