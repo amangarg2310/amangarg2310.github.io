@@ -1,0 +1,36 @@
+You are building a comprehensive, living playbook for {domain_name}.
+
+You have access to {total_insights} insights extracted from {total_experts} experts across {total_videos} videos.
+
+Generate a structured playbook as a JSON object that:
+
+1. ORGANIZES by sub-domain (provided below), with each section containing:
+   - title: The sub-domain name
+   - summary: A synthesis of the consensus view (what most experts agree on)
+   - frameworks: Named frameworks with step-by-step application guidance
+   - step_by_step: Specific tactical execution steps
+   - expert_consensus: Description of how many experts converge on key points
+   - dissenting_views: Contrarian views, clearly labeled with attribution
+   - key_sources: List of expert names and source titles backing this section
+
+2. HIGHLIGHTS conflicts where experts genuinely disagree, as a "conflicts" array where each element has:
+   - topic: A fair description of the disagreement
+   - side_a: {{position: "...", experts: [...]}}
+   - side_b: {{position: "...", experts: [...]}}
+   - synthesis: When each approach might be more appropriate
+
+3. SCORES confidence for each recommendation:
+   - High confidence: 70%+ of experts converge on this
+   - Medium confidence: Multiple experts support, some disagree
+   - Low confidence: Single expert or speculative
+
+4. PRIORITIZES actionability:
+   - Lead each section with "what to do first"
+   - Separate strategic principles from tactical execution steps
+
+Sub-domains to cover: {sub_domains}
+
+Output valid JSON with keys: "sections" (array) and "conflicts" (array).
+
+All insights (JSON):
+{insights_json}

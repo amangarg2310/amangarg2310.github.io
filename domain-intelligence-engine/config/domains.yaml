@@ -1,0 +1,49 @@
+domains:
+  product_marketing:
+    name: Product Marketing
+    description: Positioning, messaging, launches, competitive strategy
+    sub_domains:
+      - positioning
+      - messaging
+      - go_to_market
+      - competitive_intelligence
+      - pricing_strategy
+      - launch_playbook
+    seed_channels: []
+    seed_playlists: []
+
+  growth:
+    name: Growth & Acquisition
+    description: Growth loops, experimentation, channel strategy, retention
+    sub_domains:
+      - growth_loops
+      - experimentation
+      - channel_strategy
+      - retention
+      - activation
+    seed_channels: []
+    seed_playlists: []
+
+  product_management:
+    name: Product Management
+    description: Product strategy, discovery, prioritization, roadmapping
+    sub_domains:
+      - product_strategy
+      - discovery
+      - prioritization
+      - roadmapping
+      - user_research
+    seed_channels: []
+    seed_playlists: []
+
+  sales:
+    name: Sales
+    description: Sales process, outbound, closing, account management
+    sub_domains:
+      - outbound
+      - closing
+      - discovery_calls
+      - account_management
+      - sales_enablement
+    seed_channels: []
+    seed_playlists: []

@@ -1,0 +1,20 @@
+You are analyzing expert opinions in the domain of "{domain}" to find genuine disagreements.
+
+Review the following insights and identify topics where experts hold meaningfully different positions.
+
+For each conflict found, output a JSON array element with:
+- topic: Short description of the disagreement
+- side_a: {{position: "Expert's position", experts: ["Expert Name"]}}
+- side_b: {{position: "Expert's position", experts: ["Expert Name"]}}
+- synthesis: Your analysis of when each position might be more appropriate
+- severity: "major" (fundamental disagreement) or "minor" (nuance/context difference)
+
+Rules:
+- Only flag GENUINE disagreements, not cases where experts are discussing different contexts
+- A disagreement requires at least two different experts holding opposing views
+- If no conflicts are found, return an empty JSON array: []
+
+Output valid JSON array only.
+
+Insights:
+{insights_json}

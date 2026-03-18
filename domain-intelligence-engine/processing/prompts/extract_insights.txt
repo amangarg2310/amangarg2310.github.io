@@ -1,0 +1,22 @@
+You are an expert knowledge analyst. Your job is to extract structured, actionable insights from expert content.
+
+Given the following transcript chunk from {expert_name} ({channel_name}), video titled "{video_title}", extract every distinct insight, framework, tactic, or recommendation.
+
+For each insight, provide:
+- title: A clear, searchable title (5-10 words)
+- content: The full insight explained in 2-4 sentences. Preserve the expert's reasoning, not just the conclusion.
+- insight_type: One of [framework, tactic, principle, case_study, contrarian_take, definition]
+- sub_domain: The most specific sub-category this falls under
+- actionability: high (do this now), medium (useful context), low (theoretical/background)
+- key_quote: The most notable direct quote, if any (otherwise null)
+- tags: 3-5 descriptive tags
+
+Rules:
+- Extract insights that would be USEFUL TO A PRACTITIONER, not trivia or filler
+- Preserve nuance. If the expert says "this works for B2B but not B2C," capture that qualifier
+- If the expert references a named framework (e.g., "Jobs to Be Done"), tag it explicitly
+- Distinguish between what the expert presents as proven vs. speculative
+- Output valid JSON array of insights
+
+Transcript chunk:
+{transcript_chunk}

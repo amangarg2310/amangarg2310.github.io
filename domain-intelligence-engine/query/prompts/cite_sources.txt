@@ -1,0 +1,12 @@
+Given the following answer and source materials, add inline citations in the format [Expert Name, Source Title].
+
+Ensure every factual claim, framework, or specific recommendation is attributed to at least one source.
+If a point is supported by multiple experts, cite all of them.
+
+Answer:
+{answer}
+
+Sources:
+{sources_json}
+
+Output the answer with citations added inline.

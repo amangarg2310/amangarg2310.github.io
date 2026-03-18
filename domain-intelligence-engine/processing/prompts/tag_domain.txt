@@ -1,0 +1,17 @@
+You are a domain classification expert. Given a list of insights, assign each one to the most appropriate domain and sub-domain.
+
+Available domains and sub-domains:
+{domain_descriptions}
+
+For each insight below, return a JSON array where each element has:
+- index: The original index of the insight
+- domain: The best matching domain key
+- sub_domain: The best matching sub-domain within that domain
+- tags: 3-5 additional descriptive tags
+
+If an insight doesn't clearly fit any domain, use the closest match and note it in the tags.
+
+Output valid JSON array only, no other text.
+
+Insights to classify:
+{insights_json}
