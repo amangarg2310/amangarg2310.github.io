@@ -1,34 +1,49 @@
 """
-Intelligence pipeline — full automated flow from YouTube URL to synthesized knowledge.
+Intelligence pipeline — full automated flow from source to synthesized knowledge.
 
-This runs when a user pastes a URL. Everything is automated:
-1. Ingest video (metadata + transcript)
-2. Store source in database
-3. Chunk transcript
-4. Extract insights from each chunk
-5. Auto-detect domain
-6. Store insights
-7. Re-synthesize domain knowledge
+Supports multiple source types:
+- YouTube videos (transcript extraction)
+- Web articles (text extraction)
+- Documents (PDF, DOCX, PPTX)
+- Images/screenshots (Vision API)
+- Pasted text
+
+Each source type produces text that flows through the same pipeline:
+ingest → chunk → extract insights → detect domain → synthesize
 """
 
 import logging
+import os
+import re
 import sqlite3
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import config
 from youtube_ingest import ingest_video, chunk_transcript, extract_video_id
 from insight_extractor import extract_insights
 from domain_detector import detect_domain
-from domain_synthesizer import synthesize_domain
+from domain_synthesizer import synthesize_domain, resynthesize_domain_full
 
 logger = logging.getLogger(__name__)
 
 # In-memory status tracking for UI polling
 _pipeline_status = {}
 
+SOURCE_TYPE_ICONS = {
+    'youtube': '🎥',
+    'article': '📄',
+    'pdf': '📑',
+    'docx': '📝',
+    'pptx': '📊',
+    'image': '🖼️',
+    'text': '📋',
+}
+
 
 def get_pipeline_status(video_id: str) -> dict:
-    """Get the current processing status for a video."""
+    """Get the current processing status for a source."""
     return _pipeline_status.get(video_id, {
         'status': 'unknown',
         'step': '',
@@ -49,7 +64,7 @@ def _update_status(video_id: str, status: str, step: str, progress: int, error: 
 
 
 def check_already_ingested(video_id: str, db_path=None) -> dict | None:
-    """Check if a video has already been ingested."""
+    """Check if a source has already been ingested."""
     db_path = db_path or config.DB_PATH
     if not db_path.exists():
         return None
@@ -66,6 +81,22 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
         return None
 
 
+def detect_source_type(url: str) -> str:
+    """Auto-detect source type from a URL."""
+    if re.search(r'(?:youtube\.com/watch|youtu\.be/|youtube\.com/shorts/)', url):
+        return 'youtube'
+    return 'article'
+
+
+def _generate_source_id(prefix: str) -> str:
+    """Generate a unique source identifier."""
+    return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+# ══════════════════════════════════════════════════════════════
+# YouTube Pipeline (existing, refactored)
+# ══════════════════════════════════════════════════════════════
+
 def run_pipeline(url: str, db_path=None) -> dict:
     """
     Run the full intelligence pipeline for a YouTube URL.
@@ -79,10 +110,12 @@ def run_pipeline(url: str, db_path=None) -> dict:
     existing = check_already_ingested(video_id, db_path)
     if existing and existing['status'] == 'processed':
         _update_status(video_id, 'already_exists', 'Already processed', 100,
-                       title=existing.get('title', ''))
+                       title=existing.get('title', ''),
+                       source_id=existing.get('id'))
         return {
             'status': 'already_exists', 'video_id': video_id,
             'title': existing.get('title', ''),
+            'source_id': existing.get('id'),
             'message': 'This video has already been processed.',
         }
 
@@ -98,8 +131,8 @@ def run_pipeline(url: str, db_path=None) -> dict:
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             INSERT OR REPLACE INTO sources
-            (video_id, url, title, channel, thumbnail, duration_seconds, transcript, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?)
+            (video_id, url, title, channel, thumbnail, duration_seconds, transcript, source_type, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'youtube', 'processing', ?)
         """, (video.video_id, url, video.title, video.channel, video.thumbnail,
               video.duration_seconds, video.transcript, now))
         conn.commit()
@@ -108,42 +141,298 @@ def run_pipeline(url: str, db_path=None) -> dict:
         ).fetchone()[0]
         conn.close()
 
-        # Step 3: Chunk transcript
-        _update_status(video_id, 'processing', 'Analyzing content...', 35,
-                       title=video.title, channel=video.channel)
-        chunks = chunk_transcript(video.transcript)
-
-        # Step 4: Auto-detect domain
-        _update_status(video_id, 'processing', 'Detecting domain...', 45,
-                       title=video.title, channel=video.channel)
-        domain_result = detect_domain(
-            video.title, video.channel, chunks[0] if chunks else video.transcript, db_path
+        # Steps 3-7: shared pipeline
+        return _run_shared_pipeline(
+            video_id=video.video_id,
+            source_id=source_id,
+            transcript=video.transcript,
+            title=video.title,
+            channel=video.channel,
+            source_date=now,
+            db_path=db_path,
+            start_progress=35,
         )
-        domain_id = domain_result['domain_id']
-        domain_name = domain_result['domain_name']
+
+    except Exception as e:
+        logger.error(f"Pipeline failed for {url}: {e}", exc_info=True)
+        _update_status(video_id, 'error', 'Failed', 0, error=str(e))
+        try:
+            conn = sqlite3.connect(str(db_path))
+            conn.execute(
+                "UPDATE sources SET status = 'error', error_message = ? WHERE video_id = ?",
+                (str(e), video_id),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+        return {'status': 'error', 'video_id': video_id, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Article Pipeline
+# ══════════════════════════════════════════════════════════════
+
+def run_article_pipeline(url: str, db_path=None) -> dict:
+    """Run the pipeline for a web article URL."""
+    from article_ingest import ingest_article, generate_article_id
+
+    db_path = db_path or config.DB_PATH
+    source_vid = generate_article_id(url)
+
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''),
+                       source_id=existing.get('id'))
+        return {
+            'status': 'already_exists', 'video_id': source_vid,
+            'title': existing.get('title', ''),
+            'source_id': existing.get('id'),
+        }
+
+    try:
+        _update_status(source_vid, 'processing', 'Fetching article...', 10)
+        article = ingest_article(url)
+
+        _update_status(source_vid, 'processing', f'Extracted: {article.title[:40]}...', 25,
+                       title=article.title, channel=article.site_name)
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            INSERT OR REPLACE INTO sources
+            (video_id, url, title, channel, transcript, source_type, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'article', 'processing', ?)
+        """, (source_vid, url, article.title, article.site_name, article.text_content, now))
+        conn.commit()
+        source_id = conn.execute(
+            "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
+        ).fetchone()[0]
+        conn.close()
+
+        return _run_shared_pipeline(
+            video_id=source_vid,
+            source_id=source_id,
+            transcript=article.text_content,
+            title=article.title,
+            channel=article.site_name,
+            source_date=now,
+            db_path=db_path,
+            start_progress=35,
+        )
+
+    except Exception as e:
+        logger.error(f"Article pipeline failed for {url}: {e}", exc_info=True)
+        _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': source_vid, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# File Pipeline (PDF, DOCX, PPTX)
+# ══════════════════════════════════════════════════════════════
+
+def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None) -> dict:
+    """Run the pipeline for an uploaded document."""
+    from file_ingest import ingest_file
+
+    db_path = db_path or config.DB_PATH
+    source_vid = _generate_source_id("file")
+
+    try:
+        _update_status(source_vid, 'processing', f'Extracting text from {original_filename}...', 10,
+                       title=original_filename)
+
+        text_content, page_count = ingest_file(file_path, original_filename)
+
+        _update_status(source_vid, 'processing', f'Extracted text ({page_count} pages)', 25,
+                       title=original_filename, channel=source_type.upper())
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            INSERT INTO sources
+            (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?)
+        """, (source_vid, "", original_filename, source_type.upper(),
+              text_content, source_type, file_path, original_filename, now))
+        conn.commit()
+        source_id = conn.execute(
+            "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
+        ).fetchone()[0]
+        conn.close()
+
+        return _run_shared_pipeline(
+            video_id=source_vid,
+            source_id=source_id,
+            transcript=text_content,
+            title=original_filename,
+            channel=source_type.upper(),
+            source_date=now,
+            db_path=db_path,
+            start_progress=35,
+        )
+
+    except Exception as e:
+        logger.error(f"File pipeline failed for {original_filename}: {e}", exc_info=True)
+        _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': source_vid, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Image Pipeline
+# ══════════════════════════════════════════════════════════════
+
+def run_image_pipeline(file_path: str, original_filename: str, db_path=None) -> dict:
+    """Run the pipeline for an uploaded image/screenshot."""
+    from image_ingest import ingest_image
+
+    db_path = db_path or config.DB_PATH
+    source_vid = _generate_source_id("img")
+
+    try:
+        _update_status(source_vid, 'processing', 'Analyzing image with AI...', 10,
+                       title=original_filename)
+
+        text_content = ingest_image(file_path)
+
+        _update_status(source_vid, 'processing', 'Image analyzed', 30,
+                       title=original_filename, channel='Image')
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            INSERT INTO sources
+            (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at)
+            VALUES (?, ?, ?, 'Image', ?, 'image', ?, ?, 'processing', ?)
+        """, (source_vid, "", original_filename, text_content, file_path, original_filename, now))
+        conn.commit()
+        source_id = conn.execute(
+            "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
+        ).fetchone()[0]
+        conn.close()
+
+        return _run_shared_pipeline(
+            video_id=source_vid,
+            source_id=source_id,
+            transcript=text_content,
+            title=original_filename,
+            channel="Image",
+            source_date=now,
+            db_path=db_path,
+            start_progress=35,
+        )
+
+    except Exception as e:
+        logger.error(f"Image pipeline failed for {original_filename}: {e}", exc_info=True)
+        _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': source_vid, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Text Pipeline (pasted text)
+# ══════════════════════════════════════════════════════════════
+
+def run_text_pipeline(title: str, text_content: str, db_path=None) -> dict:
+    """Run the pipeline for pasted text."""
+    db_path = db_path or config.DB_PATH
+    source_vid = _generate_source_id("text")
+
+    try:
+        _update_status(source_vid, 'processing', 'Processing text...', 15,
+                       title=title)
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            INSERT INTO sources
+            (video_id, url, title, channel, transcript, source_type, status, created_at)
+            VALUES (?, '', ?, 'Text Note', ?, 'text', 'processing', ?)
+        """, (source_vid, title, text_content, now))
+        conn.commit()
+        source_id = conn.execute(
+            "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
+        ).fetchone()[0]
+        conn.close()
+
+        return _run_shared_pipeline(
+            video_id=source_vid,
+            source_id=source_id,
+            transcript=text_content,
+            title=title,
+            channel="Text Note",
+            source_date=now,
+            db_path=db_path,
+            start_progress=25,
+        )
+
+    except Exception as e:
+        logger.error(f"Text pipeline failed: {e}", exc_info=True)
+        _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': source_vid, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Reprocess Pipeline
+# ══════════════════════════════════════════════════════════════
+
+def reprocess_pipeline(source_id: int, db_path=None) -> dict:
+    """
+    Re-process an existing source with current prompts.
+
+    Loads the stored text, re-chunks, re-extracts insights, and re-synthesizes.
+    Does NOT re-fetch the original source.
+    """
+    db_path = db_path or config.DB_PATH
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    source = conn.execute(
+        "SELECT id, video_id, title, channel, transcript, domain_id FROM sources WHERE id = ?",
+        (source_id,),
+    ).fetchone()
+    conn.close()
+
+    if not source:
+        return {'status': 'error', 'error': 'Source not found'}
+
+    source = dict(source)
+    video_id = source['video_id']
+    transcript = source['transcript']
+
+    if not transcript or not transcript.strip():
+        _update_status(video_id, 'error', 'No text content stored', 0, error='No stored transcript to re-process')
+        return {'status': 'error', 'video_id': video_id, 'error': 'No text content to re-process'}
+
+    domain_id = source['domain_id']
+
+    try:
+        # Delete old insights
+        _update_status(video_id, 'processing', 'Re-analyzing content...', 10,
+                       title=source['title'], channel=source['channel'])
 
         conn = sqlite3.connect(str(db_path))
-        conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
+        conn.execute("DELETE FROM insights WHERE source_id = ?", (source_id,))
         conn.commit()
         conn.close()
 
-        _update_status(video_id, 'processing', f'Domain: {domain_name}', 50,
-                       title=video.title, channel=video.channel, domain=domain_name)
+        # Re-chunk and re-extract
+        chunks = chunk_transcript(transcript)
 
-        # Step 5: Extract insights
         all_insights = []
         for i, chunk in enumerate(chunks):
-            progress = 50 + int((i / max(len(chunks), 1)) * 25)
+            progress = 20 + int((i / max(len(chunks), 1)) * 40)
             _update_status(video_id, 'processing',
-                           f'Extracting insights ({i+1}/{len(chunks)})...', progress,
-                           title=video.title, channel=video.channel, domain=domain_name)
+                           f'Re-extracting insights ({i+1}/{len(chunks)})...', progress,
+                           title=source['title'], channel=source['channel'])
             insights = extract_insights(chunk, chunk_index=i)
             all_insights.extend(insights)
 
-        # Step 6: Store insights
-        _update_status(video_id, 'processing', 'Storing insights...', 80,
-                       title=video.title, channel=video.channel, domain=domain_name)
+        # Store new insights
+        _update_status(video_id, 'processing', 'Storing insights...', 70,
+                       title=source['title'], channel=source['channel'])
 
+        now = datetime.now(timezone.utc).isoformat()
         conn = sqlite3.connect(str(db_path))
         for insight in all_insights:
             conn.execute("""
@@ -160,48 +449,143 @@ def run_pipeline(url: str, db_path=None) -> dict:
                 insight.get('chunk_index', 0),
                 now,
             ))
-        conn.commit()
-        conn.close()
-
-        # Step 7: Re-synthesize
-        _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
-                       title=video.title, channel=video.channel, domain=domain_name)
-        synthesize_domain(domain_id, source_id, video.title, video.channel, db_path)
-
-        # Mark as processed
-        conn = sqlite3.connect(str(db_path))
         conn.execute(
-            "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
-            (datetime.now(timezone.utc).isoformat(), source_id),
+            "UPDATE sources SET processed_at = ? WHERE id = ?",
+            (now, source_id),
         )
         conn.commit()
         conn.close()
 
+        # Re-synthesize the full domain
+        _update_status(video_id, 'processing', 'Re-synthesizing knowledge...', 85,
+                       title=source['title'], channel=source['channel'])
+
+        resynthesize_domain_full(domain_id, db_path)
+
+        # Get domain name for status
+        conn = sqlite3.connect(str(db_path))
+        domain_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
+        domain_name = domain_row[0] if domain_row else None
+        conn.close()
+
         _update_status(video_id, 'complete', 'Done', 100,
-                       title=video.title, channel=video.channel, domain=domain_name,
-                       insights_count=len(all_insights))
+                       title=source['title'], channel=source['channel'],
+                       domain=domain_name, insights_count=len(all_insights))
 
-        logger.info(f"Pipeline complete: {video.title} → {domain_name} ({len(all_insights)} insights)")
-
+        logger.info(f"Reprocess complete: {source['title']} ({len(all_insights)} insights)")
         return {
             'status': 'complete', 'video_id': video_id,
-            'title': video.title, 'channel': video.channel,
-            'domain_name': domain_name, 'domain_id': domain_id,
-            'insights_count': len(all_insights),
-            'is_new_domain': domain_result.get('is_new', False),
+            'title': source['title'], 'insights_count': len(all_insights),
+            'domain_name': domain_name,
         }
 
     except Exception as e:
-        logger.error(f"Pipeline failed for {url}: {e}", exc_info=True)
+        logger.error(f"Reprocess failed for source {source_id}: {e}", exc_info=True)
         _update_status(video_id, 'error', 'Failed', 0, error=str(e))
-        try:
-            conn = sqlite3.connect(str(db_path))
-            conn.execute(
-                "UPDATE sources SET status = 'error', error_message = ? WHERE video_id = ?",
-                (str(e), video_id),
-            )
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass
         return {'status': 'error', 'video_id': video_id, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Shared Pipeline (steps 3-7, common to all source types)
+# ══════════════════════════════════════════════════════════════
+
+def _run_shared_pipeline(
+    video_id: str,
+    source_id: int,
+    transcript: str,
+    title: str,
+    channel: str,
+    source_date: str,
+    db_path=None,
+    start_progress: int = 35,
+) -> dict:
+    """
+    Shared pipeline steps: chunk → detect domain → extract insights → store → synthesize.
+
+    Used by all source type pipelines after they've ingested and stored the source.
+    """
+    db_path = db_path or config.DB_PATH
+
+    # Step 3: Chunk transcript
+    _update_status(video_id, 'processing', 'Analyzing content...', start_progress,
+                   title=title, channel=channel)
+    chunks = chunk_transcript(transcript)
+
+    # Step 4: Auto-detect domain
+    _update_status(video_id, 'processing', 'Detecting domain...', start_progress + 10,
+                   title=title, channel=channel)
+    domain_result = detect_domain(
+        title, channel, chunks[0] if chunks else transcript, db_path
+    )
+    domain_id = domain_result['domain_id']
+    domain_name = domain_result['domain_name']
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
+    conn.commit()
+    conn.close()
+
+    _update_status(video_id, 'processing', f'Domain: {domain_name}', start_progress + 15,
+                   title=title, channel=channel, domain=domain_name)
+
+    # Step 5: Extract insights
+    all_insights = []
+    for i, chunk in enumerate(chunks):
+        progress = (start_progress + 15) + int((i / max(len(chunks), 1)) * 25)
+        _update_status(video_id, 'processing',
+                       f'Extracting insights ({i+1}/{len(chunks)})...', progress,
+                       title=title, channel=channel, domain=domain_name)
+        insights = extract_insights(chunk, chunk_index=i)
+        all_insights.extend(insights)
+
+    # Step 6: Store insights
+    _update_status(video_id, 'processing', 'Storing insights...', 80,
+                   title=title, channel=channel, domain=domain_name)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(db_path))
+    for insight in all_insights:
+        conn.execute("""
+            INSERT INTO insights
+            (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            source_id, domain_id,
+            insight.get('title', 'Untitled'),
+            insight.get('content', ''),
+            insight.get('insight_type', 'general'),
+            insight.get('actionability', 'medium'),
+            insight.get('key_quote', ''),
+            insight.get('chunk_index', 0),
+            now,
+        ))
+    conn.commit()
+    conn.close()
+
+    # Step 7: Re-synthesize
+    _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
+                   title=title, channel=channel, domain=domain_name)
+    synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+
+    # Mark as processed
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
+        (datetime.now(timezone.utc).isoformat(), source_id),
+    )
+    conn.commit()
+    conn.close()
+
+    _update_status(video_id, 'complete', 'Done', 100,
+                   title=title, channel=channel, domain=domain_name,
+                   insights_count=len(all_insights))
+
+    logger.info(f"Pipeline complete: {title} → {domain_name} ({len(all_insights)} insights)")
+
+    return {
+        'status': 'complete', 'video_id': video_id,
+        'title': title, 'channel': channel,
+        'domain_name': domain_name, 'domain_id': domain_id,
+        'insights_count': len(all_insights),
+        'is_new_domain': domain_result.get('is_new', False),
+    }

@@ -16,8 +16,14 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).parent
 DATA_DIR = PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "intel_engine.db"
+UPLOADS_DIR = DATA_DIR / "uploads"
 
 DATA_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(exist_ok=True)
+
+# ── Upload limits ──
+MAX_UPLOAD_SIZE_MB = 50
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'pptx', 'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 # ── OpenAI ──
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

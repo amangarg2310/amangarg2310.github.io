@@ -101,9 +101,24 @@ def run_migrations(db_path=None):
         CREATE INDEX IF NOT EXISTS idx_syntheses_domain ON syntheses(domain_id, version DESC);
     """)
 
+    # Schema evolution — add columns for multi-source support
+    _add_column(conn, "sources", "source_type", "TEXT DEFAULT 'youtube'")
+    _add_column(conn, "sources", "file_path", "TEXT")
+    _add_column(conn, "sources", "original_filename", "TEXT")
+
     conn.commit()
     conn.close()
     logger.info("Migrations complete")
+
+
+def _add_column(conn, table: str, column: str, definition: str):
+    """Add a column if it doesn't exist (SQLite has no IF NOT EXISTS for ALTER)."""
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        logger.info(f"Added column {table}.{column}")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
 
 
 if __name__ == "__main__":

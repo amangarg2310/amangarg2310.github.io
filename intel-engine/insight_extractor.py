@@ -10,9 +10,9 @@ import config
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_PROMPT = """You are an expert technical note-taker. Your job is to extract GRANULAR, SPECIFIC, ACTIONABLE knowledge from this transcript — the kind of detail someone would need to actually DO what's being described.
+EXTRACTION_PROMPT = """You are an expert technical note-taker. Your job is to extract GRANULAR, SPECIFIC, ACTIONABLE knowledge from this content — the kind of detail someone would need to actually DO what's being described.
 
-This is likely a how-to or tutorial video. Capture the SPECIFICS, not just summaries:
+This could be from a video transcript, article, document, or notes. Capture the SPECIFICS, not just summaries:
 - Exact tool names, versions, settings, configurations mentioned
 - Step-by-step procedures (the actual steps, not "users can set up X")
 - Specific commands, parameters, URLs, file paths, menu locations
@@ -32,7 +32,7 @@ CRITICAL: Prefer MORE insights with SPECIFIC detail over fewer insights with vag
 Bad: "Users can set up daily briefs for topics of interest"
 Good: "Set up a daily brief by creating a new task in OpenClaw with the prompt 'Research [topic] and summarize top 5 developments from the last 24h', set schedule to 7am daily, output to Telegram channel"
 
-TRANSCRIPT CHUNK:
+CONTENT CHUNK:
 {chunk}
 
 Return ONLY a JSON array, no markdown:
@@ -52,7 +52,7 @@ def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
         response = client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You extract detailed, granular, actionable knowledge from transcripts. Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays."},
+                {"role": "system", "content": "You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays."},
                 {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
             ],
             temperature=0.3,

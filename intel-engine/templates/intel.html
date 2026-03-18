@@ -36,95 +36,171 @@
 
     {% if domain %}
     <!-- ══════════════════════════════════════════════════════════
-         DOMAIN DETAIL VIEW
+         DOMAIN DETAIL — Two-Panel Layout
          ══════════════════════════════════════════════════════════ -->
-    <div class="intel-hero compact">
-        <div class="intel-input-wrap">
-            <input type="text"
-                   class="intel-input"
-                   id="urlInput"
-                   placeholder="Add another video to {{ domain.name }}..."
-                   autocomplete="off"
-                   spellcheck="false">
-            <button class="intel-input-btn" id="ingestBtn" onclick="ingestVideo()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <div class="intel-detail-layout">
+
+        <!-- ── Sources Sidebar (Left) ── -->
+        <aside class="intel-sources-panel">
+            <div class="intel-sources-header">
+                <span class="intel-sources-title">Sources</span>
+                <span class="intel-sources-count">{{ sources|length if sources else 0 }}</span>
+            </div>
+
+            <!-- Add Source Button -->
+            <button class="intel-add-source-btn" onclick="toggleAddPanel()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                     <line x1="12" y1="5" x2="12" y2="19"/>
-                    <polyline points="19 12 12 19 5 12"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
+                Add source
             </button>
-        </div>
-        <div class="intel-status" id="statusCard"></div>
-    </div>
 
-    <div class="intel-detail">
-        <a href="{{ url_for('index') }}" class="intel-back">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            All Domains
-        </a>
-
-        <div class="intel-detail-header">
-            <div class="intel-detail-icon">{{ domain.icon }}</div>
-            <h1 class="intel-detail-title">{{ domain.name }}</h1>
-            <p class="intel-detail-meta">
-                {{ domain.source_count }} video{{ 's' if domain.source_count != 1 else '' }} &middot;
-                {{ domain.insight_count }} insight{{ 's' if domain.insight_count != 1 else '' }}
-                {% if synthesis %} &middot; Synthesis v{{ synthesis.version }}{% endif %}
-            </p>
-        </div>
-
-        <!-- Chat Interface -->
-        <div class="intel-chat">
-            <div class="intel-chat-header">
-                Ask anything about {{ domain.name }}
-            </div>
-            <div class="intel-chat-messages" id="chatMessages">
-                <div class="intel-chat-empty">
-                    Ask a question to explore what you've learned about {{ domain.name }}.
+            <!-- Add Source Panel (hidden by default) -->
+            <div class="intel-add-panel" id="addPanel">
+                <div class="intel-add-tabs">
+                    <button class="intel-add-tab active" onclick="switchAddTab('link')">Link</button>
+                    <button class="intel-add-tab" onclick="switchAddTab('upload')">Upload</button>
+                    <button class="intel-add-tab" onclick="switchAddTab('text')">Text</button>
+                </div>
+                <div class="intel-add-content">
+                    <!-- Link Tab -->
+                    <div class="intel-add-pane active" id="addPaneLink">
+                        <input type="text" class="intel-add-input" id="addLinkInput"
+                               placeholder="Paste YouTube or article URL..."
+                               onkeydown="if(event.key==='Enter')submitLink()">
+                        <button class="intel-add-submit" onclick="submitLink()">Add Link</button>
+                    </div>
+                    <!-- Upload Tab -->
+                    <div class="intel-add-pane" id="addPaneUpload">
+                        <div class="intel-drop-zone" id="sidebarDropZone"
+                             onclick="document.getElementById('sidebarFileInput').click()">
+                            <span class="intel-drop-zone-icon">📎</span>
+                            Drop files or click to browse
+                            <div style="margin-top:4px;font-size:11px;color:var(--intel-text-tertiary)">
+                                PDF, DOCX, PPTX, PNG, JPG
+                            </div>
+                        </div>
+                        <input type="file" class="intel-file-input" id="sidebarFileInput"
+                               accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
+                               onchange="uploadFile(this.files[0])">
+                    </div>
+                    <!-- Text Tab -->
+                    <div class="intel-add-pane" id="addPaneText">
+                        <input type="text" class="intel-add-input" id="addTextTitle"
+                               placeholder="Title (optional)" style="margin-bottom:6px">
+                        <textarea class="intel-add-textarea" id="addTextContent"
+                                  placeholder="Paste your notes, text, or content..."></textarea>
+                        <button class="intel-add-submit" onclick="submitText()">Add Text</button>
+                    </div>
                 </div>
             </div>
-            <div class="intel-chat-input-wrap">
-                <input type="text"
-                       class="intel-chat-input"
-                       id="chatInput"
-                       placeholder="What are the key strategies for..."
-                       autocomplete="off">
-                <button class="intel-chat-send" id="chatSendBtn" onclick="sendChat()">Ask</button>
+
+            <!-- Sidebar Processing Status -->
+            <div class="intel-sidebar-status" id="sidebarStatus">
+                <div class="intel-spinner small"></div>
+                <span id="sidebarStatusText">Processing...</span>
             </div>
-        </div>
 
-        <!-- Auto-Generated Brief / Synthesis -->
-        {% if synthesis %}
-        <div class="intel-brief-header">
-            <h2 class="intel-brief-title">Knowledge Brief</h2>
-            <span class="intel-brief-version">v{{ synthesis.version }} &middot; {{ synthesis.source_count }} sources &middot; {{ synthesis.insight_count }} insights</span>
-        </div>
-        <div class="intel-synthesis intel-animate-in">
-            {{ synthesis_html | safe }}
-        </div>
-        {% endif %}
-
-        <!-- Sources -->
-        {% if sources %}
-        <div class="intel-sources">
-            <div class="intel-sources-title">Sources ({{ sources|length }})</div>
-            {% for source in sources %}
-            <div class="intel-source-item intel-animate-in" style="animation-delay: {{ loop.index0 * 0.05 }}s">
-                {% if source.thumbnail %}
-                <img class="intel-source-thumb" src="{{ source.thumbnail }}" alt="" loading="lazy">
+            <!-- Source List -->
+            <div class="intel-source-list">
+                {% if sources %}
+                {% for source in sources %}
+                <div class="intel-source-item intel-animate-in" id="source-{{ source.id }}"
+                     style="animation-delay: {{ loop.index0 * 0.04 }}s"
+                     data-source-id="{{ source.id }}"
+                     data-video-id="{{ source.video_id }}">
+                    <div class="intel-source-type-icon">
+                        {% if source.source_type == 'youtube' or not source.source_type %}🎥
+                        {% elif source.source_type == 'article' %}📄
+                        {% elif source.source_type == 'pdf' %}📑
+                        {% elif source.source_type == 'docx' %}📝
+                        {% elif source.source_type == 'pptx' %}📊
+                        {% elif source.source_type == 'image' %}🖼️
+                        {% elif source.source_type == 'text' %}📋
+                        {% else %}📄{% endif %}
+                    </div>
+                    <div class="intel-source-item-info">
+                        <div class="intel-source-item-title">{{ source.title }}</div>
+                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights</div>
+                    </div>
+                    <div class="intel-source-actions">
+                        <button class="intel-source-action-btn reprocess" title="Re-process"
+                                onclick="event.stopPropagation(); reprocessSource({{ source.id }}, '{{ source.video_id }}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                        </button>
+                        <button class="intel-source-action-btn delete" title="Delete"
+                                onclick="event.stopPropagation(); showDeleteConfirm({{ source.id }})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Delete confirmation (hidden) -->
+                <div class="intel-source-confirm" id="confirm-{{ source.id }}">
+                    <div class="intel-source-confirm-text">Remove this source and re-synthesize?</div>
+                    <div class="intel-source-confirm-actions">
+                        <button class="intel-source-confirm-cancel" onclick="hideDeleteConfirm({{ source.id }})">Cancel</button>
+                        <button class="intel-source-confirm-remove" onclick="deleteSource({{ source.id }}, '{{ source.video_id }}')">Remove</button>
+                    </div>
+                </div>
+                {% endfor %}
                 {% else %}
-                <div class="intel-source-thumb"></div>
-                {% endif %}
-                <div class="intel-source-info">
-                    <div class="intel-source-name">{{ source.title }}</div>
-                    <div class="intel-source-channel">{{ source.channel }}</div>
+                <div style="padding:24px 8px;text-align:center;color:var(--intel-text-tertiary);font-size:13px;">
+                    No sources yet. Add a link, upload a file, or paste text to get started.
                 </div>
-                <div class="intel-source-insights">{{ source.insight_count }} insights</div>
+                {% endif %}
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
+        </aside>
+
+        <!-- ── Main Content (Right) ── -->
+        <main class="intel-main-content">
+            <div class="intel-detail-header">
+                <div class="intel-detail-icon">{{ domain.icon }}</div>
+                <h1 class="intel-detail-title">{{ domain.name }}</h1>
+                <p class="intel-detail-meta">
+                    {{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} &middot;
+                    {{ domain.insight_count }} insight{{ 's' if domain.insight_count != 1 else '' }}
+                    {% if synthesis %} &middot; Synthesis v{{ synthesis.version }}{% endif %}
+                </p>
+            </div>
+
+            <!-- Chat Interface -->
+            <div class="intel-chat">
+                <div class="intel-chat-header">
+                    Ask anything about {{ domain.name }}
+                </div>
+                <div class="intel-chat-messages" id="chatMessages">
+                    <div class="intel-chat-empty">
+                        Ask a question to explore what you've learned about {{ domain.name }}.
+                    </div>
+                </div>
+                <div class="intel-chat-input-wrap">
+                    <input type="text"
+                           class="intel-chat-input"
+                           id="chatInput"
+                           placeholder="What are the key strategies for..."
+                           autocomplete="off">
+                    <button class="intel-chat-send" id="chatSendBtn" onclick="sendChat()">Ask</button>
+                </div>
+            </div>
+
+            <!-- Knowledge Brief / Synthesis -->
+            {% if synthesis and synthesis.content %}
+            <div class="intel-brief-header">
+                <h2 class="intel-brief-title">Knowledge Brief</h2>
+                <span class="intel-brief-version">v{{ synthesis.version }} &middot; {{ synthesis.source_count }} sources &middot; {{ synthesis.insight_count }} insights</span>
+            </div>
+            <div class="intel-synthesis intel-animate-in">
+                {{ synthesis_html | safe }}
+            </div>
+            {% endif %}
+        </main>
     </div>
 
     {% else %}
@@ -132,24 +208,36 @@
          HOME VIEW — URL Input + Domain Grid
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-hero" id="heroSection">
-        <h1 class="intel-hero-title">Learn from any video.</h1>
+        <h1 class="intel-hero-title">Learn from any source.</h1>
         <p class="intel-hero-subtitle">
-            Paste a YouTube link and we'll extract every insight, organize it by topic, and build your knowledge base automatically.
+            Paste a link, upload a document, or add text — we'll extract every insight, organize by topic, and build your knowledge base automatically.
         </p>
         <div class="intel-input-wrap">
             <input type="text"
                    class="intel-input"
                    id="urlInput"
-                   placeholder="Paste a YouTube URL..."
+                   placeholder="Paste a YouTube or article URL..."
                    autocomplete="off"
                    spellcheck="false"
                    autofocus>
-            <button class="intel-input-btn" id="ingestBtn" onclick="ingestVideo()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                    <polyline points="12 5 19 12 12 19"/>
-                </svg>
-            </button>
+            <div class="intel-input-actions">
+                <button class="intel-upload-btn" title="Upload file" onclick="document.getElementById('homeFileInput').click()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                </button>
+                <button class="intel-input-btn" id="ingestBtn" onclick="ingestFromHome()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </button>
+            </div>
+            <input type="file" class="intel-file-input" id="homeFileInput"
+                   accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
+                   onchange="uploadFileFromHome(this.files[0])">
         </div>
         <div class="intel-status" id="statusCard"></div>
     </div>
@@ -172,7 +260,7 @@
                             <polygon points="23 7 16 12 23 17 23 7"/>
                             <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                         </svg>
-                        {{ d.source_count }} video{{ 's' if d.source_count != 1 else '' }}
+                        {{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}
                     </span>
                     <span class="intel-domain-stat">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -191,7 +279,7 @@
         <div class="intel-empty-icon">📚</div>
         <div class="intel-empty-title">Your knowledge base is empty</div>
         <div class="intel-empty-desc">
-            Paste a YouTube URL above to start building your first knowledge domain.
+            Paste a URL above, upload a document, or add text to start building your first knowledge domain.
         </div>
     </div>
     {% endif %}
@@ -201,7 +289,24 @@
 </div>
 
 <script>
-// ── URL Input & Ingestion ──
+// ══════════════════════════════════════════════════════════
+// Shared Utilities
+// ══════════════════════════════════════════════════════════
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function isUrl(str) {
+    return /^https?:\/\//i.test(str) || /^www\./i.test(str);
+}
+
+// ══════════════════════════════════════════════════════════
+// Home Page — URL Input & File Upload
+// ══════════════════════════════════════════════════════════
 
 const urlInput = document.getElementById('urlInput');
 const ingestBtn = document.getElementById('ingestBtn');
@@ -209,20 +314,16 @@ const statusCard = document.getElementById('statusCard');
 
 if (urlInput) {
     urlInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') ingestVideo();
+        if (e.key === 'Enter') ingestFromHome();
     });
 }
 
-function isYouTubeUrl(url) {
-    return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/.test(url);
-}
-
-function ingestVideo() {
+function ingestFromHome() {
     const url = urlInput.value.trim();
     if (!url) return;
-    if (!isYouTubeUrl(url)) {
-        showStatus('error', 'Not a YouTube URL', 'Please paste a valid YouTube video link.', 0);
-        return;
+    if (!isUrl(url)) {
+        // Prepend https:// and try
+        urlInput.value = 'https://' + url;
     }
 
     urlInput.disabled = true;
@@ -232,35 +333,64 @@ function ingestVideo() {
     fetch('/api/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url }),
+        body: JSON.stringify({ url: urlInput.value.trim() }),
     })
     .then(r => r.json())
     .then(data => {
         if (data.error) {
-            showStatus('error', 'Error', data.error, 0);
-            resetInput();
+            showHomeStatus('error', 'Error', data.error, 0);
+            resetHomeInput();
             return;
         }
         if (data.status === 'already_exists') {
-            showStatus('complete', data.title || 'Video', 'Already in your knowledge base.', 100);
-            resetInput();
+            showHomeStatus('complete', data.title || 'Source',
+                `Already in your knowledge base.`, 100, null, data.source_id);
+            resetHomeInput();
             return;
         }
-        pollStatus(data.video_id);
+        pollHomeStatus(data.video_id);
     })
     .catch(err => {
-        showStatus('error', 'Error', err.message, 0);
-        resetInput();
+        showHomeStatus('error', 'Error', err.message, 0);
+        resetHomeInput();
     });
 }
 
-function pollStatus(videoId) {
+function uploadFileFromHome(file) {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showHomeStatus('processing', file.name, 'Uploading...', 5);
+
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            showHomeStatus('error', 'Error', data.error, 0);
+            return;
+        }
+        pollHomeStatus(data.video_id);
+    })
+    .catch(err => {
+        showHomeStatus('error', 'Error', err.message, 0);
+    });
+
+    // Reset file input
+    document.getElementById('homeFileInput').value = '';
+}
+
+function pollHomeStatus(videoId) {
     const interval = setInterval(() => {
         fetch(`/api/status/${videoId}`)
             .then(r => r.json())
             .then(data => {
                 const stepText = data.status === 'error' ? (data.error || data.step) : data.step;
-                showStatus(data.status, data.title || 'Processing...', stepText, data.progress, data.domain);
+                showHomeStatus(data.status, data.title || 'Processing...', stepText, data.progress, data.domain);
 
                 if (data.status === 'complete') {
                     clearInterval(interval);
@@ -273,17 +403,19 @@ function pollStatus(videoId) {
                     }, 1200);
                 } else if (data.status === 'error') {
                     clearInterval(interval);
-                    resetInput();
+                    resetHomeInput();
                 }
             })
             .catch(() => {
                 clearInterval(interval);
-                resetInput();
+                resetHomeInput();
             });
     }, 1000);
 }
 
-function showStatus(status, title, step, progress, domain) {
+function showHomeStatus(status, title, step, progress, domain, sourceId) {
+    if (!statusCard) return;
+
     let iconContent = '';
     let iconClass = '';
     let fillClass = '';
@@ -291,7 +423,7 @@ function showStatus(status, title, step, progress, domain) {
     if (status === 'processing') {
         iconContent = '<div class="intel-spinner"></div>';
         iconClass = 'processing';
-    } else if (status === 'complete') {
+    } else if (status === 'complete' || status === 'already_exists') {
         iconContent = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
         iconClass = 'complete';
         fillClass = 'complete';
@@ -301,13 +433,18 @@ function showStatus(status, title, step, progress, domain) {
         fillClass = 'error';
     }
 
+    let stepHtml = escapeHtml(step || '');
+    if (sourceId) {
+        stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+    }
+
     statusCard.innerHTML = `
         <div class="intel-status-card">
             <div class="intel-status-header">
                 <div class="intel-status-icon ${iconClass}">${iconContent}</div>
                 <div class="intel-status-info">
                     <div class="intel-status-title">${escapeHtml(title)}</div>
-                    <div class="intel-status-step">${escapeHtml(step || '')}</div>
+                    <div class="intel-status-step">${stepHtml}</div>
                 </div>
             </div>
             <div class="intel-progress-track">
@@ -318,7 +455,21 @@ function showStatus(status, title, step, progress, domain) {
     statusCard.classList.add('active');
 }
 
-function resetInput() {
+function reprocessFromHome(sourceId) {
+    showHomeStatus('processing', 'Re-processing...', 'Starting...', 5);
+    fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                showHomeStatus('error', 'Error', data.error, 0);
+                return;
+            }
+            pollHomeStatus(data.video_id);
+        })
+        .catch(err => showHomeStatus('error', 'Error', err.message, 0));
+}
+
+function resetHomeInput() {
     if (urlInput) urlInput.disabled = false;
     if (ingestBtn) {
         ingestBtn.disabled = false;
@@ -326,14 +477,276 @@ function resetInput() {
     }
 }
 
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+
+// ══════════════════════════════════════════════════════════
+// Domain Detail — Sources Sidebar
+// ══════════════════════════════════════════════════════════
+
+function toggleAddPanel() {
+    const panel = document.getElementById('addPanel');
+    if (panel) {
+        panel.classList.toggle('active');
+    }
 }
 
-// ── Chat Interface ──
+function switchAddTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.intel-add-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Update panes
+    document.querySelectorAll('.intel-add-pane').forEach(p => p.classList.remove('active'));
+    const paneId = {link: 'addPaneLink', upload: 'addPaneUpload', text: 'addPaneText'}[tab];
+    const pane = document.getElementById(paneId);
+    if (pane) pane.classList.add('active');
+}
+
+function submitLink() {
+    const input = document.getElementById('addLinkInput');
+    let url = input.value.trim();
+    if (!url) return;
+    if (!isUrl(url)) url = 'https://' + url;
+
+    input.disabled = true;
+    showSidebarStatus('Processing...');
+
+    fetch('/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            input.disabled = false;
+            alert(data.error);
+            return;
+        }
+        if (data.status === 'already_exists') {
+            if (data.source_id) {
+                showSidebarStatus('Re-processing...');
+                reprocessSource(data.source_id, data.video_id);
+            } else {
+                hideSidebarStatus();
+                input.disabled = false;
+            }
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(err => {
+        hideSidebarStatus();
+        input.disabled = false;
+    });
+}
+
+function uploadFile(file) {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showSidebarStatus(`Uploading ${file.name}...`);
+
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            alert(data.error);
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(err => {
+        hideSidebarStatus();
+    });
+
+    document.getElementById('sidebarFileInput').value = '';
+}
+
+function submitText() {
+    const titleInput = document.getElementById('addTextTitle');
+    const contentInput = document.getElementById('addTextContent');
+    const content = contentInput.value.trim();
+    if (!content) return;
+
+    const title = titleInput.value.trim() || content.substring(0, 60) + '...';
+
+    contentInput.disabled = true;
+    titleInput.disabled = true;
+    showSidebarStatus('Processing text...');
+
+    fetch('/api/ingest-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, content: content }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            contentInput.disabled = false;
+            titleInput.disabled = false;
+            alert(data.error);
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(err => {
+        hideSidebarStatus();
+        contentInput.disabled = false;
+        titleInput.disabled = false;
+    });
+}
+
+function showSidebarStatus(text) {
+    const el = document.getElementById('sidebarStatus');
+    const textEl = document.getElementById('sidebarStatusText');
+    if (el && textEl) {
+        textEl.textContent = text;
+        el.classList.add('active');
+    }
+}
+
+function hideSidebarStatus() {
+    const el = document.getElementById('sidebarStatus');
+    if (el) el.classList.remove('active');
+}
+
+function pollSidebarStatus(videoId) {
+    const interval = setInterval(() => {
+        fetch(`/api/status/${videoId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.step) showSidebarStatus(data.step);
+
+                if (data.status === 'complete') {
+                    clearInterval(interval);
+                    showSidebarStatus('Done! Reloading...');
+                    setTimeout(() => window.location.reload(), 800);
+                } else if (data.status === 'error') {
+                    clearInterval(interval);
+                    hideSidebarStatus();
+                }
+            })
+            .catch(() => {
+                clearInterval(interval);
+                hideSidebarStatus();
+            });
+    }, 1000);
+}
+
+// ── Source Management ──
+
+function reprocessSource(sourceId, videoId) {
+    const item = document.getElementById(`source-${sourceId}`);
+    if (item) item.classList.add('processing');
+
+    showSidebarStatus('Re-processing...');
+
+    fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                hideSidebarStatus();
+                if (item) item.classList.remove('processing');
+                return;
+            }
+            pollSidebarStatus(data.video_id);
+        })
+        .catch(() => {
+            hideSidebarStatus();
+            if (item) item.classList.remove('processing');
+        });
+}
+
+function showDeleteConfirm(sourceId) {
+    document.querySelectorAll('.intel-source-confirm').forEach(c => c.classList.remove('active'));
+    const confirm = document.getElementById(`confirm-${sourceId}`);
+    if (confirm) confirm.classList.add('active');
+}
+
+function hideDeleteConfirm(sourceId) {
+    const confirm = document.getElementById(`confirm-${sourceId}`);
+    if (confirm) confirm.classList.remove('active');
+}
+
+function deleteSource(sourceId, videoId) {
+    const item = document.getElementById(`source-${sourceId}`);
+    const confirm = document.getElementById(`confirm-${sourceId}`);
+    if (item) item.classList.add('deleting');
+    if (confirm) confirm.classList.remove('active');
+
+    showSidebarStatus('Removing source...');
+
+    fetch(`/api/source/${sourceId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                hideSidebarStatus();
+                if (item) item.classList.remove('deleting');
+                return;
+            }
+
+            if (data.status === 'resynthesizing') {
+                showSidebarStatus('Re-synthesizing...');
+                // Poll for completion
+                const checkInterval = setInterval(() => {
+                    fetch(`/api/status/${videoId}`)
+                        .then(r => r.json())
+                        .then(status => {
+                            if (status.status === 'complete' || status.status === 'unknown') {
+                                clearInterval(checkInterval);
+                                window.location.reload();
+                            }
+                        })
+                        .catch(() => {
+                            clearInterval(checkInterval);
+                            window.location.reload();
+                        });
+                }, 1500);
+            } else {
+                // Cleared or deleted — just reload
+                setTimeout(() => window.location.reload(), 500);
+            }
+        })
+        .catch(() => {
+            hideSidebarStatus();
+            if (item) item.classList.remove('deleting');
+        });
+}
+
+// ── Drag and Drop ──
+
+const dropZone = document.getElementById('sidebarDropZone');
+if (dropZone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        });
+    });
+    dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) uploadFile(files[0]);
+    });
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Chat Interface
+// ══════════════════════════════════════════════════════════
 
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
