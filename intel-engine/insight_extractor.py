@@ -10,17 +10,27 @@ import config
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_PROMPT = """You are an expert knowledge analyst. Extract structured insights from this transcript chunk.
+EXTRACTION_PROMPT = """You are an expert technical note-taker. Your job is to extract GRANULAR, SPECIFIC, ACTIONABLE knowledge from this transcript — the kind of detail someone would need to actually DO what's being described.
+
+This is likely a how-to or tutorial video. Capture the SPECIFICS, not just summaries:
+- Exact tool names, versions, settings, configurations mentioned
+- Step-by-step procedures (the actual steps, not "users can set up X")
+- Specific commands, parameters, URLs, file paths, menu locations
+- Concrete numbers, thresholds, recommended values
+- Workarounds, gotchas, and "what NOT to do" warnings
+- Specific examples and use cases described
+- Comparisons between approaches (with the speaker's recommendation and WHY)
 
 For each distinct insight, provide:
-- title: A clear, concise title (5-10 words)
-- content: The full insight explained clearly (2-4 sentences)
-- insight_type: One of: strategy, tactic, framework, case_study, principle, warning, tool, metric
-- actionability: One of: high (immediately actionable), medium (needs context), low (theoretical)
-- key_quote: The most impactful direct quote from this section (if any)
+- title: A clear, specific title (5-12 words) — e.g. "Install OpenClaw via Docker on Mac" not "Installation Process"
+- content: The FULL practical detail — include specific steps, exact names, config values, commands. Write as if someone needs to follow along without watching the video. Can be 3-8 sentences. Do NOT summarize vaguely — be specific.
+- insight_type: One of: how_to, setup, config, workflow, tool, warning, comparison, tip, concept, troubleshooting
+- actionability: One of: high (specific steps to follow), medium (needs adaptation), low (background knowledge)
+- key_quote: The most useful direct quote from this section (if any)
 
-Return a JSON array of insights. Extract ALL meaningful insights.
-If the transcript is casual/rambling, distill the core points.
+CRITICAL: Prefer MORE insights with SPECIFIC detail over fewer insights with vague summaries.
+Bad: "Users can set up daily briefs for topics of interest"
+Good: "Set up a daily brief by creating a new task in OpenClaw with the prompt 'Research [topic] and summarize top 5 developments from the last 24h', set schedule to 7am daily, output to Telegram channel"
 
 TRANSCRIPT CHUNK:
 {chunk}
@@ -42,11 +52,11 @@ def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
         response = client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You extract structured knowledge from transcripts. Return only valid JSON arrays."},
+                {"role": "system", "content": "You extract detailed, granular, actionable knowledge from transcripts. Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays."},
                 {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
             ],
             temperature=0.3,
-            max_tokens=2000,
+            max_tokens=4000,
         )
 
         content = response.choices[0].message.content.strip()
