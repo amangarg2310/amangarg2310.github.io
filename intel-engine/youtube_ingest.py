@@ -110,31 +110,40 @@ def _fetch_transcript_supadata(video_id: str) -> str:
     if not api_key:
         return ""
 
-    url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&text=true"
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    api_url = f"https://api.supadata.ai/v1/transcript?url={urllib.request.quote(video_url, safe='')}&mode=native"
     try:
-        req = urllib.request.Request(url, headers={
+        req = urllib.request.Request(api_url, headers={
             'x-api-key': api_key,
         })
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode())
 
-        # Supadata returns {content: "full transcript text"} when text=true
+        # Supadata returns {content: [...segments...], lang: "en"}
         content = data.get('content', '')
-        if content:
+
+        # If content is a string, return directly
+        if isinstance(content, str) and content.strip():
             logger.info(f"Got transcript via Supadata for {video_id}")
             return content
 
-        # Or it may return a list of segments
-        segments = data.get('segments', data.get('transcript', []))
-        if segments and isinstance(segments, list):
+        # If content is a list of segments [{text, offset, duration}]
+        if isinstance(content, list) and content:
             text = " ".join(
                 s.get('text', '') if isinstance(s, dict) else str(s)
-                for s in segments
+                for s in content
             )
             if text.strip():
                 logger.info(f"Got transcript via Supadata for {video_id}")
                 return text
 
+    except urllib.error.HTTPError as e:
+        body = ''
+        try:
+            body = e.read().decode()
+        except Exception:
+            pass
+        logger.warning(f"Supadata API error for {video_id}: HTTP {e.code} - {body}")
     except Exception as e:
         logger.warning(f"Supadata transcript fetch failed for {video_id}: {e}")
 
