@@ -116,16 +116,21 @@ def _fetch_transcript_supadata(video_id: str) -> str:
     try:
         from supadata import Supadata
         client = Supadata(api_key=api_key)
-        transcript = client.youtube.transcript(url=video_url)
+        transcript = client.transcript(url=video_url, mode="native")
         if transcript and transcript.content:
-            # content is a list of TranscriptEntry objects
-            text = " ".join(
-                entry.text if hasattr(entry, 'text') else str(entry)
-                for entry in transcript.content
-            )
-            if text.strip():
-                logger.info(f"Got transcript via Supadata SDK for {video_id}")
-                return text
+            # content is a list of TranscriptEntry objects or a string
+            if isinstance(transcript.content, str):
+                if transcript.content.strip():
+                    logger.info(f"Got transcript via Supadata SDK for {video_id}")
+                    return transcript.content
+            elif isinstance(transcript.content, list):
+                text = " ".join(
+                    entry.text if hasattr(entry, 'text') else str(entry)
+                    for entry in transcript.content
+                )
+                if text.strip():
+                    logger.info(f"Got transcript via Supadata SDK for {video_id}")
+                    return text
     except ImportError:
         logger.info("Supadata SDK not installed, trying raw HTTP")
     except Exception as e:

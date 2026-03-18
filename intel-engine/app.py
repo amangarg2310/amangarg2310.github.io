@@ -19,6 +19,9 @@ from flask import (
 import config
 from migrations import run_migrations
 
+# Run migrations at import time so they execute under gunicorn too
+run_migrations()
+
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32).hex())
 
@@ -262,9 +265,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-
-    # Run migrations
-    run_migrations()
 
     print(f"\n  Domain Intelligence Engine")
     print(f"  Running at: http://localhost:{args.port}\n")
