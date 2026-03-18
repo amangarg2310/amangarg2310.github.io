@@ -1,9 +1,15 @@
 """
 YouTube video ingestion — fetch metadata and transcript from a YouTube URL.
+
+Uses YouTube oEmbed API for metadata (no auth required, works on cloud servers)
+and youtube-transcript-api for transcripts.
 """
 
+import json
 import logging
 import re
+import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from typing import Optional
 
@@ -36,36 +42,32 @@ def extract_video_id(url: str) -> Optional[str]:
 
 
 def fetch_video_metadata(video_id: str) -> dict:
-    """Fetch video metadata using yt-dlp (no download)."""
-    try:
-        import yt_dlp
-    except ImportError:
-        raise ImportError("yt-dlp is required. Install with: pip install yt-dlp")
-
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'skip_download': True,
-        'no_check_certificates': True,
-    }
+    """Fetch video metadata using YouTube oEmbed API (no auth, no bot detection)."""
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    oembed_url = f"https://www.youtube.com/oembed?url={urllib.request.quote(video_url, safe='')}&format=json"
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-    except Exception as e:
-        error_msg = str(e).lower()
-        if 'private' in error_msg or 'unavailable' in error_msg:
+        req = urllib.request.Request(oembed_url, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; IntelEngine/1.0)',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 401 or e.code == 403:
             raise ValueError(f"Video is private or unavailable: {video_id}")
-        elif 'age' in error_msg:
-            raise ValueError(f"Video is age-restricted and cannot be accessed: {video_id}")
+        elif e.code == 404:
+            raise ValueError(f"Video not found: {video_id}")
         else:
-            raise ValueError(f"Could not fetch video metadata (yt-dlp may need updating): {e}")
+            raise ValueError(f"Could not fetch video metadata (HTTP {e.code}): {video_id}")
+    except Exception as e:
+        raise ValueError(f"Could not fetch video metadata: {e}")
 
+    # oEmbed gives title, author_name, thumbnail_url but not duration
     return {
-        'title': info.get('title', 'Untitled'),
-        'channel': info.get('channel', info.get('uploader', 'Unknown')),
-        'thumbnail': info.get('thumbnail', ''),
-        'duration': info.get('duration', 0),
+        'title': data.get('title', 'Untitled'),
+        'channel': data.get('author_name', 'Unknown'),
+        'thumbnail': data.get('thumbnail_url', f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'),
+        'duration': 0,  # oEmbed doesn't provide duration; not critical for pipeline
     }
 
 
