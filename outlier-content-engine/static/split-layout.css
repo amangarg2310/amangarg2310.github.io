@@ -1,0 +1,291 @@
+/*
+ * Split Layout Styles - Signal AI Design
+ * Two-panel layout with chat (left) and content (right)
+ */
+
+/* Split Layout Container */
+.page-split-layout {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    height: calc(100vh - 80px);
+    gap: 0;
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+}
+
+/* Chat Panel (Left) */
+.split-panel-chat {
+    background: #0a0f1e; /* Darker than main bg */
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: sticky;
+    top: 0;
+    height: calc(100vh - 80px);
+}
+
+/* Content Panel (Right) */
+.split-panel-content {
+    background: var(--bg);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
+}
+
+/* Platform Badge Overlay (Top-Left) */
+.platform-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(8px);
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.platform-badge svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.badge-instagram {
+    border: 1px solid rgba(240, 148, 51, 0.5);
+}
+
+.badge-tiktok {
+    border: 1px solid rgba(0, 242, 234, 0.5);
+}
+
+/* Category Tags Overlay (Top-Right) */
+.category-tags {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 2;
+}
+
+.tag-pill {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+/* Tag color variations */
+.tag-0 { background: #00ccff; color: #000; }
+.tag-1 { background: #a855f7; color: #fff; }
+.tag-2 { background: #fb923c; color: #000; }
+.tag-3 { background: #ec4899; color: #fff; }
+.tag-4 { background: #10b981; color: #000; }
+
+/* Card Media Container */
+.card-media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/5; /* Instagram standard */
+    overflow: hidden;
+    border-radius: 12px 12px 0 0;
+    background: var(--card);
+}
+
+.card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.card-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Gradient fallback for missing images */
+.gradient-fallback {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+}
+
+.gradient-fallback.grad-0 {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+}
+
+.gradient-fallback.grad-1 {
+    background: linear-gradient(135deg, #00ccff, #0ea5e9);
+}
+
+.gradient-fallback.grad-2 {
+    background: linear-gradient(135deg, #fb923c, #f59e0b);
+}
+
+.gradient-fallback.grad-3 {
+    background: linear-gradient(135deg, #10b981, #14b8a6);
+}
+
+.gradient-fallback.grad-4 {
+    background: linear-gradient(135deg, #ec4899, #f43f5e);
+}
+
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    padding: 16px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.filter-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.filter-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pill {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.pill.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+.pill:hover:not(.active) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Enhanced Card Hover Effects */
+.outlier-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.outlier-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(34, 211, 238, 0.2);
+}
+
+.outlier-card:hover .card-media::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1200px) {
+    .page-split-layout {
+        grid-template-columns: 350px 1fr;
+    }
+}
+
+@media (max-width: 1024px) {
+    .page-split-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: 50vh 1fr;
+        height: auto;
+    }
+
+    .split-panel-chat {
+        height: 50vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+    }
+
+    .split-panel-content {
+        height: auto;
+        min-height: 100vh;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-split-layout {
+        grid-template-rows: 40vh 1fr;
+    }
+
+    .filter-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .outlier-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .platform-badge {
+        font-size: 11px;
+        padding: 4px 10px;
+        gap: 4px;
+    }
+
+    .platform-badge svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .tag-pill {
+        font-size: 9px;
+        padding: 3px 8px;
+    }
+
+    .category-tags {
+        top: 8px;
+        right: 8px;
+        gap: 4px;
+    }
+}

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signal AI - Outlier Content</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/split-layout.css">
+    <style>
+        /* Override base layout for split-screen */
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* Split Container */
+        .split-container {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            height: 100vh;
+            background: var(--bg);
+        }
+
+        /* Left: Chat Panel */
+        .chat-panel {
+            background: #0a0f1e;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Chat Header */
+        .chat-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chat-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .chat-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), #0ea5e9);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .chat-subtitle {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-left: 44px;
+        }
+
+        /* Chat Messages Area */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Chat Message */
+        .chat-message {
+            display: flex;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Insight Cards */
+        .insight-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 8px;
+        }
+
+        .insight-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .insight-icon {
+            font-size: 16px;
+        }
+
+        .insight-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .insight-metric {
+            background: var(--accent);
+            color: #000;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: auto;
+        }
+
+        .insight-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .insight-desc {
+            font-size: 13px;
+            color: var(--text-dim);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .insight-link {
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .insight-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Chat Input */
+        .chat-input-area {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .chat-input-wrapper {
+            position: relative;
+        }
+
+        .chat-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        /* Right: Content Panel */
+        .content-panel {
+            background: var(--bg);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Content Header with Filters */
+        .content-header {
+            padding: 24px 32px 0;
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 10;
+        }
+
+        .content-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .content-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .content-count {
+            background: rgba(34, 211, 238, 0.1);
+            color: var(--accent);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .split-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 50vh 1fr;
+            }
+
+            .chat-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="split-container">
+    <!-- Left Panel: Chat -->
+    <div class="chat-panel">
+        <!-- Chat Header -->
+        <div class="chat-header">
+            <div class="chat-brand">
+                <div class="chat-brand-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                    </svg>
+                </div>
+                <span class="chat-brand-name">Signal AI</span>
+            </div>
+            <p class="chat-subtitle">Outlier Content - {{ outliers|length if outliers else 0 }} posts</p>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-message">
+                <div class="message-avatar">S</div>
+                <div>
+                    <div class="message-content">
+                        Welcome back. I've been monitoring your sector. Which brand or competitor set should we analyze today?
+                    </div>
+                    <div class="message-time">Just now</div>
+                </div>
+            </div>
+
+            {% if insights %}
+            <div class="chat-message">
+                <div class="message-avatar">S</div>
+                <div style="flex: 1;">
+                    <div class="message-content">
+                        {{ insights.summary }}
+                    </div>
+
+                    {% if insights.patterns %}
+                    {% for pattern in insights.patterns[:2] %}
+                    <div class="insight-card">
+                        <div class="insight-header">
+                            <span class="insight-icon">📊</span>
+                            <span class="insight-label">PATTERN</span>
+                            <span class="insight-metric">{{ pattern.metric }}</span>
+                        </div>
+                        <div class="insight-title">{{ pattern.name }}</div>
+                        <div class="insight-desc">{{ pattern.description }}</div>
+                        <a href="#" class="insight-link" onclick="filterByPattern('{{ pattern.name }}'); return false;">
+                            View related posts →
+                        </a>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+
+                    {% if insights.franchises %}
+                    {% for franchise in insights.franchises[:1] %}
+                    <div class="insight-card">
+                        <div class="insight-header">
+                            <span class="insight-icon">🎬</span>
+                            <span class="insight-label">FRANCHISE</span>
+                            <span class="insight-metric">{{ franchise.retention_score }}</span>
+                        </div>
+                        <div class="insight-title">{{ franchise.name }}</div>
+                        <div class="insight-desc">{{ franchise.description }}</div>
+                        <a href="#" class="insight-link">View related posts →</a>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+
+                    <div class="message-time">{{ insights.outlier_count }} outliers analyzed</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Chat Input -->
+        <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+                <input
+                    type="text"
+                    class="chat-input"
+                    id="chatInput"
+                    placeholder="Ask about your competitors..."
+                    autocomplete="off"
+                >
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel: Content Grid -->
+    <div class="content-panel">
+        <!-- Content Header -->
+        <div class="content-header">
+            <div class="content-title-row">
+                <h1 class="content-title">Outlier Content</h1>
+                <span class="content-count">{{ outliers|length if outliers else 0 }}</span>
+            </div>
+
+            <!-- Filter Pills -->
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <span class="filter-label">PLATFORM</span>
+                    <div class="filter-pills">
+                        <button class="pill {% if not selected_platform %}active{% endif %}"
+                                onclick="applyFilter('platform', '')">All</button>
+                        <button class="pill {% if selected_platform == 'instagram' %}active{% endif %}"
+                                onclick="applyFilter('platform', 'instagram')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+                            Instagram
+                        </button>
+                        <button class="pill {% if selected_platform == 'tiktok' %}active{% endif %}"
+                                onclick="applyFilter('platform', 'tiktok')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+                            TikTok
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">SORT BY</span>
+                    <div class="filter-pills">
+                        <button class="pill {% if sort_by == 'score' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'score')">Score</button>
+                        <button class="pill {% if sort_by == 'saves' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'saves')">Saves</button>
+                        <button class="pill {% if sort_by == 'shares' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'shares')">Shares</button>
+                        <button class="pill {% if sort_by == 'date' %}active{% endif %}"
+                                onclick="applyFilter('sort', 'date')">Recent</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Grid -->
+        <div style="padding: 24px 32px;">
+            {% if outliers %}
+            <div class="outlier-grid">
+                {% for post in outliers %}
+                <div class="outlier-card" style="animation-delay: {{ loop.index0 * 0.04 }}s">
+                    <!-- Card Media Container with Overlays -->
+                    <div class="card-media">
+                        <!-- Post Image/Video -->
+                        {% if post.media_url %}
+                            {% if post.media_type == 'video' %}
+                            <video src="{{ post.media_url }}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>
+                            {% else %}
+                            <img src="{{ post.media_url }}" alt="{{ post.competitor_name }} post" loading="lazy">
+                            {% endif %}
+                        {% else %}
+                            {% set grad_class = "grad-" ~ (loop.index0 % 5) %}
+                            <div class="gradient-fallback {{ grad_class }}"></div>
+                        {% endif %}
+
+                        <!-- Platform Badge (Top-Left) -->
+                        <div class="platform-badge {% if post.platform == 'instagram' %}badge-instagram{% else %}badge-tiktok{% endif %}">
+                            {% if post.platform == 'tiktok' %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.51a8.27 8.27 0 004.76 1.5v-3.4a4.85 4.85 0 01-1-.08z"/></svg>
+                            {% else %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+                            {% endif %}
+                            @{{ post.competitor_handle }}
+                        </div>
+
+                        <!-- Category Tags (Top-Right) -->
+                        {% if post.content_tags %}
+                        <div class="category-tags">
+                            {% for tag in post.content_tags[:3] %}
+                            <span class="tag-pill tag-{{ loop.index0 % 5 }}">{{ tag }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Engagement Score (Bottom-Right) -->
+                        <div class="eng-score" style="position:absolute;bottom:12px;right:12px;z-index:2;">
+                            {% set pct = post.engagement_score_pct %}
+                            {% set circ = 251.2 %}
+                            {% set offset = circ - (circ * pct / 100) %}
+                            {% if pct >= 90 %}{% set ring_class = "ring-cyan" %}
+                            {% elif pct >= 75 %}{% set ring_class = "ring-green" %}
+                            {% elif pct >= 50 %}{% set ring_class = "ring-yellow" %}
+                            {% else %}{% set ring_class = "ring-muted" %}{% endif %}
+                            <svg viewBox="0 0 88 88" class="score-svg">
+                                <circle class="bg-ring" cx="44" cy="44" r="40"/>
+                                <circle class="fg-ring {{ ring_class }}" cx="44" cy="44" r="40"
+                                        stroke-dasharray="{{ circ }}"
+                                        stroke-dashoffset="{{ offset }}"
+                                        style="animation: scoreRing 1s ease-out {{ loop.index0 * 0.08 }}s both"/>
+                            </svg>
+                            <span class="score-val">{{ pct }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="outlier-card-body">
+                        {% if post.caption %}
+                        <p class="outlier-caption">"{{ post.caption[:180] }}{% if post.caption|length > 180 %}...{% endif %}"</p>
+                        {% else %}
+                        <p class="outlier-caption text-muted">(No caption)</p>
+                        {% endif %}
+
+                        <!-- Stats -->
+                        <div class="outlier-stats">
+                            <div class="stat-item">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                                {{ "{:,}".format(post.likes) if post.likes else '0' }}
+                            </div>
+                            <div class="stat-item">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                                {{ "{:,}".format(post.comments) if post.comments else '0' }}
+                            </div>
+                            {% if post.saves %}
+                            <div class="stat-item">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                                {{ "{:,}".format(post.saves) }}
+                            </div>
+                            {% endif %}
+                            {% if post.shares %}
+                            <div class="stat-item">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                                {{ "{:,}".format(post.shares) }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="1.5">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="M21 21l-4.35-4.35"></path>
+                </svg>
+                <h3>No outlier posts found</h3>
+                <p>Run an analysis to find viral content from your competitors.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function applyFilter(key, value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set(key, value);
+    window.location.href = url.toString();
+}
+
+function filterByPattern(patternName) {
+    // Filter posts by pattern - you can implement custom logic here
+    console.log('Filtering by pattern:', patternName);
+}
+
+// Chat input handling
+const chatInput = document.getElementById('chatInput');
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && chatInput.value.trim()) {
+        console.log('Chat message:', chatInput.value);
+        // TODO: Send to chat endpoint
+        chatInput.value = '';
+    }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Edit Category{% endblock %}
+{% block page_title %}Edit Category: {{ vertical.name }}{% endblock %}
+{% block page_subtitle %}Add or remove brands from this category{% endblock %}
+
+{% block content %}
+
+<!-- Current Brands -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Current Brands</div>
+            <div class="card-subtitle">{{ vertical.brands|length }} brands being tracked</div>
+        </div>
+    </div>
+
+    {% if vertical.brands %}
+    <div class="tag-list">
+        {% for brand in vertical.brands %}
+        <span class="tag">
+            {% if brand.brand_name %}{{ brand.brand_name }} {% endif %}
+            {% if brand.instagram_handle %}
+                <span style="background:var(--bg-tertiary);padding:2px 6px;border-radius:3px;font-size:10px;margin-right:4px">IG</span>@{{ brand.instagram_handle }}
+            {% endif %}
+            {% if brand.tiktok_handle %}
+                <span style="background:var(--bg-tertiary);padding:2px 6px;border-radius:3px;font-size:10px;margin:0 4px">TT</span>@{{ brand.tiktok_handle }}
+            {% endif %}
+            <form method="POST" action="{{ url_for('remove_brand_from_vertical') }}" style="display:inline;margin:0">
+                <input type="hidden" name="vertical_name" value="{{ vertical.name }}">
+                <input type="hidden" name="instagram_handle" value="{{ brand.instagram_handle }}">
+                <button type="submit" class="tag-remove"
+                        onclick="return confirm('Remove this brand?')"
+                        style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:16px;line-height:1;padding:0">&times;</button>
+            </form>
+        </span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No brands added yet</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add More Brands -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Add More Brands</div>
+    </div>
+
+    <form method="POST" action="{{ url_for('add_brand_to_vertical') }}">
+        <input type="hidden" name="vertical_name" value="{{ vertical.name }}">
+
+        <!-- Quick Add -->
+        <div class="form-group">
+            <label class="form-label">Quick Add</label>
+            <div class="flex gap-8" style="max-width:600px;margin-bottom:8px">
+                <input type="text" name="instagram_handle" class="form-input"
+                       placeholder="Instagram: @brandhandle" style="flex:1">
+                <input type="text" name="tiktok_handle" class="form-input"
+                       placeholder="TikTok: @brandhandle (optional)" style="flex:1">
+                <button type="submit" class="btn btn-primary">+ Add</button>
+            </div>
+            <div class="form-hint">Add one brand at a time. Either Instagram or TikTok required (or both)</div>
+        </div>
+    </form>
+
+    <div style="border-top:1px solid var(--border);margin:20px 0"></div>
+
+    <!-- Bulk Add -->
+    <form method="POST" action="{{ url_for('bulk_add_brands') }}">
+        <input type="hidden" name="vertical_name" value="{{ vertical.name }}">
+
+        <div class="form-group">
+            <label class="form-label">Or Bulk Paste</label>
+            <textarea name="bulk_handles" class="form-textarea" rows="6"
+                      placeholder="@newbrand1
+@brand2 | @tiktokhandle2
+@brand3 | tiktok
+
+Formats:
+• @instagram_handle (Instagram only)
+• @handle | tiktok (TikTok only)
+• @instagram | @tiktok (Both platforms)" style="max-width:600px"></textarea>
+            <div class="form-hint">
+                Add multiple brands at once. One per line. Supports Instagram, TikTok, or both.
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import Brands
+        </button>
+    </form>
+</div>
+
+<!-- Actions -->
+<div class="card" style="border-left:3px solid var(--warning)">
+    <div class="card-header">
+        <div class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" style="display:inline;margin-right:8px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Next Steps
+        </div>
+    </div>
+
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+        Changes take effect on the next analysis run. Click "Run Analysis" on the dashboard to collect data from your updated brand list.
+    </p>
+
+    <div class="flex gap-12">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Back to Dashboard
+        </a>
+        <form method="POST" action="{{ url_for('run_engine') }}" style="display:inline">
+            <input type="hidden" name="vertical_name" value="{{ vertical.name }}">
+            <button type="submit" class="btn btn-outline">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Run Analysis Now
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Danger Zone -->
+<div class="card" style="border-left:3px solid var(--danger)">
+    <div class="card-header">
+        <div class="card-title" style="color:var(--danger)">Danger Zone</div>
+    </div>
+
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+        Delete this category and all its brands. Historical post data will be preserved.
+    </p>
+
+    <form method="POST" action="{{ url_for('delete_vertical') }}" onsubmit="return confirm('Delete category \'{{ vertical.name }}\'? This cannot be undone.')">
+        <input type="hidden" name="vertical_name" value="{{ vertical.name }}">
+        <button type="submit" class="btn btn-danger">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            Delete Category
+        </button>
+    </form>
+</div>
+
+{% endblock %}

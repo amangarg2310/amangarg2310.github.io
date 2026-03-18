@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Brand Voice{% endblock %}
+{% block page_title %}Brand Voice{% endblock %}
+{% block page_subtitle %}Define how {{ profile.name }} sounds — the AI uses this to rewrite content in your voice{% endblock %}
+
+{% block content %}
+
+<!-- Voice Analysis Insights -->
+{% if voice_analysis %}
+<div class="voice-card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                Learned Voice Profile
+            </div>
+            <div class="card-subtitle">
+                Extracted from {{ voice_analysis.source_post_count }} of your top-performing posts
+                (last analyzed: {{ voice_analysis.analyzed_at }})
+            </div>
+        </div>
+        <span class="badge badge-success">Active</span>
+    </div>
+
+    <div class="voice-summary">
+        {{ voice_analysis.voice_data.voice_summary }}
+    </div>
+
+    <div class="voice-stat-grid">
+        <div class="voice-stat">
+            <div class="voice-stat-label">Sentence Style</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.sentence_patterns.structure }}, {{ voice_analysis.voice_data.sentence_patterns.avg_length }} sentences</div>
+        </div>
+        <div class="voice-stat">
+            <div class="voice-stat-label">Vocabulary</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.vocabulary.formality }} formality</div>
+        </div>
+        <div class="voice-stat">
+            <div class="voice-stat-label">Emoji Usage</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.emoji_usage }}</div>
+        </div>
+        <div class="voice-stat">
+            <div class="voice-stat-label">Caption Length</div>
+            <div class="voice-stat-value">{{ voice_analysis.voice_data.caption_length }}</div>
+        </div>
+    </div>
+
+    <div class="mt-16">
+        <div class="voice-stat-label" style="margin-bottom:8px;">Tone Markers</div>
+        <div class="tag-list">
+            {% for marker in voice_analysis.voice_data.tone_markers %}
+            <span class="badge badge-primary">{{ marker }}</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="mt-16">
+        <div class="voice-stat-label" style="margin-bottom:8px;">Signature Moves</div>
+        <div class="tag-list">
+            {% for move in voice_analysis.voice_data.signature_moves %}
+            <span class="badge badge-neutral">{{ move }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% elif profile.own_channel and profile.own_channel.get('instagram') %}
+<div class="card">
+    <div class="empty-state" style="padding:24px;">
+        <div class="empty-state-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <h3>Voice analysis not yet available</h3>
+        <p>Run the pipeline to collect your posts and analyze your writing voice.</p>
+        <form method="POST" action="{{ url_for('run_engine') }}">
+            <button type="submit" class="btn btn-primary">Run Pipeline</button>
+        </form>
+    </div>
+</div>
+
+{% else %}
+<div class="card" style="border-left: 3px solid var(--warning);">
+    <div class="card-header">
+        <div>
+            <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Learn Your Real Voice
+            </div>
+            <div class="card-subtitle">Add your Instagram handle below to let the AI learn your actual writing style from your top posts</div>
+        </div>
+    </div>
+    <p class="text-sm text-muted">
+        Without your own channel configured, the AI uses only the static voice settings below.
+        Adding your handle lets it analyze your real captions and match your style precisely.
+    </p>
+</div>
+{% endif %}
+
+{% if own_top_posts %}
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Your Top-Performing Posts</div>
+            <div class="card-subtitle">These posts drove the most engagement and shape your voice profile</div>
+        </div>
+    </div>
+    {% for post in own_top_posts[:5] %}
+    <div class="own-post-item">
+        <div class="flex-between">
+            <span class="badge badge-neutral">{{ post.media_type or 'post' }}</span>
+            <span class="text-sm" style="color: var(--accent);">
+                {{ "{:,}".format(post.total_engagement) }} engagement
+            </span>
+        </div>
+        <div class="own-post-caption">
+            "{{ post.caption[:200] }}{% if post.caption|length > 200 %}...{% endif %}"
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('save_voice') }}">
+
+    <!-- Own Channel -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Your Instagram Handle</div>
+                <div class="card-subtitle">The AI collects your posts to learn your real writing voice</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Instagram Handle</label>
+            <input type="text" name="own_instagram" class="form-input"
+                   value="{{ profile.own_channel.get('instagram', '') if profile.own_channel else '' }}"
+                   placeholder="yourbrand" style="max-width:300px;">
+            <div class="form-hint">Without the @ symbol. Leave blank if you don't want voice learning.</div>
+        </div>
+    </div>
+
+    <!-- Brand Identity -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Brand Identity</div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Brand Name</label>
+                <input type="text" name="brand_name" class="form-input" value="{{ profile.name }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Industry / Vertical</label>
+                <input type="text" name="vertical" class="form-input" value="{{ profile.vertical }}" required>
+                <div class="form-hint">e.g. premium streetwear, specialty coffee, SaaS</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tagline</label>
+            <input type="text" name="tagline" class="form-input" value="{{ profile.tagline }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Brand Description</label>
+            <textarea name="description" class="form-textarea" rows="3">{{ profile.description }}</textarea>
+            <div class="form-hint">A short description that gives the AI context about who your brand is</div>
+        </div>
+    </div>
+
+    <!-- Voice Settings -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Voice & Tone</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tone</label>
+            <textarea name="tone" class="form-textarea" rows="2">{{ profile.voice.tone }}</textarea>
+            <div class="form-hint">Describe how your brand sounds. e.g. "Confident but never loud. Mature."</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Writing Style</label>
+            <textarea name="language_style" class="form-textarea" rows="2">{{ profile.voice.language_style }}</textarea>
+            <div class="form-hint">How does your brand write? e.g. "Minimal, intentional. Short declarative sentences."</div>
+        </div>
+    </div>
+
+    <!-- Themes -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Core Themes</div>
+                <div class="card-subtitle">Topics your brand consistently talks about</div>
+            </div>
+        </div>
+        <div class="tag-list mb-16" id="themes-tags">
+            {% for theme in profile.voice.themes %}
+            <span class="tag">
+                {{ theme }}
+                <input type="hidden" name="themes" value="{{ theme }}">
+                <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+            </span>
+            {% endfor %}
+        </div>
+        <div class="flex gap-8">
+            <input type="text" id="new-theme" class="form-input" placeholder="Add a theme..." style="max-width:300px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="addTag('themes')">Add</button>
+        </div>
+    </div>
+
+    <!-- Things to Avoid -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Things to Avoid</div>
+                <div class="card-subtitle">The AI will never use these in your content</div>
+            </div>
+        </div>
+        <div class="tag-list mb-16" id="avoids-tags">
+            {% for item in profile.voice.avoids %}
+            <span class="tag">
+                {{ item }}
+                <input type="hidden" name="avoids" value="{{ item }}">
+                <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+            </span>
+            {% endfor %}
+        </div>
+        <div class="flex gap-8">
+            <input type="text" id="new-avoid" class="form-input" placeholder="Add something to avoid..." style="max-width:300px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="addTag('avoids')">Add</button>
+        </div>
+    </div>
+
+    <!-- Example Captions -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Example Captions</div>
+                <div class="card-subtitle">2-5 captions that perfectly capture your brand voice — the AI uses these as reference</div>
+            </div>
+        </div>
+        <div id="captions-container">
+            {% for cap in profile.voice.example_captions %}
+            <div class="form-group flex gap-8" style="align-items:start;">
+                <textarea name="example_captions" class="form-textarea" rows="2" style="flex:1;">{{ cap }}</textarea>
+                <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="addCaption()">+ Add Another Caption</button>
+    </div>
+
+    <!-- Save -->
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Brand Voice</button>
+    </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addTag(type) {
+    const input = document.getElementById('new-' + type.replace('s', ''));
+    let el = input || document.getElementById('new-' + type);
+    if (!el) {
+        const singular = type === 'themes' ? 'theme' : 'avoid';
+        el = document.getElementById('new-' + singular);
+    }
+    if (!el || !el.value.trim()) return;
+
+    const container = document.getElementById(type + '-tags');
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `
+        ${el.value.trim()}
+        <input type="hidden" name="${type}" value="${el.value.trim()}">
+        <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+    `;
+    container.appendChild(tag);
+    el.value = '';
+}
+
+function addCaption() {
+    const container = document.getElementById('captions-container');
+    const div = document.createElement('div');
+    div.className = 'form-group flex gap-8';
+    div.style.alignItems = 'start';
+    div.innerHTML = `
+        <textarea name="example_captions" class="form-textarea" rows="2" style="flex:1;" placeholder="Write an example caption..."></textarea>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    container.appendChild(div);
+}
+
+document.querySelectorAll('#new-theme, #new-avoid').forEach(el => {
+    el.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const type = this.id.replace('new-', '') + 's';
+            addTag(type);
+        }
+    });
+});
+</script>
+{% endblock %}

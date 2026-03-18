@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Configure outlier detection thresholds and content categories{% endblock %}
+
+{% block content %}
+
+<form method="POST" action="{{ url_for('save_settings') }}">
+
+    <!-- Outlier Detection -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Outlier Detection</div>
+                <div class="card-subtitle">Control how sensitive the engine is at detecting standout posts</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Engagement Multiplier</label>
+                <div class="flex gap-12" style="align-items:center;">
+                    <input type="range" name="engagement_multiplier" id="eng-mult"
+                           min="1.5" max="5.0" step="0.1"
+                           value="{{ settings.engagement_multiplier }}"
+                           oninput="document.getElementById('eng-mult-val').textContent = this.value + 'x'"
+                           style="flex:1;">
+                    <span id="eng-mult-val" class="fw-600" style="min-width:40px;">{{ settings.engagement_multiplier }}x</span>
+                </div>
+                <div class="form-hint">
+                    Flag posts that get this many times more engagement than the account's average.
+                    Lower = more outliers found. Default: 2.0x
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Standard Deviation Threshold</label>
+                <div class="flex gap-12" style="align-items:center;">
+                    <input type="range" name="std_dev_threshold" id="std-dev"
+                           min="1.0" max="3.0" step="0.1"
+                           value="{{ settings.std_dev_threshold }}"
+                           oninput="document.getElementById('std-dev-val').textContent = this.value + '\u03C3'"
+                           style="flex:1;">
+                    <span id="std-dev-val" class="fw-600" style="min-width:40px;">{{ settings.std_dev_threshold }}&sigma;</span>
+                </div>
+                <div class="form-hint">
+                    Alternative detection method using statistical deviation.
+                    Lower = more sensitive. Default: 1.5&sigma;
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Lookback Window</label>
+                <div class="flex gap-12" style="align-items:center;">
+                    <input type="number" name="lookback_days" class="form-input"
+                           value="{{ settings.lookback_days }}" min="7" max="90" style="max-width:100px;">
+                    <span class="text-muted">days</span>
+                </div>
+                <div class="form-hint">How many days of historical data to use for calculating averages</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Posts to Collect Per Competitor</label>
+                <input type="number" name="posts_per_competitor" class="form-input"
+                       value="{{ posts_per_competitor }}" min="5" max="50" style="max-width:100px;">
+                <div class="form-hint">Number of recent posts to fetch each run</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis Settings -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">AI Analysis</div>
+                <div class="card-subtitle">Control how many outliers the AI analyzes and rewrites</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Outliers to Analyze</label>
+                <input type="number" name="top_outliers_to_analyze" class="form-input"
+                       value="{{ settings.top_outliers_to_analyze }}" min="1" max="25" style="max-width:100px;">
+                <div class="form-hint">How many top outliers to send to the AI for deep analysis</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Outliers to Rewrite</label>
+                <input type="number" name="top_outliers_to_rewrite" class="form-input"
+                       value="{{ settings.top_outliers_to_rewrite }}" min="1" max="10" style="max-width:100px;">
+                <div class="form-hint">How many outlier concepts to rewrite in your brand voice</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Tags -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Content Categories</div>
+                <div class="card-subtitle">How the engine categorizes competitor content — customize for your industry</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Content Themes</label>
+            <div class="tag-list mb-16" id="themes-tags">
+                {% for theme in content_tags.themes %}
+                <span class="tag">
+                    {{ theme }}
+                    <input type="hidden" name="themes" value="{{ theme }}">
+                    <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+                </span>
+                {% endfor %}
+            </div>
+            <div class="flex gap-8">
+                <input type="text" id="new-theme" class="form-input" placeholder="Add a theme..." style="max-width:250px;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="addSettingsTag('themes', 'theme')">Add</button>
+            </div>
+        </div>
+
+        <div class="form-group mt-24">
+            <label class="form-label">Hook Types</label>
+            <div class="tag-list mb-16" id="hooks-tags">
+                {% for hook in content_tags.hook_types %}
+                <span class="tag">
+                    {{ hook }}
+                    <input type="hidden" name="hook_types" value="{{ hook }}">
+                    <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+                </span>
+                {% endfor %}
+            </div>
+            <div class="flex gap-8">
+                <input type="text" id="new-hook" class="form-input" placeholder="Add a hook type..." style="max-width:250px;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="addSettingsTag('hooks', 'hook')">Add</button>
+            </div>
+        </div>
+
+        <div class="form-group mt-24">
+            <label class="form-label">Content Formats</label>
+            <div class="tag-list mb-16" id="formats-tags">
+                {% for fmt in content_tags.formats %}
+                <span class="tag">
+                    {{ fmt }}
+                    <input type="hidden" name="formats" value="{{ fmt }}">
+                    <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+                </span>
+                {% endfor %}
+            </div>
+            <div class="flex gap-8">
+                <input type="text" id="new-format" class="form-input" placeholder="Add a format..." style="max-width:250px;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="addSettingsTag('formats', 'format')">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save -->
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+    </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addSettingsTag(containerName, inputName) {
+    const input = document.getElementById('new-' + inputName);
+    if (!input || !input.value.trim()) return;
+
+    const container = document.getElementById(containerName + '-tags');
+    const hiddenName = containerName === 'hooks' ? 'hook_types' : containerName;
+
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `
+        ${input.value.trim()}
+        <input type="hidden" name="${hiddenName}" value="${input.value.trim()}">
+        <span class="tag-remove" onclick="this.parentElement.remove()">&times;</span>
+    `;
+    container.appendChild(tag);
+    input.value = '';
+}
+
+document.querySelectorAll('#new-theme, #new-hook, #new-format').forEach(el => {
+    el.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const map = {'new-theme': ['themes', 'theme'], 'new-hook': ['hooks', 'hook'], 'new-format': ['formats', 'format']};
+            const [container, input] = map[this.id];
+            addSettingsTag(container, input);
+        }
+    });
+});
+</script>
+{% endblock %}

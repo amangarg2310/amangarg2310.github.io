@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "BiteClimb",
+    "slug": "biteclimb",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#9333ea",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.biteclimb.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#9333ea"
+      },
+      "package": "com.biteclimb.app"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-image-picker"
+    ]
+  }
+}

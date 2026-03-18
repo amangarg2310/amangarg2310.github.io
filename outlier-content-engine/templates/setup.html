@@ -1,0 +1,418 @@
+{% extends "base_minimal.html" %}
+{% block title %}Settings{% endblock %}
+{% block topbar_title %}API Keys & Brand{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Configure API keys, your brand, and team settings{% endblock %}
+
+{% block content %}
+
+<div class="settings-card">
+    <div class="settings-card-title">API Keys</div>
+    <div class="settings-card-subtitle">Required for data collection and AI analysis</div>
+
+    <form id="setupForm" method="POST" action="{{ url_for('save_setup') }}">
+        <!-- Apify API Token -->
+        <div class="settings-form-group">
+            <label class="settings-label">Apify API Token *</label>
+            <div class="settings-input-wrap">
+                <input type="password" name="apify_token" id="apifyToken" class="settings-input"
+                       value="{{ apify_token or '' }}" required autocomplete="off"
+                       placeholder="apify_api_...">
+                <span class="settings-validation-badge" id="apifyBadge"></span>
+            </div>
+            <div class="settings-hint">
+                Used for Instagram, TikTok, and Facebook data collection.
+                <a href="https://console.apify.com/account/integrations" target="_blank">Get your token here &rarr;</a>
+            </div>
+        </div>
+
+        <!-- OpenAI Key -->
+        <div class="settings-form-group">
+            <label class="settings-label">OpenAI API Key *</label>
+            <div class="settings-input-wrap">
+                <input type="password" name="openai_key" id="openaiKey" class="settings-input"
+                       value="{{ openai_key or '' }}" required autocomplete="off"
+                       placeholder="sk-...">
+                <span class="settings-validation-badge" id="openaiBadge"></span>
+            </div>
+            <div class="settings-hint">
+                Used for AI content analysis.
+                <a href="https://platform.openai.com/api-keys" target="_blank">Get your key here &rarr;</a>
+            </div>
+        </div>
+
+        <!-- Validate and Save Keys Buttons -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button type="button" class="settings-btn-validate" id="validateBtn" onclick="validateKeys()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Validate Keys
+            </button>
+            <button type="button" class="settings-btn-validate" id="saveKeysBtn" onclick="saveKeysOnly()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Keys
+            </button>
+        </div>
+
+        <hr class="settings-divider">
+
+        <!-- Your Brand -->
+        <div class="settings-card-title">Your Brand</div>
+        <div class="settings-card-subtitle">Used for voice analysis and personalized content briefs</div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Your Brand's Instagram Handle</label>
+            <input type="text" name="own_brand_instagram" id="ownBrandIg" class="settings-input"
+                   value="{{ own_brand_instagram or '' }}"
+                   placeholder="@yourbrand">
+            <div class="settings-hint">
+                We'll analyze your top posts to learn your brand voice, then tailor content suggestions to match your tone and style.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Your Brand's TikTok Handle <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="own_brand_tiktok" id="ownBrandTt" class="settings-input"
+                   value="{{ own_brand_tiktok or '' }}"
+                   placeholder="@yourbrand">
+            <div class="settings-hint">
+                TikTok handle for your brand, used alongside Instagram for voice analysis.
+            </div>
+        </div>
+
+        <hr class="settings-divider">
+
+        <!-- Brand Profile -->
+        <div class="settings-card-title">Brand Profile</div>
+        <div class="settings-card-subtitle">Tell us about your brand so AI analysis and content recommendations are tailored to your identity. If you've added your social handles above and have posts, we'll also learn from your top-performing content automatically.</div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Brand Name</label>
+            <input type="text" name="brand_name" id="brandName" class="settings-input"
+                   value="{{ brand_name or '' }}"
+                   placeholder="e.g., Heritage">
+            <div class="settings-hint">
+                Your brand or company name as it should appear in content briefs.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Category / Vertical</label>
+            <input type="text" name="brand_category" id="brandCategory" class="settings-input"
+                   value="{{ brand_category or '' }}"
+                   placeholder="e.g., Premium Streetwear, DTC Beauty, Fitness Apparel">
+            <div class="settings-hint">
+                The market category your brand operates in. Helps the AI understand your competitive context.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Target Audience</label>
+            <input type="text" name="brand_audience" id="brandAudience" class="settings-input"
+                   value="{{ brand_audience or '' }}"
+                   placeholder="e.g., 25-40 year old professionals who value quality and craftsmanship">
+            <div class="settings-hint">
+                Who your content is for. The AI will tailor recommendations to resonate with this audience.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Brand Description / Ethos</label>
+            <textarea name="brand_description" id="brandDescription" class="settings-input"
+                      rows="3" placeholder="e.g., Elevated streetwear rooted in timeless craftsmanship. We bridge heritage design with modern culture, creating pieces that outlast trends.">{{ brand_description or '' }}</textarea>
+            <div class="settings-hint">
+                A short description of what your brand stands for. This shapes the tone and angle of AI-generated content ideas.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Tone &amp; Voice</label>
+            <input type="text" name="brand_tone" id="brandTone" class="settings-input"
+                   value="{{ brand_tone or '' }}"
+                   placeholder="e.g., Sophisticated yet approachable, confident, quality-focused">
+            <div class="settings-hint">
+                How your brand speaks. The AI will write captions and briefs that match this voice.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Core Values / Themes</label>
+            <input type="text" name="brand_values" id="brandValues" class="settings-input"
+                   value="{{ brand_values or '' }}"
+                   placeholder="e.g., Craftsmanship, Authenticity, Timeless design, Community">
+            <div class="settings-hint">
+                Comma-separated values or themes your brand embodies. These guide content recommendations.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Topics to Avoid <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="brand_avoids" id="brandAvoids" class="settings-input"
+                   value="{{ brand_avoids or '' }}"
+                   placeholder="e.g., Politics, controversy, aggressive discounts, clickbait">
+            <div class="settings-hint">
+                Comma-separated topics or styles your brand should never touch. The AI will steer clear of these.
+            </div>
+        </div>
+
+        <hr class="settings-divider">
+
+        <!-- Team Emails -->
+        <div class="settings-form-group">
+            <label class="settings-label">Team Email Distribution</label>
+            <input type="text" name="team_emails" class="settings-input"
+                   value="{{ team_emails or '' }}"
+                   placeholder="you@startup.com, teammate@startup.com">
+            <div class="settings-hint">
+                Comma-separated emails for weekly reports (optional, can be added later)
+            </div>
+        </div>
+
+        <hr class="settings-divider">
+
+        <!-- Google Login -->
+        <div class="settings-card-title">Google Login <span class="settings-text-muted">(optional)</span></div>
+        <div class="settings-card-subtitle">Enable Google OAuth to require login. When not configured, the app is accessible without authentication.</div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Google OAuth Client ID</label>
+            <input type="text" name="google_client_id" class="settings-input"
+                   value="{{ google_client_id or '' }}"
+                   placeholder="123456789.apps.googleusercontent.com">
+            <div class="settings-hint">
+                From <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console &rarr; Credentials</a>
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Google OAuth Client Secret</label>
+            <input type="password" name="google_client_secret" class="settings-input"
+                   value="{{ google_client_secret or '' }}"
+                   placeholder="GOCSPX-...">
+            <div class="settings-hint">
+                Keep this secret. Add <code>{{ request.url_root }}auth/google/callback</code> as an Authorized Redirect URI in Google Cloud Console.
+            </div>
+        </div>
+
+        <div class="settings-form-group">
+            <label class="settings-label">Allowed Emails <span class="settings-text-muted">(optional)</span></label>
+            <input type="text" name="allowed_emails" class="settings-input"
+                   value="{{ allowed_emails or '' }}"
+                   placeholder="you@gmail.com, teammate@gmail.com">
+            <div class="settings-hint">
+                Comma-separated list of Gmail addresses authorized to access the platform.
+                If left blank, any Google account can log in. When set, only these emails will be granted access.
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="settings-actions">
+            <button type="submit" class="settings-btn-primary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Help Card -->
+<div class="settings-card settings-card-accent">
+    <div class="settings-card-title" style="display:flex;align-items:center;gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--signal-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Getting Your API Keys
+    </div>
+
+    <div style="font-size:12px;color:var(--signal-text-dim);line-height:1.7;margin-top:16px">
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">Apify (Instagram + TikTok):</strong></p>
+        <ol style="padding-left:20px;margin-bottom:20px">
+            <li>Sign up at <a href="https://apify.com" target="_blank" style="color:var(--signal-cyan)">apify.com</a></li>
+            <li>Go to <a href="https://console.apify.com/account/integrations" target="_blank" style="color:var(--signal-cyan)">Settings &rarr; Integrations</a></li>
+            <li>Copy your Personal API token</li>
+        </ol>
+
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">OpenAI (AI Analysis):</strong></p>
+        <ol style="padding-left:20px;margin-bottom:20px">
+            <li>Sign up at <a href="https://platform.openai.com" target="_blank" style="color:var(--signal-cyan)">platform.openai.com</a></li>
+            <li>Add payment method ($5 minimum)</li>
+            <li>Go to API Keys &rarr; Create new secret key</li>
+        </ol>
+
+        <p style="margin-bottom:14px"><strong style="color:var(--signal-text-secondary)">Google Login (optional):</strong></p>
+        <ol style="padding-left:20px">
+            <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--signal-cyan)">Google Cloud Console &rarr; Credentials</a></li>
+            <li>Create an OAuth 2.0 Client ID (Web application)</li>
+            <li>Add <code style="color:var(--signal-cyan)">{{ request.url_root }}auth/google/callback</code> as a redirect URI</li>
+            <li>Copy the Client ID and Client Secret</li>
+        </ol>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── BYOK: Store keys in localStorage so each browser has its own ──
+const STORAGE_KEYS = {
+    apify: 'scout_apify_token',
+    openai: 'scout_openai_key',
+    ownBrandIg: 'scout_own_brand_ig',
+    ownBrandTt: 'scout_own_brand_tt',
+};
+
+// On page load: fill inputs from localStorage if server had no value
+document.addEventListener('DOMContentLoaded', () => {
+    const fields = {
+        apifyToken: STORAGE_KEYS.apify,
+        openaiKey: STORAGE_KEYS.openai,
+        ownBrandIg: STORAGE_KEYS.ownBrandIg,
+        ownBrandTt: STORAGE_KEYS.ownBrandTt,
+    };
+
+    Object.entries(fields).forEach(([inputId, storageKey]) => {
+        const el = document.getElementById(inputId);
+        if (el && !el.value) {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) el.value = saved;
+        }
+    });
+});
+
+// Live API key validation
+function validateKeys() {
+    const btn = document.getElementById('validateBtn');
+    const apifyBadge = document.getElementById('apifyBadge');
+    const openaiBadge = document.getElementById('openaiBadge');
+    const apifyVal = document.getElementById('apifyToken').value.trim();
+    const openaiVal = document.getElementById('openaiKey').value.trim();
+
+    btn.disabled = true;
+    btn.textContent = 'Validating...';
+    apifyBadge.className = 'settings-validation-badge checking';
+    apifyBadge.textContent = '...';
+    openaiBadge.className = 'settings-validation-badge checking';
+    openaiBadge.textContent = '...';
+
+    fetch('/api/validate_keys', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({apify_token: apifyVal, openai_key: openaiVal}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.apify && data.apify.valid) {
+            apifyBadge.className = 'settings-validation-badge valid';
+            apifyBadge.textContent = data.apify.username ? '\u2713 ' + data.apify.username : '\u2713 Valid';
+        } else {
+            apifyBadge.className = 'settings-validation-badge invalid';
+            apifyBadge.textContent = '\u2717 ' + (data.apify ? data.apify.error : 'Invalid');
+        }
+        if (data.openai && data.openai.valid) {
+            openaiBadge.className = 'settings-validation-badge valid';
+            openaiBadge.textContent = '\u2713 Valid';
+        } else {
+            openaiBadge.className = 'settings-validation-badge invalid';
+            openaiBadge.textContent = '\u2717 ' + (data.openai ? data.openai.error : 'Invalid');
+        }
+    })
+    .catch(() => {
+        apifyBadge.className = 'settings-validation-badge invalid';
+        apifyBadge.textContent = 'Error';
+        openaiBadge.className = 'settings-validation-badge invalid';
+        openaiBadge.textContent = 'Error';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Validate Keys';
+    });
+}
+
+// Save just the API keys
+function saveKeysOnly() {
+    const btn = document.getElementById('saveKeysBtn');
+    const apifyVal = document.getElementById('apifyToken').value.trim();
+    const openaiVal = document.getElementById('openaiKey').value.trim();
+
+    if (!apifyVal || !openaiVal) {
+        alert('Please enter both API keys before saving.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    // Create form data with API keys and empty values for optional fields
+    const formData = new FormData();
+    formData.append('apify_token', apifyVal);
+    formData.append('openai_key', openaiVal);
+    // Add empty values for optional fields to prevent backend errors
+    formData.append('tiktok_key', '');
+    formData.append('team_emails', '');
+    formData.append('own_brand_instagram', '');
+    formData.append('own_brand_tiktok', '');
+    formData.append('google_client_id', '');
+    formData.append('google_client_secret', '');
+    formData.append('allowed_emails', '');
+
+    fetch('/setup/save', {
+        method: 'POST',
+        body: formData,
+        redirect: 'manual'
+    })
+    .then(async r => {
+        // redirect: 'manual' converts 302 redirects to opaque responses (type='opaqueredirect', status=0)
+        // Treat opaque redirects as success since our endpoint always redirects on success
+        if (r.ok || r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)) {
+            // Save to localStorage
+            localStorage.setItem(STORAGE_KEYS.apify, apifyVal);
+            localStorage.setItem(STORAGE_KEYS.openai, openaiVal);
+
+            // Update button to show success
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Saved!';
+
+            // Redirect to dashboard after a short delay
+            setTimeout(() => {
+                window.location.href = '/signal';
+            }, 800);
+        } else {
+            // Try to get error details from response
+            let errorMsg = 'Error saving keys. Please try again.';
+            try {
+                const text = await r.text();
+                console.error('Save error response:', text);
+                // Try to extract flash message from HTML response
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(text, 'text/html');
+                const flashMsg = doc.querySelector('.alert-danger, .flash-danger');
+                if (flashMsg) {
+                    errorMsg = flashMsg.textContent.trim();
+                }
+            } catch (e) {
+                console.error('Failed to parse error:', e);
+            }
+            alert(errorMsg);
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
+        }
+    })
+    .catch(err => {
+        console.error('Save fetch error:', err);
+        alert('Error saving keys: ' + err.message);
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Keys';
+    })
+    .finally(() => {
+        btn.disabled = false;
+    });
+}
+
+// On form submit: save keys to localStorage
+document.getElementById('setupForm').addEventListener('submit', () => {
+    const apify = document.getElementById('apifyToken');
+    const openai = document.getElementById('openaiKey');
+    const ownIg = document.getElementById('ownBrandIg');
+    const ownTt = document.getElementById('ownBrandTt');
+
+    if (apify && apify.value) localStorage.setItem(STORAGE_KEYS.apify, apify.value.trim());
+    if (openai && openai.value) localStorage.setItem(STORAGE_KEYS.openai, openai.value.trim());
+    if (ownIg && ownIg.value) localStorage.setItem(STORAGE_KEYS.ownBrandIg, ownIg.value.trim());
+    if (ownTt && ownTt.value) localStorage.setItem(STORAGE_KEYS.ownBrandTt, ownTt.value.trim());
+});
+</script>
+{% endblock %}
