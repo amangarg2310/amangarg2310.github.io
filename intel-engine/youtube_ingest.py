@@ -7,6 +7,7 @@ and youtube-transcript-api for transcripts.
 
 import json
 import logging
+import os
 import re
 import urllib.request
 import urllib.error
@@ -71,6 +72,37 @@ def fetch_video_metadata(video_id: str) -> dict:
     }
 
 
+def _build_transcript_api():
+    """Build YouTubeTranscriptApi instance with proxy if configured."""
+    from youtube_transcript_api import YouTubeTranscriptApi
+
+    proxy_user = os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip()
+    proxy_pass = os.environ.get('WEBSHARE_PROXY_PASSWORD', '').strip()
+
+    if proxy_user and proxy_pass:
+        try:
+            from youtube_transcript_api.proxies import WebshareProxyConfig
+            logger.info("Using Webshare proxy for transcript fetching")
+            return YouTubeTranscriptApi(
+                proxy_config=WebshareProxyConfig(
+                    proxy_username=proxy_user,
+                    proxy_password=proxy_pass,
+                )
+            )
+        except ImportError:
+            logger.warning("WebshareProxyConfig not available, using direct connection")
+
+    return YouTubeTranscriptApi()
+
+
+def _extract_text(transcript) -> str:
+    """Extract text from transcript entries (works with both old and new API formats)."""
+    return " ".join(
+        entry.text if hasattr(entry, 'text') else entry.get('text', '')
+        for entry in transcript
+    )
+
+
 def fetch_transcript(video_id: str) -> str:
     """Fetch video transcript using youtube-transcript-api."""
     try:
@@ -78,40 +110,22 @@ def fetch_transcript(video_id: str) -> str:
     except ImportError:
         raise ImportError("youtube-transcript-api required. Install with: pip install youtube-transcript-api")
 
-    # Try new API first (v1.0.0+), fall back to old API
+    ytt_api = _build_transcript_api()
+
+    # Try fetching with default language
     try:
-        ytt_api = YouTubeTranscriptApi()
         transcript = ytt_api.fetch(video_id)
-        return " ".join(
-            entry.text if hasattr(entry, 'text') else entry.get('text', '')
-            for entry in transcript
-        )
-    except AttributeError:
-        pass  # Old version without .fetch()
+        return _extract_text(transcript)
     except Exception as e:
-        logger.warning(f"Could not fetch transcript (new API) for {video_id}: {e}")
+        logger.warning(f"Could not fetch transcript for {video_id}: {e}")
         # Try with English language filter
         try:
-            ytt_api = YouTubeTranscriptApi()
             transcript = ytt_api.fetch(video_id, languages=['en'])
-            return " ".join(
-                entry.text if hasattr(entry, 'text') else entry.get('text', '')
-                for entry in transcript
-            )
+            return _extract_text(transcript)
         except Exception:
             pass
 
-    # Fall back to old API (pre-v1.0.0)
-    try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        return " ".join(entry['text'] for entry in transcript_list)
-    except Exception as e:
-        logger.warning(f"Could not fetch transcript (old API) for {video_id}: {e}")
-        try:
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-            return " ".join(entry['text'] for entry in transcript_list)
-        except Exception:
-            return ""
+    return ""
 
 
 def ingest_video(url: str) -> VideoMeta:
@@ -125,6 +139,13 @@ def ingest_video(url: str) -> VideoMeta:
     transcript = fetch_transcript(video_id)
 
     if not transcript:
+        proxy_user = os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip()
+        if not proxy_user:
+            raise ValueError(
+                "YouTube is blocking transcript requests from this server. "
+                "Set WEBSHARE_PROXY_USERNAME and WEBSHARE_PROXY_PASSWORD environment variables "
+                "with Webshare residential proxy credentials to fix this."
+            )
         raise ValueError(f"No transcript available for video: {video_id}")
 
     return VideoMeta(
