@@ -49,8 +49,17 @@ def fetch_video_metadata(video_id: str) -> dict:
         'no_check_certificates': True,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if 'private' in error_msg or 'unavailable' in error_msg:
+            raise ValueError(f"Video is private or unavailable: {video_id}")
+        elif 'age' in error_msg:
+            raise ValueError(f"Video is age-restricted and cannot be accessed: {video_id}")
+        else:
+            raise ValueError(f"Could not fetch video metadata (yt-dlp may need updating): {e}")
 
     return {
         'title': info.get('title', 'Untitled'),
@@ -67,11 +76,35 @@ def fetch_transcript(video_id: str) -> str:
     except ImportError:
         raise ImportError("youtube-transcript-api required. Install with: pip install youtube-transcript-api")
 
+    # Try new API first (v1.0.0+), fall back to old API
+    try:
+        ytt_api = YouTubeTranscriptApi()
+        transcript = ytt_api.fetch(video_id)
+        return " ".join(
+            entry.text if hasattr(entry, 'text') else entry.get('text', '')
+            for entry in transcript
+        )
+    except AttributeError:
+        pass  # Old version without .fetch()
+    except Exception as e:
+        logger.warning(f"Could not fetch transcript (new API) for {video_id}: {e}")
+        # Try with English language filter
+        try:
+            ytt_api = YouTubeTranscriptApi()
+            transcript = ytt_api.fetch(video_id, languages=['en'])
+            return " ".join(
+                entry.text if hasattr(entry, 'text') else entry.get('text', '')
+                for entry in transcript
+            )
+        except Exception:
+            pass
+
+    # Fall back to old API (pre-v1.0.0)
     try:
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
         return " ".join(entry['text'] for entry in transcript_list)
     except Exception as e:
-        logger.warning(f"Could not fetch transcript for {video_id}: {e}")
+        logger.warning(f"Could not fetch transcript (old API) for {video_id}: {e}")
         try:
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
             return " ".join(entry['text'] for entry in transcript_list)

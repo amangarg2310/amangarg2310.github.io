@@ -259,7 +259,8 @@ function pollStatus(videoId) {
         fetch(`/api/status/${videoId}`)
             .then(r => r.json())
             .then(data => {
-                showStatus(data.status, data.title || 'Processing...', data.step, data.progress, data.domain);
+                const stepText = data.status === 'error' ? (data.error || data.step) : data.step;
+                showStatus(data.status, data.title || 'Processing...', stepText, data.progress, data.domain);
 
                 if (data.status === 'complete') {
                     clearInterval(interval);
