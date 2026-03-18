@@ -2,7 +2,8 @@
 YouTube video ingestion — fetch metadata and transcript from a YouTube URL.
 
 Uses YouTube oEmbed API for metadata (no auth required, works on cloud servers)
-and youtube-transcript-api for transcripts.
+and youtube-transcript-api for transcripts, with Supadata.ai as a free fallback
+when YouTube blocks cloud server IPs.
 """
 
 import json
@@ -103,8 +104,45 @@ def _extract_text(transcript) -> str:
     )
 
 
+def _fetch_transcript_supadata(video_id: str) -> str:
+    """Fetch transcript via Supadata.ai free API (100 req/month free, no proxy needed)."""
+    api_key = os.environ.get('SUPADATA_API_KEY', '').strip()
+    if not api_key:
+        return ""
+
+    url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&text=true"
+    try:
+        req = urllib.request.Request(url, headers={
+            'x-api-key': api_key,
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode())
+
+        # Supadata returns {content: "full transcript text"} when text=true
+        content = data.get('content', '')
+        if content:
+            logger.info(f"Got transcript via Supadata for {video_id}")
+            return content
+
+        # Or it may return a list of segments
+        segments = data.get('segments', data.get('transcript', []))
+        if segments and isinstance(segments, list):
+            text = " ".join(
+                s.get('text', '') if isinstance(s, dict) else str(s)
+                for s in segments
+            )
+            if text.strip():
+                logger.info(f"Got transcript via Supadata for {video_id}")
+                return text
+
+    except Exception as e:
+        logger.warning(f"Supadata transcript fetch failed for {video_id}: {e}")
+
+    return ""
+
+
 def fetch_transcript(video_id: str) -> str:
-    """Fetch video transcript using youtube-transcript-api."""
+    """Fetch video transcript. Tries direct API first, then Supadata fallback."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
     except ImportError:
@@ -112,18 +150,23 @@ def fetch_transcript(video_id: str) -> str:
 
     ytt_api = _build_transcript_api()
 
-    # Try fetching with default language
+    # Try direct fetch first
     try:
         transcript = ytt_api.fetch(video_id)
         return _extract_text(transcript)
     except Exception as e:
-        logger.warning(f"Could not fetch transcript for {video_id}: {e}")
+        logger.warning(f"Direct transcript fetch failed for {video_id}: {e}")
         # Try with English language filter
         try:
             transcript = ytt_api.fetch(video_id, languages=['en'])
             return _extract_text(transcript)
         except Exception:
             pass
+
+    # Fallback: Supadata.ai free API
+    supadata_text = _fetch_transcript_supadata(video_id)
+    if supadata_text:
+        return supadata_text
 
     return ""
 
@@ -139,12 +182,13 @@ def ingest_video(url: str) -> VideoMeta:
     transcript = fetch_transcript(video_id)
 
     if not transcript:
-        proxy_user = os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip()
-        if not proxy_user:
+        has_supadata = bool(os.environ.get('SUPADATA_API_KEY', '').strip())
+        has_proxy = bool(os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip())
+        if not has_supadata and not has_proxy:
             raise ValueError(
                 "YouTube is blocking transcript requests from this server. "
-                "Set WEBSHARE_PROXY_USERNAME and WEBSHARE_PROXY_PASSWORD environment variables "
-                "with Webshare residential proxy credentials to fix this."
+                "Set SUPADATA_API_KEY env var (free at supadata.ai, 100 videos/month) "
+                "to fix this."
             )
         raise ValueError(f"No transcript available for video: {video_id}")
 
