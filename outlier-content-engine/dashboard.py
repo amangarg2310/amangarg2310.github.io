@@ -2447,6 +2447,176 @@ def analysis_status():
     return jsonify(response)
 
 
+# ══════════════════════════════════════════════════════════════
+# Domain Intelligence Engine Routes
+# ══════════════════════════════════════════════════════════════
+
+@app.route("/intel")
+@login_required
+def intel_page():
+    """Main Intelligence Engine page — URL input + domain grid."""
+    conn = None
+    domains = []
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.row_factory = sqlite3.Row
+        domains = [dict(r) for r in conn.execute(
+            "SELECT * FROM intel_domains ORDER BY updated_at DESC"
+        ).fetchall()]
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        if conn:
+            conn.close()
+
+    return render_template("intel.html", domains=domains, domain=None, synthesis=None)
+
+
+@app.route("/intel/domain/<domain_name>")
+@login_required
+def intel_domain_page(domain_name):
+    """Domain detail page — synthesis + chat + sources."""
+    import markdown
+    conn = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.row_factory = sqlite3.Row
+
+        domain = conn.execute(
+            "SELECT * FROM intel_domains WHERE name = ? COLLATE NOCASE", (domain_name,)
+        ).fetchone()
+        if not domain:
+            return redirect(url_for('intel_page'))
+        domain = dict(domain)
+
+        # Latest synthesis
+        synthesis_row = conn.execute(
+            "SELECT * FROM intel_syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+            (domain['id'],)
+        ).fetchone()
+        synthesis = dict(synthesis_row) if synthesis_row else None
+        synthesis_html = ""
+        if synthesis:
+            try:
+                synthesis_html = markdown.markdown(
+                    synthesis['content'],
+                    extensions=['extra', 'nl2br']
+                )
+            except Exception:
+                synthesis_html = f"<p>{synthesis['content']}</p>"
+
+        # Sources for this domain with insight counts
+        sources = [dict(r) for r in conn.execute("""
+            SELECT s.*, COUNT(i.id) as insight_count
+            FROM intel_sources s
+            LEFT JOIN intel_insights i ON i.source_id = s.id
+            WHERE s.domain_id = ? AND s.status = 'processed'
+            GROUP BY s.id
+            ORDER BY s.created_at DESC
+        """, (domain['id'],)).fetchall()]
+
+        # All domains for nav
+        domains = [dict(r) for r in conn.execute(
+            "SELECT * FROM intel_domains ORDER BY updated_at DESC"
+        ).fetchall()]
+
+    except sqlite3.OperationalError:
+        return redirect(url_for('intel_page'))
+    finally:
+        if conn:
+            conn.close()
+
+    return render_template("intel.html",
+                           domain=domain,
+                           synthesis=synthesis,
+                           synthesis_html=synthesis_html,
+                           sources=sources,
+                           domains=domains)
+
+
+@app.route("/api/intel/ingest", methods=["POST"])
+@login_required
+def intel_ingest():
+    """Accept a YouTube URL and start background processing."""
+    from intel_pipeline import run_pipeline, check_already_ingested, _update_status
+    from youtube_ingest import extract_video_id
+
+    data = request.get_json()
+    url = (data or {}).get('url', '').strip()
+    if not url:
+        return {"error": "No URL provided"}, 400
+
+    video_id = extract_video_id(url)
+    if not video_id:
+        return {"error": "Invalid YouTube URL"}, 400
+
+    # Check if already processed
+    existing = check_already_ingested(video_id)
+    if existing and existing['status'] == 'processed':
+        return {"status": "already_exists", "video_id": video_id, "title": existing.get('title', '')}
+
+    # Run pipeline in background thread
+    _update_status(video_id, 'processing', 'Starting...', 5)
+
+    def _run():
+        try:
+            # Ensure tables exist
+            from intel_migrations import run_intel_migrations
+            run_intel_migrations()
+            run_pipeline(url)
+        except Exception as e:
+            _update_status(video_id, 'error', 'Failed', 0, error=str(e))
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return {"status": "started", "video_id": video_id}
+
+
+@app.route("/api/intel/status/<video_id>")
+@login_required
+def intel_status(video_id):
+    """Poll processing status for a video."""
+    from intel_pipeline import get_pipeline_status
+    return get_pipeline_status(video_id)
+
+
+@app.route("/api/intel/domains")
+@login_required
+def intel_domains():
+    """List all knowledge domains."""
+    conn = None
+    try:
+        conn = sqlite3.connect(str(config.DB_PATH))
+        conn.row_factory = sqlite3.Row
+        domains = [dict(r) for r in conn.execute(
+            "SELECT * FROM intel_domains ORDER BY updated_at DESC"
+        ).fetchall()]
+        return {"domains": domains}
+    except sqlite3.OperationalError:
+        return {"domains": []}
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/intel/query", methods=["POST"])
+@login_required
+def intel_query():
+    """Ask a question against a domain's knowledge."""
+    from intel_query import query_domain
+
+    data = request.get_json()
+    domain_id = (data or {}).get('domain_id')
+    question = (data or {}).get('question', '').strip()
+
+    if not domain_id or not question:
+        return {"answer": "Please provide a question.", "sources_used": 0}
+
+    result = query_domain(int(domain_id), question)
+    return result
+
+
 # ── Entry Point ──
 
 if __name__ == "__main__":
@@ -2477,6 +2647,12 @@ if __name__ == "__main__":
         consolidate_vertical_name_casing()
     except (ImportError, sqlite3.Error) as e:
         logging.warning(f"Migration check (verticals): {e}")
+
+    try:
+        from intel_migrations import run_intel_migrations
+        run_intel_migrations()
+    except (ImportError, sqlite3.Error) as e:
+        logging.warning(f"Migration check (intel): {e}")
 
     print(f"\n  Outlier Content Engine Dashboard")
     print(f"  Running at: http://localhost:{args.port}")

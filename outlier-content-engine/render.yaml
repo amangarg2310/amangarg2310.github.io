@@ -2,7 +2,7 @@ services:
   - type: web
     name: scoutai
     env: python
-    buildCommand: "pip install -r requirements.txt && python database_migrations.py"
+    buildCommand: "pip install -r requirements.txt && python database_migrations.py && python intel_migrations.py"
     startCommand: "gunicorn dashboard:app"
     envVars:
       - key: PYTHON_VERSION

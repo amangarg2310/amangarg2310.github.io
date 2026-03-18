@@ -1,0 +1,798 @@
+/* ══════════════════════════════════════════════════════════════
+   Domain Intelligence Engine — Apple-inspired minimal UI
+   Clean, white, lots of breathing room. A 10-year-old could use it.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Reset & Foundation ── */
+:root {
+    --intel-bg: #fafafa;
+    --intel-surface: #ffffff;
+    --intel-surface-hover: #f5f5f7;
+    --intel-border: #e5e5ea;
+    --intel-border-light: #f0f0f2;
+    --intel-text: #1d1d1f;
+    --intel-text-secondary: #6e6e73;
+    --intel-text-tertiary: #aeaeb2;
+    --intel-accent: #0071e3;
+    --intel-accent-hover: #0077ed;
+    --intel-accent-light: rgba(0, 113, 227, 0.08);
+    --intel-green: #34c759;
+    --intel-green-light: rgba(52, 199, 89, 0.08);
+    --intel-red: #ff3b30;
+    --intel-red-light: rgba(255, 59, 48, 0.06);
+    --intel-orange: #ff9500;
+    --intel-purple: #af52de;
+    --intel-radius: 16px;
+    --intel-radius-sm: 12px;
+    --intel-radius-xs: 8px;
+    --intel-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --intel-shadow-lg: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+    --intel-shadow-focus: 0 0 0 4px rgba(0, 113, 227, 0.15);
+    --intel-font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --intel-transition: 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+* { box-sizing: border-box; }
+
+.intel-page {
+    min-height: 100vh;
+    background: var(--intel-bg);
+    font-family: var(--intel-font);
+    color: var(--intel-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Top Navigation ── */
+.intel-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 52px;
+    background: rgba(250, 250, 250, 0.85);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--intel-border-light);
+}
+
+.intel-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--intel-text);
+}
+
+.intel-nav-logo {
+    width: 28px;
+    height: 28px;
+    background: var(--intel-accent);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.intel-nav-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.intel-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.intel-nav-link {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--intel-text-secondary);
+    text-decoration: none;
+    border-radius: 20px;
+    transition: all var(--intel-transition);
+}
+
+.intel-nav-link:hover {
+    color: var(--intel-text);
+    background: var(--intel-surface-hover);
+}
+
+.intel-nav-link.active {
+    color: var(--intel-accent);
+    background: var(--intel-accent-light);
+}
+
+/* ── Hero / URL Input Section ── */
+.intel-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 80px 24px 48px;
+    text-align: center;
+}
+
+.intel-hero.compact {
+    padding: 40px 24px 32px;
+}
+
+.intel-hero-title {
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin: 0 0 12px;
+    color: var(--intel-text);
+}
+
+.intel-hero.compact .intel-hero-title {
+    font-size: 28px;
+}
+
+.intel-hero-subtitle {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--intel-text-secondary);
+    margin: 0 0 40px;
+    max-width: 480px;
+    line-height: 1.5;
+}
+
+.intel-hero.compact .intel-hero-subtitle {
+    font-size: 15px;
+    margin-bottom: 28px;
+}
+
+/* ── URL Input ── */
+.intel-input-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+}
+
+.intel-input {
+    width: 100%;
+    padding: 16px 56px 16px 20px;
+    font-size: 16px;
+    font-family: var(--intel-font);
+    color: var(--intel-text);
+    background: var(--intel-surface);
+    border: 1.5px solid var(--intel-border);
+    border-radius: 14px;
+    outline: none;
+    transition: all var(--intel-transition);
+    box-shadow: var(--intel-shadow);
+}
+
+.intel-input:focus {
+    border-color: var(--intel-accent);
+    box-shadow: var(--intel-shadow-focus);
+}
+
+.intel-input::placeholder {
+    color: var(--intel-text-tertiary);
+}
+
+.intel-input-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    background: var(--intel-accent);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--intel-transition);
+}
+
+.intel-input-btn:hover {
+    background: var(--intel-accent-hover);
+    transform: translateY(-50%) scale(1.05);
+}
+
+.intel-input-btn:disabled {
+    background: var(--intel-text-tertiary);
+    cursor: not-allowed;
+    transform: translateY(-50%);
+}
+
+.intel-input-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ── Processing Status Pill ── */
+.intel-status {
+    display: none;
+    margin-top: 20px;
+    width: 100%;
+    max-width: 640px;
+}
+
+.intel-status.active {
+    display: block;
+}
+
+.intel-status-card {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius-sm);
+    padding: 20px 24px;
+    box-shadow: var(--intel-shadow);
+}
+
+.intel-status-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.intel-status-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.intel-status-icon.processing {
+    background: var(--intel-accent-light);
+}
+
+.intel-status-icon.complete {
+    background: var(--intel-green-light);
+}
+
+.intel-status-icon.error {
+    background: var(--intel-red-light);
+}
+
+.intel-status-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.intel-status-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--intel-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.intel-status-step {
+    font-size: 12px;
+    color: var(--intel-text-secondary);
+    margin-top: 2px;
+}
+
+.intel-progress-track {
+    width: 100%;
+    height: 4px;
+    background: var(--intel-border-light);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.intel-progress-fill {
+    height: 100%;
+    background: var(--intel-accent);
+    border-radius: 2px;
+    transition: width 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+    width: 0%;
+}
+
+.intel-progress-fill.complete {
+    background: var(--intel-green);
+}
+
+.intel-progress-fill.error {
+    background: var(--intel-red);
+}
+
+/* ── Domain Grid ── */
+.intel-domains-section {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+}
+
+.intel-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.intel-section-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--intel-text);
+}
+
+.intel-section-count {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--intel-text-tertiary);
+    background: var(--intel-surface-hover);
+    padding: 4px 12px;
+    border-radius: 20px;
+}
+
+.intel-domains-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.intel-domain-card {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius);
+    padding: 24px;
+    cursor: pointer;
+    transition: all var(--intel-transition);
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.intel-domain-card:hover {
+    border-color: var(--intel-accent);
+    box-shadow: var(--intel-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.intel-domain-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.intel-domain-name {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+    color: var(--intel-text);
+}
+
+.intel-domain-desc {
+    font-size: 13px;
+    color: var(--intel-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 16px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.intel-domain-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+}
+
+.intel-domain-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ── Domain Detail View ── */
+.intel-detail {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+}
+
+.intel-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--intel-accent);
+    text-decoration: none;
+    padding: 8px 0;
+    margin-bottom: 24px;
+    transition: opacity var(--intel-transition);
+}
+
+.intel-back:hover {
+    opacity: 0.7;
+}
+
+.intel-detail-header {
+    margin-bottom: 32px;
+}
+
+.intel-detail-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.intel-detail-title {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    margin: 0 0 8px;
+}
+
+.intel-detail-meta {
+    font-size: 14px;
+    color: var(--intel-text-secondary);
+}
+
+/* ── Synthesis Card ── */
+.intel-synthesis {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius);
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: var(--intel-shadow);
+}
+
+.intel-synthesis h2 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 28px 0 12px;
+    color: var(--intel-text);
+}
+
+.intel-synthesis h2:first-child {
+    margin-top: 0;
+}
+
+.intel-synthesis p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--intel-text-secondary);
+    margin: 0 0 12px;
+}
+
+.intel-synthesis ul, .intel-synthesis ol {
+    padding-left: 20px;
+    margin: 0 0 16px;
+}
+
+.intel-synthesis li {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--intel-text-secondary);
+    margin-bottom: 6px;
+}
+
+.intel-synthesis strong {
+    color: var(--intel-text);
+    font-weight: 600;
+}
+
+.intel-synthesis blockquote {
+    border-left: 3px solid var(--intel-accent);
+    padding: 8px 16px;
+    margin: 16px 0;
+    background: var(--intel-accent-light);
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: var(--intel-text-secondary);
+}
+
+/* ── Chat / Query Section ── */
+.intel-chat {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius);
+    overflow: hidden;
+    box-shadow: var(--intel-shadow);
+    margin-bottom: 32px;
+}
+
+.intel-chat-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--intel-border-light);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--intel-text);
+}
+
+.intel-chat-messages {
+    padding: 24px;
+    min-height: 120px;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.intel-chat-empty {
+    text-align: center;
+    padding: 32px 0;
+    color: var(--intel-text-tertiary);
+    font-size: 14px;
+}
+
+.intel-chat-msg {
+    margin-bottom: 20px;
+    max-width: 85%;
+}
+
+.intel-chat-msg.user {
+    margin-left: auto;
+    text-align: right;
+}
+
+.intel-chat-msg-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--intel-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+}
+
+.intel-chat-msg-bubble {
+    display: inline-block;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: left;
+}
+
+.intel-chat-msg.user .intel-chat-msg-bubble {
+    background: var(--intel-accent);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.intel-chat-msg.assistant .intel-chat-msg-bubble {
+    background: var(--intel-surface-hover);
+    color: var(--intel-text);
+    border-bottom-left-radius: 4px;
+}
+
+.intel-chat-msg-bubble strong {
+    font-weight: 600;
+}
+
+.intel-chat-msg-bubble ul {
+    padding-left: 16px;
+    margin: 8px 0;
+}
+
+.intel-chat-msg-bubble li {
+    margin-bottom: 4px;
+}
+
+.intel-chat-input-wrap {
+    display: flex;
+    gap: 8px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--intel-border-light);
+    background: var(--intel-bg);
+}
+
+.intel-chat-input {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: var(--intel-font);
+    color: var(--intel-text);
+    background: var(--intel-surface);
+    border: 1.5px solid var(--intel-border);
+    border-radius: 12px;
+    outline: none;
+    transition: border-color var(--intel-transition);
+}
+
+.intel-chat-input:focus {
+    border-color: var(--intel-accent);
+}
+
+.intel-chat-input::placeholder {
+    color: var(--intel-text-tertiary);
+}
+
+.intel-chat-send {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--intel-font);
+    color: white;
+    background: var(--intel-accent);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all var(--intel-transition);
+    white-space: nowrap;
+}
+
+.intel-chat-send:hover {
+    background: var(--intel-accent-hover);
+}
+
+.intel-chat-send:disabled {
+    background: var(--intel-text-tertiary);
+    cursor: not-allowed;
+}
+
+/* ── Sources List ── */
+.intel-sources {
+    margin-bottom: 32px;
+}
+
+.intel-sources-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--intel-text);
+}
+
+.intel-source-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius-sm);
+    margin-bottom: 8px;
+    transition: all var(--intel-transition);
+}
+
+.intel-source-item:hover {
+    border-color: var(--intel-accent);
+}
+
+.intel-source-thumb {
+    width: 80px;
+    height: 45px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--intel-surface-hover);
+    flex-shrink: 0;
+}
+
+.intel-source-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.intel-source-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--intel-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.intel-source-channel {
+    font-size: 12px;
+    color: var(--intel-text-secondary);
+    margin-top: 2px;
+}
+
+.intel-source-insights {
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+    background: var(--intel-surface-hover);
+    padding: 3px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+/* ── Empty State ── */
+.intel-empty {
+    text-align: center;
+    padding: 64px 24px;
+}
+
+.intel-empty-icon {
+    font-size: 56px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.intel-empty-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--intel-text);
+    margin-bottom: 8px;
+}
+
+.intel-empty-desc {
+    font-size: 15px;
+    color: var(--intel-text-secondary);
+    max-width: 400px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+/* ── Loading spinner ── */
+@keyframes intel-spin {
+    to { transform: rotate(360deg); }
+}
+
+.intel-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--intel-border);
+    border-top-color: var(--intel-accent);
+    border-radius: 50%;
+    animation: intel-spin 0.8s linear infinite;
+}
+
+.intel-spinner.white {
+    border-color: rgba(255,255,255,0.3);
+    border-top-color: white;
+}
+
+/* ── Typing indicator ── */
+@keyframes intel-bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+}
+
+.intel-typing {
+    display: flex;
+    gap: 4px;
+    padding: 8px 4px;
+}
+
+.intel-typing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--intel-text-tertiary);
+    animation: intel-bounce 1.2s infinite;
+}
+
+.intel-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.intel-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* ── Fade-in animation ── */
+@keyframes intel-fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.intel-animate-in {
+    animation: intel-fadeIn 0.4s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+    .intel-hero { padding: 48px 16px 32px; }
+    .intel-hero-title { font-size: 28px; }
+    .intel-hero-subtitle { font-size: 15px; }
+    .intel-input { padding: 14px 52px 14px 16px; font-size: 15px; }
+    .intel-domains-grid { grid-template-columns: 1fr; }
+    .intel-nav { padding: 0 16px; }
+    .intel-detail { padding: 0 16px 48px; }
+    .intel-synthesis { padding: 20px; }
+}
