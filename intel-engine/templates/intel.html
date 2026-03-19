@@ -156,6 +156,14 @@
                 </div>
                 {% endif %}
             </div>
+
+            <!-- Admin tools -->
+            <div style="padding:12px 16px;border-top:1px solid var(--intel-border-light);">
+                <button onclick="backfillEmbeddings()" id="backfillBtn"
+                    style="width:100%;padding:8px;font-size:12px;color:var(--intel-text-tertiary);background:none;border:1px solid var(--intel-border-light);border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);">
+                    Backfill Embeddings
+                </button>
+            </div>
         </aside>
 
         <!-- ── Main Content (Right) ── -->
@@ -679,6 +687,26 @@ function pollSidebarStatus(videoId) {
                 hideSidebarStatus();
             });
     }, 1000);
+}
+
+// ── Admin Tools ──
+
+function backfillEmbeddings() {
+    const btn = document.getElementById('backfillBtn');
+    btn.disabled = true;
+    btn.textContent = 'Generating embeddings...';
+
+    fetch('/api/backfill-embeddings', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.textContent = data.error ? 'Error — try again' : `✓ ${data.message}`;
+            setTimeout(() => { btn.textContent = 'Backfill Embeddings'; }, 4000);
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.textContent = 'Failed — try again';
+        });
 }
 
 // ── Source Management ──
