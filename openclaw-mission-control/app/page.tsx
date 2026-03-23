@@ -18,18 +18,12 @@ import { ModelUsageChart } from '@/components/dashboard/model-usage-chart'
 import { TeamView } from '@/components/dashboard/team-view'
 import { GettingStarted } from '@/components/dashboard/getting-started'
 import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
-import {
-  getTodayUsage,
-  getActiveRuns,
-  getNeedsApproval,
-} from '@/lib/mock-data'
+import { useDashboardStats } from '@/lib/hooks'
 
 export default function DashboardPage() {
   const [showCreateTask, setShowCreateTask] = useState(false)
 
-  const today = getTodayUsage()
-  const activeRuns = getActiveRuns()
-  const needsApproval = getNeedsApproval()
+  const { activeRuns, needsApproval, todayUsage: today } = useDashboardStats()
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">

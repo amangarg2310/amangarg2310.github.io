@@ -17,7 +17,7 @@ import {
   Command,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getOnlineAgents, getActiveRuns, getNeedsApproval } from '@/lib/mock-data'
+import { useSidebarStats } from '@/lib/hooks'
 
 const mainNav = [
   { name: 'Mission Control', href: '/', icon: LayoutDashboard },
@@ -36,13 +36,11 @@ const manageNav = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const onlineAgents = getOnlineAgents()
-  const activeRuns = getActiveRuns()
-  const needsApproval = getNeedsApproval()
+  const { activeRunCount, approvalCount, onlineAgentCount } = useSidebarStats()
 
   function getBadge(href: string): number | null {
-    if (href === '/runs' && activeRuns.length > 0) return activeRuns.length
-    if (href === '/approvals' && needsApproval.length > 0) return needsApproval.length
+    if (href === '/runs' && activeRunCount > 0) return activeRunCount
+    if (href === '/approvals' && approvalCount > 0) return approvalCount
     return null
   }
 
@@ -146,7 +144,7 @@ export function Sidebar() {
               John Doe
             </span>
             <span className="text-xs text-muted-foreground">
-              {onlineAgents.length} agents online
+              {onlineAgentCount} agents online
             </span>
           </div>
         </button>

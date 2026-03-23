@@ -1,12 +1,14 @@
 'use client'
 
-import { runs, agents } from '@/lib/mock-data'
+import { useRuns, useAgents } from '@/lib/hooks'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatDuration } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 
 export function RunStatusBoard() {
+  const { data: runs } = useRuns()
+  const { data: agents } = useAgents()
   const activeRuns = runs.filter((r) =>
     ['running', 'stalled', 'needs_approval', 'failed', 'completed'].includes(
       r.status

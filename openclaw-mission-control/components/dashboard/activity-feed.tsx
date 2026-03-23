@@ -1,6 +1,6 @@
 'use client'
 
-import { getRecentActivity } from '@/lib/mock-data'
+import { useActivity } from '@/lib/hooks'
 import { timeAgo } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
@@ -43,7 +43,7 @@ const typeConfig: Record<
 }
 
 export function ActivityFeed() {
-  const activity = getRecentActivity()
+  const { data: activity } = useActivity()
 
   return (
     <motion.section

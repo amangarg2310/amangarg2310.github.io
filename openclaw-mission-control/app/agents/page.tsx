@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { agents } from '@/lib/mock-data'
+import { useAgents } from '@/lib/hooks'
 import { Agent } from '@/lib/types'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatCost, cn } from '@/lib/utils'
@@ -270,6 +270,7 @@ function AgentCard({ agent }: { agent: Agent }) {
 }
 
 export default function AgentsPage() {
+  const { data: agents } = useAgents()
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
       <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">

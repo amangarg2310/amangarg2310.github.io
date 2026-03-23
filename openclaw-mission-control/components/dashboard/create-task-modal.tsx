@@ -11,7 +11,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { SparkLine } from '@/components/ui/spark-line'
-import { agents } from '@/lib/mock-data'
+import { useAgents } from '@/lib/hooks'
 
 const autonomyLevels = [
   { id: 'observe', label: 'Observe' },
@@ -19,13 +19,6 @@ const autonomyLevels = [
   { id: 'confirm', label: 'Confirm' },
   { id: 'autonomous', label: 'Autonomous' },
 ]
-
-const agentOptions = agents.filter((a) => a.is_active).map((a) => ({
-  id: a.id,
-  name: a.name,
-  role: a.specialization || 'General',
-  spark: [2, 3, 2, 5, 4, 6, 5],
-}))
 
 const costTiers = [
   { id: 'economy', name: 'Economy', models: 'gpt-4o-mini, haiku', est: '$0.02' },
@@ -39,6 +32,13 @@ interface CreateTaskModalProps {
 }
 
 export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
+  const { data: agents } = useAgents()
+  const agentOptions = agents.filter((a) => a.is_active).map((a) => ({
+    id: a.id,
+    name: a.name,
+    role: a.specialization || 'General',
+    spark: [2, 3, 2, 5, 4, 6, 5],
+  }))
   const [selectedAutonomy, setSelectedAutonomy] = useState('confirm')
   const [selectedAgent, setSelectedAgent] = useState(agentOptions[0]?.id || '')
   const [selectedTier, setSelectedTier] = useState('standard')

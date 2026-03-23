@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
-import { tasks, runs, agents } from '@/lib/mock-data'
+import { useTasks, useRuns, useAgents } from '@/lib/hooks'
+import type { Task, Run, Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { StatusPill } from '@/components/ui/status-badge'
 import { formatCost, timeAgo, cn } from '@/lib/utils'
@@ -36,7 +37,7 @@ interface ApprovalItem {
   runId: string | null
 }
 
-function getApprovalItems(): ApprovalItem[] {
+function getApprovalItems(tasks: Task[], runs: Run[], agents: Agent[]): ApprovalItem[] {
   const approvalTasks = tasks.filter(
     (t) => t.status === 'needs_approval'
   )
@@ -89,9 +90,12 @@ function getApprovalItems(): ApprovalItem[] {
 }
 
 export default function ApprovalsPage() {
+  const { data: tasks } = useTasks()
+  const { data: runs } = useRuns()
+  const { data: agents } = useAgents()
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})
-  const items = getApprovalItems()
+  const items = getApprovalItems(tasks, runs, agents)
 
   const filtered = items.filter((item) => {
     const effectiveDecision = decisions[item.id] || item.decision

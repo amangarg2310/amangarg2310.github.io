@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { tasks, agents } from '@/lib/mock-data'
-import { Task } from '@/lib/types'
+import { useTasks, useAgents } from '@/lib/hooks'
+import { Task, Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { cn, timeAgo } from '@/lib/utils'
 import {
@@ -57,7 +57,7 @@ const columns: KanbanColumn[] = [
   },
 ]
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
   const agent = agents.find((a) => a.id === task.assigned_agent_id)
   const priorityColors: Record<string, string> = {
     critical: 'bg-red-500',
@@ -117,6 +117,8 @@ function TaskCard({ task }: { task: Task }) {
 }
 
 export default function BoardsPage() {
+  const { data: tasks } = useTasks()
+  const { data: agents } = useAgents()
   return (
     <div className="flex-1 h-screen overflow-hidden bg-background flex flex-col">
       {/* Header */}
@@ -173,7 +175,7 @@ export default function BoardsPage() {
                 <div className="flex-1 bg-white/[0.01] border border-dashed border-border/50 rounded-xl p-3 space-y-3 overflow-y-auto">
                   {columnTasks.length > 0 ? (
                     columnTasks.map((task) => (
-                      <TaskCard key={task.id} task={task} />
+                      <TaskCard key={task.id} task={task} agents={agents} />
                     ))
                   ) : (
                     <div className="flex items-center justify-center h-24 text-xs text-muted-foreground/50">

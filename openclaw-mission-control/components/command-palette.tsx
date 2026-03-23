@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { agents, tasks, runs } from '@/lib/mock-data'
+import { useAgents, useTasks, useRuns } from '@/lib/hooks'
+import type { Agent, Task, Run } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { cn } from '@/lib/utils'
 import {
@@ -47,7 +48,7 @@ const actions: SearchResult[] = [
   { id: 'a-newtask', type: 'action', title: 'Create New Task', subtitle: 'Deploy a task to an agent', href: '/?newTask=true', icon: Plus },
 ]
 
-function getSearchResults(query: string): SearchResult[] {
+function getSearchResults(query: string, agents: Agent[], tasks: Task[], runs: Run[]): SearchResult[] {
   if (!query.trim()) {
     return [...actions, ...pages.slice(0, 5)]
   }
@@ -117,13 +118,16 @@ function getSearchResults(query: string): SearchResult[] {
 }
 
 export function CommandPalette() {
+  const { data: agents } = useAgents()
+  const { data: tasks } = useTasks()
+  const { data: runs } = useRuns()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  const results = getSearchResults(query)
+  const results = getSearchResults(query, agents, tasks, runs)
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {

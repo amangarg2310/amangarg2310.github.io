@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { dailyUsage, modelUsage, agents, runs } from '@/lib/mock-data'
+import { useUsage, useAgents, useRuns } from '@/lib/hooks'
 import { MetricCard } from '@/components/ui/metric-card'
 import { formatCost, formatTokens, formatNumber } from '@/lib/utils'
 import {
@@ -25,6 +25,10 @@ import {
 } from 'recharts'
 
 export default function UsagePage() {
+  const { data: usage } = useUsage()
+  const { data: agents } = useAgents()
+  const { data: runs } = useRuns()
+  const { daily: dailyUsage, models: modelUsage } = usage
   const totalCost = dailyUsage.reduce(
     (sum, d) => sum + d.estimated_cost,
     0

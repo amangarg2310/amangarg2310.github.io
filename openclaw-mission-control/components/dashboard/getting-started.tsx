@@ -1,20 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { agents } from '@/lib/mock-data'
+import { useAgents } from '@/lib/hooks'
 import { X, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const steps = [
-  { label: 'Connect Provider', done: true },
-  { label: 'Create Agent', done: agents.length > 0 },
-  { label: 'Define Tools', done: false },
-  { label: 'Run Task', done: false },
-  { label: 'Review Logs', done: false },
-]
-
 export function GettingStarted() {
   const [showChecklist, setShowChecklist] = useState(true)
+  const { data: agents } = useAgents()
+
+  const steps = [
+    { label: 'Connect Provider', done: true },
+    { label: 'Create Agent', done: agents.length > 0 },
+    { label: 'Define Tools', done: false },
+    { label: 'Run Task', done: false },
+    { label: 'Review Logs', done: false },
+  ]
   const completedCount = steps.filter((s) => s.done).length
 
   return (

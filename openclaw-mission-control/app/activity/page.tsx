@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { runs, agents, tasks, runEvents } from '@/lib/mock-data'
+import { useRuns, useAgents, useTasks } from '@/lib/hooks'
+import type { Run, Agent, Task, RunEvent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, timeAgo, cn } from '@/lib/utils'
 import {
@@ -34,7 +35,7 @@ interface ActivityEntry {
   colorClass: string
 }
 
-function buildActivityLog(): ActivityEntry[] {
+function buildActivityLog(runs: Run[], agents: Agent[], tasks: Task[], runEvents: RunEvent[]): ActivityEntry[] {
   const entries: ActivityEntry[] = []
 
   // From runs
@@ -127,9 +128,13 @@ function buildActivityLog(): ActivityEntry[] {
 }
 
 export default function ActivityPage() {
+  const { data: runs } = useRuns()
+  const { data: agents } = useAgents()
+  const { data: tasks } = useTasks()
   const [filter, setFilter] = useState<ActivityType>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const allEntries = buildActivityLog()
+  // Tool-level events loaded per-run in detail view; activity page uses run-level entries
+  const allEntries = buildActivityLog(runs, agents, tasks, [])
 
   const filtered = allEntries.filter((entry) => {
     if (filter !== 'all' && entry.type !== filter) return false

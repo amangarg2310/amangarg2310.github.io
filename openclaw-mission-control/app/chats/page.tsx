@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { conversations, messages, agents } from '@/lib/mock-data'
+import { useConversations, useAgents, useMessages } from '@/lib/hooks'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, formatTokens, timeAgo, cn } from '@/lib/utils'
 import {
@@ -15,19 +15,19 @@ import {
 } from 'lucide-react'
 
 export default function ChatsPage() {
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(
-    conversations[1]?.id || null
-  )
+  const { data: conversations } = useConversations()
+  const { data: agents } = useAgents()
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
   const [isTyping] = useState(true)
   const [inputValue, setInputValue] = useState('')
 
-  const selectedConv = conversations.find((c) => c.id === selectedConvId)
+  // Auto-select first conversation when data loads
+  const activeConvId = selectedConvId || conversations[1]?.id || null
+  const selectedConv = conversations.find((c) => c.id === activeConvId)
+  const { data: convMessages } = useMessages(activeConvId || '')
   const agent = selectedConv
     ? agents.find((a) => a.id === selectedConv.agent_id)
     : null
-  const convMessages = selectedConv
-    ? messages.filter((m) => m.conversation_id === selectedConv.id)
-    : []
 
   return (
     <div className="flex h-full bg-background overflow-hidden">
@@ -48,7 +48,7 @@ export default function ChatsPage() {
                 key={chat.id}
                 onClick={() => setSelectedConvId(chat.id)}
                 className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  selectedConvId === chat.id
+                  activeConvId === chat.id
                     ? 'bg-accent/10 border border-accent/20 text-accent'
                     : 'hover:bg-white/5 text-muted-foreground hover:text-foreground border border-transparent'
                 }`}

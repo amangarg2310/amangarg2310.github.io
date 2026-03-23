@@ -1,6 +1,6 @@
 'use client'
 
-import { runs, agents, tasks } from '@/lib/mock-data'
+import { useRuns, useAgents, useTasks } from '@/lib/hooks'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatCost } from '@/lib/utils'
 import { Search, Database, PenTool, Terminal } from 'lucide-react'
@@ -87,6 +87,9 @@ function PipelineEdge({ active = false }: { active?: boolean }) {
 }
 
 export function TeamView() {
+  const { data: runs } = useRuns()
+  const { data: agents } = useAgents()
+  const { data: tasks } = useTasks()
   const activeTaskIds = [
     ...new Set(
       runs

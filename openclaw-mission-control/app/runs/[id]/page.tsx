@@ -4,7 +4,7 @@ import { useState, createElement } from 'react'
 import { use } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { runs, runEvents, agents } from '@/lib/mock-data'
+import { useRunDetail } from '@/lib/hooks'
 import { RunEvent } from '@/lib/types'
 import { StatusPill } from '@/components/ui/status-badge'
 import { formatCost, formatTokens, formatDuration, timeAgo } from '@/lib/utils'
@@ -53,9 +53,18 @@ export default function RunDetailPage({
   const { id } = use(params)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
-  const run = runs.find((r) => r.id === id)
-  const events = runEvents.filter((e) => e.run_id === id)
+  const { data: runData, loading } = useRunDetail(id)
+  const run = runData.run
+  const events = runData.events
   const selectedEvent = events.find((e) => e.id === selectedEventId)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-muted-foreground text-sm">Loading run...</div>
+      </div>
+    )
+  }
 
   if (!run) {
     return (
