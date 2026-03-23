@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
+import { CommandPalette } from "@/components/command-palette";
 
 export const metadata: Metadata = {
   title: "OpenClaw Mission Control",
@@ -21,6 +22,7 @@ export default function RootLayout({
             {children}
           </main>
         </div>
+        <CommandPalette />
       </body>
     </html>
   );

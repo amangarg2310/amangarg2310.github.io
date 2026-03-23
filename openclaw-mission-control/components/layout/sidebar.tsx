@@ -10,15 +10,26 @@ import {
   BarChart3,
   Settings,
   TerminalSquare,
+  ShieldCheck,
+  LayoutGrid,
+  Clock,
+  Search,
+  Command,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getOnlineAgents, getActiveRuns, getNeedsApproval } from '@/lib/mock-data'
 
-const navigation = [
+const mainNav = [
   { name: 'Mission Control', href: '/', icon: LayoutDashboard },
+  { name: 'Boards', href: '/boards', icon: LayoutGrid },
+  { name: 'Approvals', href: '/approvals', icon: ShieldCheck },
   { name: 'Run Inspector', href: '/runs', icon: Activity },
   { name: 'Chat Workspace', href: '/chats', icon: MessageSquare },
+]
+
+const manageNav = [
   { name: 'Agent Registry', href: '/agents', icon: Bot },
+  { name: 'Activity Log', href: '/activity', icon: Clock },
   { name: 'Usage & Cost', href: '/usage', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -28,6 +39,54 @@ export function Sidebar() {
   const onlineAgents = getOnlineAgents()
   const activeRuns = getActiveRuns()
   const needsApproval = getNeedsApproval()
+
+  function getBadge(href: string): number | null {
+    if (href === '/runs' && activeRuns.length > 0) return activeRuns.length
+    if (href === '/approvals' && needsApproval.length > 0) return needsApproval.length
+    return null
+  }
+
+  function renderNavItem(item: { name: string; href: string; icon: React.ElementType }) {
+    const isActive =
+      item.href === '/'
+        ? pathname === '/'
+        : pathname.startsWith(item.href)
+    const Icon = item.icon
+    const badge = getBadge(item.href)
+
+    return (
+      <Link
+        key={item.name}
+        href={item.href}
+        className={cn(
+          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#050506]',
+          isActive
+            ? 'bg-accent/10 text-accent border-l-2 border-accent rounded-l-sm'
+            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground border-l-2 border-transparent rounded-l-sm'
+        )}
+      >
+        <Icon
+          className={cn(
+            'w-4 h-4',
+            isActive ? 'text-accent' : 'text-muted-foreground'
+          )}
+        />
+        {item.name}
+        {badge !== null && (
+          <span
+            className={cn(
+              'ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium',
+              item.href === '/approvals'
+                ? 'bg-status-approval/20 text-status-approval'
+                : 'bg-accent/20 text-accent'
+            )}
+          >
+            {badge}
+          </span>
+        )}
+      </Link>
+    )
+  }
 
   return (
     <aside className="w-64 h-screen flex flex-col bg-[#050506] border-r border-border flex-shrink-0">
@@ -41,45 +100,39 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-        {navigation.map((item) => {
-          const isActive =
-            item.href === '/'
-              ? pathname === '/'
-              : pathname.startsWith(item.href)
-          const Icon = item.icon
+      {/* Search trigger */}
+      <div className="px-3 pt-4 pb-2">
+        <button
+          onClick={() => {
+            window.dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'k', metaKey: true })
+            )
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-white/[0.02] text-muted-foreground text-sm hover:border-accent/30 hover:bg-white/[0.04] transition-all"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span className="flex-1 text-left text-xs">Search...</span>
+          <kbd className="text-[10px] bg-white/5 border border-border px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5">
+            <Command className="w-2.5 h-2.5" />K
+          </kbd>
+        </button>
+      </div>
 
-          let badge: number | null = null
-          if (item.href === '/runs' && activeRuns.length > 0) badge = activeRuns.length
-          if (item.href === '/' && needsApproval.length > 0) badge = needsApproval.length
+      {/* Main Navigation */}
+      <nav className="flex-1 px-3 py-2 space-y-4 overflow-y-auto">
+        <div className="space-y-0.5">
+          <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50 font-medium">
+            Workspace
+          </div>
+          {mainNav.map(renderNavItem)}
+        </div>
 
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#050506]',
-                isActive
-                  ? 'bg-accent/10 text-accent border-l-2 border-accent rounded-l-sm'
-                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground border-l-2 border-transparent rounded-l-sm'
-              )}
-            >
-              <Icon
-                className={cn(
-                  'w-4 h-4',
-                  isActive ? 'text-accent' : 'text-muted-foreground'
-                )}
-              />
-              {item.name}
-              {badge !== null && (
-                <span className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent/20 px-1 text-[10px] font-medium text-accent">
-                  {badge}
-                </span>
-              )}
-            </Link>
-          )
-        })}
+        <div className="space-y-0.5">
+          <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50 font-medium">
+            Manage
+          </div>
+          {manageNav.map(renderNavItem)}
+        </div>
       </nav>
 
       {/* User Profile Footer */}
