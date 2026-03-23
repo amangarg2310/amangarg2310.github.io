@@ -111,8 +111,6 @@ export default function UsagePage() {
           <MetricCard
             title="Total Spend (7d)"
             value={formatCost(totalCost)}
-            change="+$24.10"
-            changeType="up"
             icon={<DollarSign className="w-5 h-5" />}
             accentColor="#a855f7"
             sparkData={sparkCost}
@@ -121,8 +119,6 @@ export default function UsagePage() {
           <MetricCard
             title="Total Runs"
             value={formatNumber(totalRuns)}
-            change="+12%"
-            changeType="up"
             icon={<Activity className="w-5 h-5" />}
             accentColor="#3b82f6"
             sparkData={sparkRuns}
@@ -131,18 +127,14 @@ export default function UsagePage() {
           <MetricCard
             title="Avg Cost / Run"
             value={formatCost(avgCostPerRun)}
-            change="-$0.01"
-            changeType="down"
             icon={<TrendingUp className="w-5 h-5" />}
             accentColor="#10b981"
-            sparkData={[0.05, 0.05, 0.04, 0.04, 0.05, 0.04, 0.04]}
+            sparkData={sparkCost.map((c, i) => sparkRuns[i] > 0 ? c / sparkRuns[i] : 0)}
             delay={0.3}
           />
           <MetricCard
             title="Total Tokens"
             value={formatNumber(totalTokens)}
-            change="+2.1M"
-            changeType="up"
             icon={<Cpu className="w-5 h-5" />}
             accentColor="#f59e0b"
             sparkData={sparkTokens}

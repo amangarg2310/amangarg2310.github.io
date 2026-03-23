@@ -116,7 +116,7 @@ export function normalizeSession(
     title: sessionTitle(raw),
     agent_id: raw.agentId,
     task_id: null,
-    status: isLocked ? 'active' : 'completed', // Conversation status is simpler — non-locked = done
+    status: isLocked ? 'active' : 'idle', // Honest: unlocked means idle, not "completed"
     last_message_at: updatedAt,
     message_count: 0, // Updated when transcript is loaded
     total_cost: run.estimated_cost,

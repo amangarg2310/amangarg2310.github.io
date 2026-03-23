@@ -136,12 +136,12 @@ export function Sidebar() {
       {/* User Profile Footer */}
       <div className="p-4 border-t border-border/50">
         <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
-            JD
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-blue-600 flex items-center justify-center text-white text-xs font-bold">
+            OC
           </div>
           <div className="flex flex-col items-start">
             <span className="text-sm font-medium text-foreground">
-              John Doe
+              OpenClaw
             </span>
             <span className="text-xs text-muted-foreground">
               {onlineAgentCount} agents online

@@ -124,7 +124,7 @@ export interface Conversation {
   title: string;
   agent_id: string;
   task_id: string | null;
-  status: 'active' | 'completed' | 'archived';
+  status: 'active' | 'idle' | 'completed' | 'archived';
   last_message_at: string;
   message_count: number;
   total_cost: number;

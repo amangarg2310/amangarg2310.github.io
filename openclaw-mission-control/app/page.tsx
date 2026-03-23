@@ -4,11 +4,8 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Activity,
-  CheckCircle2,
-  Clock,
   AlertTriangle,
   DollarSign,
-  Zap,
   Plus,
 } from 'lucide-react'
 import { MetricCard } from '@/components/ui/metric-card'
@@ -18,12 +15,18 @@ import { ModelUsageChart } from '@/components/dashboard/model-usage-chart'
 import { TeamView } from '@/components/dashboard/team-view'
 import { GettingStarted } from '@/components/dashboard/getting-started'
 import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
-import { useDashboardStats } from '@/lib/hooks'
+import { useDashboardStats, useRuns } from '@/lib/hooks'
+import { formatCost } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [showCreateTask, setShowCreateTask] = useState(false)
 
-  const { activeRuns, needsApproval, todayUsage: today } = useDashboardStats()
+  const { activeRuns, needsApproval, failedRuns, todayUsage: today } = useDashboardStats()
+  const { data: runs } = useRuns()
+
+  const totalCostToday = today.cost
+  const totalTokensToday = today.tokens
+  const idleRuns = runs.filter((r) => r.status === 'idle')
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
@@ -72,67 +75,39 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
-        {/* Metric Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Metric Cards Row — all live data, no fake deltas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Active Runs"
             value={String(activeRuns.length)}
-            change="+2"
-            changeType="up"
             icon={<Activity className="w-5 h-5" />}
             accentColor="#3b82f6"
-            sparkData={[2, 4, 3, 5, 8, 10, activeRuns.length]}
+            sparkData={[activeRuns.length]}
             delay={0.1}
           />
           <MetricCard
-            title="Tasks Completed"
-            value="847"
-            change="+12%"
-            changeType="up"
-            icon={<CheckCircle2 className="w-5 h-5" />}
-            accentColor="#10b981"
-            sparkData={[40, 50, 45, 60, 70, 85, 90]}
+            title="Idle Sessions"
+            value={String(idleRuns.length)}
+            icon={<Activity className="w-5 h-5" />}
+            accentColor="#71717a"
+            sparkData={[idleRuns.length]}
             delay={0.15}
           />
           <MetricCard
-            title="Pending Approval"
-            value={String(needsApproval.length)}
-            change="-1"
-            changeType="down"
-            icon={<Clock className="w-5 h-5" />}
-            accentColor="#f59e0b"
-            sparkData={[5, 4, 4, 6, 5, 4, needsApproval.length]}
+            title="Failed"
+            value={String(failedRuns.length)}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            accentColor="#ef4444"
+            sparkData={[failedRuns.length]}
             delay={0.2}
           />
           <MetricCard
-            title="Failed"
-            value="2"
-            change="0"
-            changeType="neutral"
-            icon={<AlertTriangle className="w-5 h-5" />}
-            accentColor="#ef4444"
-            sparkData={[1, 0, 2, 1, 3, 2, 2]}
-            delay={0.25}
-          />
-          <MetricCard
             title="Cost Today"
-            value={`$${today.cost.toFixed(2)}`}
-            change="+$5.20"
-            changeType="up"
+            value={totalCostToday > 0 ? formatCost(totalCostToday) : '$0.00'}
             icon={<DollarSign className="w-5 h-5" />}
             accentColor="#a855f7"
-            sparkData={[10, 15, 12, 20, 25, 30, today.cost]}
-            delay={0.3}
-          />
-          <MetricCard
-            title="Avg Latency"
-            value="1.2s"
-            change="-0.3s"
-            changeType="down"
-            icon={<Zap className="w-5 h-5" />}
-            accentColor="#06b6d4"
-            sparkData={[1.8, 1.7, 1.5, 1.6, 1.4, 1.3, 1.2]}
-            delay={0.35}
+            sparkData={[totalCostToday]}
+            delay={0.25}
           />
         </div>
 

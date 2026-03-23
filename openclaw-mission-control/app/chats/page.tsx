@@ -1,44 +1,60 @@
 'use client'
 
 import { useState } from 'react'
-import { useConversations, useAgents, useMessages } from '@/lib/hooks'
+import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, formatTokens, timeAgo, cn } from '@/lib/utils'
 import {
-  Send,
   MessageSquare,
   Terminal,
   Bot,
   User,
   DollarSign,
   Clock,
+  Loader2,
 } from 'lucide-react'
 
 export default function ChatsPage() {
   const { data: conversations } = useConversations()
   const { data: agents } = useAgents()
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
-  const [isTyping] = useState(true)
-  const [inputValue, setInputValue] = useState('')
 
   // Auto-select first conversation when data loads
-  const activeConvId = selectedConvId || conversations[1]?.id || null
+  const activeConvId = selectedConvId || conversations[0]?.id || null
   const selectedConv = conversations.find((c) => c.id === activeConvId)
-  const { data: convMessages } = useMessages(activeConvId || '')
+
+  // Use transcript-backed detail endpoint instead of simple messages
+  const { data: detail, loading: detailLoading } = useConversationDetail(activeConvId || '')
+  const convMessages = detail.messages
+  const sessionInfo = detail.session
+
   const agent = selectedConv
     ? agents.find((a) => a.id === selectedConv.agent_id)
     : null
+
+  // Derive honest status from session lock state
+  const conversationStatus = sessionInfo.isLocked
+    ? 'active'
+    : selectedConv?.status === 'active'
+      ? 'idle'
+      : selectedConv?.status || 'idle'
 
   return (
     <div className="flex h-full bg-background overflow-hidden">
       {/* Left Panel: Chat List */}
       <div className="w-72 border-r border-border flex flex-col bg-[#050506]">
         <div className="p-4 border-b border-border/50">
-          <button className="w-full flex items-center justify-center gap-2 bg-card hover:bg-white/5 border border-border text-foreground px-4 py-2 rounded-lg font-medium text-sm transition-colors">
-            <MessageSquare className="w-4 h-4" /> New Chat
-          </button>
+          <h2 className="text-sm font-medium text-foreground">Conversations</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {conversations.length} session{conversations.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          {conversations.length === 0 && (
+            <div className="text-center py-8 text-xs text-muted-foreground/50">
+              No conversations yet
+            </div>
+          )}
           {conversations.map((chat) => {
             const chatAgent = agents.find(
               (a) => a.id === chat.agent_id
@@ -73,10 +89,36 @@ export default function ChatsPage() {
             <h2 className="text-sm font-medium text-foreground">
               {selectedConv.title}
             </h2>
+            <span className={cn(
+              'ml-3 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium',
+              conversationStatus === 'active'
+                ? 'text-status-running bg-status-running/10'
+                : conversationStatus === 'idle'
+                  ? 'text-muted-foreground bg-white/5'
+                  : 'text-status-success bg-status-success/10'
+            )}>
+              {conversationStatus}
+            </span>
           </header>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {detailLoading && convMessages.length === 0 && (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading transcript...</span>
+              </div>
+            )}
+
+            {!detailLoading && convMessages.length === 0 && (
+              <div className="text-center py-16">
+                <MessageSquare className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+                <p className="text-sm text-muted-foreground">
+                  No messages in this session yet
+                </p>
+              </div>
+            )}
+
             {convMessages.map((msg) => (
               <div
                 key={msg.id}
@@ -90,6 +132,10 @@ export default function ChatsPage() {
                     {msg.role === 'user' ? (
                       <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center border border-accent/30">
                         <User className="w-4 h-4" />
+                      </div>
+                    ) : msg.role === 'tool' ? (
+                      <div className="w-8 h-8 rounded-full bg-status-tool/20 text-status-tool flex items-center justify-center border border-status-tool/30">
+                        <Terminal className="w-4 h-4" />
                       </div>
                     ) : (
                       <AgentAvatar
@@ -118,11 +164,14 @@ export default function ChatsPage() {
                     )}
 
                     <div
-                      className={`p-4 rounded-2xl text-sm leading-relaxed ${
+                      className={cn(
+                        'p-4 rounded-2xl text-sm leading-relaxed',
                         msg.role === 'user'
                           ? 'bg-accent/10 text-foreground border border-accent/20 rounded-tr-sm'
-                          : 'bg-card text-foreground border border-border rounded-tl-sm shadow-sm'
-                      }`}
+                          : msg.role === 'tool'
+                            ? 'bg-[#050506] text-foreground border border-status-tool/20 rounded-tl-sm'
+                            : 'bg-card text-foreground border border-border rounded-tl-sm shadow-sm'
+                      )}
                       style={
                         msg.role === 'assistant'
                           ? {
@@ -132,9 +181,11 @@ export default function ChatsPage() {
                           : {}
                       }
                     >
-                      <div className="whitespace-pre-wrap">
-                        {msg.content}
-                      </div>
+                      {msg.content && (
+                        <div className="whitespace-pre-wrap">
+                          {msg.content}
+                        </div>
+                      )}
 
                       {/* Tool Call Terminal Block */}
                       {msg.tool_calls &&
@@ -151,36 +202,44 @@ export default function ChatsPage() {
                               </span>
                             </div>
                             <div className="p-3 text-xs font-mono text-status-tool/80 space-y-2">
-                              <div>
-                                <span className="opacity-50">
-                                  &gt; Input:
-                                </span>{' '}
-                                {tc.input}
-                              </div>
-                              <div className="text-status-success/80">
-                                <span className="opacity-50">
-                                  &gt; Result:
-                                </span>{' '}
-                                {tc.output}
-                              </div>
+                              {tc.input && (
+                                <div>
+                                  <span className="opacity-50">
+                                    &gt; Input:
+                                  </span>{' '}
+                                  {tc.input}
+                                </div>
+                              )}
+                              {tc.output && (
+                                <div className="text-status-success/80">
+                                  <span className="opacity-50">
+                                    &gt; Result:
+                                  </span>{' '}
+                                  {tc.output}
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
                     </div>
 
                     {/* Message Footer */}
-                    {msg.role === 'assistant' && msg.estimated_cost && (
+                    {msg.role === 'assistant' && (msg.estimated_cost || msg.input_tokens || msg.output_tokens) && (
                       <div className="mt-1.5 ml-1 text-[10px] text-muted-foreground font-mono flex items-center gap-3">
-                        <span>
-                          {formatTokens(
-                            (msg.input_tokens || 0) +
-                              (msg.output_tokens || 0)
-                          )}{' '}
-                          tkns
-                        </span>
-                        <span>
-                          {formatCost(msg.estimated_cost)}
-                        </span>
+                        {(msg.input_tokens || msg.output_tokens) && (
+                          <span>
+                            {formatTokens(
+                              (msg.input_tokens || 0) +
+                                (msg.output_tokens || 0)
+                            )}{' '}
+                            tkns
+                          </span>
+                        )}
+                        {msg.estimated_cost != null && msg.estimated_cost > 0 && (
+                          <span>
+                            {formatCost(msg.estimated_cost)}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -188,8 +247,8 @@ export default function ChatsPage() {
               </div>
             ))}
 
-            {/* Typing Indicator */}
-            {isTyping && (
+            {/* Typing Indicator — only when session is actually active */}
+            {sessionInfo.isLocked && (
               <div className="flex justify-start">
                 <div className="flex gap-4 max-w-[80%]">
                   <div className="w-8 h-8 rounded-full bg-status-model/20 text-status-model flex items-center justify-center border border-status-model/40 flex-shrink-0 mt-1">
@@ -204,22 +263,6 @@ export default function ChatsPage() {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Input Area */}
-          <div className="p-4 bg-background border-t border-border">
-            <div className="relative flex items-end bg-card border border-border rounded-xl focus-within:border-accent focus-within:ring-1 focus-within:ring-accent transition-all p-2 shadow-sm">
-              <textarea
-                rows={1}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Reply to agents or provide new instructions..."
-                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none py-2 px-3 max-h-32"
-              />
-              <button className="p-2 mb-0.5 mr-0.5 bg-accent hover:bg-accent/90 text-white rounded-lg transition-colors flex-shrink-0">
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
       ) : (
@@ -244,14 +287,17 @@ export default function ChatsPage() {
           <div className="p-4 space-y-4 overflow-y-auto">
             <div className="bg-card border border-border rounded-xl p-3 card-glow">
               <div className="flex items-center gap-2 mb-3 text-sm font-medium text-foreground">
-                <Bot className="w-4 h-4 text-accent" /> Active Agents
+                <Bot className="w-4 h-4 text-accent" /> Agent
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">
                     {agent.name}
                   </span>
-                  <span className="w-2 h-2 rounded-full bg-status-running led-pulse" />
+                  <span className={cn(
+                    'w-2 h-2 rounded-full',
+                    sessionInfo.isLocked ? 'bg-status-running led-pulse' : 'bg-muted-foreground/30'
+                  )} />
                 </div>
               </div>
             </div>
@@ -275,7 +321,7 @@ export default function ChatsPage() {
                     Messages
                   </div>
                   <div className="text-sm font-mono text-foreground tabular-nums">
-                    {selectedConv.message_count}
+                    {convMessages.length || selectedConv.message_count}
                   </div>
                 </div>
               </div>
@@ -288,8 +334,11 @@ export default function ChatsPage() {
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
-                  <span className="font-mono text-foreground">
-                    {selectedConv.status}
+                  <span className={cn(
+                    'font-mono',
+                    conversationStatus === 'active' ? 'text-status-running' : 'text-foreground'
+                  )}>
+                    {conversationStatus}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -300,6 +349,16 @@ export default function ChatsPage() {
                     {timeAgo(selectedConv.last_message_at)}
                   </span>
                 </div>
+                {detail.pagination.hasMore && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Transcript
+                    </span>
+                    <span className="font-mono text-foreground">
+                      {detail.pagination.totalLinesRead} lines
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

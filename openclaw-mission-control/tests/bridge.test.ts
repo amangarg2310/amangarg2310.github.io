@@ -186,9 +186,9 @@ describe('Session normalization', () => {
     assert.ok(conversation.id.startsWith('conv-'))
   })
 
-  it('conversation unlocked maps to completed', () => {
+  it('conversation unlocked maps to idle', () => {
     const { conversation } = normalizeSession(rawSessionList.sessions[1], agentMap, false)
-    assert.equal(conversation.status, 'completed')
+    assert.equal(conversation.status, 'idle')
   })
 })
 

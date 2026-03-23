@@ -18,9 +18,11 @@ import {
   fetchRunDetail,
   fetchConversations,
   fetchMessages,
+  fetchConversationDetail,
   fetchUsage,
   fetchActivity,
 } from './api'
+import type { ConversationDetail } from './api'
 
 /**
  * Generic data-fetching hook.
@@ -88,6 +90,46 @@ export function useMessages(conversationId: string) {
     () => fetchMessages(conversationId),
     []
   )
+}
+
+const EMPTY_DETAIL: ConversationDetail = {
+  conversation: null as unknown as Conversation,
+  messages: [],
+  events: [],
+  pagination: { offset: 0, limit: 100, hasMore: false, totalLinesRead: 0 },
+  session: { isLocked: false, agentId: null, sessionId: '' },
+}
+
+export function useConversationDetail(conversationId: string) {
+  const [data, setData] = useState<ConversationDetail>(EMPTY_DETAIL)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!conversationId) {
+      setData(EMPTY_DETAIL)
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    fetchConversationDetail(conversationId)
+      .then((result) => {
+        if (!cancelled) {
+          setData(result)
+          setError(null)
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [conversationId])
+
+  return { data, loading, error }
 }
 
 export function useUsage() {

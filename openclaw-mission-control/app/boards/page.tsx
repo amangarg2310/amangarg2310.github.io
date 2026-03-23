@@ -178,8 +178,9 @@ export default function BoardsPage() {
                       <TaskCard key={task.id} task={task} agents={agents} />
                     ))
                   ) : (
-                    <div className="flex items-center justify-center h-24 text-xs text-muted-foreground/50">
-                      No tasks
+                    <div className="flex flex-col items-center justify-center h-24 gap-1">
+                      <span className="text-xs text-muted-foreground/50">No tasks</span>
+                      <span className="text-[10px] text-muted-foreground/30">Tasks appear here as agents create them</span>
                     </div>
                   )}
 
