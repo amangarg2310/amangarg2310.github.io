@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #18181b;
-  --card-foreground: #fafafa;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --border: #27272a;
+  /* Warm neutral palette inspired by Linear */
+  --background: #0a0a0c;
+  --foreground: #f5f5f4;
+  --card: #161618;
+  --card-foreground: #f5f5f4;
+  --muted: #252528;
+  --muted-foreground: #a0a0a8;
+  --border: #252528;
   --ring: #3b82f6;
   --accent: #3b82f6;
 }
@@ -41,14 +42,34 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #252528;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #3a3a3f;
 }
 
-/* Smooth transitions */
 * {
-  scrollbar-color: #27272a transparent;
+  scrollbar-color: #252528 transparent;
+}
+
+/* Focus rings for accessibility */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions on interactive elements */
+button, a, input, select, textarea {
+  transition: all 0.15s ease;
+}
+
+/* Modal/overlay animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

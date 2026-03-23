@@ -4,16 +4,27 @@ import { useState } from 'react';
 import { agents } from '@/lib/mock-data';
 import { MODEL_PRICING, estimateCost, getModelTier, getTierLabel, getTierColor } from '@/lib/costs';
 import { AgentAvatar } from '@/components/ui/agent-avatar';
+import { Tooltip } from '@/components/ui/tooltip';
 import { formatCost, cn } from '@/lib/utils';
 import {
   X,
-  Zap,
   DollarSign,
   Bot,
   ChevronRight,
   Info,
   Sparkles,
+  Eye,
+  FileText,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
+
+const autonomyLevels = [
+  { id: 'observe', label: 'Observe & Suggest', icon: Eye, description: 'Agent analyzes but never acts. You decide what to do.', color: 'border-zinc-500/30 text-zinc-400' },
+  { id: 'plan', label: 'Plan & Propose', icon: FileText, description: 'Agent creates a plan for your review before executing.', color: 'border-blue-500/30 text-blue-400' },
+  { id: 'confirm', label: 'Act with Confirmation', icon: ShieldCheck, description: 'Agent prepares actions, waits for your go-ahead.', color: 'border-amber-500/30 text-amber-400' },
+  { id: 'autonomous', label: 'Fully Autonomous', icon: Zap, description: 'Agent runs independently and notifies you when done.', color: 'border-emerald-500/30 text-emerald-400' },
+] as const;
 
 interface CreateTaskModalProps {
   onClose: () => void;
@@ -25,12 +36,12 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [modelOverride, setModelOverride] = useState<string>('');
+  const [autonomy, setAutonomy] = useState<string>('confirm');
 
   const activeAgents = agents.filter(a => a.is_active);
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const effectiveModel = modelOverride || selectedAgent?.default_model || 'gpt-4o-mini';
 
-  // Rough cost estimate based on typical task token usage
   const tokenEstimates: Record<string, { input: number; output: number }> = {
     low: { input: 5000, output: 2000 },
     medium: { input: 15000, output: 8000 },
@@ -38,19 +49,27 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
     critical: { input: 50000, output: 25000 },
   };
   const estimate = tokenEstimates[priority];
-  const costEstimate = estimateCost(effectiveModel, estimate.input, estimate.output);
+
+  // Cost comparison across tiers
+  const cheapModel = 'gpt-4o-mini';
+  const midModel = 'claude-3.5-sonnet';
+  const premiumModel = 'claude-3-opus';
+  const costCheap = estimateCost(cheapModel, estimate.input, estimate.output);
+  const costMid = estimateCost(midModel, estimate.input, estimate.output);
+  const costPremium = estimateCost(premiumModel, estimate.input, estimate.output);
+  const costEffective = estimateCost(effectiveModel, estimate.input, estimate.output);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="w-full max-w-2xl rounded-xl border border-border bg-[#111113] shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl rounded-xl border border-border bg-[#111113] shadow-2xl overflow-hidden max-h-[92vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-[#111113] z-10">
           <div>
             <h2 className="text-base font-semibold">Create New Task</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Describe what you need done and pick an agent to do it</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Describe what you need done, pick an agent, and set how much control you want</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded hover:bg-white/10 text-muted-foreground">
             <X className="h-4 w-4" />
@@ -89,10 +108,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               {activeAgents.map(agent => (
                 <button
                   key={agent.id}
-                  onClick={() => {
-                    setSelectedAgentId(agent.id);
-                    setModelOverride(''); // reset override when switching agent
-                  }}
+                  onClick={() => { setSelectedAgentId(agent.id); setModelOverride(''); }}
                   className={cn(
                     'flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-all',
                     selectedAgentId === agent.id
@@ -105,9 +121,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
                     <div className="text-[13px] font-medium">{agent.name}</div>
                     <div className="text-[10px] text-muted-foreground">{agent.specialization} · avg {formatCost(agent.avg_cost_per_run || 0)}/run</div>
                   </div>
-                  {selectedAgentId === agent.id && (
-                    <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-                  )}
+                  {selectedAgentId === agent.id && <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
                 </button>
               ))}
             </div>
@@ -119,9 +133,39 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             )}
           </div>
 
+          {/* Autonomy Level */}
+          <div>
+            <label className="text-[12px] font-medium text-muted-foreground flex items-center gap-1.5">
+              Agent Autonomy
+              <Tooltip content="Controls how much freedom the agent has. Higher autonomy = faster but less oversight. Lower = safer but requires your input." />
+            </label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {autonomyLevels.map(level => {
+                const LevelIcon = level.icon;
+                return (
+                  <button
+                    key={level.id}
+                    onClick={() => setAutonomy(level.id)}
+                    className={cn(
+                      'flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition-all',
+                      autonomy === level.id
+                        ? level.color + ' bg-white/[0.03]'
+                        : 'border-border text-muted-foreground hover:bg-white/[0.02]'
+                    )}
+                  >
+                    <LevelIcon className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <div>
+                      <div className="text-[11px] font-medium">{level.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{level.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Priority + Model row */}
           <div className="grid grid-cols-2 gap-4">
-            {/* Priority */}
             <div>
               <label className="text-[12px] font-medium text-muted-foreground">Priority</label>
               <div className="flex gap-1 mt-1.5">
@@ -144,12 +188,9 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
                 ))}
               </div>
             </div>
-
-            {/* Model override */}
             <div>
               <label className="text-[12px] font-medium text-muted-foreground flex items-center gap-1">
-                Model
-                <span className="text-[10px] text-muted-foreground font-normal">(override agent default)</span>
+                Model <span className="text-[10px] font-normal">(override agent default)</span>
               </label>
               <select
                 value={modelOverride}
@@ -168,27 +209,37 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             </div>
           </div>
 
-          {/* Cost estimate */}
-          <div className="rounded-lg bg-white/[0.03] border border-border p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-emerald-400" />
-              <div>
-                <div className="text-[12px] font-medium">Estimated Cost</div>
-                <div className="text-[10px] text-muted-foreground">
-                  Based on typical {priority}-priority task · ~{(estimate.input / 1000).toFixed(0)}K in + {(estimate.output / 1000).toFixed(0)}K out tokens
-                </div>
+          {/* Cost comparison across tiers */}
+          <div className="rounded-lg border border-border overflow-hidden">
+            <div className="px-3 py-2 bg-white/[0.02] border-b border-border flex items-center gap-2">
+              <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-[12px] font-medium">Cost Comparison</span>
+              <Tooltip content="Estimated cost for this task across different model tiers, based on typical token usage for the selected priority" />
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-border">
+              <div className={cn('px-3 py-2.5 text-center', effectiveModel === cheapModel || getModelTier(effectiveModel) === 'cheap' ? 'bg-emerald-500/5' : '')}>
+                <div className="text-[10px] text-emerald-400 font-medium">Economy</div>
+                <div className="text-[14px] font-semibold mt-0.5">{formatCost(costCheap)}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">{cheapModel}</div>
+              </div>
+              <div className={cn('px-3 py-2.5 text-center', getModelTier(effectiveModel) === 'mid' ? 'bg-blue-500/5' : '')}>
+                <div className="text-[10px] text-blue-400 font-medium">Standard</div>
+                <div className="text-[14px] font-semibold mt-0.5">{formatCost(costMid)}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">{midModel}</div>
+              </div>
+              <div className={cn('px-3 py-2.5 text-center', getModelTier(effectiveModel) === 'premium' ? 'bg-amber-500/5' : '')}>
+                <div className="text-[10px] text-amber-400 font-medium">Premium</div>
+                <div className="text-[14px] font-semibold mt-0.5">{formatCost(costPremium)}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">{premiumModel}</div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-lg font-semibold">{formatCost(costEstimate)}</div>
-              <div className={cn('text-[10px] font-medium', getTierColor(getModelTier(effectiveModel)))}>
-                {effectiveModel} · {getTierLabel(getModelTier(effectiveModel))}
-              </div>
+            <div className="px-3 py-1.5 bg-white/[0.01] border-t border-border text-[10px] text-muted-foreground text-center">
+              Based on ~{(estimate.input / 1000).toFixed(0)}K input + {(estimate.output / 1000).toFixed(0)}K output tokens ({priority} priority)
             </div>
           </div>
 
           {/* Budget warning */}
-          {selectedAgent && costEstimate > selectedAgent.max_budget_per_run && (
+          {selectedAgent && costEffective > selectedAgent.max_budget_per_run && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-300">
               <Info className="h-3.5 w-3.5 shrink-0" />
               Estimated cost exceeds {selectedAgent.name}&apos;s budget of {formatCost(selectedAgent.max_budget_per_run)}/run. The run may be paused for approval.
@@ -197,10 +248,12 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-white/[0.01]">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-white/[0.01] sticky bottom-0">
           <div className="text-[11px] text-muted-foreground">
             {selectedAgent ? (
-              <span>Will be executed by <strong className="text-foreground">{selectedAgent.name}</strong> using <strong className="text-foreground">{effectiveModel}</strong></span>
+              <span>
+                <strong className="text-foreground">{selectedAgent.name}</strong> · {effectiveModel} · {autonomyLevels.find(l => l.id === autonomy)?.label}
+              </span>
             ) : (
               <span>Select an agent to continue</span>
             )}

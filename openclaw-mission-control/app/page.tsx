@@ -21,6 +21,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { RunStatusBoard } from '@/components/dashboard/run-status-board';
 import { ModelUsageChart } from '@/components/dashboard/model-usage-chart';
+import { TeamView } from '@/components/dashboard/team-view';
+import { GettingStarted } from '@/components/dashboard/getting-started';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { AgentAvatar } from '@/components/ui/agent-avatar';
 import { ModelBadge } from '@/components/ui/model-badge';
@@ -187,6 +189,12 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Getting started (dismissable) */}
+      <GettingStarted />
+
+      {/* Multi-agent team view */}
+      <TeamView />
 
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
