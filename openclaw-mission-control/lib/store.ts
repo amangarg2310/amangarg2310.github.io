@@ -23,7 +23,11 @@ import {
  * This is a server-only module — never import from client components.
  */
 
-const isLiveMode = !!process.env.OPENCLAW_RUNTIME_URL
+const isLiveMode = !!(
+  process.env.OPENCLAW_STATE_DIR ||
+  process.env.OPENCLAW_CLI_PATH ||
+  process.env.OPENCLAW_PROFILE
+)
 
 class DataStore {
   private _agents: Agent[]

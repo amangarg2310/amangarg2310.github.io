@@ -75,6 +75,37 @@ export function fetchMessages(conversationId: string): Promise<Message[]> {
   return fetchJson<Message[]>(`/conversations/${conversationId}/messages`)
 }
 
+export interface ConversationDetail {
+  conversation: Conversation
+  messages: Message[]
+  events: RunEvent[]
+  pagination: {
+    offset: number
+    limit: number
+    hasMore: boolean
+    totalLinesRead: number
+  }
+  session: {
+    isLocked: boolean
+    agentId: string | null
+    sessionId: string
+  }
+}
+
+export function fetchConversationDetail(
+  conversationId: string,
+  options?: { offset?: number; limit?: number; types?: string }
+): Promise<ConversationDetail> {
+  const params = new URLSearchParams()
+  if (options?.offset) params.set('offset', String(options.offset))
+  if (options?.limit) params.set('limit', String(options.limit))
+  if (options?.types) params.set('types', options.types)
+  const qs = params.toString()
+  return fetchJson<ConversationDetail>(
+    `/conversations/${conversationId}/detail${qs ? `?${qs}` : ''}`
+  )
+}
+
 // --- Usage ---
 export function fetchUsage(): Promise<{ daily: DailyUsage[]; models: ModelUsage[] }> {
   return fetchJson<{ daily: DailyUsage[]; models: ModelUsage[] }>('/usage')

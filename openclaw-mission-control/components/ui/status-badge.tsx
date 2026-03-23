@@ -19,6 +19,7 @@ export type StatusType =
   | 'active'
   | 'inactive'
   | 'busy'
+  | 'idle'
 
 const statusConfig: Record<
   string,
@@ -39,6 +40,7 @@ const statusConfig: Record<
   active: { label: 'Active', color: '#10b981', bgClass: 'bg-status-success' },
   inactive: { label: 'Inactive', color: '#71717a', bgClass: 'bg-zinc-500' },
   busy: { label: 'Busy', color: '#3b82f6', bgClass: 'bg-status-running' },
+  idle: { label: 'Idle', color: '#94a3b8', bgClass: 'bg-slate-400' },
 }
 
 interface StatusBadgeProps {

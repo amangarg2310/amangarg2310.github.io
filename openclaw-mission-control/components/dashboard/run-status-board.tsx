@@ -10,7 +10,7 @@ export function RunStatusBoard() {
   const { data: runs } = useRuns()
   const { data: agents } = useAgents()
   const activeRuns = runs.filter((r) =>
-    ['running', 'stalled', 'needs_approval', 'failed', 'completed'].includes(
+    ['running', 'idle', 'stalled', 'needs_approval', 'failed', 'completed'].includes(
       r.status
     )
   ).slice(0, 5)

@@ -27,6 +27,7 @@ const statusFilters: { label: string; value: RunStatus | 'all' }[] = [
   { label: 'Queued', value: 'queued' },
   { label: 'Completed', value: 'completed' },
   { label: 'Failed', value: 'failed' },
+  { label: 'Idle', value: 'idle' },
   { label: 'Stalled', value: 'stalled' },
   { label: 'Needs Approval', value: 'needs_approval' },
 ];

@@ -10,7 +10,7 @@ export type TaskStatus =
   | 'paused'
   | 'stalled';
 
-export type RunStatus = TaskStatus;
+export type RunStatus = TaskStatus | 'idle';
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 

@@ -78,11 +78,15 @@ export function normalizeSession(
 ): { run: Run; conversation: Conversation } {
   const agent = agentMap.get(raw.agentId)
 
+  // Status derivation: don't overclaim certainty.
+  // locked → running (lock file exists, session is active)
+  // abortedLastRun → failed (explicit signal from OpenClaw)
+  // otherwise → idle (we don't know — session exists but state is ambiguous)
   const status = isLocked
     ? 'running'
     : raw.abortedLastRun
       ? 'failed'
-      : 'completed'
+      : 'idle'
 
   const startedAt = new Date(raw.updatedAt - raw.ageMs).toISOString()
   const updatedAt = new Date(raw.updatedAt).toISOString()
@@ -112,7 +116,7 @@ export function normalizeSession(
     title: sessionTitle(raw),
     agent_id: raw.agentId,
     task_id: null,
-    status: isLocked ? 'active' : 'completed',
+    status: isLocked ? 'active' : 'completed', // Conversation status is simpler — non-locked = done
     last_message_at: updatedAt,
     message_count: 0, // Updated when transcript is loaded
     total_cost: run.estimated_cost,
