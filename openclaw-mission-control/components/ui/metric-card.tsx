@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
 
 interface MetricCardProps {
   label: string;
@@ -8,6 +9,7 @@ interface MetricCardProps {
   icon: LucideIcon;
   iconColor?: string;
   trend?: { value: string; positive: boolean };
+  tooltip?: string;
   className?: string;
 }
 
@@ -18,6 +20,7 @@ export function MetricCard({
   icon: Icon,
   iconColor = 'text-muted-foreground',
   trend,
+  tooltip,
   className,
 }: MetricCardProps) {
   return (
@@ -28,7 +31,10 @@ export function MetricCard({
       )}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+          {label}
+          {tooltip && <Tooltip content={tooltip} />}
+        </span>
         <Icon className={cn('h-4 w-4', iconColor)} />
       </div>
       <div className="mt-2">
