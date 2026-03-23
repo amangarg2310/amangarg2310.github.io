@@ -17,6 +17,8 @@ import {
   normalizeSession as bridgeNormalizeSession,
   computeUsage,
 } from './bridge'
+import { applyProjectMapping } from './project-mapper'
+import { store } from './store'
 
 /**
  * Runtime adapter: fetches data from OpenClaw via local bridge
@@ -110,6 +112,17 @@ export async function fetchRuntimeData(): Promise<RuntimeData | null> {
     allRuns.push(run)
     allConversations.push(conversation)
   }
+
+  // Build agent workspace lookup from raw agent data
+  const agentWorkspaces = new Map<string, string>()
+  for (const raw of rawAgents || []) {
+    if (raw.workspace) agentWorkspaces.set(raw.id, raw.workspace)
+  }
+
+  // Auto-map sessions to projects using workspace path matching
+  const projects = store.getProjects()
+  const roleAssignments = store.getRoleAssignments()
+  applyProjectMapping(allRuns, allConversations, agentWorkspaces, projects, roleAssignments)
 
   const { daily, models } = computeUsage(allRuns)
 

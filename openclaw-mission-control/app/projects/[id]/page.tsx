@@ -1,9 +1,9 @@
 'use client'
 
-import { use } from 'react'
+import { use, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { useProjectContext, useAgents, useTasks, useRuns } from '@/lib/hooks'
+import { useProjectContext, useAgents, useTasks, useRuns, useProjectRoles } from '@/lib/hooks'
 import { ROLE_LANES } from '@/lib/roles'
 import { RoleLaneCard } from '@/components/project/role-lane-card'
 import {
@@ -20,6 +20,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { data: agents } = useAgents()
   const { data: tasks } = useTasks(id)
   const { data: runs } = useRuns(id)
+  const { data: assignments } = useProjectRoles(id)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleAssignmentChange = useCallback(() => {
+    // Force a reload by incrementing key — simple but effective
+    setRefreshKey((k) => k + 1)
+    // Also reload the page to pick up store changes
+    window.location.reload()
+  }, [])
 
   if (!context) {
     return (
@@ -29,7 +38,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  const { project, assignments } = context
+  const { project } = context
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
@@ -50,14 +59,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               {project.name[0]}
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-foreground tracking-tight flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-foreground tracking-tight">
                 {project.name}
               </h1>
               <p className="text-sm text-muted-foreground mt-0.5">{project.description}</p>
             </div>
           </div>
 
-          {/* Summary stats */}
           <div className="flex items-center gap-6 mt-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" /> {tasks.length} tasks
@@ -69,7 +77,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <MessageSquare className="w-3.5 h-3.5" /> {context.recentConversationCount} conversations
             </span>
             <span className="flex items-center gap-1.5">
-              <FolderKanban className="w-3.5 h-3.5" /> {assignments.length} roles assigned
+              <FolderKanban className="w-3.5 h-3.5" /> {assignments.length} of 7 roles assigned
             </span>
           </div>
         </header>
@@ -88,7 +96,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
               return (
                 <motion.div
-                  key={role.id}
+                  key={`${role.id}-${refreshKey}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.03 }}
@@ -97,8 +105,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     role={role}
                     assignment={assignment}
                     agent={agent}
+                    allAgents={agents}
+                    projectId={id}
                     taskCount={roleTasks.length}
                     lastActivity={lastRun?.started_at}
+                    onAssignmentChange={handleAssignmentChange}
                   />
                 </motion.div>
               )

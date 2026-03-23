@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRuns, useAgents } from '@/lib/hooks';
+import { useActiveProject } from '@/lib/project-context';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { AgentAvatar } from '@/components/ui/agent-avatar';
 import { ModelBadge } from '@/components/ui/model-badge';
@@ -33,7 +34,8 @@ const statusFilters: { label: string; value: RunStatus | 'all' }[] = [
 ];
 
 export default function RunsPage() {
-  const { data: runs } = useRuns();
+  const { activeProjectId } = useActiveProject();
+  const { data: runs } = useRuns(activeProjectId);
   const { data: agents } = useAgents();
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
 

@@ -139,3 +139,36 @@ export function fetchProjectContext(id: string): Promise<ProjectContext> {
 export function fetchProjectRoles(id: string): Promise<RoleAssignment[]> {
   return fetchJson<RoleAssignment[]>(`/projects/${id}/roles`)
 }
+
+export async function createProject(data: { name: string; description?: string; color?: string }): Promise<Project> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`Failed to create project: ${res.status}`)
+  return res.json() as Promise<Project>
+}
+
+export async function assignRole(
+  projectId: string,
+  data: { role: string; agent_id: string; notes?: string }
+): Promise<RoleAssignment> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/roles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`Failed to assign role: ${res.status}`)
+  return res.json() as Promise<RoleAssignment>
+}
+
+export async function unassignRole(projectId: string, role: string): Promise<void> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/roles?role=${role}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error(`Failed to unassign role: ${res.status}`)
+}

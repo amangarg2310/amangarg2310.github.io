@@ -1,15 +1,20 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useProjects, useProjectContext } from '@/lib/hooks'
+import { createProject } from '@/lib/api'
 import {
   FolderKanban,
   Activity,
   MessageSquare,
   CheckCircle2,
   Plus,
+  X,
 } from 'lucide-react'
+
+const PROJECT_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899']
 
 function ProjectCard({ projectId, delay }: { projectId: string; delay: number }) {
   const { data: context } = useProjectContext(projectId)
@@ -63,7 +68,30 @@ function ProjectCard({ projectId, delay }: { projectId: string; delay: number })
 }
 
 export default function ProjectsPage() {
-  const { data: projects } = useProjects()
+  const { data: projects, loading } = useProjects()
+  const [showCreate, setShowCreate] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [color, setColor] = useState(PROJECT_COLORS[0])
+  const [creating, setCreating] = useState(false)
+
+  const handleCreate = async () => {
+    if (!name.trim()) return
+    setCreating(true)
+    try {
+      await createProject({ name: name.trim(), description: description.trim(), color })
+      setName('')
+      setDescription('')
+      setColor(PROJECT_COLORS[0])
+      setShowCreate(false)
+      // Reload page to pick up new project
+      window.location.reload()
+    } catch (err) {
+      console.error('Failed to create project:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
@@ -78,13 +106,16 @@ export default function ProjectsPage() {
               Each project has its own agent roles, tasks, and conversations.
             </p>
           </div>
-          <button className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+          >
             <Plus className="w-4 h-4" />
             New Project
           </button>
         </header>
 
-        {projects.length === 0 ? (
+        {projects.length === 0 && !loading ? (
           <div className="text-center py-16">
             <FolderKanban className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-30" />
             <p className="text-sm text-muted-foreground">
@@ -99,6 +130,89 @@ export default function ProjectsPage() {
           </div>
         )}
       </div>
+
+      {/* Create Project Modal */}
+      <AnimatePresence>
+        {showCreate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowCreate(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-card border border-border rounded-xl p-6 w-full max-w-md space-y-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-foreground">New Project</h2>
+                <button onClick={() => setShowCreate(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. BiteClimb, ScoutAI"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="What is this project about?"
+                    rows={2}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Color</label>
+                  <div className="flex items-center gap-2">
+                    {PROJECT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setColor(c)}
+                        className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-card' : 'hover:scale-110'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setShowCreate(false)}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={!name.trim() || creating}
+                  className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creating ? 'Creating...' : 'Create Project'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
