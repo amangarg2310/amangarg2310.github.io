@@ -16,13 +16,15 @@ import { TeamView } from '@/components/dashboard/team-view'
 import { GettingStarted } from '@/components/dashboard/getting-started'
 import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
 import { useDashboardStats, useRuns } from '@/lib/hooks'
+import { useActiveProject } from '@/lib/project-context'
 import { formatCost } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [showCreateTask, setShowCreateTask] = useState(false)
+  const { activeProjectId } = useActiveProject()
 
-  const { activeRuns, needsApproval, failedRuns, todayUsage: today } = useDashboardStats()
-  const { data: runs } = useRuns()
+  const { activeRuns, needsApproval, failedRuns, todayUsage: today } = useDashboardStats(activeProjectId)
+  const { data: runs } = useRuns(activeProjectId)
 
   const totalCostToday = today.cost
   const totalTokensToday = today.tokens

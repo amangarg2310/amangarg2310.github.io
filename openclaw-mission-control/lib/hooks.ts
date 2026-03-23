@@ -10,6 +10,9 @@ import type {
   Conversation,
   DailyUsage,
   ModelUsage,
+  Project,
+  RoleAssignment,
+  ProjectContext,
 } from './types'
 import {
   fetchAgents,
@@ -21,14 +24,16 @@ import {
   fetchConversationDetail,
   fetchUsage,
   fetchActivity,
+  fetchProjects,
+  fetchProjectContext,
+  fetchProjectRoles,
 } from './api'
 import type { ConversationDetail } from './api'
 
 /**
- * Generic data-fetching hook.
- * Returns { data, loading, error } with typed data.
+ * Generic data-fetching hook with optional deps for re-fetching.
  */
-function useApi<T>(fetcher: () => Promise<T>, fallback: T): {
+function useApi<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = []): {
   data: T
   loading: boolean
   error: string | null
@@ -55,7 +60,7 @@ function useApi<T>(fetcher: () => Promise<T>, fallback: T): {
       })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, deps)
 
   return { data, loading, error }
 }
@@ -66,12 +71,20 @@ export function useAgents() {
   return useApi<Agent[]>(fetchAgents, [])
 }
 
-export function useTasks() {
-  return useApi<Task[]>(fetchTasks, [])
+export function useTasks(projectId?: string | null) {
+  return useApi<Task[]>(
+    () => fetchTasks(projectId),
+    [],
+    [projectId ?? null]
+  )
 }
 
-export function useRuns() {
-  return useApi<Run[]>(fetchRuns, [])
+export function useRuns(projectId?: string | null) {
+  return useApi<Run[]>(
+    () => fetchRuns(projectId),
+    [],
+    [projectId ?? null]
+  )
 }
 
 export function useRunDetail(id: string) {
@@ -81,8 +94,12 @@ export function useRunDetail(id: string) {
   )
 }
 
-export function useConversations() {
-  return useApi<Conversation[]>(fetchConversations, [])
+export function useConversations(projectId?: string | null) {
+  return useApi<Conversation[]>(
+    () => fetchConversations(projectId),
+    [],
+    [projectId ?? null]
+  )
 }
 
 export function useMessages(conversationId: string) {
@@ -139,18 +156,41 @@ export function useUsage() {
   )
 }
 
-export function useActivity(limit = 20) {
+export function useActivity(limit = 20, projectId?: string | null) {
   return useApi<Array<{ id: string; text: string; time: string; type: string }>>(
-    () => fetchActivity(limit),
-    []
+    () => fetchActivity(limit, projectId),
+    [],
+    [projectId ?? null]
+  )
+}
+
+// --- Project hooks ---
+
+export function useProjects() {
+  return useApi<Project[]>(fetchProjects, [])
+}
+
+export function useProjectContext(projectId: string | null) {
+  return useApi<ProjectContext | null>(
+    () => projectId ? fetchProjectContext(projectId) : Promise.resolve(null),
+    null,
+    [projectId]
+  )
+}
+
+export function useProjectRoles(projectId: string | null) {
+  return useApi<RoleAssignment[]>(
+    () => projectId ? fetchProjectRoles(projectId) : Promise.resolve([]),
+    [],
+    [projectId]
   )
 }
 
 // --- Derived/computed hooks ---
 
-export function useDashboardStats() {
-  const { data: runs, loading: runsLoading } = useRuns()
-  const { data: tasks, loading: tasksLoading } = useTasks()
+export function useDashboardStats(projectId?: string | null) {
+  const { data: runs, loading: runsLoading } = useRuns(projectId)
+  const { data: tasks, loading: tasksLoading } = useTasks(projectId)
   const { data: usage } = useUsage()
 
   const activeRuns = runs.filter((r) => r.status === 'running')

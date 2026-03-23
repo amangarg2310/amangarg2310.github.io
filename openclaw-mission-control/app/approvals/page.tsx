@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useTasks, useRuns, useAgents } from '@/lib/hooks'
+import { useActiveProject } from '@/lib/project-context'
 import type { Task, Run, Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { StatusPill } from '@/components/ui/status-badge'
@@ -90,8 +91,9 @@ function getApprovalItems(tasks: Task[], runs: Run[], agents: Agent[]): Approval
 }
 
 export default function ApprovalsPage() {
-  const { data: tasks } = useTasks()
-  const { data: runs } = useRuns()
+  const { activeProjectId } = useActiveProject()
+  const { data: tasks } = useTasks(activeProjectId)
+  const { data: runs } = useRuns(activeProjectId)
   const { data: agents } = useAgents()
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})

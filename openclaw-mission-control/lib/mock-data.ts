@@ -1,4 +1,4 @@
-import { Agent, Task, Run, RunEvent, Message, Conversation, UsageRecord, DailyUsage, ModelUsage } from './types';
+import { Agent, Task, Run, RunEvent, Message, Conversation, UsageRecord, DailyUsage, ModelUsage, Project, RoleAssignment } from './types';
 
 // --- Agents ---
 export const agents: Agent[] = [
@@ -134,6 +134,7 @@ export const tasks: Task[] = [
     status: 'running',
     assigned_agent_id: 'agent-001',
     created_by: 'user',
+    project_id: 'proj-001',
     created_at: '2026-03-23T08:00:00Z',
     updated_at: '2026-03-23T08:05:00Z',
   },
@@ -145,6 +146,7 @@ export const tasks: Task[] = [
     status: 'running',
     assigned_agent_id: 'agent-002',
     created_by: 'user',
+    project_id: 'proj-001',
     created_at: '2026-03-23T07:30:00Z',
     updated_at: '2026-03-23T07:35:00Z',
   },
@@ -156,6 +158,7 @@ export const tasks: Task[] = [
     status: 'completed',
     assigned_agent_id: 'agent-003',
     created_by: 'user',
+    project_id: 'proj-001',
     created_at: '2026-03-22T14:00:00Z',
     updated_at: '2026-03-22T14:45:00Z',
   },
@@ -167,6 +170,7 @@ export const tasks: Task[] = [
     status: 'needs_approval',
     assigned_agent_id: 'agent-004',
     created_by: 'user',
+    project_id: 'proj-001',
     created_at: '2026-03-23T06:00:00Z',
     updated_at: '2026-03-23T09:30:00Z',
   },
@@ -178,6 +182,7 @@ export const tasks: Task[] = [
     status: 'queued',
     assigned_agent_id: 'agent-003',
     created_by: 'user',
+    project_id: 'proj-002',
     created_at: '2026-03-23T09:00:00Z',
     updated_at: '2026-03-23T09:00:00Z',
   },
@@ -189,6 +194,7 @@ export const tasks: Task[] = [
     status: 'failed',
     assigned_agent_id: 'agent-002',
     created_by: 'user',
+    project_id: 'proj-002',
     created_at: '2026-03-22T16:00:00Z',
     updated_at: '2026-03-22T16:30:00Z',
   },
@@ -200,6 +206,7 @@ export const tasks: Task[] = [
     status: 'running',
     assigned_agent_id: 'agent-006',
     created_by: 'user',
+    project_id: 'proj-002',
     created_at: '2026-03-23T09:15:00Z',
     updated_at: '2026-03-23T09:20:00Z',
   },
@@ -509,6 +516,7 @@ export const conversations: Conversation[] = [
     agent_id: 'agent-001',
     task_id: 'task-001',
     status: 'active',
+    project_id: 'proj-001',
     last_message_at: minutesAgo(2),
     message_count: 8,
     total_cost: 0.0038,
@@ -519,6 +527,7 @@ export const conversations: Conversation[] = [
     agent_id: 'agent-002',
     task_id: 'task-002',
     status: 'active',
+    project_id: 'proj-001',
     last_message_at: minutesAgo(10),
     message_count: 12,
     total_cost: 0.405,
@@ -529,6 +538,7 @@ export const conversations: Conversation[] = [
     agent_id: 'agent-003',
     task_id: 'task-003',
     status: 'completed',
+    project_id: 'proj-001',
     last_message_at: hoursAgo(19.5),
     message_count: 6,
     total_cost: 0.0025,
@@ -539,6 +549,7 @@ export const conversations: Conversation[] = [
     agent_id: 'agent-004',
     task_id: 'task-004',
     status: 'active',
+    project_id: 'proj-002',
     last_message_at: minutesAgo(30),
     message_count: 10,
     total_cost: 0.280,
@@ -549,6 +560,7 @@ export const conversations: Conversation[] = [
     agent_id: 'agent-006',
     task_id: 'task-007',
     status: 'active',
+    project_id: 'proj-002',
     last_message_at: minutesAgo(5),
     message_count: 4,
     total_cost: 0.0035,
@@ -715,6 +727,39 @@ export function getNeedsApproval() {
 export function getOnlineAgents() {
   return agents.filter(a => a.is_active);
 }
+
+// --- Projects ---
+export const projects: Project[] = [
+  {
+    id: 'proj-001',
+    name: 'BiteClimb',
+    slug: 'biteclimb',
+    description: 'Community-driven food/beverage tier ranking platform',
+    color: '#3b82f6',
+    created_at: '2026-02-15T10:00:00Z',
+    updated_at: '2026-03-23T10:00:00Z',
+  },
+  {
+    id: 'proj-002',
+    name: 'ScoutAI',
+    slug: 'scoutai',
+    description: 'AI-powered competitive intelligence platform',
+    color: '#8b5cf6',
+    created_at: '2026-03-01T10:00:00Z',
+    updated_at: '2026-03-23T10:00:00Z',
+  },
+];
+
+// --- Role Assignments ---
+export const roleAssignments: RoleAssignment[] = [
+  { id: 'ra-001', project_id: 'proj-001', role: 'research', agent_id: 'agent-001', notes: 'Weekly trend scans for food/bev industry', created_at: '2026-03-15T10:00:00Z' },
+  { id: 'ra-002', project_id: 'proj-001', role: 'strategy', agent_id: 'agent-004', notes: 'Competitive analysis for tier ranking space', created_at: '2026-03-15T10:00:00Z' },
+  { id: 'ra-003', project_id: 'proj-001', role: 'content', agent_id: 'agent-003', notes: 'Blog posts and marketing copy', created_at: '2026-03-15T10:00:00Z' },
+  { id: 'ra-004', project_id: 'proj-001', role: 'product', agent_id: 'agent-006', notes: 'Roadmap planning and feature briefs', created_at: '2026-03-15T10:00:00Z' },
+  { id: 'ra-005', project_id: 'proj-001', role: 'advisor', agent_id: 'agent-006', notes: 'Weekly retros and investor updates', created_at: '2026-03-15T10:00:00Z' },
+  { id: 'ra-006', project_id: 'proj-002', role: 'research', agent_id: 'agent-001', notes: 'CI/CD market research', created_at: '2026-03-15T10:00:00Z' },
+  { id: 'ra-007', project_id: 'proj-002', role: 'product', agent_id: 'agent-002', notes: 'Feature development and code review', created_at: '2026-03-15T10:00:00Z' },
+];
 
 export function getRecentActivity() {
   return [

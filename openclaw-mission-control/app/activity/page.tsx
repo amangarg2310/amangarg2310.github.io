@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRuns, useAgents, useTasks } from '@/lib/hooks'
+import { useActiveProject } from '@/lib/project-context'
 import type { Run, Agent, Task, RunEvent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, timeAgo, cn } from '@/lib/utils'
@@ -128,9 +129,10 @@ function buildActivityLog(runs: Run[], agents: Agent[], tasks: Task[], runEvents
 }
 
 export default function ActivityPage() {
-  const { data: runs } = useRuns()
+  const { activeProjectId } = useActiveProject()
+  const { data: runs } = useRuns(activeProjectId)
   const { data: agents } = useAgents()
-  const { data: tasks } = useTasks()
+  const { data: tasks } = useTasks(activeProjectId)
   const [filter, setFilter] = useState<ActivityType>('all')
   const [searchQuery, setSearchQuery] = useState('')
   // Tool-level events loaded per-run in detail view; activity page uses run-level entries

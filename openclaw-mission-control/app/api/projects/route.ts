@@ -2,12 +2,9 @@ import { store } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
-  const projectId = url.searchParams.get('project_id')
-
-  const runs = projectId ? store.getRunsByProject(projectId) : store.getRuns()
-  return Response.json(runs, {
+export async function GET() {
+  const projects = store.getProjects()
+  return Response.json(projects, {
     headers: { 'Access-Control-Allow-Origin': '*' },
   })
 }

@@ -7,6 +7,9 @@ import type {
   Conversation,
   DailyUsage,
   ModelUsage,
+  Project,
+  RoleAssignment,
+  ProjectContext,
 } from './types'
 
 /**
@@ -53,13 +56,15 @@ export function fetchAgent(id: string): Promise<Agent> {
 }
 
 // --- Tasks ---
-export function fetchTasks(): Promise<Task[]> {
-  return fetchJson<Task[]>('/tasks')
+export function fetchTasks(projectId?: string | null): Promise<Task[]> {
+  const qs = projectId ? `?project_id=${projectId}` : ''
+  return fetchJson<Task[]>(`/tasks${qs}`)
 }
 
 // --- Runs ---
-export function fetchRuns(): Promise<Run[]> {
-  return fetchJson<Run[]>('/runs')
+export function fetchRuns(projectId?: string | null): Promise<Run[]> {
+  const qs = projectId ? `?project_id=${projectId}` : ''
+  return fetchJson<Run[]>(`/runs${qs}`)
 }
 
 export function fetchRunDetail(id: string): Promise<{ run: Run; events: RunEvent[] }> {
@@ -67,8 +72,9 @@ export function fetchRunDetail(id: string): Promise<{ run: Run; events: RunEvent
 }
 
 // --- Conversations ---
-export function fetchConversations(): Promise<Conversation[]> {
-  return fetchJson<Conversation[]>('/conversations')
+export function fetchConversations(projectId?: string | null): Promise<Conversation[]> {
+  const qs = projectId ? `?project_id=${projectId}` : ''
+  return fetchJson<Conversation[]>(`/conversations${qs}`)
 }
 
 export function fetchMessages(conversationId: string): Promise<Message[]> {
@@ -113,7 +119,23 @@ export function fetchUsage(): Promise<{ daily: DailyUsage[]; models: ModelUsage[
 
 // --- Activity ---
 export function fetchActivity(
-  limit = 20
+  limit = 20,
+  projectId?: string | null
 ): Promise<Array<{ id: string; text: string; time: string; type: string }>> {
-  return fetchJson(`/activity?limit=${limit}`)
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (projectId) params.set('project_id', projectId)
+  return fetchJson(`/activity?${params}`)
+}
+
+// --- Projects ---
+export function fetchProjects(): Promise<Project[]> {
+  return fetchJson<Project[]>('/projects')
+}
+
+export function fetchProjectContext(id: string): Promise<ProjectContext> {
+  return fetchJson<ProjectContext>(`/projects/${id}`)
+}
+
+export function fetchProjectRoles(id: string): Promise<RoleAssignment[]> {
+  return fetchJson<RoleAssignment[]>(`/projects/${id}/roles`)
 }

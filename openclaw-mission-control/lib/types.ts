@@ -61,6 +61,7 @@ export interface Task {
   status: TaskStatus;
   assigned_agent_id: string | null;
   created_by: string;
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,6 +79,7 @@ export interface Run {
   estimated_cost: number;
   retry_count: number;
   parent_run_id: string | null;
+  project_id?: string | null;
   // Joined
   agent_name?: string;
   task_title?: string;
@@ -125,6 +127,7 @@ export interface Conversation {
   agent_id: string;
   task_id: string | null;
   status: 'active' | 'idle' | 'completed' | 'archived';
+  project_id?: string | null;
   last_message_at: string;
   message_count: number;
   total_cost: number;
@@ -156,4 +159,60 @@ export interface ModelUsage {
   output_tokens: number;
   estimated_cost: number;
   percentage: number;
+}
+
+// --- Roles ---
+
+export type RoleLane =
+  | 'research'
+  | 'strategy'
+  | 'product'
+  | 'content'
+  | 'performance_marketing'
+  | 'consumer_insights'
+  | 'advisor';
+
+export interface RoleLaneConfig {
+  id: RoleLane;
+  label: string;
+  description: string;
+  color: string;
+  suggestedJobs: SuggestedJob[];
+}
+
+export interface SuggestedJob {
+  id: string;
+  title: string;
+  description: string;
+  cadence: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'on_demand';
+  enabled: boolean;
+}
+
+// --- Projects ---
+
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoleAssignment {
+  id: string;
+  project_id: string;
+  role: RoleLane;
+  agent_id: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface ProjectContext {
+  project: Project;
+  assignments: RoleAssignment[];
+  taskCount: number;
+  activeRunCount: number;
+  recentConversationCount: number;
 }

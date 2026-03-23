@@ -2,12 +2,21 @@ import { store } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
-  const projectId = url.searchParams.get('project_id')
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const context = store.getProjectContext(id)
 
-  const runs = projectId ? store.getRunsByProject(projectId) : store.getRuns()
-  return Response.json(runs, {
+  if (!context) {
+    return Response.json({ error: 'Project not found' }, {
+      status: 404,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
+  }
+
+  return Response.json(context, {
     headers: { 'Access-Control-Allow-Origin': '*' },
   })
 }

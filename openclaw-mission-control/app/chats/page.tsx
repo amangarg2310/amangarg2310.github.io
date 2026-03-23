@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
+import { useActiveProject } from '@/lib/project-context'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, formatTokens, timeAgo, cn } from '@/lib/utils'
 import {
@@ -15,7 +16,8 @@ import {
 } from 'lucide-react'
 
 export default function ChatsPage() {
-  const { data: conversations } = useConversations()
+  const { activeProjectId } = useActiveProject()
+  const { data: conversations } = useConversations(activeProjectId)
   const { data: agents } = useAgents()
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
 

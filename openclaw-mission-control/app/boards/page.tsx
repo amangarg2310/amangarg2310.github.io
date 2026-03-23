@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useTasks, useAgents } from '@/lib/hooks'
+import { useActiveProject } from '@/lib/project-context'
 import { Task, Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { cn, timeAgo } from '@/lib/utils'
@@ -117,7 +118,8 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
 }
 
 export default function BoardsPage() {
-  const { data: tasks } = useTasks()
+  const { activeProjectId } = useActiveProject()
+  const { data: tasks } = useTasks(activeProjectId)
   const { data: agents } = useAgents()
   return (
     <div className="flex-1 h-screen overflow-hidden bg-background flex flex-col">

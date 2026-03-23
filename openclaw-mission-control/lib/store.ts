@@ -1,4 +1,4 @@
-import { Agent, Task, Run, RunEvent, Message, Conversation, DailyUsage, ModelUsage } from './types'
+import { Agent, Task, Run, RunEvent, Message, Conversation, DailyUsage, ModelUsage, Project, RoleAssignment, ProjectContext } from './types'
 import {
   agents as mockAgents,
   tasks as mockTasks,
@@ -8,18 +8,24 @@ import {
   messages as mockMessages,
   dailyUsage as mockDailyUsage,
   modelUsage as mockModelUsage,
+  projects as mockProjects,
+  roleAssignments as mockRoleAssignments,
 } from './mock-data'
+import { loadProjectData, saveProjectData } from './project-store'
+import { resolveStateDir } from './bridge/state-resolver'
 
 /**
  * Persistent in-memory data store for the control plane.
  *
  * Mode selection:
- *  - Demo mode (no OPENCLAW_RUNTIME_URL): seeds with mock data
- *  - Live mode (OPENCLAW_RUNTIME_URL set): starts empty, hydrated by sync.ts
+ *  - Demo mode (no OPENCLAW env vars): seeds with mock data
+ *  - Live mode (OPENCLAW env vars set): starts empty, hydrated by sync.ts
  *
  * The sync layer calls replaceAll() to swap in normalized runtime data.
- * API routes only read from this store — never from the runtime directly.
+ * CRITICAL: replaceAll() never touches _projects or _roleAssignments —
+ * those are dashboard-owned and persist to disk independently.
  *
+ * API routes only read from this store — never from the runtime directly.
  * This is a server-only module — never import from client components.
  */
 
@@ -28,6 +34,14 @@ const isLiveMode = !!(
   process.env.OPENCLAW_CLI_PATH ||
   process.env.OPENCLAW_PROFILE
 )
+
+// Resolve state dir for project persistence (null in demo mode)
+let stateDir: string | null = null
+try {
+  stateDir = resolveStateDir()
+} catch {
+  // Demo mode — no state dir
+}
 
 class DataStore {
   private _agents: Agent[]
@@ -38,6 +52,10 @@ class DataStore {
   private _messages: Message[]
   private _dailyUsage: DailyUsage[]
   private _modelUsage: ModelUsage[]
+
+  // Dashboard-owned data — NOT touched by replaceAll()
+  private _projects: Project[]
+  private _roleAssignments: RoleAssignment[]
 
   constructor() {
     if (isLiveMode) {
@@ -61,10 +79,21 @@ class DataStore {
       this._dailyUsage = [...mockDailyUsage]
       this._modelUsage = [...mockModelUsage]
     }
+
+    // Load projects from disk (live mode) or mock data (demo mode)
+    const diskData = loadProjectData(stateDir)
+    if (diskData) {
+      this._projects = diskData.projects
+      this._roleAssignments = diskData.roleAssignments
+    } else {
+      this._projects = [...mockProjects]
+      this._roleAssignments = [...mockRoleAssignments]
+    }
   }
 
   /**
-   * Replace all store contents atomically. Called by sync.ts.
+   * Replace all bridge-sourced store contents atomically. Called by sync.ts.
+   * DOES NOT touch _projects or _roleAssignments — those are dashboard-owned.
    */
   replaceAll(data: {
     agents: Agent[]
@@ -110,6 +139,10 @@ class DataStore {
     return this._tasks.find((t) => t.id === id)
   }
 
+  getTasksByProject(projectId: string): Task[] {
+    return this._tasks.filter((t) => t.project_id === projectId)
+  }
+
   upsertTask(task: Task): void {
     const idx = this._tasks.findIndex((t) => t.id === task.id)
     if (idx >= 0) this._tasks[idx] = task
@@ -131,6 +164,10 @@ class DataStore {
 
   getRun(id: string): Run | undefined {
     return this._runs.find((r) => r.id === id)
+  }
+
+  getRunsByProject(projectId: string): Run[] {
+    return this._runs.filter((r) => r.project_id === projectId)
   }
 
   getRunEvents(runId: string): RunEvent[] {
@@ -156,6 +193,10 @@ class DataStore {
     return this._conversations.find((c) => c.id === id)
   }
 
+  getConversationsByProject(projectId: string): Conversation[] {
+    return this._conversations.filter((c) => c.project_id === projectId)
+  }
+
   getMessages(conversationId: string): Message[] {
     return this._messages.filter((m) => m.conversation_id === conversationId)
   }
@@ -169,6 +210,65 @@ class DataStore {
     return this._modelUsage
   }
 
+  // --- Projects (dashboard-owned, persisted to disk) ---
+  getProjects(): Project[] {
+    return this._projects
+  }
+
+  getProject(id: string): Project | undefined {
+    return this._projects.find((p) => p.id === id)
+  }
+
+  upsertProject(project: Project): void {
+    const idx = this._projects.findIndex((p) => p.id === project.id)
+    if (idx >= 0) this._projects[idx] = project
+    else this._projects.push(project)
+    this._persistProjects()
+  }
+
+  deleteProject(id: string): boolean {
+    const idx = this._projects.findIndex((p) => p.id === id)
+    if (idx < 0) return false
+    this._projects.splice(idx, 1)
+    // Also remove role assignments for this project
+    this._roleAssignments = this._roleAssignments.filter((ra) => ra.project_id !== id)
+    this._persistProjects()
+    return true
+  }
+
+  // --- Role Assignments (dashboard-owned, persisted to disk) ---
+  getRoleAssignments(projectId?: string): RoleAssignment[] {
+    if (projectId) return this._roleAssignments.filter((ra) => ra.project_id === projectId)
+    return this._roleAssignments
+  }
+
+  upsertRoleAssignment(assignment: RoleAssignment): void {
+    const idx = this._roleAssignments.findIndex((ra) => ra.id === assignment.id)
+    if (idx >= 0) this._roleAssignments[idx] = assignment
+    else this._roleAssignments.push(assignment)
+    this._persistProjects()
+  }
+
+  removeRoleAssignment(id: string): boolean {
+    const idx = this._roleAssignments.findIndex((ra) => ra.id === id)
+    if (idx < 0) return false
+    this._roleAssignments.splice(idx, 1)
+    this._persistProjects()
+    return true
+  }
+
+  getProjectContext(projectId: string): ProjectContext | null {
+    const project = this.getProject(projectId)
+    if (!project) return null
+
+    const assignments = this.getRoleAssignments(projectId)
+    const taskCount = this.getTasksByProject(projectId).length
+    const activeRunCount = this.getRunsByProject(projectId).filter((r) => r.status === 'running').length
+    const recentConversationCount = this.getConversationsByProject(projectId).length
+
+    return { project, assignments, taskCount, activeRunCount, recentConversationCount }
+  }
+
   // --- Activity (computed) ---
   getRecentActivity(limit = 20) {
     type ActivityItem = {
@@ -176,6 +276,7 @@ class DataStore {
       text: string
       time: string
       type: 'started' | 'completed' | 'failed' | 'needs_approval' | 'stalled'
+      project_id?: string | null
     }
 
     const items: ActivityItem[] = []
@@ -190,6 +291,7 @@ class DataStore {
         text: `${name} started ${title}`,
         time: run.started_at,
         type: 'started',
+        project_id: run.project_id,
       })
 
       if (run.status === 'completed' && run.ended_at) {
@@ -198,6 +300,7 @@ class DataStore {
           text: `${name} completed ${title}`,
           time: run.ended_at,
           type: 'completed',
+          project_id: run.project_id,
         })
       }
       if (run.status === 'failed' && run.ended_at) {
@@ -206,6 +309,7 @@ class DataStore {
           text: `${name} failed on ${title} — ${run.retry_count} retries exhausted`,
           time: run.ended_at,
           type: 'failed',
+          project_id: run.project_id,
         })
       }
       if (run.status === 'needs_approval') {
@@ -214,6 +318,7 @@ class DataStore {
           text: `${name} completed ${title} — awaiting approval`,
           time: run.ended_at || run.started_at,
           type: 'needs_approval',
+          project_id: run.project_id,
         })
       }
       if (run.status === 'stalled') {
@@ -222,12 +327,19 @@ class DataStore {
           text: `${name} stalled on ${title}`,
           time: run.started_at,
           type: 'stalled',
+          project_id: run.project_id,
         })
       }
     }
 
     return items
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .slice(0, limit)
+  }
+
+  getRecentActivityByProject(projectId: string, limit = 20) {
+    return this.getRecentActivity(limit * 2)
+      .filter((item) => item.project_id === projectId)
       .slice(0, limit)
   }
 
@@ -264,6 +376,14 @@ class DataStore {
 
   getOnlineAgents(): Agent[] {
     return this._agents.filter((a) => a.is_active)
+  }
+
+  // --- Internal ---
+  private _persistProjects(): void {
+    saveProjectData(stateDir, {
+      projects: this._projects,
+      roleAssignments: this._roleAssignments,
+    })
   }
 }
 
