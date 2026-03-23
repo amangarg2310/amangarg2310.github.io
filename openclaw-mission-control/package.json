@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsx --test tests/bridge.test.ts",
+    "validate": "npx tsx scripts/validate-bridge.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

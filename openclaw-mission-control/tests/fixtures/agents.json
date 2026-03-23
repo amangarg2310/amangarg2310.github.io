@@ -1,0 +1,20 @@
+[
+  {
+    "id": "main",
+    "workspace": "/home/user/projects/webapp",
+    "agentDir": "/home/user/.openclaw/agents/main",
+    "model": "anthropic/claude-3.5-sonnet",
+    "bindings": 3,
+    "isDefault": true,
+    "routes": ["telegram:direct", "http:webhook"]
+  },
+  {
+    "id": "code-reviewer",
+    "workspace": "/home/user/projects/webapp",
+    "agentDir": "/home/user/.openclaw/agents/code-reviewer",
+    "model": "openai-codex/gpt-5.4",
+    "bindings": 1,
+    "isDefault": false,
+    "routes": ["github:pr-review"]
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "path": "/home/user/.openclaw/agents/main/sessions",
+  "count": 3,
+  "activeMinutes": 42,
+  "sessions": [
+    {
+      "key": "agent:main:telegram:direct:6966123628",
+      "updatedAt": 1711200000000,
+      "ageMs": 3600000,
+      "sessionId": "fe2c7af8-b34c-4c49-b340-a9156aa5b402",
+      "systemSent": true,
+      "abortedLastRun": false,
+      "inputTokens": 15200,
+      "outputTokens": 8400,
+      "totalTokens": 23600,
+      "totalTokensFresh": true,
+      "model": "anthropic/claude-3.5-sonnet",
+      "modelProvider": "anthropic",
+      "contextTokens": 128000,
+      "agentId": "main",
+      "kind": "direct"
+    },
+    {
+      "key": "agent:main:http:webhook:deploy-check",
+      "updatedAt": 1711196400000,
+      "ageMs": 7200000,
+      "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "systemSent": true,
+      "abortedLastRun": true,
+      "inputTokens": 5000,
+      "outputTokens": 2000,
+      "totalTokens": 7000,
+      "model": "anthropic/claude-3.5-sonnet",
+      "modelProvider": "anthropic",
+      "contextTokens": 128000,
+      "agentId": "main",
+      "kind": "webhook"
+    },
+    {
+      "key": "agent:main:telegram:direct:9988776655",
+      "updatedAt": 1711189200000,
+      "ageMs": 86400000,
+      "sessionId": "deadbeef-cafe-4000-8000-123456789abc",
+      "agentId": "main",
+      "kind": "direct"
+    }
+  ]
+}
