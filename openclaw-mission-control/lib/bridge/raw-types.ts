@@ -41,8 +41,8 @@ export interface RawSession {
   updatedAt: number // epoch ms
   ageMs: number
   sessionId: string // UUID
-  systemSent: boolean
-  abortedLastRun: boolean
+  systemSent?: boolean
+  abortedLastRun?: boolean
   inputTokens?: number | null
   outputTokens?: number | null
   totalTokens?: number | null

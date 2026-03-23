@@ -37,13 +37,14 @@ export interface TranscriptResult {
  */
 export async function readTranscript(
   stateDir: string,
+  agentId: string,
   sessionId: string,
   options?: TranscriptReadOptions
 ): Promise<TranscriptResult | null> {
-  const filePath = resolveTranscriptPath(stateDir, sessionId)
+  const filePath = resolveTranscriptPath(stateDir, agentId, sessionId)
   if (!existsSync(filePath)) return null
 
-  const lockPath = resolveTranscriptLockPath(stateDir, sessionId)
+  const lockPath = resolveTranscriptLockPath(stateDir, agentId, sessionId)
   const isLocked = existsSync(lockPath)
 
   const offset = options?.offset ?? 0
@@ -106,13 +107,13 @@ export async function readTranscript(
 /**
  * Check if a session is currently active (has a .jsonl.lock file).
  */
-export function isSessionActive(stateDir: string, sessionId: string): boolean {
-  return existsSync(resolveTranscriptLockPath(stateDir, sessionId))
+export function isSessionActive(stateDir: string, agentId: string, sessionId: string): boolean {
+  return existsSync(resolveTranscriptLockPath(stateDir, agentId, sessionId))
 }
 
 /**
  * Check if a transcript file exists for a session.
  */
-export function hasTranscript(stateDir: string, sessionId: string): boolean {
-  return existsSync(resolveTranscriptPath(stateDir, sessionId))
+export function hasTranscript(stateDir: string, agentId: string, sessionId: string): boolean {
+  return existsSync(resolveTranscriptPath(stateDir, agentId, sessionId))
 }

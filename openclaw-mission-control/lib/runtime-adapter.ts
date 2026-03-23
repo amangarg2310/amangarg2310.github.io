@@ -105,7 +105,7 @@ export async function fetchRuntimeData(): Promise<RuntimeData | null> {
 
   const rawSessions = rawSessionList?.sessions || []
   for (const session of rawSessions) {
-    const locked = isSessionActive(stateDir, session.sessionId)
+    const locked = isSessionActive(stateDir, session.agentId, session.sessionId)
     const { run, conversation } = bridgeNormalizeSession(session, agentMap, locked)
     allRuns.push(run)
     allConversations.push(conversation)

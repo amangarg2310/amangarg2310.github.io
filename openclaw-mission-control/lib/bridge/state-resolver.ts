@@ -66,16 +66,17 @@ export function resolveStateDir(options?: {
 
 /**
  * Resolve the path to a session's transcript .jsonl file.
- * Convention: <stateDir>/sessions/<sessionId>.jsonl
+ * On-disk layout: <stateDir>/agents/<agentId>/sessions/<sessionId>.jsonl
+ * Example: ~/.openclaw/agents/main/sessions/fe2c7af8-...-.jsonl
  */
-export function resolveTranscriptPath(stateDir: string, sessionId: string): string {
-  return resolve(stateDir, 'sessions', `${sessionId}.jsonl`)
+export function resolveTranscriptPath(stateDir: string, agentId: string, sessionId: string): string {
+  return resolve(stateDir, 'agents', agentId, 'sessions', `${sessionId}.jsonl`)
 }
 
 /**
  * Check if a session is currently locked (active/in-progress).
- * Convention: <stateDir>/sessions/<sessionId>.jsonl.lock
+ * On-disk layout: <stateDir>/agents/<agentId>/sessions/<sessionId>.jsonl.lock
  */
-export function resolveTranscriptLockPath(stateDir: string, sessionId: string): string {
-  return resolve(stateDir, 'sessions', `${sessionId}.jsonl.lock`)
+export function resolveTranscriptLockPath(stateDir: string, agentId: string, sessionId: string): string {
+  return resolve(stateDir, 'agents', agentId, 'sessions', `${sessionId}.jsonl.lock`)
 }
