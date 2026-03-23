@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -11,6 +12,13 @@
   --border: #252528;
   --ring: #3b82f6;
   --accent: #3b82f6;
+  /* Status colors */
+  --status-success: #10b981;
+  --status-running: #3b82f6;
+  --status-approval: #f59e0b;
+  --status-failed: #ef4444;
+  --status-model: #a855f7;
+  --status-tool: #06b6d4;
 }
 
 @theme inline {
@@ -23,30 +31,43 @@
   --color-border: var(--border);
   --color-ring: var(--ring);
   --color-accent: var(--accent);
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', Menlo, monospace;
+  --color-status-success: var(--status-success);
+  --color-status-running: var(--status-running);
+  --color-status-approval: var(--status-approval);
+  --color-status-failed: var(--status-failed);
+  --color-status-model: var(--status-model);
+  --color-status-tool: var(--status-tool);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', Menlo, monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #252528;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3f;
+  background: #3f3f46;
 }
 
 * {
@@ -64,11 +85,91 @@ button, a, input, select, textarea {
   transition: all 0.15s ease;
 }
 
-/* Modal/overlay animations */
+/* Card glow effects */
+.card-glow {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 4px 24px -8px rgba(0, 0, 0, 0.5);
+}
+.card-hover {
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3), 0 8px 32px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* Tabular nums for metrics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section header fade */
+.section-header-fade {
+  position: relative;
+}
+.section-header-fade::after {
+  content: '';
+  position: absolute;
+  bottom: -16px;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: linear-gradient(to bottom, rgba(10, 10, 12, 1), rgba(10, 10, 12, 0));
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* LED pulse for running status */
+.led-pulse {
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Pipeline flow animation */
+.animate-flow {
+  animation: flow 1s linear infinite;
+}
+
+/* Busy ring for active agents */
+.busy-ring {
+  animation: spin 3s linear infinite;
+}
+
+/* Typing indicator dots */
+.typing-dot:nth-child(1) { animation: typing 1.4s infinite 0s; }
+.typing-dot:nth-child(2) { animation: typing 1.4s infinite 0.2s; }
+.typing-dot:nth-child(3) { animation: typing 1.4s infinite 0.4s; }
+
+/* Gantt chart grid background */
+.gantt-grid {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent calc(10% - 1px),
+    rgba(37, 37, 40, 0.3) calc(10% - 1px),
+    rgba(37, 37, 40, 0.3) 10%
+  );
+}
+
+/* Keyframes */
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+@keyframes flow {
+  to { stroke-dashoffset: -8; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(1); }
+  30% { opacity: 1; transform: scale(1.2); }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

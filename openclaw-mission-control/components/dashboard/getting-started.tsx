@@ -1,113 +1,75 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { agents } from '@/lib/mock-data';
-import { cn } from '@/lib/utils';
-import {
-  Key,
-  Bot,
-  ListTodo,
-  CheckCircle2,
-  X,
-  Sparkles,
-} from 'lucide-react';
+import { useState } from 'react'
+import { agents } from '@/lib/mock-data'
+import { X, Check } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const steps = [
-  {
-    id: 'keys',
-    label: 'Set up API keys',
-    description: 'Add your OpenAI or Anthropic API key in Settings',
-    href: '/settings',
-    icon: Key,
-    done: true, // mock: keys are configured
-  },
-  {
-    id: 'agents',
-    label: 'Create your first agent',
-    description: 'Define an AI worker with a role, model, and tools',
-    href: '/agents',
-    icon: Bot,
-    done: agents.length > 0,
-  },
-  {
-    id: 'task',
-    label: 'Assign a task',
-    description: 'Create a task and let an agent execute it',
-    href: '/?newTask=true',
-    icon: ListTodo,
-    done: false, // mock: no tasks created by user
-  },
-  {
-    id: 'review',
-    label: 'Review results',
-    description: 'Inspect a completed run and approve or iterate',
-    href: '/runs',
-    icon: CheckCircle2,
-    done: false,
-  },
-];
+  { label: 'Connect Provider', done: true },
+  { label: 'Create Agent', done: agents.length > 0 },
+  { label: 'Define Tools', done: false },
+  { label: 'Run Task', done: false },
+  { label: 'Review Logs', done: false },
+]
 
 export function GettingStarted() {
-  const [dismissed, setDismissed] = useState(false);
-  if (dismissed) return null;
-
-  const completedCount = steps.filter(s => s.done).length;
-  const progress = (completedCount / steps.length) * 100;
+  const [showChecklist, setShowChecklist] = useState(true)
+  const completedCount = steps.filter((s) => s.done).length
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-blue-400" />
-          <h3 className="text-sm font-medium">Getting Started</h3>
-          <span className="text-[10px] text-muted-foreground">{completedCount}/{steps.length}</span>
-        </div>
-        <button
-          onClick={() => setDismissed(true)}
-          className="p-1 rounded hover:bg-white/10 text-muted-foreground"
-          title="Dismiss"
+    <AnimatePresence>
+      {showChecklist && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0, marginTop: 0 }}
+          className="bg-card border border-border rounded-xl overflow-hidden card-glow"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* Progress bar */}
-      <div className="h-0.5 bg-white/5">
-        <div className="h-full bg-blue-500 transition-all" style={{ width: `${progress}%` }} />
-      </div>
-
-      <div className="divide-y divide-border">
-        {steps.map((step, i) => {
-          const StepIcon = step.icon;
-          return (
-            <Link
-              key={step.id}
-              href={step.href}
-              className={cn(
-                'flex items-center gap-3 px-4 py-3 transition-colors',
-                step.done ? 'opacity-60' : 'hover:bg-white/[0.02]'
-              )}
+          <div className="p-4 border-b border-border/50 flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm">
+                {completedCount}/{steps.length}
+              </div>
+              <h2 className="text-sm font-medium text-foreground">
+                Getting Started
+              </h2>
+            </div>
+            <button
+              onClick={() => setShowChecklist(false)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              <div className={cn(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
-                step.done
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                  : 'bg-white/[0.03] border-border text-muted-foreground'
-              )}>
-                {step.done ? <CheckCircle2 className="h-3.5 w-3.5" /> : <StepIcon className="h-3.5 w-3.5" />}
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-5 gap-4 bg-card">
+            {steps.map((item, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div
+                  className={`w-4 h-4 rounded-full flex items-center justify-center border ${
+                    item.done
+                      ? 'bg-status-success border-status-success'
+                      : 'border-muted-foreground/50'
+                  }`}
+                >
+                  {item.done && (
+                    <Check className="w-3 h-3 text-background" />
+                  )}
+                </div>
+                <span
+                  className={`text-sm ${
+                    item.done
+                      ? 'text-muted-foreground line-through'
+                      : 'text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className={cn('text-[13px] font-medium', step.done && 'line-through text-muted-foreground')}>{step.label}</div>
-                <div className="text-[11px] text-muted-foreground">{step.description}</div>
-              </div>
-              {!step.done && (
-                <span className="text-[11px] text-blue-400 shrink-0">Start →</span>
-              )}
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
 }

@@ -1,365 +1,312 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { agents } from '@/lib/mock-data';
-import { Agent } from '@/lib/types';
-import { MODEL_PRICING, getModelTier, getTierLabel, getTierColor } from '@/lib/costs';
-import { AgentAvatar } from '@/components/ui/agent-avatar';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { ModelBadge } from '@/components/ui/model-badge';
-import { PageHeader } from '@/components/ui/page-header';
-import { Tooltip } from '@/components/ui/tooltip';
-import { formatCost, cn } from '@/lib/utils';
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { agents } from '@/lib/mock-data'
+import { Agent } from '@/lib/types'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { formatCost, cn } from '@/lib/utils'
 import {
-  Plus,
-  Search,
-  Pencil,
-  Copy,
-  Archive,
-  ChevronDown,
-  ChevronRight,
-  DollarSign,
-  Wrench,
-  X,
   Bot,
-  Sparkles,
+  Search,
+  Plus,
+  MoreVertical,
+  ChevronDown,
+  ChevronUp,
+  Wrench,
+  Activity,
+  DollarSign,
   ArrowRight,
-  Info,
-} from 'lucide-react';
+  Cpu,
+  AlertTriangle,
+} from 'lucide-react'
 
-export default function AgentsPage() {
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
-  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const filteredAgents = agents.filter(a => {
-    if (filter === 'active' && !a.is_active) return false;
-    if (filter === 'inactive' && a.is_active) return false;
-    if (searchQuery && !a.name.toLowerCase().includes(searchQuery.toLowerCase()) && !a.specialization.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
-
+function MiniProgressRing({
+  progress,
+  color,
+}: {
+  progress: number
+  color: string
+}) {
+  const radius = 10
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset =
+    circumference - (progress / 100) * circumference
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-      <PageHeader title="Agents" description="Create and manage your AI agent team">
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search agents..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="h-8 w-48 rounded-md border border-border bg-card pl-8 pr-3 text-[13px] outline-none placeholder:text-muted-foreground focus:border-blue-500/50"
-            />
-          </div>
-          <div className="flex rounded-md border border-border overflow-hidden">
-            {(['all', 'active', 'inactive'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  'px-3 py-1.5 text-[11px] font-medium transition-colors capitalize',
-                  filter === f ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                )}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-500 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" /> New Agent
-          </button>
-        </div>
-      </PageHeader>
-
-      {/* Empty state */}
-      {filteredAgents.length === 0 && (
-        <div className="rounded-lg border border-dashed border-border bg-white/[0.01] py-12 text-center space-y-3">
-          <Bot className="h-10 w-10 text-muted-foreground mx-auto opacity-30" />
-          {searchQuery || filter !== 'all' ? (
-            <>
-              <p className="text-[13px] text-muted-foreground">No agents match your filters</p>
-              <button onClick={() => { setFilter('all'); setSearchQuery(''); }} className="text-[12px] text-blue-400">Clear filters</button>
-            </>
-          ) : (
-            <>
-              <p className="text-base font-medium">No agents yet</p>
-              <p className="text-[13px] text-muted-foreground max-w-sm mx-auto">
-                Agents are AI workers with specific skills. Create your first agent to start assigning tasks.
-              </p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-500 transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" /> Create Your First Agent
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Agent cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {filteredAgents.map((agent) => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            expanded={expandedAgent === agent.id}
-            onToggle={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
-            onEdit={() => setEditingAgent(agent)}
-            onDuplicate={() => {
-              // Mock: would create a copy
-              setShowCreateModal(true);
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Create/Edit Agent Modal */}
-      {(showCreateModal || editingAgent) && (
-        <AgentFormModal
-          agent={editingAgent}
-          onClose={() => { setShowCreateModal(false); setEditingAgent(null); }}
+    <div className="relative w-6 h-6 flex items-center justify-center">
+      <svg className="w-full h-full transform -rotate-90">
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          stroke="currentColor"
+          strokeWidth="2"
+          fill="transparent"
+          className="text-border"
         />
-      )}
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          stroke={color}
+          strokeWidth="2"
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          className="transition-all duration-500 ease-out"
+        />
+      </svg>
     </div>
-  );
+  )
 }
 
-function AgentCard({
-  agent, expanded, onToggle, onEdit, onDuplicate,
+function MiniBar({
+  value,
+  max,
+  color,
 }: {
-  agent: Agent; expanded: boolean; onToggle: () => void; onEdit: () => void; onDuplicate: () => void;
+  value: number
+  max: number
+  color: string
 }) {
+  const percentage = Math.min(100, (value / max) * 100)
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          <AgentAvatar name={agent.name} color={agent.avatar_color} size="lg" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold">{agent.name}</h3>
-              <StatusBadge status={agent.status || (agent.is_active ? 'active' : 'inactive')} size="sm" />
+    <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-500"
+        style={{ width: `${percentage}%`, backgroundColor: color }}
+      />
+    </div>
+  )
+}
+
+function AgentCard({ agent }: { agent: Agent }) {
+  const [expanded, setExpanded] = useState(false)
+  const isBusy = agent.status === 'busy'
+  const color = agent.avatar_color || '#3b82f6'
+  const budgetUsed = Math.min(
+    100,
+    ((agent.avg_cost_per_run || 0) / agent.max_budget_per_run) * 100 * (agent.total_runs || 0)
+  )
+  const clampedBudget = Math.min(100, Math.max(0, budgetUsed))
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card rounded-xl border border-border/50 card-glow overflow-hidden flex flex-col relative"
+    >
+      {/* Top border identity color */}
+      <div
+        className="absolute top-0 left-0 right-0 h-1"
+        style={{ backgroundColor: color }}
+      />
+
+      <div className="p-5 flex-1">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              {isBusy && (
+                <div
+                  className="absolute -inset-1 rounded-full border border-dashed busy-ring opacity-50"
+                  style={{ borderColor: color }}
+                />
+              )}
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border border-white/10"
+                style={{
+                  backgroundColor: `${color}20`,
+                  color: color,
+                }}
+              >
+                {agent.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')
+                  .slice(0, 2)}
+              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{agent.specialization}</p>
-            <p className="text-[12px] text-muted-foreground mt-1.5 line-clamp-2">{agent.description}</p>
+            <div>
+              <h3 className="text-foreground font-medium flex items-center gap-2">
+                {agent.name}
+                <StatusBadge
+                  status={agent.is_active ? 'running' : 'inactive'}
+                  size="sm"
+                />
+              </h3>
+              <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">
+                {agent.description}
+              </p>
+            </div>
           </div>
+          <button className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors">
+            <MoreVertical className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Model routing - made much more visible */}
-        <div className="mt-3 rounded bg-white/[0.02] border border-white/5 p-2.5">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
+        {/* Routing Pipeline */}
+        <div className="mb-5 bg-background/50 rounded-lg p-3 border border-border/30">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-medium">
             Model Routing
-            <Tooltip content="The agent starts with the cheap default model. If the task is too complex, it escalates to the premium model." />
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <div className="text-[10px] text-muted-foreground">Default</div>
-              <ModelBadge model={agent.default_model} />
+            <div className="flex-1 bg-status-success/10 border border-status-success/20 rounded px-2 py-1.5 flex items-center gap-1.5">
+              <Cpu className="w-3 h-3 text-status-success" />
+              <span className="text-xs text-status-success font-mono truncate">
+                {agent.default_model}
+              </span>
             </div>
-            <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-            <div className="flex-1">
-              <div className="text-[10px] text-muted-foreground">Escalation</div>
-              <ModelBadge model={agent.escalation_model} />
+            <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+            <div className="flex-1 bg-status-approval/10 border border-status-approval/20 rounded px-2 py-1.5 flex items-center gap-1.5">
+              <AlertTriangle className="w-3 h-3 text-status-approval" />
+              <span className="text-xs text-status-approval font-mono truncate">
+                {agent.escalation_model}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 mt-3">
-          <div className="rounded bg-white/[0.03] px-2.5 py-1.5">
-            <div className="text-[10px] text-muted-foreground">Runs</div>
-            <div className="text-[13px] font-medium">{agent.total_runs}</div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1">
+              <Activity className="w-3 h-3" /> Runs
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-mono tabular-nums text-foreground">
+                {agent.total_runs || 0}
+              </span>
+              <MiniBar
+                value={agent.total_runs || 0}
+                max={2000}
+                color={color}
+              />
+            </div>
           </div>
-          <div className="rounded bg-white/[0.03] px-2.5 py-1.5">
-            <div className="text-[10px] text-muted-foreground">Avg Cost</div>
-            <div className="text-[13px] font-medium">{formatCost(agent.avg_cost_per_run || 0)}</div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1">
+              <DollarSign className="w-3 h-3" /> Avg Cost
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-mono tabular-nums text-foreground">
+                {formatCost(agent.avg_cost_per_run || 0)}
+              </span>
+              <MiniBar
+                value={agent.avg_cost_per_run || 0}
+                max={agent.max_budget_per_run}
+                color={color}
+              />
+            </div>
           </div>
-          <div className="rounded bg-white/[0.03] px-2.5 py-1.5">
-            <div className="text-[10px] text-muted-foreground">Budget</div>
-            <div className="text-[13px] font-medium">{formatCost(agent.max_budget_per_run)}/run</div>
+          <div className="flex flex-col gap-1.5 items-end">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Budget
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-mono tabular-nums text-foreground">
+                {formatCost(agent.max_budget_per_run)}
+              </span>
+              <MiniProgressRing
+                progress={clampedBudget}
+                color={clampedBudget > 90 ? '#ef4444' : color}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Expand system prompt */}
         <button
-          onClick={onToggle}
-          className="flex items-center gap-1 mt-3 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border-t border-border/50 mt-2"
         >
-          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          System prompt & personality
+          {expanded ? 'Hide Details' : 'Show Details'}
+          {expanded ? (
+            <ChevronUp className="w-3 h-3" />
+          ) : (
+            <ChevronDown className="w-3 h-3" />
+          )}
         </button>
+      </div>
+
+      <AnimatePresence>
         {expanded && (
-          <div className="mt-2 rounded bg-white/[0.02] border border-white/5 p-3">
-            <p className="text-[12px] text-muted-foreground leading-relaxed font-mono">{agent.system_prompt}</p>
-          </div>
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-border/50 bg-background/30"
+          >
+            <div className="p-5 space-y-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 font-medium">
+                  System Prompt
+                </div>
+                <div className="bg-[#0d0d0f] border border-border/50 rounded p-2.5 text-xs text-muted-foreground font-mono leading-relaxed max-h-24 overflow-y-auto">
+                  {agent.system_prompt}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 font-medium flex items-center gap-1">
+                  <Wrench className="w-3 h-3" /> Tools (
+                  {agent.allowed_tools.length})
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {agent.allowed_tools.map((tool) => (
+                    <span
+                      key={tool}
+                      className="px-2 py-0.5 rounded bg-status-tool/10 border border-status-tool/20 text-status-tool text-[10px] font-mono"
+                    >
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
         )}
-      </div>
-
-      {/* Tools */}
-      <div className="px-4 py-2.5 border-t border-border flex items-center gap-1.5 flex-wrap">
-        <Wrench className="h-3 w-3 text-muted-foreground mr-0.5" />
-        {agent.allowed_tools.map(tool => (
-          <span key={tool} className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground font-mono">
-            {tool}
-          </span>
-        ))}
-      </div>
-
-      {/* Actions */}
-      <div className="px-4 py-2 border-t border-border flex items-center gap-1">
-        <button onClick={onEdit} className="p-1.5 rounded hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground" title="Edit agent">
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={onDuplicate} className="p-1.5 rounded hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground" title="Duplicate agent">
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-        <button className="p-1.5 rounded hover:bg-red-500/20 transition-colors text-muted-foreground hover:text-red-400" title="Archive agent">
-          <Archive className="h-3.5 w-3.5" />
-        </button>
-        <span className="ml-auto text-[10px] text-muted-foreground">{agent.total_runs} total runs</span>
-      </div>
-    </div>
-  );
+      </AnimatePresence>
+    </motion.div>
+  )
 }
 
-function AgentFormModal({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
-  const isEditing = !!agent;
-  const [defaultModel, setDefaultModel] = useState(agent?.default_model || 'gpt-4o-mini');
-  const [escalationModel, setEscalationModel] = useState(agent?.escalation_model || 'claude-3.5-sonnet');
-
-  const defaultPricing = MODEL_PRICING[defaultModel];
-  const escalationPricing = MODEL_PRICING[escalationModel];
-
+export default function AgentsPage() {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="w-full max-w-xl rounded-xl border border-border bg-[#111113] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+    <div className="flex-1 h-screen overflow-y-auto bg-background">
+      <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">
+        {/* Header */}
+        <header className="flex items-center justify-between section-header-fade pb-2">
           <div>
-            <h2 className="text-base font-semibold">{isEditing ? `Edit ${agent.name}` : 'Create New Agent'}</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {isEditing ? 'Update this agent\'s configuration' : 'Define a new AI worker with specific skills'}
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight flex items-center gap-2">
+              <Bot className="w-6 h-6 text-accent" />
+              Agent Registry
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage and configure your autonomous workforce.
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-white/10 text-muted-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Name</label>
-              <input className="mt-1 w-full h-9 rounded-md border border-border bg-card px-3 text-[13px] outline-none focus:border-blue-500/50" defaultValue={agent?.name} placeholder="e.g. Researcher" />
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search agents..."
+                className="bg-card border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground focus:outline-none focus:border-accent w-64 transition-colors"
+              />
             </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Specialization</label>
-              <input className="mt-1 w-full h-9 rounded-md border border-border bg-card px-3 text-[13px] outline-none focus:border-blue-500/50" defaultValue={agent?.specialization} placeholder="e.g. Research & Intel" />
-            </div>
+            <button className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+              <Plus className="w-4 h-4" />
+              New Agent
+            </button>
           </div>
+        </header>
 
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Description</label>
-            <input className="mt-1 w-full h-9 rounded-md border border-border bg-card px-3 text-[13px] outline-none focus:border-blue-500/50" defaultValue={agent?.description} placeholder="What does this agent do?" />
-          </div>
-
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              System Prompt / Personality
-            </label>
-            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">This defines how the agent behaves, its tone, and approach</p>
-            <textarea className="w-full h-28 rounded-md border border-border bg-card px-3 py-2 text-[13px] outline-none focus:border-blue-500/50 resize-none font-mono" defaultValue={agent?.system_prompt} placeholder="You are..." />
-          </div>
-
-          {/* Model selection - the key UX improvement */}
-          <div className="rounded-lg border border-border bg-white/[0.02] p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-blue-400" />
-              <h3 className="text-[13px] font-medium">Model Routing</h3>
-              <Tooltip content="Agents use a cheap model for simple tasks and escalate to a powerful model when needed. This keeps costs low while maintaining quality." />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Default Model
-                  <span className="text-[9px] ml-1 font-normal">(used first, cheapest)</span>
-                </label>
-                <select
-                  value={defaultModel}
-                  onChange={e => setDefaultModel(e.target.value)}
-                  className="mt-1 w-full h-9 rounded-md border border-border bg-card px-2 text-[12px] outline-none font-mono"
-                >
-                  {Object.entries(MODEL_PRICING).map(([model, pricing]) => (
-                    <option key={model} value={model}>
-                      {model} — {getTierLabel(pricing.tier)}
-                    </option>
-                  ))}
-                </select>
-                {defaultPricing && (
-                  <div className={cn('text-[10px] mt-1', getTierColor(defaultPricing.tier))}>
-                    {getTierLabel(defaultPricing.tier)} · ${defaultPricing.input.toFixed(2)} in / ${defaultPricing.output.toFixed(2)} out per 1M
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Escalation Model
-                  <span className="text-[9px] ml-1 font-normal">(for complex tasks)</span>
-                </label>
-                <select
-                  value={escalationModel}
-                  onChange={e => setEscalationModel(e.target.value)}
-                  className="mt-1 w-full h-9 rounded-md border border-border bg-card px-2 text-[12px] outline-none font-mono"
-                >
-                  {Object.entries(MODEL_PRICING).map(([model, pricing]) => (
-                    <option key={model} value={model}>
-                      {model} — {getTierLabel(pricing.tier)}
-                    </option>
-                  ))}
-                </select>
-                {escalationPricing && (
-                  <div className={cn('text-[10px] mt-1', getTierColor(escalationPricing.tier))}>
-                    {getTierLabel(escalationPricing.tier)} · ${escalationPricing.input.toFixed(2)} in / ${escalationPricing.output.toFixed(2)} out per 1M
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-blue-500/5 border border-blue-500/10 rounded-md px-3 py-2">
-              <Info className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />
-              <span>The agent starts every task with the <strong className="text-foreground">default model</strong>. If the task requires more capability (e.g. complex reasoning, large context), it automatically escalates to the <strong className="text-foreground">escalation model</strong>.</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Max Budget per Run</label>
-            <div className="relative mt-1">
-              <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input className="w-full h-9 rounded-md border border-border bg-card pl-8 pr-3 text-[13px] outline-none focus:border-blue-500/50" type="number" step="0.10" defaultValue={agent?.max_budget_per_run || 0.50} />
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">Run pauses for approval if cost exceeds this limit</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-md border border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors">
-            Cancel
-          </button>
-          <button className="px-4 py-1.5 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-500 transition-colors">
-            {isEditing ? 'Save Changes' : 'Create Agent'}
-          </button>
+        {/* Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-6">
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
         </div>
       </div>
     </div>
-  );
+  )
 }

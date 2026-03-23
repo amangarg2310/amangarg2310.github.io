@@ -1,58 +1,100 @@
-import { cn } from '@/lib/utils';
-import { LucideIcon } from 'lucide-react';
-import { Tooltip } from '@/components/ui/tooltip';
+'use client'
+
+import React from 'react'
+import { motion } from 'framer-motion'
+import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react'
+import { SparkLine } from '@/components/ui/spark-line'
 
 interface MetricCardProps {
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  icon: LucideIcon;
-  iconColor?: string;
-  trend?: { value: string; positive: boolean };
-  tooltip?: string;
-  className?: string;
+  title: string
+  value: string | number
+  change?: string
+  changeType?: 'up' | 'down' | 'neutral'
+  icon: React.ReactNode
+  sparkData?: number[]
+  accentColor?: string
+  delay?: number
+  className?: string
 }
 
 export function MetricCard({
-  label,
+  title,
   value,
-  subtitle,
-  icon: Icon,
-  iconColor = 'text-muted-foreground',
-  trend,
-  tooltip,
-  className,
+  change,
+  changeType = 'neutral',
+  icon,
+  sparkData,
+  accentColor = '#3b82f6',
+  delay = 0,
+  className = '',
 }: MetricCardProps) {
+  const ChangeIcon =
+    changeType === 'up'
+      ? ArrowUpRight
+      : changeType === 'down'
+        ? ArrowDownRight
+        : Minus
+  const changeColor =
+    changeType === 'up'
+      ? 'text-emerald-400'
+      : changeType === 'down'
+        ? 'text-red-400'
+        : 'text-muted-foreground'
+
   return (
-    <div
-      className={cn(
-        'rounded-lg border border-border bg-card p-4 transition-colors hover:bg-card/80',
-        className
-      )}
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay, ease: 'easeOut' }}
+      className={`bg-card rounded-xl p-5 card-glow hover:card-hover transition-all duration-300 relative overflow-hidden group border border-border/50 ${className}`}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-          {label}
-          {tooltip && <Tooltip content={tooltip} />}
-        </span>
-        <Icon className={cn('h-4 w-4', iconColor)} />
-      </div>
-      <div className="mt-2">
-        <span className="text-2xl font-semibold tracking-tight">{value}</span>
-        {trend && (
-          <span
-            className={cn(
-              'ml-2 text-xs font-medium',
-              trend.positive ? 'text-emerald-400' : 'text-red-400'
-            )}
-          >
-            {trend.value}
-          </span>
+      {/* Subtle background gradient glow on hover */}
+      <div
+        className="absolute -top-24 -right-24 w-48 h-48 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-500 blur-3xl pointer-events-none"
+        style={{ backgroundColor: accentColor }}
+      />
+
+      <div className="flex justify-between items-start mb-4">
+        <div
+          className="p-2.5 rounded-lg border border-white/5 relative"
+          style={{
+            backgroundColor: `${accentColor}15`,
+            color: accentColor,
+          }}
+        >
+          {icon}
+        </div>
+
+        {sparkData && (
+          <div className="opacity-70 group-hover:opacity-100 transition-opacity duration-300">
+            <SparkLine
+              data={sparkData}
+              color={accentColor}
+              width={64}
+              height={24}
+            />
+          </div>
         )}
       </div>
-      {subtitle && (
-        <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
-      )}
-    </div>
-  );
+
+      <div>
+        <h3 className="text-muted-foreground text-sm font-medium mb-1">
+          {title}
+        </h3>
+        <div className="flex items-baseline gap-3">
+          <span className="text-2xl font-semibold text-foreground font-mono tabular-nums tracking-tight">
+            {value}
+          </span>
+          {change && (
+            <div
+              className={`flex items-center text-xs font-medium ${changeColor}`}
+            >
+              <ChangeIcon className="w-3 h-3 mr-0.5" />
+              {change}
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
 }

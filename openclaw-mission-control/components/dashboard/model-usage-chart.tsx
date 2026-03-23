@@ -1,58 +1,105 @@
-'use client';
+'use client'
 
-import { modelUsage } from '@/lib/mock-data';
-import { formatCost } from '@/lib/utils';
-import { getTierLabel } from '@/lib/costs';
-import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion'
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 
-const tierBarColors: Record<string, string> = {
-  cheap: 'bg-emerald-500',
-  mid: 'bg-blue-500',
-  premium: 'bg-amber-500',
-};
-
-const tierTextColors: Record<string, string> = {
-  cheap: 'text-emerald-400',
-  mid: 'text-blue-400',
-  premium: 'text-amber-400',
-};
+const costData = [
+  { time: 'Mon', cost: 12.5 },
+  { time: 'Tue', cost: 18.2 },
+  { time: 'Wed', cost: 15.8 },
+  { time: 'Thu', cost: 24.4 },
+  { time: 'Fri', cost: 32.1 },
+  { time: 'Sat', cost: 28.5 },
+  { time: 'Sun', cost: 42.18 },
+]
 
 export function ModelUsageChart() {
-  const totalCost = modelUsage.reduce((sum, m) => sum + m.estimated_cost, 0);
-
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-medium">Model Usage (7 days)</h3>
-      </div>
-      <div className="p-4 space-y-3">
-        {modelUsage.map((m) => (
-          <div key={m.model} className="space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-mono">{m.model}</span>
-                <span className={cn('text-[10px] font-medium', tierTextColors[m.tier])}>
-                  {getTierLabel(m.tier)}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] text-muted-foreground">{m.percentage}%</span>
-                <span className="text-[11px] font-medium">{formatCost(m.estimated_cost)}</span>
-              </div>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-white/5">
-              <div
-                className={cn('h-full rounded-full transition-all', tierBarColors[m.tier])}
-                style={{ width: `${m.percentage}%` }}
+    <motion.section
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.6 }}
+      className="space-y-4"
+    >
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider section-header-fade">
+        Cost & Usage (7d)
+      </h2>
+      <div className="bg-card border border-border rounded-xl p-6 card-glow h-[340px] flex flex-col">
+        <div className="flex-1 w-full h-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={costData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient
+                  id="colorCost"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="5%"
+                    stopColor="#3b82f6"
+                    stopOpacity={0.3}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="#3b82f6"
+                    stopOpacity={0}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#252528"
+                vertical={false}
               />
-            </div>
-          </div>
-        ))}
-        <div className="pt-2 mt-2 border-t border-border flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Total (7d)</span>
-          <span className="text-sm font-semibold">{formatCost(totalCost)}</span>
+              <XAxis
+                dataKey="time"
+                stroke="#a0a0a8"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                dy={10}
+              />
+              <YAxis
+                stroke="#a0a0a8"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(val) => `$${val}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#161618',
+                  borderColor: '#252528',
+                  borderRadius: '8px',
+                  color: '#f5f5f4',
+                }}
+                itemStyle={{ color: '#3b82f6' }}
+              />
+              <Area
+                type="monotone"
+                dataKey="cost"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorCost)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
-    </div>
-  );
+    </motion.section>
+  )
 }

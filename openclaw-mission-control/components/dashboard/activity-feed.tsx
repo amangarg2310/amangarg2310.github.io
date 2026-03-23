@@ -1,55 +1,88 @@
-'use client';
+'use client'
 
-import { getRecentActivity } from '@/lib/mock-data';
-import { timeAgo } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { getRecentActivity } from '@/lib/mock-data'
+import { timeAgo } from '@/lib/utils'
+import { motion } from 'framer-motion'
+import {
+  Zap,
+  Terminal,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+} from 'lucide-react'
 
-const typeStyles: Record<string, string> = {
-  started: 'border-blue-500/30',
-  completed: 'border-emerald-500/30',
-  failed: 'border-red-500/30',
-  needs_approval: 'border-amber-500/30',
-  stalled: 'border-red-400/30',
-};
-
-const dotStyles: Record<string, string> = {
-  started: 'bg-blue-400',
-  completed: 'bg-emerald-400',
-  failed: 'bg-red-400',
-  needs_approval: 'bg-amber-400',
-  stalled: 'bg-red-300',
-};
+const typeConfig: Record<
+  string,
+  { icon: React.ElementType; colorClass: string }
+> = {
+  started: {
+    icon: Zap,
+    colorClass:
+      'bg-status-model/10 border-status-model/20 text-status-model',
+  },
+  completed: {
+    icon: CheckCircle2,
+    colorClass:
+      'bg-status-success/10 border-status-success/20 text-status-success',
+  },
+  failed: {
+    icon: AlertTriangle,
+    colorClass:
+      'bg-status-failed/10 border-status-failed/20 text-status-failed',
+  },
+  needs_approval: {
+    icon: Clock,
+    colorClass:
+      'bg-status-approval/10 border-status-approval/20 text-status-approval',
+  },
+  stalled: {
+    icon: AlertTriangle,
+    colorClass:
+      'bg-status-failed/10 border-status-failed/20 text-status-failed',
+  },
+}
 
 export function ActivityFeed() {
-  const activity = getRecentActivity();
+  const activity = getRecentActivity()
 
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-medium">Recent Activity</h3>
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.7 }}
+      className="space-y-4 pb-12"
+    >
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider section-header-fade">
+        Activity Feed
+      </h2>
+      <div className="bg-card border border-border rounded-xl overflow-hidden card-glow">
+        <div className="divide-y divide-border/50">
+          {activity.map((item) => {
+            const config = typeConfig[item.type] || typeConfig.started
+            const Icon = config.icon
+            return (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center border ${config.colorClass}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <span className="text-sm text-foreground font-medium">
+                    {item.text}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                  {timeAgo(item.time)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
-      <div className="divide-y divide-border">
-        {activity.map((item) => (
-          <div
-            key={item.id}
-            className={cn(
-              'flex items-start gap-3 px-4 py-3 border-l-2',
-              typeStyles[item.type] || 'border-zinc-500/30'
-            )}
-          >
-            <span
-              className={cn(
-                'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                dotStyles[item.type] || 'bg-zinc-400'
-              )}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] text-foreground leading-snug">{item.text}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">{timeAgo(item.time)}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+    </motion.section>
+  )
 }

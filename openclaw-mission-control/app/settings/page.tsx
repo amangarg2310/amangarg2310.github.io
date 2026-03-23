@@ -1,204 +1,334 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { PageHeader } from '@/components/ui/page-header';
-import { Tooltip } from '@/components/ui/tooltip';
-import { MODEL_PRICING } from '@/lib/costs';
-import { getTierLabel, getTierColor } from '@/lib/costs';
-import { cn } from '@/lib/utils';
+import { useState } from 'react'
+import { motion } from 'framer-motion'
+import { MODEL_PRICING, getTierLabel } from '@/lib/costs'
 import {
+  Settings,
+  Building,
+  CreditCard,
+  Key,
   CheckCircle2,
   XCircle,
-  Loader2,
-  ExternalLink,
-} from 'lucide-react';
-
-const providers = [
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1'],
-    keyPrefix: 'sk-',
-    docsUrl: 'https://platform.openai.com/api-keys',
-    status: 'connected' as const,
-    defaultKey: 'sk-●●●●●●●●●●●●●●●●●●',
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    models: ['claude-3.5-haiku', 'claude-3.5-sonnet', 'claude-3-opus'],
-    keyPrefix: 'sk-ant-',
-    docsUrl: 'https://console.anthropic.com/settings/keys',
-    status: 'connected' as const,
-    defaultKey: 'sk-ant-●●●●●●●●●●●●●●',
-  },
-  {
-    id: 'google',
-    name: 'Google AI',
-    models: ['gemini-2.0-flash', 'gemini-2.0-pro'],
-    keyPrefix: 'AI',
-    docsUrl: 'https://aistudio.google.com/apikey',
-    status: 'not_configured' as const,
-    defaultKey: '',
-  },
-];
+  RefreshCw,
+  DollarSign,
+} from 'lucide-react'
 
 export default function SettingsPage() {
-  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testingProvider, setTestingProvider] = useState<string | null>(
+    null
+  )
 
-  const handleTestConnection = (providerId: string) => {
-    setTestingProvider(providerId);
-    setTimeout(() => setTestingProvider(null), 1500);
-  };
+  const handleTest = (id: string) => {
+    setTestingProvider(id)
+    setTimeout(() => setTestingProvider(null), 1500)
+  }
 
   return (
-    <div className="p-6 max-w-[900px] mx-auto space-y-6">
-      <PageHeader title="Settings" description="Configure your OpenClaw Mission Control" />
-
-      {/* General settings */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-medium">General</h3>
-        </div>
-        <div className="p-4 space-y-4">
+    <div className="flex-1 h-screen overflow-y-auto bg-background">
+      <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
+        {/* Header */}
+        <header className="flex items-center justify-between section-header-fade pb-2">
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Organization Name</label>
-            <input className="mt-1 w-full h-9 rounded-md border border-border bg-background px-3 text-[13px] outline-none focus:border-blue-500/50" defaultValue="OpenClaw Labs" />
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight flex items-center gap-2">
+              <Settings className="w-6 h-6 text-accent" />
+              Settings
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage organization preferences and provider integrations.
+            </p>
           </div>
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-              Daily Budget Limit
-              <Tooltip content="All running agents will pause when total spend for the day reaches this limit" />
-            </label>
-            <input className="mt-1 w-full h-9 rounded-md border border-border bg-background px-3 text-[13px] outline-none focus:border-blue-500/50" type="number" defaultValue="25.00" />
-            <p className="text-[11px] text-muted-foreground mt-1">Pause all runs when daily spend reaches this limit.</p>
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-              Default Model Routing Strategy
-              <Tooltip content="Controls which model tier agents use by default. Cost-Optimized starts with the cheapest model and only escalates when the task requires more capability." />
-            </label>
-            <select className="mt-1 w-full h-9 rounded-md border border-border bg-background px-3 text-[13px] outline-none">
-              <option>Cost-Optimized (default cheap, escalate when needed)</option>
-              <option>Balanced (default mid-tier)</option>
-              <option>Quality-First (default premium)</option>
-            </select>
-          </div>
-        </div>
-      </div>
+          <button className="bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+            Save Changes
+          </button>
+        </header>
 
-      {/* Provider management */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-medium">AI Providers</h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Configure API keys for each provider. Models from connected providers are available to your agents.</p>
-        </div>
-        <div className="divide-y divide-border">
-          {providers.map(provider => (
-            <div key={provider.id} className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-semibold">{provider.name}</span>
-                  {provider.status === 'connected' ? (
-                    <span className="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
-                      <CheckCircle2 className="h-3 w-3" /> Connected
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-white/5 border border-border px-1.5 py-0.5 rounded-full">
-                      <XCircle className="h-3 w-3" /> Not configured
-                    </span>
-                  )}
-                </div>
-                <a
-                  href={provider.docsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                >
-                  Get API key <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-
-              <div className="flex gap-2">
+        {/* General Settings */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-card border border-border rounded-xl p-6 card-glow space-y-6"
+        >
+          <h2 className="text-lg font-medium text-foreground flex items-center gap-2">
+            <Building className="w-5 h-5 text-muted-foreground" />
+            General
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Organization Name
+              </label>
+              <input
+                type="text"
+                defaultValue="Acme Corp"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Daily Budget Limit ($)
+              </label>
+              <div className="relative">
+                <DollarSign className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  type="password"
-                  className="flex-1 h-9 rounded-md border border-border bg-background px-3 text-[13px] outline-none focus:border-blue-500/50 font-mono"
-                  defaultValue={provider.defaultKey}
-                  placeholder={`${provider.keyPrefix}...`}
+                  type="number"
+                  defaultValue="50.00"
+                  className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground font-mono tabular-nums focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
                 />
-                <button
-                  onClick={() => handleTestConnection(provider.id)}
-                  disabled={testingProvider === provider.id}
-                  className={cn(
-                    'px-3 h-9 rounded-md border border-border text-[12px] font-medium transition-colors',
-                    testingProvider === provider.id
-                      ? 'text-muted-foreground cursor-wait'
-                      : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {testingProvider === provider.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    'Test'
-                  )}
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-muted-foreground">Models:</span>
-                {provider.models.map(model => (
-                  <span key={model} className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground font-mono">
-                    {model}
-                  </span>
-                ))}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Default Routing Strategy
+              </label>
+              <select className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors appearance-none">
+                <option value="cost">
+                  Cost-Optimized (Economy tiers first)
+                </option>
+                <option value="balanced">
+                  Balanced (Standard tiers, escalate on failure)
+                </option>
+                <option value="performance">
+                  Performance (Premium tiers only)
+                </option>
+              </select>
+            </div>
+          </div>
+        </motion.section>
 
-      {/* Model pricing reference */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-medium">Model Pricing Reference</h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Per 1M tokens. Used for cost estimation.</p>
-        </div>
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              <th className="text-left px-4 py-2">Model</th>
-              <th className="text-left px-4 py-2">Tier</th>
-              <th className="text-right px-4 py-2">Input/1M</th>
-              <th className="text-right px-4 py-2">Output/1M</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {Object.entries(MODEL_PRICING).map(([model, pricing]) => (
-              <tr key={model} className="hover:bg-white/[0.02]">
-                <td className="px-4 py-2 text-[12px] font-mono">{model}</td>
-                <td className={`px-4 py-2 text-[12px] font-medium ${getTierColor(pricing.tier)}`}>{getTierLabel(pricing.tier)}</td>
-                <td className="px-4 py-2 text-right text-[12px]">${pricing.input.toFixed(2)}</td>
-                <td className="px-4 py-2 text-right text-[12px]">${pricing.output.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        {/* Providers */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="space-y-4"
+        >
+          <h2 className="text-lg font-medium text-foreground flex items-center gap-2 px-1">
+            <Key className="w-5 h-5 text-muted-foreground" />
+            Model Providers
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* OpenAI */}
+            <div className="bg-card border border-border rounded-xl p-5 card-glow flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-status-success" />
+              <div className="flex justify-between items-start mb-4 pl-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-sm bg-white/10 flex items-center justify-center">
+                    <span className="font-bold text-white text-xs">
+                      OAI
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-foreground flex items-center gap-2">
+                      OpenAI
+                      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-status-success bg-status-success/10 px-1.5 py-0.5 rounded">
+                        <CheckCircle2 className="w-3 h-3" /> Connected
+                      </span>
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Last tested: 2 mins ago
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleTest('openai')}
+                  className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${testingProvider === 'openai' ? 'animate-spin' : ''}`}
+                  />
+                </button>
+              </div>
+              <div className="pl-2">
+                <input
+                  type="password"
+                  defaultValue="sk-................................"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-muted-foreground font-mono focus:outline-none focus:border-accent focus:text-foreground transition-colors"
+                />
+              </div>
+            </div>
 
-      {/* Integration note */}
-      <div className="rounded-lg border border-dashed border-border bg-white/[0.02] p-4">
-        <p className="text-[13px] text-muted-foreground">
-          <strong className="text-foreground">Integration note:</strong> This settings page will connect to OpenClaw&apos;s configuration API.
-          Model routing, budget limits, and API keys will be persisted via the backend.
-          Currently showing mock configuration UI.
-        </p>
-      </div>
+            {/* Anthropic */}
+            <div className="bg-card border border-border rounded-xl p-5 card-glow flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-status-success" />
+              <div className="flex justify-between items-start mb-4 pl-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-sm bg-[#d97757]/20 flex items-center justify-center">
+                    <span className="font-bold text-[#d97757] text-xs">
+                      A
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-foreground flex items-center gap-2">
+                      Anthropic
+                      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-status-success bg-status-success/10 px-1.5 py-0.5 rounded">
+                        <CheckCircle2 className="w-3 h-3" /> Connected
+                      </span>
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Last tested: 1 hour ago
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleTest('anthropic')}
+                  className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${testingProvider === 'anthropic' ? 'animate-spin' : ''}`}
+                  />
+                </button>
+              </div>
+              <div className="pl-2">
+                <input
+                  type="password"
+                  defaultValue="sk-ant-................................"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-muted-foreground font-mono focus:outline-none focus:border-accent focus:text-foreground transition-colors"
+                />
+              </div>
+            </div>
 
-      <div className="flex justify-end">
-        <button className="px-4 py-2 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-500 transition-colors">
-          Save Settings
-        </button>
+            {/* Google */}
+            <div className="bg-card border border-border rounded-xl p-5 card-glow flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-status-failed" />
+              <div className="flex justify-between items-start mb-4 pl-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-sm bg-[#4285f4]/20 flex items-center justify-center">
+                    <span className="font-bold text-[#4285f4] text-xs">
+                      G
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-foreground flex items-center gap-2">
+                      Google
+                      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-status-failed bg-status-failed/10 px-1.5 py-0.5 rounded">
+                        <XCircle className="w-3 h-3" /> Error
+                      </span>
+                    </h3>
+                    <p className="text-xs text-status-failed mt-0.5">
+                      Invalid API Key
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleTest('google')}
+                  className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${testingProvider === 'google' ? 'animate-spin' : ''}`}
+                  />
+                </button>
+              </div>
+              <div className="pl-2">
+                <input
+                  type="password"
+                  placeholder="Enter API Key"
+                  className="w-full bg-background border border-status-failed/50 rounded-lg px-3 py-1.5 text-xs text-foreground font-mono focus:outline-none focus:border-status-failed focus:ring-1 focus:ring-status-failed transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* Pricing Table */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-card border border-border rounded-xl p-6 card-glow space-y-4"
+        >
+          <h2 className="text-lg font-medium text-foreground flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-muted-foreground" />
+            Model Pricing & Limits
+          </h2>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-muted-foreground uppercase bg-background/80 border-b border-border">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Model</th>
+                  <th className="px-4 py-3 font-medium">Tier</th>
+                  <th className="px-4 py-3 font-medium text-right">
+                    Input / 1M
+                  </th>
+                  <th className="px-4 py-3 font-medium text-right">
+                    Output / 1M
+                  </th>
+                  <th className="px-4 py-3 font-medium text-right">
+                    Usage This Month
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {Object.entries(MODEL_PRICING).map(
+                  ([model, pricing]) => {
+                    const tierColor =
+                      pricing.tier === 'cheap'
+                        ? 'border-status-success'
+                        : pricing.tier === 'mid'
+                          ? 'border-status-running'
+                          : 'border-status-approval'
+                    const tierBgColor =
+                      pricing.tier === 'cheap'
+                        ? 'text-status-success bg-status-success/10'
+                        : pricing.tier === 'mid'
+                          ? 'text-status-running bg-status-running/10'
+                          : 'text-status-approval bg-status-approval/10'
+                    const barColor =
+                      pricing.tier === 'cheap'
+                        ? 'bg-status-success'
+                        : pricing.tier === 'mid'
+                          ? 'bg-status-running'
+                          : 'bg-status-approval'
+                    const usagePct = Math.random() * 80 + 5
+
+                    return (
+                      <tr
+                        key={model}
+                        className="bg-background/30 hover:bg-white/5 transition-colors relative"
+                      >
+                        <td
+                          className={`px-4 py-3 font-mono text-foreground border-l-2 ${tierColor}`}
+                        >
+                          {model}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded ${tierBgColor}`}
+                          >
+                            {getTierLabel(pricing.tier)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          ${pricing.input.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          ${pricing.output.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-xs tabular-nums text-foreground">
+                              ${(pricing.input * usagePct * 0.01).toFixed(2)}
+                            </span>
+                            <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${barColor} rounded-full`}
+                                style={{
+                                  width: `${usagePct}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+                )}
+              </tbody>
+            </table>
+          </div>
+        </motion.section>
       </div>
     </div>
-  );
+  )
 }
