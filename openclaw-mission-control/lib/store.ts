@@ -13,12 +13,17 @@ import {
 /**
  * Persistent in-memory data store for the control plane.
  *
- * In demo mode (no OPENCLAW_RUNTIME_URL), serves mock data.
- * When connected to an OpenClaw runtime, this acts as a normalized
- * cache that the API routes populate from the runtime.
+ * Mode selection:
+ *  - Demo mode (no OPENCLAW_RUNTIME_URL): seeds with mock data
+ *  - Live mode (OPENCLAW_RUNTIME_URL set): starts empty, hydrated by sync.ts
+ *
+ * The sync layer calls replaceAll() to swap in normalized runtime data.
+ * API routes only read from this store — never from the runtime directly.
  *
  * This is a server-only module — never import from client components.
  */
+
+const isLiveMode = !!process.env.OPENCLAW_RUNTIME_URL
 
 class DataStore {
   private _agents: Agent[]
@@ -31,15 +36,50 @@ class DataStore {
   private _modelUsage: ModelUsage[]
 
   constructor() {
-    // Seed with mock data — replaced by runtime adapter in production
-    this._agents = [...mockAgents]
-    this._tasks = [...mockTasks]
-    this._runs = [...mockRuns]
-    this._runEvents = [...mockRunEvents]
-    this._conversations = [...mockConversations]
-    this._messages = [...mockMessages]
-    this._dailyUsage = [...mockDailyUsage]
-    this._modelUsage = [...mockModelUsage]
+    if (isLiveMode) {
+      // Live mode: start empty, sync.ts will hydrate from runtime
+      this._agents = []
+      this._tasks = []
+      this._runs = []
+      this._runEvents = []
+      this._conversations = []
+      this._messages = []
+      this._dailyUsage = []
+      this._modelUsage = []
+    } else {
+      // Demo mode: seed with mock data
+      this._agents = [...mockAgents]
+      this._tasks = [...mockTasks]
+      this._runs = [...mockRuns]
+      this._runEvents = [...mockRunEvents]
+      this._conversations = [...mockConversations]
+      this._messages = [...mockMessages]
+      this._dailyUsage = [...mockDailyUsage]
+      this._modelUsage = [...mockModelUsage]
+    }
+  }
+
+  /**
+   * Replace all store contents atomically. Called by sync.ts.
+   */
+  replaceAll(data: {
+    agents: Agent[]
+    tasks: Task[]
+    runs: Run[]
+    runEvents: RunEvent[]
+    conversations: Conversation[]
+    messages: Message[]
+    dailyUsage: DailyUsage[]
+    modelUsage: ModelUsage[]
+  }): void {
+    this._agents = data.agents
+    this._tasks = data.tasks
+    this._runs = data.runs
+    this._runEvents = data.runEvents
+    this._conversations = data.conversations
+    this._messages = data.messages
+    this._dailyUsage = data.dailyUsage
+    this._modelUsage = data.modelUsage
   }
 
   // --- Agents ---
