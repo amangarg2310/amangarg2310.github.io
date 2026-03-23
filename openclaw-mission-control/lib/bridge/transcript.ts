@@ -1,7 +1,7 @@
-import { createReadStream, existsSync } from 'fs'
+import { createReadStream, existsSync, readFileSync } from 'fs'
 import { createInterface } from 'readline'
 import { resolveTranscriptPath, resolveTranscriptLockPath } from './state-resolver'
-import type { RawTranscriptLine } from './raw-types'
+import type { RawTranscriptLine, RawTranscriptSession } from './raw-types'
 
 /**
  * Direct .jsonl transcript reader for on-demand conversation detail.
@@ -116,4 +116,39 @@ export function isSessionActive(stateDir: string, agentId: string, sessionId: st
  */
 export function hasTranscript(stateDir: string, agentId: string, sessionId: string): boolean {
   return existsSync(resolveTranscriptPath(stateDir, agentId, sessionId))
+}
+
+/**
+ * Fast extraction of cwd from a transcript's first session line.
+ * Reads only the first few lines of the file (synchronously) to avoid
+ * full transcript parsing during sync. Returns null if no transcript
+ * exists or no session line is found in the first 5 lines.
+ */
+export function getSessionCwd(stateDir: string, agentId: string, sessionId: string): string | null {
+  const filePath = resolveTranscriptPath(stateDir, agentId, sessionId)
+  if (!existsSync(filePath)) return null
+
+  try {
+    // Read just the first 4KB — the session line is always first and small
+    const fd = readFileSync(filePath, { encoding: 'utf-8', flag: 'r' })
+    const firstChunk = fd.slice(0, 4096)
+    const lines = firstChunk.split('\n')
+
+    for (const line of lines.slice(0, 5)) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (parsed.type === 'session' && parsed.cwd) {
+          return (parsed as RawTranscriptSession).cwd
+        }
+      } catch {
+        continue
+      }
+    }
+  } catch {
+    // File read error — skip silently
+  }
+
+  return null
 }

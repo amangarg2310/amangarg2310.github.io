@@ -13,6 +13,7 @@ import {
   fetchAgents,
   fetchSessions,
   isSessionActive,
+  getSessionCwd,
   normalizeAgent as bridgeNormalizeAgent,
   normalizeSession as bridgeNormalizeSession,
   computeUsage,
@@ -113,16 +114,24 @@ export async function fetchRuntimeData(): Promise<RuntimeData | null> {
     allConversations.push(conversation)
   }
 
-  // Build agent workspace lookup from raw agent data
+  // Read per-session cwd from transcript first line (precise, per-session)
+  const sessionCwds = new Map<string, string>()
+  for (const session of rawSessions) {
+    const cwd = getSessionCwd(stateDir, session.agentId, session.sessionId)
+    if (cwd) sessionCwds.set(session.sessionId, cwd)
+  }
+
+  // Build agent workspace lookup from raw agent data (coarse fallback)
   const agentWorkspaces = new Map<string, string>()
   for (const raw of rawAgents || []) {
     if (raw.workspace) agentWorkspaces.set(raw.id, raw.workspace)
   }
 
-  // Auto-map sessions to projects using workspace path matching
+  // Auto-map sessions to projects:
+  // transcript cwd (precise) → agent workspace (fallback) → agent default
   const projects = store.getProjects()
   const roleAssignments = store.getRoleAssignments()
-  applyProjectMapping(allRuns, allConversations, agentWorkspaces, projects, roleAssignments)
+  applyProjectMapping(allRuns, allConversations, sessionCwds, agentWorkspaces, projects, roleAssignments)
 
   const { daily, models } = computeUsage(allRuns)
 

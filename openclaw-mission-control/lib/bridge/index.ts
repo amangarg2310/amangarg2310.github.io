@@ -15,7 +15,7 @@
 
 export { resolveStateDir, resolveTranscriptPath, resolveTranscriptLockPath } from './state-resolver'
 export { fetchAgents, fetchSessions } from './cli'
-export { readTranscript, isSessionActive, hasTranscript } from './transcript'
+export { readTranscript, isSessionActive, hasTranscript, getSessionCwd } from './transcript'
 export type { TranscriptReadOptions, TranscriptResult } from './transcript'
 export {
   normalizeAgent,

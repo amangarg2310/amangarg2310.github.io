@@ -95,9 +95,17 @@ export function buildAgentDefaults(
 
 /**
  * Map a run/conversation to a project using the priority chain.
+ *
+ * Order:
+ *   1. Explicit project_id (already set by dashboard)
+ *   2. Manual override by session ID
+ *   3. Transcript cwd (per-session, precise — where the session was running)
+ *   4. Agent workspace (per-agent, coarse fallback — agent's root workspace)
+ *   5. Agent-to-project default (if agent is assigned to exactly one project)
  */
 export function resolveProjectId(opts: {
   existingProjectId?: string | null
+  sessionCwd?: string | null
   agentWorkspace?: string | null
   agentId?: string
   sessionId?: string
@@ -113,13 +121,19 @@ export function resolveProjectId(opts: {
     return opts.overrides[opts.sessionId]
   }
 
-  // 3. Workspace path match
+  // 3. Transcript cwd — precise, per-session
+  if (opts.sessionCwd) {
+    const cwdMatch = matchPathToProject(opts.sessionCwd, opts.pathMatcher)
+    if (cwdMatch) return cwdMatch
+  }
+
+  // 4. Agent workspace — coarse fallback, per-agent
   if (opts.agentWorkspace) {
     const pathMatch = matchPathToProject(opts.agentWorkspace, opts.pathMatcher)
     if (pathMatch) return pathMatch
   }
 
-  // 4. Agent default (if agent is assigned to exactly one project)
+  // 5. Agent default (if agent is assigned to exactly one project)
   if (opts.agentId) {
     const agentDefault = opts.agentDefaults.get(opts.agentId)
     if (agentDefault) return agentDefault
@@ -131,11 +145,15 @@ export function resolveProjectId(opts: {
 /**
  * Apply project mapping to arrays of runs and conversations.
  * Mutates in place for efficiency.
+ *
+ * @param sessionCwds - per-session cwd from transcript first line (precise)
+ * @param agentWorkspaces - per-agent workspace from CLI (coarse fallback)
  */
 export function applyProjectMapping(
   runs: Run[],
   conversations: Conversation[],
-  agentWorkspaces: Map<string, string>, // agentId → workspace path
+  sessionCwds: Map<string, string>,       // sessionId → cwd (from transcript)
+  agentWorkspaces: Map<string, string>,   // agentId → workspace (from CLI)
   projects: Project[],
   assignments: RoleAssignment[],
   overrides: Record<string, string> = {}
@@ -147,6 +165,7 @@ export function applyProjectMapping(
     if (!run.project_id) {
       run.project_id = resolveProjectId({
         existingProjectId: run.project_id,
+        sessionCwd: sessionCwds.get(run.id) ?? null,
         agentWorkspace: agentWorkspaces.get(run.agent_id) ?? null,
         agentId: run.agent_id,
         sessionId: run.id,
@@ -159,7 +178,6 @@ export function applyProjectMapping(
 
   for (const conv of conversations) {
     if (!conv.project_id) {
-      // Find matching run to get agent info
       const run = runs.find((r) => `conv-${r.id}` === conv.id)
       if (run) {
         conv.project_id = run.project_id
