@@ -17,17 +17,27 @@ const MIN_INTERVAL = 5000
 
 let syncTimer: ReturnType<typeof setInterval> | null = null
 let lastSyncAt: string | null = null
+let lastSuccessAt: string | null = null
 let lastSyncError: string | null = null
 let syncCount = 0
+let syncInProgress = false
 
 /**
  * Run a single sync cycle: fetch from runtime, hydrate store.
+ * Skips if a previous sync is still running (overlap guard).
  */
-export async function syncOnce(): Promise<{ ok: boolean; error?: string }> {
+export async function syncOnce(): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
   if (!isRuntimeConfigured()) {
     return { ok: true } // Demo mode — nothing to sync
   }
 
+  // Overlap guard: skip if previous sync is still running
+  if (syncInProgress) {
+    console.warn('[sync] Previous sync still running — skipping this tick')
+    return { ok: true, skipped: true }
+  }
+
+  syncInProgress = true
   try {
     const data = await fetchRuntimeData()
 
@@ -51,7 +61,9 @@ export async function syncOnce(): Promise<{ ok: boolean; error?: string }> {
     })
 
     syncCount++
-    lastSyncAt = new Date().toISOString()
+    const now = new Date().toISOString()
+    lastSyncAt = now
+    lastSuccessAt = now
     lastSyncError = null
 
     if (syncCount <= 3 || syncCount % 20 === 0) {
@@ -63,9 +75,12 @@ export async function syncOnce(): Promise<{ ok: boolean; error?: string }> {
     return { ok: true }
   } catch (err) {
     const msg = (err as Error).message
+    lastSyncAt = new Date().toISOString()
     lastSyncError = msg
     console.error(`[sync] Error: ${msg}`)
     return { ok: false, error: msg }
+  } finally {
+    syncInProgress = false
   }
 }
 
@@ -109,7 +124,9 @@ export function getSyncStatus() {
     mode: isRuntimeConfigured() ? 'live' : 'demo',
     runtimeUrl: getRuntimeUrl() || null,
     running: syncTimer !== null,
+    syncInProgress,
     lastSyncAt,
+    lastSuccessAt,
     lastSyncError,
     syncCount,
     intervalMs: SYNC_INTERVAL_MS,
