@@ -11,20 +11,42 @@ import type {
 import { estimateCost, getModelTier } from './costs'
 
 /**
- * Runtime adapter: fetches raw data from OpenClaw runtime
- * and normalizes it into the lib/types.ts contract.
+ * Runtime adapter: fetches data from OpenClaw runtime and normalizes
+ * it into the lib/types.ts contract.
  *
- * This module isolates all OpenClaw-specific data shapes.
- * If the runtime API changes, only this file needs updating.
+ * DATA SOURCE STRATEGY
+ * ====================
+ * OpenClaw's documented HTTP API is AI-facing (POST /v1/chat/completions,
+ * POST /v1/responses), NOT a management/dashboard REST API. There are no
+ * confirmed stable endpoints like GET /agents, GET /sessions, GET /tasks.
+ *
+ * The management surface is CLI/config oriented:
+ *   - `openclaw agents list`, `openclaw sessions --json`, etc.
+ *
+ * This adapter defines an INTEGRATION CONTRACT — the shape we expect
+ * from a thin bridge service (or future native endpoints) that sits
+ * between OpenClaw internals and this dashboard. The endpoints below
+ * are NOT guaranteed OpenClaw-native routes.
+ *
+ * Source mapping:
+ *   agents  → derived from agent config/registry (openclaw agents list)
+ *   sessions → derived from session store (openclaw sessions --json)
+ *   tasks   → ADAPTER-OWNED — mission control's own concept, not native
+ *
+ * If you point OPENCLAW_RUNTIME_URL at a bridge service that exposes
+ * /agents and /sessions, sync will work. If the runtime doesn't have
+ * those endpoints yet, the adapter degrades gracefully (returns null,
+ * store stays in demo mode).
  *
  * Server-only — never import from client components.
  */
 
 const RUNTIME_URL = process.env.OPENCLAW_RUNTIME_URL || ''
 
-// --- Raw runtime shapes (what OpenClaw actually returns) ---
-// These are best-effort guesses based on typical agent runtimes.
-// Adjust once you know the exact OpenClaw API surface.
+// --- Raw runtime shapes (integration contract) ---
+// These are the shapes we EXPECT from a bridge service or future
+// native OpenClaw management API. Not confirmed native endpoints.
+// Update when actual API surface is known.
 
 interface RawRuntimeAgent {
   id: string
@@ -295,21 +317,30 @@ export interface RuntimeData {
 }
 
 /**
- * Fetch all data from the OpenClaw runtime and normalize it.
+ * Fetch all data from the runtime bridge and normalize it.
  * Returns null if OPENCLAW_RUNTIME_URL is not set or unreachable.
+ *
+ * Endpoint contract (bridge service must provide):
+ *   GET /agents   → RawRuntimeAgent[]   (from agent config/registry)
+ *   GET /sessions → RawRuntimeSession[]  (from session store)
+ *   GET /tasks    → RawRuntimeTask[]     (OPTIONAL — adapter-owned)
+ *
+ * None of these are confirmed native OpenClaw REST endpoints.
+ * They represent the contract between this dashboard and a bridge layer.
  */
 export async function fetchRuntimeData(): Promise<RuntimeData | null> {
   if (!RUNTIME_URL) return null
 
-  // Fetch agents and sessions in parallel
+  // Fetch from bridge service — agents and sessions are the core sources.
+  // Tasks are optional (adapter-owned concept, may not exist on bridge).
   const [rawAgents, rawSessions, rawTasks] = await Promise.all([
     fetchRuntime<RawRuntimeAgent[]>('/agents'),
     fetchRuntime<RawRuntimeSession[]>('/sessions'),
-    fetchRuntime<RawRuntimeTask[]>('/tasks'),
+    fetchRuntime<RawRuntimeTask[]>('/tasks'), // Optional — null is fine
   ])
 
-  // If we can't reach the runtime at all, return null
-  if (!rawAgents && !rawSessions && !rawTasks) return null
+  // If neither agents nor sessions are reachable, runtime is down
+  if (!rawAgents && !rawSessions) return null
 
   const agents = (rawAgents || []).map(normalizeAgent)
   const agentMap = new Map(agents.map((a) => [a.id, a]))
