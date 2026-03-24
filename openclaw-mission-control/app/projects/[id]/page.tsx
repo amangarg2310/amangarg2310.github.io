@@ -1,105 +1,114 @@
 'use client'
 
 import { use, useState, useCallback } from 'react'
-import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { useProjectContext, useAgents, useTasks, useRuns, useProjectRoles } from '@/lib/hooks'
+import { useCommandCenter, useAgents, useAutomations } from '@/lib/hooks'
+import type { RoleLane } from '@/lib/types'
 import { ROLE_LANES } from '@/lib/roles'
 import { RoleLaneCard } from '@/components/project/role-lane-card'
+import { CommandCenterHeader } from '@/components/project/command-center-header'
+import { BlockersBanner } from '@/components/project/blockers-banner'
+import { NextActionsPanel } from '@/components/project/next-actions-panel'
+import { BudgetSummary } from '@/components/project/budget-summary'
+import { WorkflowStatus } from '@/components/project/workflow-status'
+import { timeAgo } from '@/lib/utils'
 import {
-  FolderKanban,
-  ArrowLeft,
   Activity,
-  CheckCircle2,
-  MessageSquare,
+  Zap,
+  PlayCircle,
+  PauseCircle,
 } from 'lucide-react'
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { data: context } = useProjectContext(id)
+  const { data: cc, loading } = useCommandCenter(id)
   const { data: agents } = useAgents()
-  const { data: tasks } = useTasks(id)
-  const { data: runs } = useRuns(id)
-  const { data: assignments } = useProjectRoles(id)
+  const { data: automationConfigs } = useAutomations(id)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const handleAssignmentChange = useCallback(() => {
-    // Force a reload by incrementing key — simple but effective
+  const handleChange = useCallback(() => {
     setRefreshKey((k) => k + 1)
-    // Also reload the page to pick up store changes
     window.location.reload()
   }, [])
 
-  if (!context) {
+  if (loading || !cc) {
     return (
       <div className="flex-1 flex items-center justify-center h-screen">
-        <p className="text-sm text-muted-foreground">Loading project...</p>
+        <p className="text-sm text-muted-foreground">Loading command center...</p>
       </div>
     )
   }
 
-  const { project } = context
+  const { project, focus, roleSummaries, blockers, nextActions, budgetSummary, recentActivity, automationSummary, activeWorkflows } = cc
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
-      <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
-        {/* Header */}
-        <header className="section-header-fade pb-2">
-          <Link
-            href="/projects"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-4"
-          >
-            <ArrowLeft className="w-3 h-3" /> Back to Projects
-          </Link>
-          <div className="flex items-center gap-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
-              style={{ backgroundColor: project.color + '20', color: project.color }}
-            >
-              {project.name[0]}
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-                {project.name}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">{project.description}</p>
-            </div>
-          </div>
+      <div className="max-w-6xl mx-auto px-8 py-8 space-y-6">
+        {/* Header with editable focus */}
+        <CommandCenterHeader
+          project={project}
+          focus={focus}
+          onFocusUpdated={handleChange}
+        />
 
-          <div className="flex items-center gap-6 mt-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> {tasks.length} tasks
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5" /> {runs.filter((r) => r.status === 'running').length} active runs
-            </span>
-            <span className="flex items-center gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5" /> {context.recentConversationCount} conversations
-            </span>
-            <span className="flex items-center gap-1.5">
-              <FolderKanban className="w-3.5 h-3.5" /> {assignments.length} of 7 roles assigned
-            </span>
-          </div>
-        </header>
+        {/* Blockers banner */}
+        <BlockersBanner blockers={blockers} />
+
+        {/* Metric cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
+          <MetricCard
+            icon={<PlayCircle className="w-4 h-4 text-blue-400" />}
+            label="Active Runs"
+            value={roleSummaries.reduce((s, r) => s + r.activeRunCount, 0)}
+          />
+          <MetricCard
+            icon={<PauseCircle className="w-4 h-4 text-muted-foreground" />}
+            label="Idle Agents"
+            value={roleSummaries.filter((r) => r.agent_id && r.activeRunCount === 0).length}
+          />
+          <MetricCard
+            icon={<Zap className="w-4 h-4 text-emerald-400" />}
+            label="Automations"
+            value={`${automationSummary.enabled} / ${automationSummary.total}`}
+          />
+          <MetricCard
+            icon={<Activity className="w-4 h-4 text-amber-400" />}
+            label="Roles Assigned"
+            value={`${roleSummaries.filter((r) => r.agent_id).length} / 7`}
+          />
+        </motion.div>
+
+        {/* Active workflows */}
+        <WorkflowStatus workflows={activeWorkflows} />
 
         {/* Role Lanes Grid */}
         <section>
           <h2 className="text-sm font-medium text-foreground mb-4">Role Lanes</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {ROLE_LANES.map((role, i) => {
-              const assignment = assignments.find((a) => a.role === role.id)
-              const agent = assignment ? agents.find((a) => a.id === assignment.agent_id) : undefined
-              const roleTasks = tasks.filter((t) => t.assigned_agent_id === assignment?.agent_id)
-              const lastRun = runs
-                .filter((r) => r.agent_id === assignment?.agent_id)
-                .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0]
+              const summary = roleSummaries.find((s) => s.role === role.id)
+              const assignment = summary?.agent_id ? {
+                id: `ra-${role.id}`,
+                project_id: id,
+                role: role.id as RoleLane,
+                agent_id: summary.agent_id,
+                notes: '',
+                created_at: '',
+              } : undefined
+              const agent = summary?.agent_id ? agents.find((a) => a.id === summary.agent_id) : undefined
+              const roleAutomations = automationConfigs.filter((ac) => ac.role === role.id)
 
               return (
                 <motion.div
                   key={`${role.id}-${refreshKey}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 + i * 0.03 }}
+                  transition={{ delay: 0.15 + i * 0.03 }}
                 >
                   <RoleLaneCard
                     role={role}
@@ -107,16 +116,71 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     agent={agent}
                     allAgents={agents}
                     projectId={id}
-                    taskCount={roleTasks.length}
-                    lastActivity={lastRun?.started_at}
-                    onAssignmentChange={handleAssignmentChange}
+                    taskCount={summary?.taskCount ?? 0}
+                    activeRunCount={summary?.activeRunCount ?? 0}
+                    lastActivity={summary?.lastActivity ?? undefined}
+                    automationConfigs={roleAutomations}
+                    onAssignmentChange={handleChange}
                   />
                 </motion.div>
               )
             })}
           </div>
         </section>
+
+        {/* Bottom section: Activity + Next Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Activity */}
+          <div className="lg:col-span-2 bg-card border border-border rounded-xl p-4">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+              Recent Activity
+            </h3>
+            {recentActivity.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60 text-center py-4">
+                No recent activity for this project.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {recentActivity.slice(0, 8).map((item) => (
+                  <div key={item.id} className="flex items-start gap-2.5 py-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                      item.type === 'completed' ? 'bg-emerald-400' :
+                      item.type === 'failed' ? 'bg-red-400' :
+                      item.type === 'needs_approval' ? 'bg-amber-400' :
+                      item.type === 'stalled' ? 'bg-orange-400' :
+                      'bg-blue-400'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground/80 truncate">{item.text}</p>
+                      <p className="text-[10px] text-muted-foreground">{timeAgo(item.time)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Next Actions */}
+          <div className="lg:col-span-1">
+            <NextActionsPanel actions={nextActions} />
+          </div>
+        </div>
+
+        {/* Budget */}
+        <BudgetSummary budget={budgetSummary} />
       </div>
+    </div>
+  )
+}
+
+function MetricCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number | string }) {
+  return (
+    <div className="bg-card border border-border rounded-xl px-4 py-3 card-glow">
+      <div className="flex items-center gap-2 mb-1">
+        {icon}
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</span>
+      </div>
+      <span className="text-xl font-semibold text-foreground font-mono">{value}</span>
     </div>
   )
 }

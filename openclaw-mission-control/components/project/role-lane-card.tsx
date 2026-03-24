@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import type { RoleLaneConfig, RoleAssignment, Agent } from '@/lib/types'
+import type { RoleLaneConfig, RoleAssignment, Agent, AutomationConfig } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { timeAgo } from '@/lib/utils'
-import { assignRole, unassignRole } from '@/lib/api'
+import { assignRole, unassignRole, toggleAutomation } from '@/lib/api'
+import { ROLE_TIER_DEFAULTS, TIER_LABELS } from '@/lib/execution-policy'
 import {
   ChevronDown,
   ChevronRight,
   Clock,
   UserPlus,
   X,
+  Zap,
 } from 'lucide-react'
 
 interface RoleLaneCardProps {
@@ -20,7 +22,9 @@ interface RoleLaneCardProps {
   allAgents: Agent[]
   projectId: string
   taskCount: number
+  activeRunCount?: number
   lastActivity?: string
+  automationConfigs?: AutomationConfig[]
   onAssignmentChange: () => void
 }
 
@@ -31,12 +35,18 @@ export function RoleLaneCard({
   allAgents,
   projectId,
   taskCount,
+  activeRunCount = 0,
   lastActivity,
+  automationConfigs = [],
   onAssignmentChange,
 }: RoleLaneCardProps) {
   const [showJobs, setShowJobs] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const defaultTier = ROLE_TIER_DEFAULTS[role.id]
+  const tierLabel = TIER_LABELS[defaultTier]
+  const enabledCount = automationConfigs.filter((ac) => ac.enabled).length
 
   const handleAssign = async (agentId: string) => {
     setSaving(true)
@@ -63,6 +73,15 @@ export function RoleLaneCard({
     }
   }
 
+  const handleToggleJob = async (jobId: string, enabled: boolean) => {
+    try {
+      await toggleAutomation(projectId, jobId, role.id, enabled)
+      onAssignmentChange()
+    } catch (err) {
+      console.error('Failed to toggle automation:', err)
+    }
+  }
+
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden card-glow">
       <div className="h-1" style={{ backgroundColor: role.color }} />
@@ -74,6 +93,9 @@ export function RoleLaneCard({
             <h3 className="text-sm font-semibold text-foreground">{role.label}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>
           </div>
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-background/50 border border-border/30 text-muted-foreground shrink-0">
+            {tierLabel}
+          </span>
         </div>
 
         {/* Assigned Agent */}
@@ -132,14 +154,22 @@ export function RoleLaneCard({
         {/* Stats */}
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
           <span>{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
+          {activeRunCount > 0 && (
+            <span className="text-blue-400">{activeRunCount} running</span>
+          )}
           {lastActivity && (
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" /> {timeAgo(lastActivity)}
             </span>
           )}
+          {enabledCount > 0 && (
+            <span className="flex items-center gap-1 text-emerald-400">
+              <Zap className="w-3 h-3" /> {enabledCount} auto
+            </span>
+          )}
         </div>
 
-        {/* Suggested Jobs */}
+        {/* Automations */}
         {role.suggestedJobs.length > 0 && (
           <div>
             <button
@@ -147,27 +177,38 @@ export function RoleLaneCard({
               className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             >
               {showJobs ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              {role.suggestedJobs.length} suggested automations
+              {role.suggestedJobs.length} automations · {enabledCount} enabled
             </button>
             {showJobs && (
               <div className="mt-2 space-y-1.5">
-                {role.suggestedJobs.map((job) => (
-                  <div key={job.id} className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={job.enabled}
-                      disabled
-                      className="rounded border-border accent-accent w-3 h-3"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-foreground/70">{job.title}</span>
-                      <span className="text-muted-foreground/50 ml-1">· {job.cadence}</span>
+                {role.suggestedJobs.map((job) => {
+                  const config = automationConfigs.find((ac) => ac.job_id === job.id)
+                  const isEnabled = config?.enabled ?? false
+                  return (
+                    <div key={job.id} className="flex items-center gap-2 text-xs">
+                      <button
+                        onClick={() => handleToggleJob(job.id, !isEnabled)}
+                        disabled={!agent}
+                        className={`relative w-7 h-4 rounded-full transition-colors ${
+                          isEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/20'
+                        } ${!agent ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                          isEnabled ? 'left-3.5' : 'left-0.5'
+                        }`} />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <span className={isEnabled ? 'text-foreground' : 'text-foreground/50'}>{job.title}</span>
+                        <span className="text-muted-foreground/50 ml-1">· {job.cadence}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <p className="text-[10px] text-muted-foreground/40 mt-1">
-                  Automations are not yet active — coming soon.
-                </p>
+                  )
+                })}
+                {!agent && (
+                  <p className="text-[10px] text-muted-foreground/40 mt-1">
+                    Assign an agent to enable automations.
+                  </p>
+                )}
               </div>
             )}
           </div>
