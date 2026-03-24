@@ -7,11 +7,12 @@ import {
   ArrowRight,
   Plus,
   Lightbulb,
-  ChevronDown,
-  ChevronRight,
+  Info,
+  UserCheck,
+  Clock,
 } from 'lucide-react'
 import { useState } from 'react'
-import type { ExecutionRecommendation } from '@/lib/task-recommender'
+import type { ExecutionRecommendation, AgentStrategy } from '@/lib/task-recommender'
 import type { WorkflowChain } from '@/lib/workflow-chains'
 
 interface RecommendationPanelProps {
@@ -19,6 +20,7 @@ interface RecommendationPanelProps {
   loading: boolean
   onOverrideTier?: (tier: string) => void
   onOverrideAutonomy?: (level: string) => void
+  onOverrideAgentStrategy?: (strategy: AgentStrategy) => void
 }
 
 const TIER_COLORS: Record<string, string> = {
@@ -28,16 +30,47 @@ const TIER_COLORS: Record<string, string> = {
   premium: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
 }
 
-const AUTONOMY_LABELS: Record<string, string> = {
-  observe: 'Observe — Agent explains, you act',
-  plan: 'Plan — Agent proposes, you approve',
-  confirm: 'Confirm — Agent acts, you confirm key steps',
-  autonomous: 'Autonomous — Agent runs freely',
+const AUTONOMY_LABELS: Record<string, { label: string; desc: string }> = {
+  observe: { label: 'Observe', desc: 'Agent explains, you act' },
+  plan: { label: 'Plan', desc: 'Agent proposes, you approve' },
+  confirm: { label: 'Confirm', desc: 'Agent acts, you confirm key steps' },
+  autonomous: { label: 'Autonomous', desc: 'Agent runs freely' },
 }
 
-export function RecommendationPanel({ recommendation, loading, onOverrideTier, onOverrideAutonomy }: RecommendationPanelProps) {
-  const [showReasoning, setShowReasoning] = useState(false)
+const AGENT_STRATEGY_OPTIONS: { id: AgentStrategy; label: string; icon: typeof Bot; desc: string }[] = [
+  { id: 'reuse_existing', label: 'Reuse Existing', icon: UserCheck, desc: 'Use the currently assigned agent' },
+  { id: 'create_persistent', label: 'Create Project Agent', icon: Bot, desc: 'New agent dedicated to this project' },
+  { id: 'create_temporary', label: 'Temporary Agent', icon: Clock, desc: 'One-off agent, auto-removed after task' },
+]
 
+function WhyBadge({ reason }: { reason: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className="relative inline-block">
+      <button
+        onClick={() => setShow(!show)}
+        className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+        title="Why?"
+      >
+        <Info className="w-2.5 h-2.5" />
+        why
+      </button>
+      {show && (
+        <div className="absolute z-50 bottom-full left-0 mb-1 w-56 bg-card border border-border rounded-lg shadow-lg px-3 py-2">
+          <p className="text-[10px] text-muted-foreground leading-relaxed">{reason}</p>
+        </div>
+      )}
+    </span>
+  )
+}
+
+export function RecommendationPanel({
+  recommendation,
+  loading,
+  onOverrideTier,
+  onOverrideAutonomy,
+  onOverrideAgentStrategy,
+}: RecommendationPanelProps) {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
@@ -66,44 +99,77 @@ export function RecommendationPanel({ recommendation, loading, onOverrideTier, o
   const rec = recommendation
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
         Recommendations
       </h3>
 
       {/* Best Role */}
-      <div className="bg-background/50 border border-border/30 rounded-xl px-4 py-3">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Best Role</div>
+      <RecommendationCard
+        label="Best Role"
+        reason={rec.reasons.role_reason}
+      >
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md bg-accent/20 flex items-center justify-center">
             <Bot className="w-3.5 h-3.5 text-accent" />
           </div>
           <span className="text-sm font-medium text-foreground">{rec.role_label}</span>
         </div>
-      </div>
+      </RecommendationCard>
 
-      {/* Agent */}
-      <div className="bg-background/50 border border-border/30 rounded-xl px-4 py-3">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Agent</div>
+      {/* Agent Strategy */}
+      <RecommendationCard
+        label="Agent"
+        reason={rec.reasons.agent_reason}
+      >
         {rec.agent_id ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5 text-accent" />
+              <UserCheck className="w-3.5 h-3.5 text-accent" />
             </div>
             <span className="text-sm font-medium text-foreground">{rec.agent_name}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-amber-400">
+          <div className="flex items-center gap-2 text-amber-400 mb-2">
             <Plus className="w-4 h-4" />
-            <span className="text-sm font-medium">Create new {rec.role_label} agent</span>
+            <span className="text-sm font-medium">No agent assigned</span>
           </div>
         )}
-      </div>
+        <div className="space-y-1.5">
+          {AGENT_STRATEGY_OPTIONS.map((opt) => {
+            const isSelected = rec.agent_strategy === opt.id
+            const isDisabled = opt.id === 'reuse_existing' && !rec.agent_id
+            const Icon = opt.icon
+            return (
+              <button
+                key={opt.id}
+                onClick={() => onOverrideAgentStrategy?.(opt.id)}
+                disabled={isDisabled}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all text-xs ${
+                  isSelected
+                    ? 'bg-accent/10 border border-accent/30 text-foreground'
+                    : isDisabled
+                    ? 'opacity-30 cursor-not-allowed border border-transparent'
+                    : 'border border-border/20 text-muted-foreground hover:border-border/50 hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <div>
+                  <div className="font-medium">{opt.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </RecommendationCard>
 
       {/* Compute Tier */}
-      <div className="bg-background/50 border border-border/30 rounded-xl px-4 py-3">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Compute Tier</div>
-        <div className="flex items-center gap-2">
+      <RecommendationCard
+        label="Compute Tier"
+        reason={rec.reasons.tier_reason}
+      >
+        <div className="flex items-center gap-2 mb-1.5">
           <Cpu className="w-4 h-4 text-muted-foreground" />
           <span className={`text-sm font-medium px-2 py-0.5 rounded border ${TIER_COLORS[rec.tier] || TIER_COLORS.standard}`}>
             {rec.tier_label}
@@ -111,62 +177,90 @@ export function RecommendationPanel({ recommendation, loading, onOverrideTier, o
           <span className="text-xs text-muted-foreground font-mono">{rec.estimated_cost}</span>
         </div>
         {rec.prefer_local && (
-          <p className="text-[10px] text-emerald-400 mt-1.5">Local-first recommended — comparable quality at lower cost</p>
+          <p className="text-[10px] text-emerald-400 mb-1.5">Local-first — comparable quality at lower cost</p>
         )}
-        {onOverrideTier && (
-          <div className="flex gap-1.5 mt-2">
-            {['local', 'economy', 'standard', 'premium'].map((t) => (
-              <button
-                key={t}
-                onClick={() => onOverrideTier(t)}
-                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                  t === rec.tier
-                    ? TIER_COLORS[t]
-                    : 'border-border/30 text-muted-foreground/50 hover:text-muted-foreground'
-                }`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+        <div className="flex gap-1.5">
+          {['local', 'economy', 'standard', 'premium'].map((t) => (
+            <button
+              key={t}
+              onClick={() => onOverrideTier?.(t)}
+              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                t === rec.tier
+                  ? TIER_COLORS[t]
+                  : 'border-border/30 text-muted-foreground/50 hover:text-muted-foreground'
+              }`}
+            >
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+      </RecommendationCard>
 
       {/* Autonomy */}
-      <div className="bg-background/50 border border-border/30 rounded-xl px-4 py-3">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Autonomy Level</div>
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-foreground">{AUTONOMY_LABELS[rec.autonomy] || rec.autonomy}</span>
+      <RecommendationCard
+        label="Autonomy Level"
+        reason={rec.reasons.autonomy_reason}
+      >
+        <div className="space-y-1.5">
+          {Object.entries(AUTONOMY_LABELS).map(([key, val]) => {
+            const isSelected = rec.autonomy === key
+            return (
+              <button
+                key={key}
+                onClick={() => onOverrideAutonomy?.(key)}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all text-xs ${
+                  isSelected
+                    ? 'bg-accent/10 border border-accent/30 text-foreground'
+                    : 'border border-border/20 text-muted-foreground hover:border-border/50 hover:text-foreground'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                <div>
+                  <span className="font-medium">{val.label}</span>
+                  <span className="text-muted-foreground ml-1">— {val.desc}</span>
+                </div>
+              </button>
+            )
+          })}
         </div>
-      </div>
+      </RecommendationCard>
 
       {/* Workflow Chain */}
       {rec.workflow_chain && (
-        <WorkflowChainCard chain={rec.workflow_chain} />
+        <RecommendationCard
+          label="Suggested Workflow"
+          reason={rec.reasons.chain_reason || ''}
+        >
+          <WorkflowChainCard chain={rec.workflow_chain} />
+        </RecommendationCard>
       )}
+    </div>
+  )
+}
 
-      {/* Reasoning */}
-      <button
-        onClick={() => setShowReasoning(!showReasoning)}
-        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {showReasoning ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        Why this recommendation?
-      </button>
-      {showReasoning && (
-        <div className="bg-background/30 border border-border/20 rounded-lg px-3 py-2">
-          <p className="text-xs text-muted-foreground leading-relaxed">{rec.reasoning}</p>
-        </div>
-      )}
+function RecommendationCard({
+  label,
+  reason,
+  children,
+}: {
+  label: string
+  reason: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="bg-background/50 border border-border/30 rounded-xl px-4 py-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</span>
+        {reason && <WhyBadge reason={reason} />}
+      </div>
+      {children}
     </div>
   )
 }
 
 function WorkflowChainCard({ chain }: { chain: WorkflowChain }) {
   return (
-    <div className="bg-background/50 border border-border/30 rounded-xl px-4 py-3">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Suggested Workflow</div>
+    <div>
       <div className="text-sm font-medium text-foreground mb-2">{chain.name}</div>
       <div className="flex items-center gap-1.5 flex-wrap">
         {chain.steps.map((step, i) => (

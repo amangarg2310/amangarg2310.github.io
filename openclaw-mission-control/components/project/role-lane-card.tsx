@@ -5,7 +5,7 @@ import type { RoleLaneConfig, RoleAssignment, Agent, AutomationConfig } from '@/
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { timeAgo } from '@/lib/utils'
 import { assignRole, unassignRole, toggleAutomation } from '@/lib/api'
-import { ROLE_TIER_DEFAULTS, TIER_LABELS } from '@/lib/execution-policy'
+import { ROLE_TIER_DEFAULTS, TIER_LABELS, TIER_COST_RANGES, type ExecutionTier } from '@/lib/execution-policy'
 import {
   ChevronDown,
   ChevronRight,
@@ -13,6 +13,11 @@ import {
   UserPlus,
   X,
   Zap,
+  Play,
+  FileText,
+  MessageSquare,
+  RefreshCw,
+  Info,
 } from 'lucide-react'
 
 interface RoleLaneCardProps {
@@ -26,6 +31,8 @@ interface RoleLaneCardProps {
   lastActivity?: string
   automationConfigs?: AutomationConfig[]
   onAssignmentChange: () => void
+  onCreateTask?: (role: string) => void
+  onViewOutput?: (agentId: string) => void
 }
 
 export function RoleLaneCard({
@@ -39,13 +46,17 @@ export function RoleLaneCard({
   lastActivity,
   automationConfigs = [],
   onAssignmentChange,
+  onCreateTask,
+  onViewOutput,
 }: RoleLaneCardProps) {
   const [showJobs, setShowJobs] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
+  const [showTierInfo, setShowTierInfo] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const defaultTier = ROLE_TIER_DEFAULTS[role.id]
+  const defaultTier = ROLE_TIER_DEFAULTS[role.id] as ExecutionTier
   const tierLabel = TIER_LABELS[defaultTier]
+  const tierCost = TIER_COST_RANGES[defaultTier]
   const enabledCount = automationConfigs.filter((ac) => ac.enabled).length
 
   const handleAssign = async (agentId: string) => {
@@ -93,9 +104,27 @@ export function RoleLaneCard({
             <h3 className="text-sm font-semibold text-foreground">{role.label}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>
           </div>
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-background/50 border border-border/30 text-muted-foreground shrink-0">
-            {tierLabel}
-          </span>
+          <div className="relative">
+            <button
+              onClick={() => setShowTierInfo(!showTierInfo)}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-background/50 border border-border/30 text-muted-foreground shrink-0 hover:border-border/60 transition-colors flex items-center gap-1"
+            >
+              {tierLabel}
+              <Info className="w-2.5 h-2.5" />
+            </button>
+            {showTierInfo && (
+              <div className="absolute z-30 right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-lg p-3">
+                <p className="text-[10px] text-foreground font-medium mb-1">Default: {tierLabel}</p>
+                <p className="text-[10px] text-muted-foreground mb-1.5">Est. cost: {tierCost}</p>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {defaultTier === 'economy' && `${role.label} defaults to Economy — local-first, escalate for deep synthesis.`}
+                  {defaultTier === 'standard' && `${role.label} defaults to Standard — needs reasoning quality for reliable output.`}
+                  {defaultTier === 'premium' && `${role.label} defaults to Premium — high-stakes decisions need top models.`}
+                </p>
+                <button onClick={() => setShowTierInfo(false)} className="text-[9px] text-accent mt-1.5">Close</button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Assigned Agent */}
@@ -148,6 +177,37 @@ export function RoleLaneCard({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        {agent && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <ActionButton
+              icon={<Play className="w-3 h-3" />}
+              label="Run now"
+              disabled
+              title="Requires OpenClaw execution API"
+              onClick={() => {}}
+            />
+            <ActionButton
+              icon={<FileText className="w-3 h-3" />}
+              label="Create task"
+              onClick={() => onCreateTask?.(role.id)}
+            />
+            <ActionButton
+              icon={<MessageSquare className="w-3 h-3" />}
+              label="View output"
+              onClick={() => agent && onViewOutput?.(agent.id)}
+            />
+            <ActionButton
+              icon={<RefreshCw className="w-3 h-3" />}
+              label="Reassign"
+              onClick={() => {
+                handleUnassign()
+                setShowAgentPicker(true)
+              }}
+            />
           </div>
         )}
 
@@ -215,5 +275,35 @@ export function RoleLaneCard({
         )}
       </div>
     </div>
+  )
+}
+
+function ActionButton({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  title,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  title?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title || label}
+      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] border transition-colors ${
+        disabled
+          ? 'border-border/20 text-muted-foreground/30 cursor-not-allowed'
+          : 'border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60 hover:bg-white/5'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }

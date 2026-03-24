@@ -1,6 +1,7 @@
 'use client'
 
 import { use, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useCommandCenter, useAgents, useAutomations } from '@/lib/hooks'
 import type { RoleLane } from '@/lib/types'
@@ -11,6 +12,7 @@ import { BlockersBanner } from '@/components/project/blockers-banner'
 import { NextActionsPanel } from '@/components/project/next-actions-panel'
 import { BudgetSummary } from '@/components/project/budget-summary'
 import { WorkflowStatus } from '@/components/project/workflow-status'
+import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
 import { timeAgo } from '@/lib/utils'
 import {
   Activity,
@@ -24,7 +26,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { data: cc, loading } = useCommandCenter(id)
   const { data: agents } = useAgents()
   const { data: automationConfigs } = useAutomations(id)
+  const router = useRouter()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [showTaskModal, setShowTaskModal] = useState(false)
 
   const handleChange = useCallback(() => {
     setRefreshKey((k) => k + 1)
@@ -121,6 +125,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     lastActivity={summary?.lastActivity ?? undefined}
                     automationConfigs={roleAutomations}
                     onAssignmentChange={handleChange}
+                    onCreateTask={() => setShowTaskModal(true)}
+                    onViewOutput={(agentId) => router.push(`/chats?agent=${agentId}`)}
                   />
                 </motion.div>
               )
@@ -169,6 +175,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         {/* Budget */}
         <BudgetSummary budget={budgetSummary} />
       </div>
+
+      <CreateTaskModal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} />
     </div>
   )
 }

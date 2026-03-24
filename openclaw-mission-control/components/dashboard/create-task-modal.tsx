@@ -11,6 +11,7 @@ import { useAgents, useProjects, useRecommendation } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { RecommendationPanel } from './recommendation-panel'
 import type { Urgency, Tradeoff } from '@/lib/execution-policy'
+import type { AgentStrategy } from '@/lib/task-recommender'
 
 const URGENCY_OPTIONS: { id: Urgency; label: string; color: string }[] = [
   { id: 'low', label: 'Low', color: 'border-gray-500/30 text-gray-400 hover:border-gray-500/50' },
@@ -43,6 +44,9 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
   const [tradeoff, setTradeoff] = useState<Tradeoff>('balanced')
   const [recurring, setRecurring] = useState(false)
   const [cadence, setCadence] = useState<typeof CADENCE_OPTIONS[number]>('weekly')
+  const [tierOverride, setTierOverride] = useState<string | null>(null)
+  const [autonomyOverride, setAutonomyOverride] = useState<string | null>(null)
+  const [agentStrategyOverride, setAgentStrategyOverride] = useState<AgentStrategy | null>(null)
 
   const config = useMemo(() => ({
     project_id: projectId,
@@ -221,17 +225,27 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
               <RecommendationPanel
                 recommendation={recommendation}
                 loading={recLoading}
+                onOverrideTier={(t) => setTierOverride(t)}
+                onOverrideAutonomy={(a) => setAutonomyOverride(a)}
+                onOverrideAgentStrategy={(s) => setAgentStrategyOverride(s)}
               />
             </div>
           </div>
 
           {/* Footer */}
           <div className="px-6 py-4 border-t border-border bg-card/50 flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground space-y-0.5">
               {recommendation && (
-                <span>
-                  {recommendation.role_label} · {recommendation.tier_label} · Est. {recommendation.estimated_cost}
-                </span>
+                <>
+                  <div>
+                    {recommendation.role_label} · {tierOverride || recommendation.tier_label} · Est. {recommendation.estimated_cost}
+                  </div>
+                  {(tierOverride || autonomyOverride || agentStrategyOverride) && (
+                    <div className="text-accent text-[10px]">
+                      Manual overrides applied
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -241,13 +255,21 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
               >
                 Cancel
               </button>
-              <button
-                disabled={!projectId || !goal}
-                className="px-6 py-2 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-lg shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <ArrowUpRight className="w-4 h-4" />
-                Launch
-              </button>
+              <div className="relative group">
+                <button
+                  disabled={!projectId || !goal}
+                  className="px-6 py-2 bg-accent/50 text-white/70 text-sm font-medium rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 cursor-not-allowed"
+                  title="Requires OpenClaw execution API — task will be saved as draft"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  Save Draft
+                </button>
+                <div className="absolute bottom-full right-0 mb-2 w-56 bg-card border border-border rounded-lg shadow-lg px-3 py-2 hidden group-hover:block">
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Agent execution requires the OpenClaw control API (not yet available). Tasks are saved as drafts for now.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

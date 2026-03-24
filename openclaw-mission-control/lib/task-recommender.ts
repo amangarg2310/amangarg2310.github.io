@@ -22,6 +22,16 @@ export interface TaskLaunchConfig {
   recurrence_cadence?: 'daily' | 'weekly' | 'biweekly' | 'monthly'
 }
 
+export type AgentStrategy = 'reuse_existing' | 'create_persistent' | 'create_temporary'
+
+export interface ReasoningDetail {
+  role_reason: string
+  agent_reason: string
+  tier_reason: string
+  autonomy_reason: string
+  chain_reason: string | null
+}
+
 export interface ExecutionRecommendation {
   role: RoleLane
   role_label: string
@@ -31,9 +41,9 @@ export interface ExecutionRecommendation {
   model: string
   agent_id: string | null
   agent_name: string | null
-  create_agent: boolean
+  agent_strategy: AgentStrategy
   workflow_chain: WorkflowChain | null
-  reasoning: string
+  reasons: ReasoningDetail
   estimated_cost: string
   prefer_local: boolean
 }
@@ -92,21 +102,24 @@ const TIER_LABELS: Record<ExecutionTier, string> = {
 /**
  * Infer the best role for a goal from keyword matching.
  * Returns role with highest keyword match count, defaulting to 'research'.
+ * Also returns the matched keywords for explainability.
  */
-function inferRole(goal: string): RoleLane {
+function inferRole(goal: string): { role: RoleLane; matchedKeywords: string[]; score: number } {
   const lower = goal.toLowerCase()
   let bestRole: RoleLane = 'research'
   let bestScore = 0
+  let bestMatches: string[] = []
 
   for (const [role, keywords] of Object.entries(ROLE_KEYWORDS) as [RoleLane, string[]][]) {
-    const score = keywords.filter((kw) => lower.includes(kw)).length
-    if (score > bestScore) {
-      bestScore = score
+    const matches = keywords.filter((kw) => lower.includes(kw))
+    if (matches.length > bestScore) {
+      bestScore = matches.length
       bestRole = role
+      bestMatches = matches
     }
   }
 
-  return bestRole
+  return { role: bestRole, matchedKeywords: bestMatches, score: bestScore }
 }
 
 /**
@@ -120,8 +133,8 @@ export function recommendExecution(
   agents: Agent[],
   assignments: RoleAssignment[],
 ): ExecutionRecommendation {
-  // 1. Infer best role
-  const role = inferRole(config.goal)
+  // 1. Infer best role with keyword evidence
+  const { role, matchedKeywords, score } = inferRole(config.goal)
 
   // 2. Find existing agent assignment for this role + project
   const assignment = assignments.find(
@@ -139,8 +152,29 @@ export function recommendExecution(
   const chainMatches = matchChainsToGoal(config.goal)
   const chain = chainMatches[0] ?? null
 
-  // 5. Build reasoning
-  const reasoning = explainRecommendation(role, tier, config.urgency, config.tradeoff, preferLocal)
+  // 5. Build structured reasoning
+  const roleReason = score > 0
+    ? `Matched keywords: ${matchedKeywords.map((k) => `"${k}"`).join(', ')}. ${ROLE_LABELS[role]} is the best fit for this type of work.`
+    : `No strong keyword match — defaulting to ${ROLE_LABELS[role]} as a safe starting point.`
+
+  const agentReason = agent
+    ? `${agent.name} is already assigned to ${ROLE_LABELS[role]} for this project. ${agent.total_runs ? `${agent.total_runs} prior runs.` : ''}`
+    : `No agent is assigned to ${ROLE_LABELS[role]} for this project. You can create a persistent project agent or use a temporary one.`
+
+  const tierReason = explainRecommendation(role, tier, config.urgency, config.tradeoff, preferLocal)
+
+  const autonomyReason = config.urgency === 'critical'
+    ? `Critical urgency requires human oversight — using "${autonomy}" mode.`
+    : config.urgency === 'low'
+    ? `Low urgency allows more agent freedom — using "${autonomy}" mode.`
+    : `Default "${autonomy}" mode for ${ROLE_LABELS[role]} tasks at ${config.urgency} urgency.`
+
+  const chainReason = chain
+    ? `Goal matches the "${chain.name}" pattern (${chain.steps.map((s) => ROLE_LABELS[s.role]).join(' → ')}). Multi-step workflow recommended.`
+    : null
+
+  // 6. Determine agent strategy
+  const agentStrategy: AgentStrategy = agent ? 'reuse_existing' : 'create_persistent'
 
   return {
     role,
@@ -151,9 +185,15 @@ export function recommendExecution(
     model,
     agent_id: agent?.id ?? null,
     agent_name: agent?.name ?? null,
-    create_agent: !agent,
+    agent_strategy: agentStrategy,
     workflow_chain: chain,
-    reasoning,
+    reasons: {
+      role_reason: roleReason,
+      agent_reason: agentReason,
+      tier_reason: tierReason,
+      autonomy_reason: autonomyReason,
+      chain_reason: chainReason,
+    },
     estimated_cost: TIER_COST_RANGES[tier],
     prefer_local: preferLocal,
   }
