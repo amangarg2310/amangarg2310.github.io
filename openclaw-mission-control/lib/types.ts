@@ -196,6 +196,7 @@ export interface Project {
   slug: string;
   description: string;
   color: string;
+  focus?: ProjectFocus | null;
   created_at: string;
   updated_at: string;
 }
@@ -209,10 +210,90 @@ export interface RoleAssignment {
   created_at: string;
 }
 
+export interface ProjectFocus {
+  summary: string;
+  updated_at: string;
+}
+
 export interface ProjectContext {
   project: Project;
   assignments: RoleAssignment[];
   taskCount: number;
   activeRunCount: number;
   recentConversationCount: number;
+}
+
+export interface AutomationConfig {
+  project_id: string;
+  job_id: string;
+  role: RoleLane;
+  enabled: boolean;
+  cadence: SuggestedJob['cadence'];
+  last_run_at: string | null;
+  next_run_at: string | null;
+}
+
+export interface CommandCenterData {
+  project: Project;
+  focus: ProjectFocus | null;
+  roleSummaries: RoleSummary[];
+  blockers: BlockerItem[];
+  nextActions: NextAction[];
+  budgetSummary: BudgetSummary;
+  recentActivity: ActivityItem[];
+  automationSummary: { enabled: number; total: number };
+  activeWorkflows: WorkflowInstanceSummary[];
+}
+
+export interface RoleSummary {
+  role: RoleLane;
+  agent_id: string | null;
+  agent_name: string | null;
+  agent_status: AgentStatus | null;
+  taskCount: number;
+  activeRunCount: number;
+  lastActivity: string | null;
+  automationsEnabled: number;
+  automationsTotal: number;
+}
+
+export interface BlockerItem {
+  id: string;
+  type: 'failed' | 'stalled' | 'needs_approval';
+  title: string;
+  agent_name: string;
+  time: string;
+  run_id: string;
+}
+
+export interface NextAction {
+  id: string;
+  type: 'assign_role' | 'review_approval' | 'investigate_stall' | 'enable_automation' | 'run_workflow';
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+export interface BudgetSummary {
+  costToday: number;
+  costTotal: number;
+  runsToday: number;
+  dailyTrend: number[];
+}
+
+export interface ActivityItem {
+  id: string;
+  text: string;
+  time: string;
+  type: 'started' | 'completed' | 'failed' | 'needs_approval' | 'stalled';
+  project_id?: string | null;
+}
+
+export interface WorkflowInstanceSummary {
+  id: string;
+  chain_name: string;
+  current_step: number;
+  total_steps: number;
+  status: 'running' | 'waiting' | 'completed' | 'failed';
+  updated_at: string;
 }

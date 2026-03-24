@@ -1,19 +1,23 @@
 /**
  * Disk persistence for dashboard-owned project data.
  *
- * Projects and role assignments are NOT part of the bridge sync cycle.
- * They persist to <stateDir>/dashboard/projects.json and survive restarts.
+ * Projects, role assignments, automation configs, and workflow instances
+ * are NOT part of the bridge sync cycle. They persist to
+ * <stateDir>/dashboard/projects.json and survive restarts.
  *
  * In demo mode (no stateDir): returns mock data, skips disk writes.
  */
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
-import type { Project, RoleAssignment } from './types'
+import type { Project, RoleAssignment, AutomationConfig } from './types'
+import type { WorkflowInstance } from './workflow-chains'
 
 export interface ProjectData {
   projects: Project[]
   roleAssignments: RoleAssignment[]
+  automationConfigs: AutomationConfig[]
+  workflowInstances: WorkflowInstance[]
 }
 
 function getProjectFilePath(stateDir: string): string {
@@ -28,11 +32,16 @@ export function loadProjectData(stateDir: string | null): ProjectData | null {
 
   try {
     const raw = readFileSync(filePath, 'utf-8')
-    const data = JSON.parse(raw) as ProjectData
+    const data = JSON.parse(raw)
     if (!Array.isArray(data.projects) || !Array.isArray(data.roleAssignments)) {
       return null
     }
-    return data
+    return {
+      projects: data.projects,
+      roleAssignments: data.roleAssignments,
+      automationConfigs: data.automationConfigs || [],
+      workflowInstances: data.workflowInstances || [],
+    }
   } catch {
     return null
   }

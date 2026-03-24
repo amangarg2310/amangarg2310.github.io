@@ -1,4 +1,5 @@
-import { Agent, Task, Run, RunEvent, Message, Conversation, DailyUsage, ModelUsage, Project, RoleAssignment, ProjectContext } from './types'
+import { Agent, Task, Run, RunEvent, Message, Conversation, DailyUsage, ModelUsage, Project, RoleAssignment, ProjectContext, AutomationConfig } from './types'
+import type { WorkflowInstance } from './workflow-chains'
 import {
   agents as mockAgents,
   tasks as mockTasks,
@@ -10,6 +11,8 @@ import {
   modelUsage as mockModelUsage,
   projects as mockProjects,
   roleAssignments as mockRoleAssignments,
+  automationConfigs as mockAutomationConfigs,
+  workflowInstances as mockWorkflowInstances,
 } from './mock-data'
 import { loadProjectData, saveProjectData } from './project-store'
 import { resolveStateDir } from './bridge/state-resolver'
@@ -56,6 +59,8 @@ class DataStore {
   // Dashboard-owned data — NOT touched by replaceAll()
   private _projects: Project[]
   private _roleAssignments: RoleAssignment[]
+  private _automationConfigs: AutomationConfig[]
+  private _workflowInstances: WorkflowInstance[]
 
   constructor() {
     if (isLiveMode) {
@@ -85,9 +90,13 @@ class DataStore {
     if (diskData) {
       this._projects = diskData.projects
       this._roleAssignments = diskData.roleAssignments
+      this._automationConfigs = diskData.automationConfigs
+      this._workflowInstances = diskData.workflowInstances
     } else {
       this._projects = [...mockProjects]
       this._roleAssignments = [...mockRoleAssignments]
+      this._automationConfigs = [...mockAutomationConfigs]
+      this._workflowInstances = [...mockWorkflowInstances]
     }
   }
 
@@ -378,11 +387,87 @@ class DataStore {
     return this._agents.filter((a) => a.is_active)
   }
 
+  // --- Automation Configs (dashboard-owned, persisted to disk) ---
+  getAutomationConfigs(projectId?: string): AutomationConfig[] {
+    if (projectId) return this._automationConfigs.filter((ac) => ac.project_id === projectId)
+    return this._automationConfigs
+  }
+
+  upsertAutomationConfig(config: AutomationConfig): void {
+    const idx = this._automationConfigs.findIndex(
+      (ac) => ac.project_id === config.project_id && ac.job_id === config.job_id,
+    )
+    if (idx >= 0) this._automationConfigs[idx] = config
+    else this._automationConfigs.push(config)
+    this._persistProjects()
+  }
+
+  toggleAutomation(projectId: string, jobId: string, enabled: boolean): boolean {
+    const config = this._automationConfigs.find(
+      (ac) => ac.project_id === projectId && ac.job_id === jobId,
+    )
+    if (!config) return false
+    config.enabled = enabled
+    this._persistProjects()
+    return true
+  }
+
+  // --- Workflow Instances (dashboard-owned, persisted to disk) ---
+  getWorkflowInstances(projectId?: string): WorkflowInstance[] {
+    if (projectId) return this._workflowInstances.filter((wi) => wi.project_id === projectId)
+    return this._workflowInstances
+  }
+
+  getWorkflowInstance(id: string): WorkflowInstance | undefined {
+    return this._workflowInstances.find((wi) => wi.id === id)
+  }
+
+  upsertWorkflowInstance(instance: WorkflowInstance): void {
+    const idx = this._workflowInstances.findIndex((wi) => wi.id === instance.id)
+    if (idx >= 0) this._workflowInstances[idx] = instance
+    else this._workflowInstances.push(instance)
+    this._persistProjects()
+  }
+
+  advanceWorkflow(instanceId: string, runId: string): WorkflowInstance | null {
+    const instance = this._workflowInstances.find((wi) => wi.id === instanceId)
+    if (!instance) return null
+
+    // Record the run for the current step
+    instance.step_run_ids[instance.current_step] = runId
+    instance.current_step += 1
+    instance.updated_at = new Date().toISOString()
+
+    // Check if chain is complete
+    const { WORKFLOW_CHAINS } = require('./workflow-chains')
+    const chain = WORKFLOW_CHAINS.find((c: { id: string }) => c.id === instance.chain_id)
+    if (chain && instance.current_step >= chain.steps.length) {
+      instance.status = 'completed'
+    } else {
+      instance.status = 'waiting' // waiting for next step to start
+    }
+
+    this._persistProjects()
+    return instance
+  }
+
+  // --- Project Focus ---
+  updateProjectFocus(projectId: string, summary: string): boolean {
+    const project = this._projects.find((p) => p.id === projectId)
+    if (!project) return false
+    project.focus = { summary, updated_at: new Date().toISOString() }
+    project.updated_at = new Date().toISOString()
+    this._persistProjects()
+    return true
+  }
+
   // --- Internal ---
   private _persistProjects(): void {
     saveProjectData(stateDir, {
       projects: this._projects,
       roleAssignments: this._roleAssignments,
+      automationConfigs: this._automationConfigs,
+      workflowInstances: this._workflowInstances,
     })
   }
 }

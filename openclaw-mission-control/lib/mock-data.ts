@@ -1,4 +1,5 @@
-import { Agent, Task, Run, RunEvent, Message, Conversation, UsageRecord, DailyUsage, ModelUsage, Project, RoleAssignment } from './types';
+import { Agent, Task, Run, RunEvent, Message, Conversation, UsageRecord, DailyUsage, ModelUsage, Project, RoleAssignment, AutomationConfig } from './types';
+import type { WorkflowInstance } from './workflow-chains';
 
 // --- Agents ---
 export const agents: Agent[] = [
@@ -760,6 +761,10 @@ export const roleAssignments: RoleAssignment[] = [
   { id: 'ra-006', project_id: 'proj-002', role: 'research', agent_id: 'agent-001', notes: 'CI/CD market research', created_at: '2026-03-15T10:00:00Z' },
   { id: 'ra-007', project_id: 'proj-002', role: 'product', agent_id: 'agent-002', notes: 'Feature development and code review', created_at: '2026-03-15T10:00:00Z' },
 ];
+
+// Empty defaults — these are created via UI, not hardcoded
+export const automationConfigs: AutomationConfig[] = [];
+export const workflowInstances: WorkflowInstance[] = [];
 
 export function getRecentActivity() {
   return [
