@@ -5,9 +5,10 @@
 This is a monorepo hosted on GitHub Pages containing two projects:
 
 ```
-├── biteclimb/          # Community-driven product tier ranking app
-├── outlier-content-engine/  # AI-powered competitive intelligence platform (ScoutAI)
-└── render.yaml         # Render.com deployment config
+├── biteclimb/                # Community-driven product tier ranking app
+├── outlier-content-engine/   # AI-powered competitive intelligence platform (ScoutAI)
+├── openclaw-mission-control/ # Project-centric founder OS on OpenClaw
+└── render.yaml               # Render.com deployment config
 ```
 
 ---
@@ -53,6 +54,26 @@ npm run seed        # Seed the SQLite database
 See `outlier-content-engine/CLAUDE.md` for detailed documentation.
 
 **Tech Stack:** Python 3.11, Flask, SQLite, OpenAI GPT-4o-mini, Apify collectors
+
+---
+
+## OpenClaw Mission Control
+
+See `openclaw-mission-control/CLAUDE.md` for detailed documentation.
+
+**What it is:** Project-centric founder operating system for managing multiple early-stage startup workstreams through 7 role lanes (Research, Strategy, Product & PMM, Content & Marketing, Performance Marketing, Consumer Insights, Advisor).
+
+**Tech Stack:** Next.js 16, React 19, TypeScript, TailwindCSS 4, Framer Motion, Radix UI
+
+### Key Commands
+
+```bash
+cd openclaw-mission-control
+npm install
+npm run dev       # Start dev server
+npm run build     # Production build
+npm run test      # Bridge layer tests
+```
 
 ---
 

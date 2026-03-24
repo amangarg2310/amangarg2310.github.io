@@ -1,5 +1,6 @@
 import { store } from './store'
 import { fetchRuntimeData, isRuntimeConfigured, getRuntimeUrl } from './runtime-adapter'
+import { checkWorkflows } from './workflow-orchestrator'
 
 /**
  * Sync layer: periodic hydration of lib/store.ts from the OpenClaw runtime.
@@ -65,6 +66,9 @@ export async function syncOnce(): Promise<{ ok: boolean; error?: string; skipped
     lastSyncAt = now
     lastSuccessAt = now
     lastSyncError = null
+
+    // Check workflow handoffs after each sync
+    checkWorkflows()
 
     if (syncCount <= 3 || syncCount % 20 === 0) {
       console.log(
