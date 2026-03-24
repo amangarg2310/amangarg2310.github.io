@@ -7,39 +7,38 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const context = store.getProjectContext(id)
+  const configs = store.getAutomationConfigs(id)
 
-  if (!context) {
-    return Response.json({ error: 'Project not found' }, {
-      status: 404,
-      headers: { 'Access-Control-Allow-Origin': '*' },
-    })
-  }
-
-  return Response.json(context, {
+  return Response.json(configs, {
     headers: { 'Access-Control-Allow-Origin': '*' },
   })
 }
 
-export async function PATCH(
+export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   const body = await request.json()
 
-  if (body.focus !== undefined) {
-    const ok = store.updateProjectFocus(id, body.focus)
-    if (!ok) {
-      return Response.json({ error: 'Project not found' }, {
-        status: 404,
-        headers: { 'Access-Control-Allow-Origin': '*' },
-      })
-    }
+  if (!body.job_id || !body.role) {
+    return Response.json({ error: 'job_id and role required' }, {
+      status: 400,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
   }
 
-  const context = store.getProjectContext(id)
-  return Response.json(context, {
+  store.upsertAutomationConfig({
+    project_id: id,
+    job_id: body.job_id,
+    role: body.role,
+    enabled: body.enabled ?? false,
+    cadence: body.cadence ?? 'weekly',
+    last_run_at: body.last_run_at ?? null,
+    next_run_at: body.next_run_at ?? null,
+  })
+
+  return Response.json({ ok: true }, {
     headers: { 'Access-Control-Allow-Origin': '*' },
   })
 }
@@ -48,7 +47,7 @@ export async function OPTIONS() {
   return new Response(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   })

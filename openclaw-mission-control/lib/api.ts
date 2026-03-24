@@ -10,7 +10,11 @@ import type {
   Project,
   RoleAssignment,
   ProjectContext,
+  AutomationConfig,
+  CommandCenterData,
 } from './types'
+import type { ExecutionRecommendation, TaskLaunchConfig } from './task-recommender'
+import type { WorkflowInstance } from './workflow-chains'
 
 /**
  * Frontend API client for OpenClaw Mission Control.
@@ -171,4 +175,72 @@ export async function unassignRole(projectId: string, role: string): Promise<voi
     method: 'DELETE',
   })
   if (!res.ok) throw new Error(`Failed to unassign role: ${res.status}`)
+}
+
+export async function updateProjectFocus(projectId: string, focus: string): Promise<ProjectContext> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ focus }),
+  })
+  if (!res.ok) throw new Error(`Failed to update focus: ${res.status}`)
+  return res.json() as Promise<ProjectContext>
+}
+
+// --- Command Center ---
+export function fetchCommandCenter(projectId: string): Promise<CommandCenterData> {
+  return fetchJson<CommandCenterData>(`/projects/${projectId}/command-center`)
+}
+
+// --- Automations ---
+export function fetchAutomations(projectId: string): Promise<AutomationConfig[]> {
+  return fetchJson<AutomationConfig[]>(`/projects/${projectId}/automations`)
+}
+
+export async function toggleAutomation(
+  projectId: string,
+  jobId: string,
+  role: string,
+  enabled: boolean,
+  cadence?: string,
+): Promise<void> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/automations`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ job_id: jobId, role, enabled, cadence }),
+  })
+  if (!res.ok) throw new Error(`Failed to toggle automation: ${res.status}`)
+}
+
+// --- Recommendations ---
+export async function fetchRecommendation(
+  projectId: string,
+  config: Partial<TaskLaunchConfig>,
+): Promise<ExecutionRecommendation> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/recommend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`Failed to get recommendation: ${res.status}`)
+  return res.json() as Promise<ExecutionRecommendation>
+}
+
+// --- Workflows ---
+export function fetchWorkflows(projectId: string): Promise<WorkflowInstance[]> {
+  return fetchJson<WorkflowInstance[]>(`/projects/${projectId}/workflows`)
+}
+
+export async function startWorkflow(projectId: string, chainId: string): Promise<WorkflowInstance> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/workflows`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chain_id: chainId }),
+  })
+  if (!res.ok) throw new Error(`Failed to start workflow: ${res.status}`)
+  return res.json() as Promise<WorkflowInstance>
 }

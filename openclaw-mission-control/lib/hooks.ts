@@ -13,7 +13,11 @@ import type {
   Project,
   RoleAssignment,
   ProjectContext,
+  AutomationConfig,
+  CommandCenterData,
 } from './types'
+import type { ExecutionRecommendation, TaskLaunchConfig } from './task-recommender'
+import type { WorkflowInstance } from './workflow-chains'
 import {
   fetchAgents,
   fetchTasks,
@@ -27,6 +31,10 @@ import {
   fetchProjects,
   fetchProjectContext,
   fetchProjectRoles,
+  fetchCommandCenter,
+  fetchAutomations,
+  fetchRecommendation,
+  fetchWorkflows,
 } from './api'
 import type { ConversationDetail } from './api'
 
@@ -225,4 +233,71 @@ export function useSidebarStats() {
     approvalCount: tasks.filter((t) => t.status === 'needs_approval').length,
     onlineAgentCount: agents.filter((a) => a.is_active).length,
   }
+}
+
+// --- Command Center ---
+
+export function useCommandCenter(projectId: string | null) {
+  return useApi<CommandCenterData | null>(
+    () => projectId ? fetchCommandCenter(projectId) : Promise.resolve(null),
+    null,
+    [projectId],
+  )
+}
+
+// --- Automations ---
+
+export function useAutomations(projectId: string | null) {
+  return useApi<AutomationConfig[]>(
+    () => projectId ? fetchAutomations(projectId) : Promise.resolve([]),
+    [],
+    [projectId],
+  )
+}
+
+// --- Recommendations ---
+
+export function useRecommendation(projectId: string | null, config: Partial<TaskLaunchConfig>) {
+  const [data, setData] = useState<ExecutionRecommendation | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!projectId || !config.goal || config.goal.length < 3) {
+      setData(null)
+      return
+    }
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      setLoading(true)
+      fetchRecommendation(projectId, config)
+        .then((result) => {
+          if (!cancelled) setData(result)
+        })
+        .catch(() => {
+          if (!cancelled) setData(null)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, 300) // debounce
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, config.goal, config.urgency, config.tradeoff, config.recurring])
+
+  return { data, loading }
+}
+
+// --- Workflows ---
+
+export function useWorkflows(projectId: string | null) {
+  return useApi<WorkflowInstance[]>(
+    () => projectId ? fetchWorkflows(projectId) : Promise.resolve([]),
+    [],
+    [projectId],
+  )
 }
