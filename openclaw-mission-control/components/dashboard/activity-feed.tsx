@@ -56,32 +56,40 @@ export function ActivityFeed() {
         Activity Feed
       </h2>
       <div className="bg-card border border-border rounded-xl overflow-hidden card-glow">
-        <div className="divide-y divide-border/50">
-          {activity.map((item) => {
-            const config = typeConfig[item.type] || typeConfig.started
-            const Icon = config.icon
-            return (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center border ${config.colorClass}`}
-                  >
-                    <Icon className="w-4 h-4" />
+        {activity.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2">
+            <Clock className="w-8 h-8 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No activity yet</p>
+            <p className="text-xs text-muted-foreground/50">Activity appears here as OpenClaw agents run tasks.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/50">
+            {activity.map((item) => {
+              const config = typeConfig[item.type] || typeConfig.started
+              const Icon = config.icon
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center border ${config.colorClass}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm text-foreground font-medium">
+                      {item.text}
+                    </span>
                   </div>
-                  <span className="text-sm text-foreground font-medium">
-                    {item.text}
+                  <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                    {timeAgo(item.time)}
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                  {timeAgo(item.time)}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </motion.section>
   )

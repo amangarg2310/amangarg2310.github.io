@@ -90,7 +90,7 @@ export default function UsagePage() {
               Usage & Cost
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Monitor API spend and performance metrics.
+              Monitor API spend and performance metrics. All costs are <span className="text-amber-400/70 font-medium">estimated</span> from token counts.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-1">
@@ -109,7 +109,7 @@ export default function UsagePage() {
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
-            title="Total Spend (7d)"
+            title="Est. Spend (7d)"
             value={formatCost(totalCost)}
             icon={<DollarSign className="w-5 h-5" />}
             accentColor="#a855f7"
@@ -125,7 +125,7 @@ export default function UsagePage() {
             delay={0.2}
           />
           <MetricCard
-            title="Avg Cost / Run"
+            title="Est. Avg Cost / Run"
             value={formatCost(avgCostPerRun)}
             icon={<TrendingUp className="w-5 h-5" />}
             accentColor="#10b981"
@@ -232,7 +232,7 @@ export default function UsagePage() {
             <h3 className="text-sm font-medium text-foreground mb-6">
               Spend by Model
             </h3>
-            <div className="flex-1 w-full min-h-[200px]">
+            <div className="w-full h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={modelCostData}
@@ -342,7 +342,7 @@ export default function UsagePage() {
                       Tokens
                     </th>
                     <th className="px-4 py-2 font-medium text-right">
-                      Cost
+                      Est. Cost
                     </th>
                   </tr>
                 </thead>

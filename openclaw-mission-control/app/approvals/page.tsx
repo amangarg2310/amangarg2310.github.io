@@ -150,7 +150,7 @@ export default function ApprovalsPage() {
               Approvals
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Review and approve agent actions that require human oversight.
+              Review agent actions that require human oversight. Decisions are tracked locally — writeback to OpenClaw requires the approval API.
             </p>
           </div>
           {pendingCount > 0 && (
@@ -333,12 +333,16 @@ export default function ApprovalsPage() {
             <div className="text-center py-16">
               <ShieldCheck className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-30" />
               <p className="text-sm text-muted-foreground">
-                {filter === 'pending'
-                  ? 'No pending approvals'
-                  : 'No approvals match this filter.'}
+                {items.length === 0
+                  ? 'No approval requests yet'
+                  : filter === 'pending'
+                    ? 'No pending approvals'
+                    : 'No approvals match this filter.'}
               </p>
               <p className="text-xs text-muted-foreground/50 mt-1">
-                Approvals appear when agents request human oversight for critical or high-cost actions.
+                {items.length === 0
+                  ? 'Approvals appear here when OpenClaw agents hit budget thresholds or need human sign-off.'
+                  : 'Try changing your filter.'}
               </p>
             </div>
           )}

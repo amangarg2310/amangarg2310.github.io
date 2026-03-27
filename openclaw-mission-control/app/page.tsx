@@ -104,7 +104,7 @@ export default function DashboardPage() {
             delay={0.2}
           />
           <MetricCard
-            title="Cost Today"
+            title="Est. Cost Today"
             value={totalCostToday > 0 ? formatCost(totalCostToday) : '$0.00'}
             icon={<DollarSign className="w-5 h-5" />}
             accentColor="#a855f7"

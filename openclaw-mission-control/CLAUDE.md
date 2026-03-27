@@ -18,10 +18,11 @@ npm run validate  # Bridge validation script
 
 ## Architecture
 
-### Dual-Mode Store
+### Store
 
-- **Demo mode** (no `OPENCLAW_*` env vars): Seeds with mock data from `lib/mock-data.ts`
-- **Live mode** (`OPENCLAW_STATE_DIR` set): Starts empty, hydrated every 15s by `lib/sync.ts` from local OpenClaw CLI
+- Always starts empty — no mock/demo data
+- Runtime data hydrated every 15s by `lib/sync.ts` from local OpenClaw CLI
+- Set `OPENCLAW_STATE_DIR` to enable sync from your local OpenClaw installation
 
 ### Data Ownership
 

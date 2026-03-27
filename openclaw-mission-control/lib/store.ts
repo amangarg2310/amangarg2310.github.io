@@ -20,9 +20,8 @@ import { resolveStateDir } from './bridge/state-resolver'
 /**
  * Persistent in-memory data store for the control plane.
  *
- * Mode selection:
- *  - Demo mode (no OPENCLAW env vars): seeds with mock data
- *  - Live mode (OPENCLAW env vars set): starts empty, hydrated by sync.ts
+ * Always starts empty. Runtime data is hydrated by sync.ts from OpenClaw CLI.
+ * No mock/demo data is ever seeded.
  *
  * The sync layer calls replaceAll() to swap in normalized runtime data.
  * CRITICAL: replaceAll() never touches _projects or _roleAssignments —
@@ -63,29 +62,18 @@ class DataStore {
   private _workflowInstances: WorkflowInstance[]
 
   constructor() {
-    if (isLiveMode) {
-      // Live mode: start empty, sync.ts will hydrate from runtime
-      this._agents = []
-      this._tasks = []
-      this._runs = []
-      this._runEvents = []
-      this._conversations = []
-      this._messages = []
-      this._dailyUsage = []
-      this._modelUsage = []
-    } else {
-      // Demo mode: seed with mock data
-      this._agents = [...mockAgents]
-      this._tasks = [...mockTasks]
-      this._runs = [...mockRuns]
-      this._runEvents = [...mockRunEvents]
-      this._conversations = [...mockConversations]
-      this._messages = [...mockMessages]
-      this._dailyUsage = [...mockDailyUsage]
-      this._modelUsage = [...mockModelUsage]
-    }
+    // Always start empty — all runtime data comes from OpenClaw sync (replaceAll).
+    // No demo/mock data seeding.
+    this._agents = []
+    this._tasks = []
+    this._runs = []
+    this._runEvents = []
+    this._conversations = []
+    this._messages = []
+    this._dailyUsage = []
+    this._modelUsage = []
 
-    // Load projects from disk (live mode) or mock data (demo mode)
+    // Load dashboard-owned data from disk if available, otherwise start empty
     const diskData = loadProjectData(stateDir)
     if (diskData) {
       this._projects = diskData.projects
@@ -93,10 +81,10 @@ class DataStore {
       this._automationConfigs = diskData.automationConfigs
       this._workflowInstances = diskData.workflowInstances
     } else {
-      this._projects = [...mockProjects]
-      this._roleAssignments = [...mockRoleAssignments]
-      this._automationConfigs = [...mockAutomationConfigs]
-      this._workflowInstances = [...mockWorkflowInstances]
+      this._projects = []
+      this._roleAssignments = []
+      this._automationConfigs = []
+      this._workflowInstances = []
     }
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
@@ -63,12 +63,35 @@ export default function ChatsPage() {
     ? agents.find((a) => a.id === selectedConv.agent_id)
     : null
 
-  // Derive honest status from session lock state
+  // Auto-scroll: only scroll to bottom when new messages arrive, not while user is reading history
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const prevMessageCount = useRef(0)
+
+  const isNearBottom = useCallback(() => {
+    const el = messagesContainerRef.current
+    if (!el) return true
+    const threshold = 100 // px from bottom
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+  }, [])
+
+  useEffect(() => {
+    const newCount = convMessages.length
+    // Scroll to bottom only if: first load, new messages arrived AND user was near bottom
+    if (newCount > 0 && (prevMessageCount.current === 0 || (newCount > prevMessageCount.current && isNearBottom()))) {
+      messagesEndRef.current?.scrollIntoView({ behavior: prevMessageCount.current === 0 ? 'auto' : 'smooth' })
+    }
+    prevMessageCount.current = newCount
+  }, [convMessages.length, isNearBottom])
+
+  // Derive honest status labels from session lock state
   const conversationStatus = sessionInfo.isLocked
-    ? 'active'
+    ? 'responding'
     : selectedConv?.status === 'active'
       ? 'idle'
-      : selectedConv?.status || 'idle'
+      : selectedConv?.status === 'completed'
+        ? 'ended'
+        : selectedConv?.status || 'idle'
 
   return (
     <div className="flex h-full bg-background overflow-hidden">
@@ -122,18 +145,20 @@ export default function ChatsPage() {
             </h2>
             <span className={cn(
               'ml-3 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium',
-              conversationStatus === 'active'
+              conversationStatus === 'responding'
                 ? 'text-status-running bg-status-running/10'
                 : conversationStatus === 'idle'
                   ? 'text-muted-foreground bg-white/5'
-                  : 'text-status-success bg-status-success/10'
+                  : conversationStatus === 'ended'
+                    ? 'text-status-success bg-status-success/10'
+                    : 'text-muted-foreground bg-white/5'
             )}>
-              {conversationStatus}
+              {conversationStatus === 'responding' ? 'Agent responding' : conversationStatus === 'idle' ? 'Session idle' : conversationStatus === 'ended' ? 'Session ended' : conversationStatus}
             </span>
           </header>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6">
             {detailLoading && convMessages.length === 0 && (
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
@@ -294,6 +319,9 @@ export default function ChatsPage() {
                 </div>
               </div>
             )}
+
+            {/* Scroll anchor */}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Message Composer */}
@@ -374,9 +402,9 @@ export default function ChatsPage() {
                   <span className="text-muted-foreground">Status</span>
                   <span className={cn(
                     'font-mono',
-                    conversationStatus === 'active' ? 'text-status-running' : 'text-foreground'
+                    conversationStatus === 'responding' ? 'text-status-running' : 'text-foreground'
                   )}>
-                    {conversationStatus}
+                    {conversationStatus === 'responding' ? 'Agent responding' : conversationStatus === 'idle' ? 'Idle' : conversationStatus === 'ended' ? 'Ended' : conversationStatus}
                   </span>
                 </div>
                 <div className="flex justify-between">

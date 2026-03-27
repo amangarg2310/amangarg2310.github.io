@@ -167,7 +167,7 @@ export default function ActivityPage() {
             Activity Log
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Full audit trail of all agent operations, tool calls, and system events.
+            Timeline of agent runs and task status changes from OpenClaw sync.
           </p>
         </header>
 
@@ -267,7 +267,9 @@ export default function ActivityPage() {
             <div className="text-center py-16">
               <Activity className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-30" />
               <p className="text-sm text-muted-foreground">
-                No activity matches your filters.
+                {allEntries.length === 0
+                  ? 'No activity yet — events appear here as OpenClaw agents run tasks.'
+                  : 'No activity matches your filters.'}
               </p>
             </div>
           )}

@@ -30,10 +30,10 @@ export function ModelUsageChart() {
       className="space-y-4"
     >
       <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider section-header-fade">
-        Cost & Usage (7d)
+        Est. Cost & Usage (7d)
       </h2>
       <div className="bg-card border border-border rounded-xl p-6 card-glow h-[340px] flex flex-col">
-        <div className="flex-1 w-full h-full">
+        <div className="w-full h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={costData}

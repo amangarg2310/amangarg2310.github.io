@@ -119,7 +119,7 @@ export default function RunsPage() {
                     <Tooltip content="Input + output tokens. Tokens are the units of text processed by the model. More tokens = higher cost." />
                   </span>
                 </th>
-                <th className="text-right px-4 py-2.5">Cost</th>
+                <th className="text-right px-4 py-2.5">Est. Cost</th>
                 <th className="text-right px-4 py-2.5">Duration</th>
                 <th className="text-right px-4 py-2.5">Actions</th>
               </tr>
