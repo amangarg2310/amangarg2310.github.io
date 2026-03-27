@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRuns, useAgents } from '@/lib/hooks';
+import { useRuns, useAgents, useProjects } from '@/lib/hooks';
 import { useActiveProject } from '@/lib/project-context';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { AgentAvatar } from '@/components/ui/agent-avatar';
 import { ModelBadge } from '@/components/ui/model-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tooltip } from '@/components/ui/tooltip';
-import { formatCost, formatTokens, formatDuration, cn } from '@/lib/utils';
+import { formatCost, formatTokens, formatDuration, timeAgo, cn } from '@/lib/utils';
 import { RunStatus } from '@/lib/types';
 import {
   Search,
@@ -18,8 +18,8 @@ import {
   XCircle,
   ArrowUpRight,
   Play,
-  Bot,
   ArrowRightLeft,
+  FolderKanban,
 } from 'lucide-react';
 
 const statusFilters: { label: string; value: RunStatus | 'all' }[] = [
@@ -37,21 +37,42 @@ export default function RunsPage() {
   const { activeProjectId } = useActiveProject();
   const { data: runs } = useRuns(activeProjectId);
   const { data: agents } = useAgents();
+  const { data: projects } = useProjects();
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredRuns = statusFilter === 'all'
-    ? runs
-    : runs.filter(r => r.status === statusFilter);
+  const filteredRuns = runs.filter(r => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = r.task_title?.toLowerCase().includes(q);
+      const matchesAgent = r.agent_name?.toLowerCase().includes(q);
+      const matchesId = r.id.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesAgent && !matchesId) return false;
+    }
+    return true;
+  });
+
+  // Sort: active runs first, then by start time descending
+  const sortedRuns = [...filteredRuns].sort((a, b) => {
+    const activeStatuses = ['running', 'needs_approval', 'stalled'];
+    const aActive = activeStatuses.includes(a.status) ? 0 : 1;
+    const bActive = activeStatuses.includes(b.status) ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
+  });
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-      <PageHeader title="Runs" description="Monitor and manage agent execution runs">
+      <PageHeader title="Runs" description="Agent execution runs synced from OpenClaw.">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search runs..."
-            className="h-8 w-48 rounded-md border border-border bg-card pl-8 pr-3 text-[13px] outline-none placeholder:text-muted-foreground focus:border-blue-500/50"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by task, agent, or ID..."
+            className="h-8 w-56 rounded-md border border-border bg-card pl-8 pr-3 text-[13px] outline-none placeholder:text-muted-foreground focus:border-blue-500/50"
           />
         </div>
       </PageHeader>
@@ -80,21 +101,22 @@ export default function RunsPage() {
       </div>
 
       {/* Empty state */}
-      {filteredRuns.length === 0 ? (
+      {sortedRuns.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-white/[0.01] py-12 text-center space-y-3">
           <Play className="h-10 w-10 text-muted-foreground mx-auto opacity-30" />
-          {statusFilter !== 'all' ? (
+          {statusFilter !== 'all' || searchQuery ? (
             <>
-              <p className="text-[13px] text-muted-foreground">No runs with status &quot;{statusFilter.replace('_', ' ')}&quot;</p>
-              <button onClick={() => setStatusFilter('all')} className="text-[12px] text-blue-400">Show all runs</button>
+              <p className="text-[13px] text-muted-foreground">
+                {searchQuery ? `No runs matching "${searchQuery}"` : `No runs with status "${statusFilter.replace('_', ' ')}"`}
+              </p>
+              <button onClick={() => { setStatusFilter('all'); setSearchQuery(''); }} className="text-[12px] text-blue-400">Clear filters</button>
             </>
           ) : (
             <>
               <p className="text-base font-medium">No runs yet</p>
               <p className="text-[13px] text-muted-foreground max-w-sm mx-auto">
-                Runs are created when you assign a task to an agent. Go to Mission Control to create your first task.
+                Runs appear here as OpenClaw agents execute tasks. Create a task in a project to get started.
               </p>
-              <Link href="/" className="text-[12px] text-blue-400 inline-block">Go to Mission Control →</Link>
             </>
           )}
         </div>
@@ -125,23 +147,32 @@ export default function RunsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredRuns.map((run) => {
+              {sortedRuns.map((run) => {
                 const agent = agents.find(a => a.id === run.agent_id);
+                const project = run.project_id ? projects.find(p => p.id === run.project_id) : null;
                 return (
                   <tr key={run.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 py-3">
                       <Link href={`/runs/${run.id}`} className="group">
                         <div className="text-[13px] font-medium group-hover:text-blue-400 transition-colors flex items-center gap-1">
-                          {run.task_title}
+                          {run.task_title || 'Untitled run'}
                           <ArrowUpRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
-                        <div className="text-[11px] text-muted-foreground font-mono">{run.id}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {project && (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <FolderKanban className="w-2.5 h-2.5" style={{ color: project.color }} />
+                              {project.name}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted-foreground/50 font-mono">{timeAgo(run.started_at)}</span>
+                        </div>
                       </Link>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {agent && <AgentAvatar name={agent.name} color={agent.avatar_color} size="sm" />}
-                        <span className="text-[13px]">{run.agent_name}</span>
+                        <span className="text-[13px]">{run.agent_name || agent?.name || 'Unknown'}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">

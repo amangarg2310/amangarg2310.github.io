@@ -229,6 +229,10 @@ export interface ProjectContext {
   taskCount: number;
   activeRunCount: number;
   recentConversationCount: number;
+  blockedCount: number;
+  queuedCount: number;
+  completedCount: number;
+  lastActivityAt: string | null;
 }
 
 export interface AutomationConfig {

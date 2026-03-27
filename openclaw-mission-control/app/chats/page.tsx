@@ -105,30 +105,54 @@ export default function ChatsPage() {
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
           {conversations.length === 0 && (
-            <div className="text-center py-8 text-xs text-muted-foreground/50">
-              No conversations yet
+            <div className="text-center py-8 space-y-2">
+              <MessageSquare className="w-6 h-6 text-muted-foreground/30 mx-auto" />
+              <p className="text-xs text-muted-foreground/50">
+                No conversations yet
+              </p>
+              <p className="text-[10px] text-muted-foreground/30">
+                Conversations appear as agents start sessions.
+              </p>
             </div>
           )}
-          {conversations.map((chat) => {
+          {[...conversations]
+            .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime())
+            .map((chat) => {
             const chatAgent = agents.find(
               (a) => a.id === chat.agent_id
             )
+            const isActive = chat.status === 'active'
             return (
               <button
                 key={chat.id}
                 onClick={() => setSelectedConvId(chat.id)}
-                className={`w-full text-left p-3 rounded-lg transition-colors ${
+                className={cn(
+                  'w-full text-left p-3 rounded-lg transition-colors border',
                   activeConvId === chat.id
-                    ? 'bg-accent/10 border border-accent/20 text-accent'
-                    : 'hover:bg-white/5 text-muted-foreground hover:text-foreground border border-transparent'
-                }`}
+                    ? 'bg-accent/10 border-accent/20 text-accent'
+                    : 'hover:bg-white/5 text-muted-foreground hover:text-foreground border-transparent'
+                )}
               >
-                <div className="text-sm font-medium truncate mb-1">
-                  {chat.title}
+                <div className="flex items-center gap-2 mb-1">
+                  {chatAgent && (
+                    <AgentAvatar name={chatAgent.name} color={chatAgent.avatar_color} size="sm" />
+                  )}
+                  <span className="text-sm font-medium truncate flex-1">
+                    {chat.title}
+                  </span>
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-status-running shrink-0 led-pulse" />
+                  )}
                 </div>
-                <div className="text-xs opacity-70">
-                  {chatAgent?.name} · {timeAgo(chat.last_message_at)}
+                <div className="flex items-center justify-between text-[10px] opacity-60 pl-6">
+                  <span>{chatAgent?.name}</span>
+                  <span className="font-mono">{timeAgo(chat.last_message_at)}</span>
                 </div>
+                {chat.message_count > 0 && (
+                  <div className="text-[10px] opacity-40 pl-6 mt-0.5 font-mono">
+                    {chat.message_count} message{chat.message_count !== 1 ? 's' : ''} · {formatCost(chat.total_cost)}
+                  </div>
+                )}
               </button>
             )
           })}

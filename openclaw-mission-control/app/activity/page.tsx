@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useRuns, useAgents, useTasks } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
@@ -211,56 +212,84 @@ export default function ActivityPage() {
           <div className="absolute left-[19px] top-0 bottom-0 w-px bg-border" />
 
           <div className="space-y-1">
-            {filtered.map((entry, i) => (
-              <motion.div
-                key={entry.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: Math.min(i * 0.02, 0.5) }}
-                className="flex items-start gap-4 py-3 px-1 hover:bg-white/[0.02] rounded-lg transition-colors relative"
-              >
-                {/* Icon dot */}
-                <div
-                  className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center border shrink-0 z-10 bg-background',
-                    entry.colorClass
-                  )}
-                >
-                  <entry.icon className="w-4 h-4" />
-                </div>
+            {filtered.map((entry, i) => {
+              // Date header: show when date changes from previous entry
+              const entryDate = new Date(entry.timestamp).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+              const prevDate = i > 0 ? new Date(filtered[i - 1].timestamp).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : null
+              const showDateHeader = i === 0 || entryDate !== prevDate
 
-                {/* Content */}
-                <div className="flex-1 min-w-0 pt-1">
-                  <div className="flex items-center gap-2">
-                    {entry.agentName && entry.agentColor && (
-                      <AgentAvatar
-                        name={entry.agentName}
-                        color={entry.agentColor}
-                        size="sm"
-                      />
-                    )}
-                    <span className="text-sm font-medium text-foreground truncate">
-                      {entry.title}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {entry.description}
-                  </p>
-                </div>
+              // Extract run ID from entry ID pattern like "run-start-xxx" or "run-end-xxx"
+              const runIdMatch = entry.id.match(/^run-(?:start|end|fail|approval)-(.+)$/)
+              const runId = runIdMatch?.[1]
 
-                {/* Right: time + cost */}
-                <div className="text-right shrink-0 pt-1">
-                  <div className="text-xs text-muted-foreground font-mono tabular-nums">
-                    {timeAgo(entry.timestamp)}
-                  </div>
-                  {entry.cost !== null && (
-                    <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                      {formatCost(entry.cost)}
+              return (
+                <div key={entry.id}>
+                  {showDateHeader && (
+                    <div className="flex items-center gap-3 py-3 pl-1">
+                      <div className="w-10 flex items-center justify-center z-10">
+                        <div className="w-2 h-2 rounded-full bg-border" />
+                      </div>
+                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                        {entryDate}
+                      </span>
                     </div>
                   )}
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: Math.min(i * 0.02, 0.5) }}
+                    className="flex items-start gap-4 py-3 px-1 hover:bg-white/[0.02] rounded-lg transition-colors relative group"
+                  >
+                    {/* Icon dot */}
+                    <div
+                      className={cn(
+                        'w-10 h-10 rounded-full flex items-center justify-center border shrink-0 z-10 bg-background',
+                        entry.colorClass
+                      )}
+                    >
+                      <entry.icon className="w-4 h-4" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 pt-1">
+                      <div className="flex items-center gap-2">
+                        {entry.agentName && entry.agentColor && (
+                          <AgentAvatar
+                            name={entry.agentName}
+                            color={entry.agentColor}
+                            size="sm"
+                          />
+                        )}
+                        {runId ? (
+                          <Link href={`/runs/${runId}`} className="text-sm font-medium text-foreground truncate hover:text-accent transition-colors">
+                            {entry.title}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-foreground truncate">
+                            {entry.title}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {entry.description}
+                      </p>
+                    </div>
+
+                    {/* Right: time + cost */}
+                    <div className="text-right shrink-0 pt-1">
+                      <div className="text-xs text-muted-foreground font-mono tabular-nums">
+                        {timeAgo(entry.timestamp)}
+                      </div>
+                      {entry.cost !== null && (
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                          Est. {formatCost(entry.cost)}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
                 </div>
-              </motion.div>
-            ))}
+              )
+            })}
           </div>
 
           {filtered.length === 0 && (

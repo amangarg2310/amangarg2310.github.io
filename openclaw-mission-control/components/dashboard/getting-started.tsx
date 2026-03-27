@@ -1,51 +1,78 @@
 'use client'
 
 import { useState } from 'react'
-import { useAgents } from '@/lib/hooks'
+import { useAgents, useTasks, useRuns, useProjects } from '@/lib/hooks'
 import { X, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export function GettingStarted() {
-  const [showChecklist, setShowChecklist] = useState(true)
+  const [dismissed, setDismissed] = useState(false)
   const { data: agents } = useAgents()
+  const { data: tasks } = useTasks()
+  const { data: runs } = useRuns()
+  const { data: projects } = useProjects()
 
   const steps = [
-    { label: 'Connect Provider', done: true },
-    { label: 'Create Agent', done: agents.length > 0 },
-    { label: 'Define Tools', done: false },
-    { label: 'Run Task', done: false },
-    { label: 'Review Logs', done: false },
+    {
+      label: 'OpenClaw Connected',
+      done: agents.length > 0,
+      hint: 'Set OPENCLAW_STATE_DIR to enable sync',
+    },
+    {
+      label: 'Agents Registered',
+      done: agents.length > 0,
+      hint: 'Agents appear when OpenClaw syncs',
+    },
+    {
+      label: 'Project Created',
+      done: projects.length > 0,
+      hint: 'Create a project to organize work',
+    },
+    {
+      label: 'Task Running',
+      done: tasks.some((t) => t.status === 'running'),
+      hint: 'Assign tasks to agents',
+    },
+    {
+      label: 'Run Completed',
+      done: runs.some((r) => r.status === 'completed'),
+      hint: 'Review output in the Runs page',
+    },
   ]
   const completedCount = steps.filter((s) => s.done).length
+  const allDone = completedCount === steps.length
+
+  // Hide if dismissed or all steps complete
+  if (dismissed || allDone) return null
 
   return (
     <AnimatePresence>
-      {showChecklist && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0, marginTop: 0 }}
-          className="bg-card border border-border rounded-xl overflow-hidden card-glow"
-        >
-          <div className="p-4 border-b border-border/50 flex items-center justify-between bg-white/[0.02]">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm">
-                {completedCount}/{steps.length}
-              </div>
-              <h2 className="text-sm font-medium text-foreground">
-                Getting Started
-              </h2>
+      <motion.div
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+        className="bg-card border border-border rounded-xl overflow-hidden card-glow"
+      >
+        <div className="p-4 border-b border-border/50 flex items-center justify-between bg-white/[0.02]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm">
+              {completedCount}/{steps.length}
             </div>
-            <button
-              onClick={() => setShowChecklist(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <h2 className="text-sm font-medium text-foreground">
+              Getting Started
+            </h2>
           </div>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-5 gap-4 bg-card">
-            {steps.map((item, i) => (
-              <div key={i} className="flex items-center gap-2">
+          <button
+            onClick={() => setDismissed(true)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4 grid grid-cols-1 md:grid-cols-5 gap-4 bg-card">
+          {steps.map((item, i) => (
+            <div key={i} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
                 <div
                   className={`w-4 h-4 rounded-full flex items-center justify-center border ${
                     item.done
@@ -67,10 +94,15 @@ export function GettingStarted() {
                   {item.label}
                 </span>
               </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
+              {!item.done && (
+                <span className="text-[10px] text-muted-foreground/50 ml-6">
+                  {item.hint}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </motion.div>
     </AnimatePresence>
   )
 }

@@ -259,11 +259,24 @@ class DataStore {
     if (!project) return null
 
     const assignments = this.getRoleAssignments(projectId)
-    const taskCount = this.getTasksByProject(projectId).length
-    const activeRunCount = this.getRunsByProject(projectId).filter((r) => r.status === 'running').length
+    const tasks = this.getTasksByProject(projectId)
+    const runs = this.getRunsByProject(projectId)
+    const taskCount = tasks.length
+    const activeRunCount = runs.filter((r) => r.status === 'running').length
     const recentConversationCount = this.getConversationsByProject(projectId).length
+    const blockedCount = runs.filter((r) => r.status === 'failed' || r.status === 'stalled' || r.status === 'needs_approval').length
+    const queuedCount = tasks.filter((t) => t.status === 'queued').length
+    const completedCount = tasks.filter((t) => t.status === 'completed').length
 
-    return { project, assignments, taskCount, activeRunCount, recentConversationCount }
+    // Most recent run start or end time
+    const allTimes = runs
+      .flatMap((r) => [r.started_at, r.ended_at])
+      .filter(Boolean) as string[]
+    const lastActivityAt = allTimes.length > 0
+      ? allTimes.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+      : null
+
+    return { project, assignments, taskCount, activeRunCount, recentConversationCount, blockedCount, queuedCount, completedCount, lastActivityAt }
   }
 
   // --- Activity (computed) ---

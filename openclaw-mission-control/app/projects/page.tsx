@@ -5,11 +5,13 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useProjects, useProjectContext } from '@/lib/hooks'
 import { createProject, deleteProject } from '@/lib/api'
+import { timeAgo } from '@/lib/utils'
 import {
   FolderKanban,
   Activity,
   MessageSquare,
   CheckCircle2,
+  AlertTriangle,
   Plus,
   X,
   Trash2,
@@ -22,7 +24,7 @@ function ProjectCard({ projectId, delay, onDelete }: { projectId: string; delay:
   const [confirmDelete, setConfirmDelete] = useState(false)
   if (!context) return null
 
-  const { project, taskCount, activeRunCount, recentConversationCount } = context
+  const { project, taskCount, activeRunCount, recentConversationCount, blockedCount, queuedCount, completedCount, lastActivityAt } = context
 
   return (
     <motion.div
@@ -48,26 +50,67 @@ function ProjectCard({ projectId, delay, onDelete }: { projectId: string; delay:
                 {project.name}
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                {project.description}
+                {project.description || 'No description'}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
+        {/* Status breakdown bar */}
+        {taskCount > 0 && (
+          <div className="flex items-center gap-1 mb-3">
+            {activeRunCount > 0 && (
+              <div
+                className="h-1.5 rounded-full bg-status-running"
+                style={{ flex: activeRunCount }}
+                title={`${activeRunCount} active`}
+              />
+            )}
+            {blockedCount > 0 && (
+              <div
+                className="h-1.5 rounded-full bg-status-approval"
+                style={{ flex: blockedCount }}
+                title={`${blockedCount} blocked`}
+              />
+            )}
+            {queuedCount > 0 && (
+              <div
+                className="h-1.5 rounded-full bg-muted-foreground/30"
+                style={{ flex: queuedCount }}
+                title={`${queuedCount} queued`}
+              />
+            )}
+            {completedCount > 0 && (
+              <div
+                className="h-1.5 rounded-full bg-status-success"
+                style={{ flex: completedCount }}
+                title={`${completedCount} completed`}
+              />
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3" /> {taskCount} tasks
           </span>
           <span className="flex items-center gap-1">
             <Activity className="w-3 h-3" /> {activeRunCount} active
           </span>
+          {blockedCount > 0 && (
+            <span className="flex items-center gap-1 text-status-approval">
+              <AlertTriangle className="w-3 h-3" /> {blockedCount} blocked
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <MessageSquare className="w-3 h-3" /> {recentConversationCount} chats
           </span>
-          {project.repo_branch && (
-            <span className="font-mono text-muted-foreground/50">{project.repo_branch}</span>
-          )}
         </div>
+        {lastActivityAt && (
+          <div className="mt-2 text-[10px] text-muted-foreground/50">
+            Last activity {timeAgo(lastActivityAt)}
+          </div>
+        )}
       </Link>
 
       {/* Delete button */}

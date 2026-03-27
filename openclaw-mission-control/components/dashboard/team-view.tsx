@@ -2,63 +2,10 @@
 
 import { useRuns, useAgents, useTasks } from '@/lib/hooks'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost } from '@/lib/utils'
-import { Search, Database, PenTool, Terminal } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-
-const agentIcons: Record<string, React.ElementType> = {
-  Researcher: Search,
-  'Data Analyst': Database,
-  Writer: PenTool,
-  Reviewer: Terminal,
-}
-
-const agentColors: Record<string, string> = {
-  Researcher: '#10b981',
-  'Data Analyst': '#3b82f6',
-  Writer: '#f59e0b',
-  Reviewer: '#a855f7',
-}
-
-function PipelineNode({
-  name,
-  icon: Icon,
-  status,
-  color,
-}: {
-  name: string
-  icon: React.ElementType
-  status: string
-  color: string
-}) {
-  return (
-    <div className="flex flex-col items-center gap-3 z-10">
-      <div className="w-14 h-14 rounded-2xl bg-card border border-border card-glow flex items-center justify-center relative group hover:border-accent/50 transition-colors duration-300">
-        <div
-          className="absolute inset-0 rounded-2xl opacity-10"
-          style={{ backgroundColor: color }}
-        />
-        <Icon className="w-6 h-6" style={{ color }} />
-        <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
-          <StatusBadge
-            status={
-              status === 'completed'
-                ? 'success'
-                : status === 'running'
-                  ? 'running'
-                  : status === 'needs_approval'
-                    ? 'approval'
-                    : 'queued'
-            }
-            size="sm"
-          />
-        </div>
-      </div>
-      <span className="text-xs font-medium text-muted-foreground">{name}</span>
-    </div>
-  )
-}
 
 function PipelineEdge({ active = false }: { active?: boolean }) {
   return (
@@ -120,7 +67,6 @@ export function TeamView() {
 
   if (taskGroups.length === 0) return null
 
-  // Build pipeline from involved agents
   const pipelineAgents = taskGroups[0]?.agents || []
 
   return (
@@ -137,12 +83,15 @@ export function TeamView() {
         <div className="flex items-center justify-between min-w-[600px] max-w-4xl mx-auto">
           {pipelineAgents.map((agent, i) => {
             if (!agent) return null
-            const name = agent.name
             const run = taskGroups[0]?.runs.find(
               (r) => r.agent_id === agent.id
             )
-            const Icon = agentIcons[name] || Terminal
-            const color = agentColors[name] || agent.avatar_color
+            const statusKey =
+              run?.status === 'completed'
+                ? 'success'
+                : run?.status === 'needs_approval'
+                  ? 'approval'
+                  : run?.status || 'queued'
 
             return (
               <div key={agent.id} className="contents">
@@ -155,12 +104,21 @@ export function TeamView() {
                   />
                 )}
                 <Link href={run ? `/runs/${run.id}` : '/runs'}>
-                  <PipelineNode
-                    name={name}
-                    icon={Icon}
-                    status={run?.status || 'queued'}
-                    color={color}
-                  />
+                  <div className="flex flex-col items-center gap-3 z-10">
+                    <div className="relative">
+                      <AgentAvatar
+                        name={agent.name}
+                        color={agent.avatar_color}
+                        size="lg"
+                      />
+                      <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
+                        <StatusBadge status={statusKey} size="sm" />
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {agent.name}
+                    </span>
+                  </div>
                 </Link>
               </div>
             )
