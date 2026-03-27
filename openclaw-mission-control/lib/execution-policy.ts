@@ -66,13 +66,14 @@ export function recommendTier(role: RoleLane, urgency: Urgency, tradeoff: Tradeo
 
 /**
  * Map execution tier to a concrete model name.
+ * Uses Anthropic model IDs matching the OpenClaw /model picker.
  */
 export function recommendModelForTier(tier: ExecutionTier): string {
   switch (tier) {
     case 'local': return 'local-llm'
-    case 'economy': return 'gpt-4o-mini'
-    case 'standard': return 'claude-3.5-sonnet'
-    case 'premium': return 'claude-3-opus'
+    case 'economy': return 'anthropic/claude-haiku-4-5'
+    case 'standard': return 'anthropic/claude-sonnet-4-6'
+    case 'premium': return 'anthropic/claude-opus-4-5'
   }
 }
 
