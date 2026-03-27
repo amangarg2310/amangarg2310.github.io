@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
@@ -13,6 +13,10 @@ import {
   DollarSign,
   Clock,
   Loader2,
+  Send,
+  Paperclip,
+  AlertTriangle,
+  Info,
 } from 'lucide-react'
 
 export default function ChatsPage() {
@@ -266,6 +270,13 @@ export default function ChatsPage() {
               </div>
             )}
           </div>
+
+          {/* Message Composer */}
+          <ChatComposer
+            sessionId={sessionInfo.sessionId}
+            agentId={sessionInfo.agentId}
+            isSessionActive={sessionInfo.isLocked}
+          />
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
@@ -366,6 +377,125 @@ export default function ChatsPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// --- Chat Composer ---
+
+interface ChatComposerProps {
+  sessionId: string
+  agentId: string | null
+  isSessionActive: boolean
+}
+
+function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps) {
+  const [message, setMessage] = useState('')
+  const [showAttachBlocker, setShowAttachBlocker] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const attachRef = useRef<HTMLDivElement>(null)
+
+  // Click-outside to close attachment blocker tooltip
+  useEffect(() => {
+    if (!showAttachBlocker) return
+    const handler = (e: MouseEvent) => {
+      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
+        setShowAttachBlocker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showAttachBlocker])
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  }, [message])
+
+  // Send is blocked — OpenClaw CLI doesn't expose session-based message injection
+  const canSend = false
+  const sendBlockedReason = 'Sending messages requires the OpenClaw session messaging API (not yet available). Use the OpenClaw CLI directly to interact with agents.'
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      // Send is blocked — no-op
+    }
+  }
+
+  return (
+    <div className="border-t border-border bg-card/50 backdrop-blur-sm">
+      {/* Blocker banner */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/5 border-b border-amber-500/10">
+        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+        <p className="text-[10px] text-amber-400/80">
+          Message sending requires the OpenClaw session messaging API. Use the CLI to interact with agents directly.
+        </p>
+      </div>
+
+      <div className="flex items-end gap-2 px-4 py-3">
+        {/* Attachment button — disabled with explanation */}
+        <div className="relative" ref={attachRef}>
+          <button
+            onClick={() => setShowAttachBlocker(!showAttachBlocker)}
+            className="p-2 rounded-lg border border-border/30 text-muted-foreground/30 cursor-not-allowed transition-colors hover:bg-white/5"
+            title="Image/file attachments blocked"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
+          {showAttachBlocker && (
+            <div className="absolute z-50 bottom-full left-0 mb-2 w-72 bg-card border border-border rounded-lg shadow-lg p-3">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-1">Media attachments blocked</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Attaching images/files requires native media support on the OpenClaw session messaging API.
+                    The current CLI path (<code className="text-[9px] bg-white/5 px-1 rounded">openclaw agent --session-id ... --message ...</code>)
+                    does not support media payloads. This is a platform-level dependency, not a dashboard limitation.
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1.5">
+                    When supported, this will work like Telegram: attach image(s) directly in the live conversation thread.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Text input */}
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            disabled={!canSend}
+            placeholder={canSend ? 'Send a message...' : 'Message sending not yet available — use OpenClaw CLI'}
+            className="w-full bg-[#050506] border border-border/50 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
+
+        {/* Send button — disabled */}
+        <div className="relative group">
+          <button
+            disabled
+            className="p-2.5 rounded-xl bg-accent/20 text-accent/30 cursor-not-allowed transition-colors"
+            title={sendBlockedReason}
+          >
+            <Send className="w-4 h-4" />
+          </button>
+          <div className="absolute bottom-full right-0 mb-2 w-64 bg-card border border-border rounded-lg shadow-lg px-3 py-2 hidden group-hover:block z-50">
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              {sendBlockedReason}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
