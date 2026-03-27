@@ -40,15 +40,18 @@ import type { ConversationDetail } from './api'
 
 /**
  * Generic data-fetching hook with optional deps for re-fetching.
+ * Pass refetchInterval (ms) to enable background polling.
  */
-function useApi<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = []): {
+function useApi<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = [], refetchInterval?: number): {
   data: T
   loading: boolean
   error: string | null
+  lastFetchedAt: number | null
 } {
   const [data, setData] = useState<T>(fallback)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -58,6 +61,7 @@ function useApi<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = [])
         if (!cancelled) {
           setData(result)
           setError(null)
+          setLastFetchedAt(Date.now())
         }
       })
       .catch((err) => {
@@ -70,7 +74,22 @@ function useApi<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 
-  return { data, loading, error }
+  // Background polling — silently refresh data without resetting loading state
+  useEffect(() => {
+    if (!refetchInterval) return
+    const interval = setInterval(() => {
+      fetcher()
+        .then((result) => {
+          setData(result)
+          setLastFetchedAt(Date.now())
+        })
+        .catch(() => { /* silently ignore polling errors */ })
+    }, refetchInterval)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchInterval])
+
+  return { data, loading, error, lastFetchedAt }
 }
 
 // --- Typed hooks ---
@@ -79,11 +98,12 @@ export function useAgents() {
   return useApi<Agent[]>(fetchAgents, [])
 }
 
-export function useTasks(projectId?: string | null) {
+export function useTasks(projectId?: string | null, refetchInterval?: number) {
   return useApi<Task[]>(
     () => fetchTasks(projectId),
     [],
-    [projectId ?? null]
+    [projectId ?? null],
+    refetchInterval,
   )
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTasks, useAgents } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
@@ -11,13 +11,14 @@ import {
   LayoutGrid,
   Plus,
   GripVertical,
-  AlertTriangle,
-  Clock,
   CheckCircle2,
   Circle,
   Loader2,
   Eye,
+  RefreshCw,
 } from 'lucide-react'
+
+const BOARD_POLL_INTERVAL = 15_000 // 15 seconds
 
 type KanbanColumn = {
   id: string
@@ -67,12 +68,18 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
     low: 'bg-zinc-500',
   }
 
+  // Highlight cards updated within the last 2 minutes
+  const isRecent = Date.now() - new Date(task.updated_at).getTime() < 2 * 60 * 1000
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-card border border-border/50 rounded-lg p-3 card-glow hover:card-hover transition-all cursor-grab active:cursor-grabbing group"
+      className={cn(
+        'bg-card border rounded-lg p-3 card-glow hover:card-hover transition-all cursor-grab active:cursor-grabbing group',
+        isRecent ? 'border-accent/40' : 'border-border/50',
+      )}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h4 className="text-sm font-medium text-foreground leading-snug line-clamp-2">
@@ -108,7 +115,7 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
             )}
             title={task.priority}
           />
-          <span className="text-[10px] text-muted-foreground">
+          <span className={cn('text-[10px]', isRecent ? 'text-accent' : 'text-muted-foreground')}>
             {timeAgo(task.updated_at)}
           </span>
         </div>
@@ -117,10 +124,29 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
   )
 }
 
+/** Formats elapsed seconds since last fetch as "Xm Xs ago" or "just now" */
+function lastRefreshLabel(lastFetchedAt: number | null): string {
+  if (!lastFetchedAt) return ''
+  const elapsed = Math.floor((Date.now() - lastFetchedAt) / 1000)
+  if (elapsed < 5) return 'just now'
+  if (elapsed < 60) return `${elapsed}s ago`
+  const m = Math.floor(elapsed / 60)
+  const s = elapsed % 60
+  return s > 0 ? `${m}m ${s}s ago` : `${m}m ago`
+}
+
 export default function BoardsPage() {
   const { activeProjectId } = useActiveProject()
-  const { data: tasks } = useTasks(activeProjectId)
+  const { data: tasks, lastFetchedAt } = useTasks(activeProjectId, BOARD_POLL_INTERVAL)
   const { data: agents } = useAgents()
+
+  // Tick every 5s so the "refreshed X ago" label stays fresh
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 5000)
+    return () => clearInterval(t)
+  }, [])
+
   return (
     <div className="flex-1 h-screen overflow-hidden bg-background flex flex-col">
       {/* Header */}
@@ -130,8 +156,14 @@ export default function BoardsPage() {
             <LayoutGrid className="w-6 h-6 text-accent" />
             Boards
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             Kanban view of all tasks across your agent fleet.
+            {lastFetchedAt && (
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50">
+                <RefreshCw className="w-2.5 h-2.5 animate-none" />
+                Refreshed {lastRefreshLabel(lastFetchedAt)}
+              </span>
+            )}
           </p>
         </div>
         <button className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
@@ -141,8 +173,15 @@ export default function BoardsPage() {
       </header>
 
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto px-8 pb-8">
-        <div className="flex gap-6 h-full min-w-max">
+      {/*
+        Layout strategy:
+        - Outer: flex-1 + overflow-x-auto handles horizontal scroll when columns don't fit
+        - Inner: inline-flex (not flex) so it only takes up as much width as content needs,
+          allowing overflow-x-auto to kick in at narrow widths without stretching columns
+        - Each column: fixed min-width of 280px, max 360px, uses flex-shrink-0 to not compress
+      */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden px-8 pb-8">
+        <div className="inline-flex gap-5 h-full align-top">
           {columns.map((column) => {
             const columnTasks = tasks.filter((t) =>
               column.statuses.includes(t.status)
@@ -152,7 +191,7 @@ export default function BoardsPage() {
             return (
               <div
                 key={column.id}
-                className="w-[320px] flex flex-col shrink-0"
+                className="w-[300px] flex flex-col shrink-0"
               >
                 {/* Column Header */}
                 <div className="flex items-center gap-2 mb-4 px-1">
@@ -174,7 +213,7 @@ export default function BoardsPage() {
                 </div>
 
                 {/* Column Drop Zone */}
-                <div className="flex-1 bg-white/[0.01] border border-dashed border-border/50 rounded-xl p-3 space-y-3 overflow-y-auto">
+                <div className="flex-1 bg-white/[0.01] border border-dashed border-border/50 rounded-xl p-3 space-y-3 overflow-y-auto min-h-0">
                   {columnTasks.length > 0 ? (
                     columnTasks.map((task) => (
                       <TaskCard key={task.id} task={task} agents={agents} />
