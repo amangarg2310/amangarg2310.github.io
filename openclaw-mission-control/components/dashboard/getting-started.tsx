@@ -14,14 +14,14 @@ export function GettingStarted() {
 
   const steps = [
     {
-      label: 'OpenClaw Connected',
+      label: 'Claude Code Connected',
       done: agents.length > 0,
-      hint: 'Set OPENCLAW_STATE_DIR to enable sync',
+      hint: 'Agents powered by Claude Code SDK',
     },
     {
       label: 'Agents Registered',
       done: agents.length > 0,
-      hint: 'Agents appear when OpenClaw syncs',
+      hint: 'Create agents in your project settings',
     },
     {
       label: 'Project Created',

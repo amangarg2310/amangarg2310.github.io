@@ -1,10 +1,10 @@
-# OpenClaw Mission Control
+# Mission Control
 
-Project-centric founder operating system built on top of OpenClaw. Manages multiple early-stage startup workstreams through 7 role lanes with smart task routing, workflow automation, and execution policy.
+Project-centric founder operating system powered by Claude Code SDK. Manages multiple early-stage startup workstreams through 7 role lanes with smart task routing, workflow automation, and execution policy.
 
 ## Tech Stack
 
-Next.js 16, React 19, TypeScript, TailwindCSS 4, Framer Motion, Radix UI, Recharts, Zustand
+Next.js 16, React 19, TypeScript, TailwindCSS 4, Framer Motion, Radix UI, Recharts, @anthropic-ai/claude-code (Agent SDK)
 
 ## Key Commands
 
@@ -13,39 +13,42 @@ npm run dev       # Start dev server
 npm run build     # Production build
 npm run lint      # ESLint
 npm run test      # Bridge layer tests (35 tests)
-npm run validate  # Bridge validation script
 ```
 
 ## Architecture
 
+### Agent Runtime
+
+- Agents are spawned via the Claude Agent SDK (`@anthropic-ai/claude-code`)
+- Uses your existing Claude Code login — no API key needed
+- Full tool access: Read, Write, Bash, Grep, WebFetch, etc.
+- Multi-agent support via subagent definitions per role
+
 ### Store
 
 - Always starts empty — no mock/demo data
-- Runtime data hydrated every 15s by `lib/sync.ts` from local OpenClaw CLI
-- Set `OPENCLAW_STATE_DIR` to enable sync from your local OpenClaw installation
-
-### Data Ownership
-
-- **Bridge-sourced** (agents, runs, conversations): Replaced atomically by `store.replaceAll()` each sync cycle. Never modify these directly.
-- **Dashboard-owned** (projects, role assignments, automation configs, workflow instances): Persisted to `<stateDir>/dashboard/projects.json`. Never touched by `replaceAll()`.
+- Runtime data managed by `lib/agent-runtime.ts`
+- Dashboard-owned data (projects, roles) persists to disk
 
 ### Data Flow
 
 ```
-OpenClaw CLI → lib/bridge/* → lib/runtime-adapter.ts → lib/sync.ts → lib/store.ts
-                                                                          ↓
-                                                           app/api/* routes (server)
-                                                                          ↓
-                                                           lib/api.ts (client fetch)
-                                                                          ↓
-                                                           lib/hooks.ts (React hooks)
-                                                                          ↓
-                                                           app/ pages + components/
+User action (chat/task) → lib/agent-runtime.ts → Claude Agent SDK (query())
+                                    ↓
+                              lib/store.ts (in-memory)
+                                    ↓
+                         app/api/* routes (server)
+                                    ↓
+                         lib/api.ts (client fetch)
+                                    ↓
+                         lib/hooks.ts (React hooks)
+                                    ↓
+                         app/ pages + components/
 ```
 
 ### 7 Role Lanes
 
-Each project has 7 role lanes, each mappable to an OpenClaw agent:
+Each project has 7 role lanes, each mappable to a Claude agent:
 
 | Role | Default Tier | Key Automations |
 |------|-------------|-----------------|
@@ -59,11 +62,11 @@ Each project has 7 role lanes, each mappable to an OpenClaw agent:
 
 ### Key Systems
 
-- **Execution Policy** (`lib/execution-policy.ts`): Role-based model routing. Recommends tier (local/economy/standard/premium) based on role, urgency, and cost/quality tradeoff.
+- **Agent Runtime** (`lib/agent-runtime.ts`): Spawns Claude agents via SDK, manages sessions, tracks runs and conversations.
+- **Execution Policy** (`lib/execution-policy.ts`): Role-based model routing. Recommends tier (economy/standard/premium) based on role, urgency, and cost/quality tradeoff.
 - **Task Recommender** (`lib/task-recommender.ts`): Infers best role from goal keywords, finds assigned agent, recommends tier/autonomy/model/chain.
 - **Workflow Chains** (`lib/workflow-chains.ts`): Predefined handoff patterns (Research→Strategy, full GTM pipeline, etc.)
-- **Workflow Orchestrator** (`lib/workflow-orchestrator.ts`): Runs post-sync. When a step's run completes, auto-creates queued task for next step.
-- **Project Mapper** (`lib/project-mapper.ts`): Auto-tags OpenClaw sessions to projects via transcript CWD matching.
+- **Workflow Orchestrator** (`lib/workflow-orchestrator.ts`): When a step's run completes, auto-creates queued task for next step.
 
 ## File Structure
 
@@ -72,6 +75,7 @@ app/
   page.tsx                    # Dashboard
   projects/page.tsx           # Project list
   projects/[id]/page.tsx      # Project command center
+  api/chat/route.ts           # Chat: send messages, spawn agents
   api/projects/[id]/
     route.ts                  # Project CRUD + focus update
     command-center/route.ts   # Aggregated command center data
@@ -86,19 +90,11 @@ components/
   ui/                        # Reusable primitives
 
 lib/
+  agent-runtime.ts           # Claude Agent SDK wrapper (server-only)
   store.ts                   # Singleton data store (server-only)
-  sync.ts                    # Periodic sync from OpenClaw
-  bridge/                    # OpenClaw CLI access layer (DO NOT MODIFY)
-  runtime-adapter.ts         # Bridge → store normalization (DO NOT MODIFY)
-  project-mapper.ts          # Session → project mapping (DO NOT MODIFY)
+  sync.ts                    # Agent status monitoring
+  bridge/                    # Legacy OpenClaw bridge (unused, kept for reference)
 ```
-
-## Do NOT Modify
-
-The bridge layer is stable and tested. Do not modify these files unless fixing a bridge-specific bug:
-- `lib/bridge/*` (cli.ts, transcript.ts, normalizer.ts, raw-types.ts, state-resolver.ts)
-- `lib/runtime-adapter.ts`
-- `lib/project-mapper.ts`
 
 ## Patterns
 
@@ -107,3 +103,4 @@ The bridge layer is stable and tested. Do not modify these files unless fixing a
 - Animations: `motion.div` with stagger delays
 - Cards: `bg-card border border-border rounded-xl` with `card-glow` class
 - Colors: role lanes have assigned colors in `lib/roles.ts`
+- Chat: `sendChatMessage()` from `lib/api.ts` → `POST /api/chat` → `agent-runtime.spawnAgentRun()`

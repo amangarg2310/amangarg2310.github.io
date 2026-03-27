@@ -150,7 +150,7 @@ export default function ApprovalsPage() {
               Approvals
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Review agent actions that require human oversight. Decisions are tracked locally — writeback to OpenClaw requires the approval API.
+              Review agent actions that require human oversight.
             </p>
           </div>
           {pendingCount > 0 && (
@@ -341,7 +341,7 @@ export default function ApprovalsPage() {
               </p>
               <p className="text-xs text-muted-foreground/50 mt-1">
                 {items.length === 0
-                  ? 'Approvals appear here when OpenClaw agents hit budget thresholds or need human sign-off.'
+                  ? 'Approvals appear here when agents hit budget thresholds or need human sign-off.'
                   : 'Try changing your filter.'}
               </p>
             </div>

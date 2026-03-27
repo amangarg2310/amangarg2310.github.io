@@ -1,7 +1,7 @@
 /**
  * Default empty data.
  *
- * All runtime data comes from OpenClaw sync (lib/sync.ts → store.replaceAll()).
+ * All runtime data comes from agent-runtime.ts (lib/sync.ts → store.replaceAll()).
  * Dashboard-owned data (projects, roles, automations) persists to disk via project-store.ts.
  *
  * This file exists only to satisfy the store constructor's fallback imports.

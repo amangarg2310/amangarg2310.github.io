@@ -110,7 +110,7 @@ export function ModelUsageChart() {
             <BarChart3 className="w-8 h-8 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">No usage data yet</p>
             <p className="text-xs text-muted-foreground/50">
-              Cost data appears here as OpenClaw agents run tasks.
+              Cost data appears here as agents run tasks.
             </p>
           </div>
         )}

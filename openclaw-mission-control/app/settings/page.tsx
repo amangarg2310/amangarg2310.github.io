@@ -34,7 +34,7 @@ export default function SettingsPage() {
               Settings
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Configuration sourced from your OpenClaw agent definitions.
+              Agent configuration for this Mission Control instance.
             </p>
           </div>
         </header>
@@ -68,7 +68,7 @@ export default function SettingsPage() {
               <div className="flex items-start gap-2 mt-3 bg-background/50 border border-border/30 rounded-lg px-3 py-2.5">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <p className="text-xs text-muted-foreground">
-                  API keys and provider connections are managed by OpenClaw directly.
+                  Authentication uses your Claude Code login. No API key needed.
                   This dashboard reads from your running agents — it does not manage credentials.
                 </p>
               </div>

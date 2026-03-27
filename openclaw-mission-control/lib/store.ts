@@ -1,49 +1,20 @@
 import { Agent, Task, Run, RunEvent, Message, Conversation, DailyUsage, ModelUsage, Project, RoleAssignment, ProjectContext, AutomationConfig } from './types'
 import type { WorkflowInstance } from './workflow-chains'
-import {
-  agents as mockAgents,
-  tasks as mockTasks,
-  runs as mockRuns,
-  runEvents as mockRunEvents,
-  conversations as mockConversations,
-  messages as mockMessages,
-  dailyUsage as mockDailyUsage,
-  modelUsage as mockModelUsage,
-  projects as mockProjects,
-  roleAssignments as mockRoleAssignments,
-  automationConfigs as mockAutomationConfigs,
-  workflowInstances as mockWorkflowInstances,
-} from './mock-data'
 import { loadProjectData, saveProjectData } from './project-store'
-import { resolveStateDir } from './bridge/state-resolver'
 
 /**
- * Persistent in-memory data store for the control plane.
+ * Persistent in-memory data store for Mission Control.
  *
- * Always starts empty. Runtime data is hydrated by sync.ts from OpenClaw CLI.
- * No mock/demo data is ever seeded.
+ * Manages all data locally — no external sync dependency.
+ * Agents are spawned via the Claude Agent SDK (lib/agent-runtime.ts).
+ * Dashboard-owned data (projects, roles, etc.) persists to disk.
  *
- * The sync layer calls replaceAll() to swap in normalized runtime data.
- * CRITICAL: replaceAll() never touches _projects or _roleAssignments —
- * those are dashboard-owned and persist to disk independently.
- *
- * API routes only read from this store — never from the runtime directly.
+ * API routes only read from this store — never from external services.
  * This is a server-only module — never import from client components.
  */
 
-const isLiveMode = !!(
-  process.env.OPENCLAW_STATE_DIR ||
-  process.env.OPENCLAW_CLI_PATH ||
-  process.env.OPENCLAW_PROFILE
-)
-
-// Resolve state dir for project persistence (null in demo mode)
-let stateDir: string | null = null
-try {
-  stateDir = resolveStateDir()
-} catch {
-  // Demo mode — no state dir
-}
+// Use a local state dir for persistence
+const stateDir = process.env.MISSION_CONTROL_STATE_DIR || null
 
 class DataStore {
   private _agents: Agent[]
@@ -62,7 +33,7 @@ class DataStore {
   private _workflowInstances: WorkflowInstance[]
 
   constructor() {
-    // Always start empty — all runtime data comes from OpenClaw sync (replaceAll).
+    // Always start empty — runtime data managed by agent-runtime.ts
     // No demo/mock data seeding.
     this._agents = []
     this._tasks = []
@@ -194,8 +165,18 @@ class DataStore {
     return this._conversations.filter((c) => c.project_id === projectId)
   }
 
+  upsertConversation(conversation: Conversation): void {
+    const idx = this._conversations.findIndex((c) => c.id === conversation.id)
+    if (idx >= 0) this._conversations[idx] = conversation
+    else this._conversations.push(conversation)
+  }
+
   getMessages(conversationId: string): Message[] {
     return this._messages.filter((m) => m.conversation_id === conversationId)
+  }
+
+  addMessage(message: Message): void {
+    this._messages.push(message)
   }
 
   // --- Usage ---

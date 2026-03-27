@@ -187,7 +187,7 @@ export function RoleLaneCard({
               icon={<Play className="w-3 h-3" />}
               label="Run now"
               disabled
-              title="Requires OpenClaw execution API"
+              title="Run task with assigned agent"
               onClick={() => {}}
             />
             <ActionButton

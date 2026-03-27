@@ -64,7 +64,7 @@ export default function RunsPage() {
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-      <PageHeader title="Runs" description="Agent execution runs synced from OpenClaw.">
+      <PageHeader title="Runs" description="Agent execution runs.">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
@@ -115,7 +115,7 @@ export default function RunsPage() {
             <>
               <p className="text-base font-medium">No runs yet</p>
               <p className="text-[13px] text-muted-foreground max-w-sm mx-auto">
-                Runs appear here as OpenClaw agents execute tasks. Create a task in a project to get started.
+                Runs appear here as agents execute tasks. Create a task in a project to get started.
               </p>
             </>
           )}

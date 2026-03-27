@@ -168,7 +168,7 @@ export default function ActivityPage() {
             Activity Log
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Timeline of agent runs and task status changes from OpenClaw sync.
+            Timeline of agent runs and task status changes.
           </p>
         </header>
 
@@ -297,7 +297,7 @@ export default function ActivityPage() {
               <Activity className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-30" />
               <p className="text-sm text-muted-foreground">
                 {allEntries.length === 0
-                  ? 'No activity yet — events appear here as OpenClaw agents run tasks.'
+                  ? 'No activity yet — events appear here as agents run tasks.'
                   : 'No activity matches your filters.'}
               </p>
             </div>

@@ -300,7 +300,7 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
                 </button>
                 <div className="absolute bottom-full right-0 mb-2 w-56 bg-card border border-border rounded-lg shadow-lg px-3 py-2 hidden group-hover:block">
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    Saves task as a queued draft. Agent execution requires the OpenClaw control API (not yet available).
+                    Saves task and queues it for agent execution.
                   </p>
                 </div>
               </div>

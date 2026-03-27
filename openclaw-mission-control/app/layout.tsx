@@ -5,7 +5,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { ProjectProvider } from "@/lib/project-context";
 
 export const metadata: Metadata = {
-  title: "OpenClaw Mission Control",
+  title: "Mission Control",
   description: "AI Agent Orchestration Control Plane",
 };
 

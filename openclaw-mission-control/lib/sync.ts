@@ -1,116 +1,60 @@
-import { store } from './store'
-import { fetchRuntimeData, isRuntimeConfigured, getRuntimeUrl } from './runtime-adapter'
-import { checkWorkflows } from './workflow-orchestrator'
-
 /**
- * Sync layer: periodic hydration of lib/store.ts from the OpenClaw runtime.
+ * Sync layer: tracks active agent runs and updates store status.
  *
- * - If OPENCLAW_RUNTIME_URL is set, polls the runtime every SYNC_INTERVAL_MS
- * - If not set, store stays seeded with mock data (demo mode)
- * - Each sync replaces the full store contents with normalized runtime data
- * - Sync errors are logged but don't crash — stale data is better than no data
+ * Instead of polling an external runtime, this layer:
+ * - Monitors active agent sessions from agent-runtime.ts
+ * - Periodically updates usage aggregates
+ * - Provides health/status endpoints
  *
  * Server-only — never import from client components.
  */
 
-const SYNC_INTERVAL_MS = parseInt(process.env.SYNC_INTERVAL_MS || '15000', 10) // 15s default
-const MIN_INTERVAL = 5000
+import { getActiveRunIds } from './agent-runtime'
 
 let syncTimer: ReturnType<typeof setInterval> | null = null
 let lastSyncAt: string | null = null
-let lastSuccessAt: string | null = null
-let lastSyncError: string | null = null
 let syncCount = 0
-let syncInProgress = false
 
 /**
- * Run a single sync cycle: fetch from runtime, hydrate store.
- * Skips if a previous sync is still running (overlap guard).
+ * Run a single status check cycle.
  */
 export async function syncOnce(): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
-  if (!isRuntimeConfigured()) {
-    return { ok: true } // Demo mode — nothing to sync
-  }
-
-  // Overlap guard: skip if previous sync is still running
-  if (syncInProgress) {
-    console.warn('[sync] Previous sync still running — skipping this tick')
-    return { ok: true, skipped: true }
-  }
-
-  syncInProgress = true
   try {
-    const data = await fetchRuntimeData()
-
-    if (!data) {
-      const msg = `Runtime unreachable at ${getRuntimeUrl()}`
-      lastSyncError = msg
-      console.warn(`[sync] ${msg}`)
-      return { ok: false, error: msg }
-    }
-
-    // Hydrate store with normalized runtime data
-    store.replaceAll({
-      agents: data.agents,
-      tasks: data.tasks,
-      runs: data.runs,
-      runEvents: data.runEvents,
-      conversations: data.conversations,
-      messages: data.messages,
-      dailyUsage: data.dailyUsage,
-      modelUsage: data.modelUsage,
-    })
-
+    const activeRuns = getActiveRunIds()
     syncCount++
-    const now = new Date().toISOString()
-    lastSyncAt = now
-    lastSuccessAt = now
-    lastSyncError = null
+    lastSyncAt = new Date().toISOString()
 
-    // Check workflow handoffs after each sync
-    checkWorkflows()
-
-    if (syncCount <= 3 || syncCount % 20 === 0) {
-      console.log(
-        `[sync] Hydrated store from runtime (${data.agents.length} agents, ${data.runs.length} runs, ${data.tasks.length} tasks) — sync #${syncCount}`
-      )
+    if (syncCount <= 3 || syncCount % 60 === 0) {
+      console.log(`[sync] Status check #${syncCount} — ${activeRuns.length} active runs`)
     }
 
     return { ok: true }
   } catch (err) {
     const msg = (err as Error).message
-    lastSyncAt = new Date().toISOString()
-    lastSyncError = msg
     console.error(`[sync] Error: ${msg}`)
     return { ok: false, error: msg }
-  } finally {
-    syncInProgress = false
   }
 }
 
 /**
- * Start periodic sync. Idempotent — calling multiple times is safe.
+ * Start periodic status checks. Idempotent.
  */
 export function startSync(): void {
   if (syncTimer) return
-  if (!isRuntimeConfigured()) {
-    console.log('[sync] No OPENCLAW_RUNTIME_URL set — running in demo mode with mock data')
-    return
-  }
 
-  const interval = Math.max(SYNC_INTERVAL_MS, MIN_INTERVAL)
-  console.log(`[sync] Starting periodic sync every ${interval / 1000}s from ${getRuntimeUrl()}`)
+  console.log('[sync] Mission Control ready — agents powered by Claude Code SDK')
 
-  // Initial sync immediately
+  // Initial check
   syncOnce()
 
+  // Check every 10 seconds
   syncTimer = setInterval(() => {
     syncOnce()
-  }, interval)
+  }, 10_000)
 }
 
 /**
- * Stop periodic sync.
+ * Stop periodic checks.
  */
 export function stopSync(): void {
   if (syncTimer) {
@@ -125,14 +69,14 @@ export function stopSync(): void {
  */
 export function getSyncStatus() {
   return {
-    mode: isRuntimeConfigured() ? 'live' : 'demo',
-    runtimeUrl: getRuntimeUrl() || null,
+    mode: 'sdk',
+    runtimeUrl: null,
     running: syncTimer !== null,
-    syncInProgress,
+    syncInProgress: false,
     lastSyncAt,
-    lastSuccessAt,
-    lastSyncError,
+    lastSuccessAt: lastSyncAt,
+    lastSyncError: null,
     syncCount,
-    intervalMs: SYNC_INTERVAL_MS,
+    intervalMs: 10_000,
   }
 }

@@ -60,7 +60,7 @@ export function ActivityFeed() {
           <div className="flex flex-col items-center justify-center py-10 gap-2">
             <Clock className="w-8 h-8 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">No activity yet</p>
-            <p className="text-xs text-muted-foreground/50">Activity appears here as OpenClaw agents run tasks.</p>
+            <p className="text-xs text-muted-foreground/50">Activity appears here as agents run tasks.</p>
           </div>
         ) : (
           <div className="divide-y divide-border/50">

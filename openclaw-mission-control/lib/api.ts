@@ -17,15 +17,13 @@ import type { ExecutionRecommendation, TaskLaunchConfig } from './task-recommend
 import type { WorkflowInstance } from './workflow-chains'
 
 /**
- * Frontend API client for OpenClaw Mission Control.
+ * Frontend API client for Mission Control.
  *
  * Resolves the API base URL in this order:
  *  1. NEXT_PUBLIC_API_URL env var (for external backend)
  *  2. Relative /api (Next.js API routes — default)
  *
  * All functions return typed data matching lib/types.ts.
- * Falls back to the Next.js API routes which serve from
- * the in-memory DataStore (seeded with mock data in demo mode).
  */
 
 function getBaseUrl(): string {
@@ -292,4 +290,31 @@ export async function startWorkflow(projectId: string, chainId: string): Promise
   })
   if (!res.ok) throw new Error(`Failed to start workflow: ${res.status}`)
   return res.json() as Promise<WorkflowInstance>
+}
+
+// --- Chat ---
+export async function sendChatMessage(data: {
+  message: string
+  conversation_id?: string
+  project_id?: string
+  agent_id?: string
+  role?: string
+}): Promise<{ ok: boolean; conversation_id?: string; run_id?: string }> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`Failed to send message: ${res.status}`)
+  return res.json()
+}
+
+// --- Agent Control ---
+export async function stopAgentRun(runId: string): Promise<void> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/runs/${runId}/stop`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error(`Failed to stop run: ${res.status}`)
 }

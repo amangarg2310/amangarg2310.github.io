@@ -109,7 +109,7 @@ export function Sidebar() {
               <path d="M6 20L12 16L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          OpenClaw
+          Mission Control
         </div>
       </div>
 
@@ -213,7 +213,7 @@ export function Sidebar() {
           </div>
           <div className="flex flex-col items-start">
             <span className="text-sm font-medium text-foreground">
-              OpenClaw
+              Mission Control
             </span>
             <span className="text-xs text-muted-foreground">
               {onlineAgentCount} agents online

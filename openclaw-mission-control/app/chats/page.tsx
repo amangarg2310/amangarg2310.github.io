@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
+import { sendChatMessage } from '@/lib/api'
 import { useActiveProject } from '@/lib/project-context'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, formatTokens, timeAgo, cn } from '@/lib/utils'
@@ -14,9 +15,6 @@ import {
   Clock,
   Loader2,
   Send,
-  Paperclip,
-  AlertTriangle,
-  Info,
 } from 'lucide-react'
 
 /**
@@ -466,23 +464,10 @@ interface ChatComposerProps {
   isSessionActive: boolean
 }
 
-function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps) {
+function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatComposerProps) {
   const [message, setMessage] = useState('')
-  const [showAttachBlocker, setShowAttachBlocker] = useState(false)
+  const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const attachRef = useRef<HTMLDivElement>(null)
-
-  // Click-outside to close attachment blocker tooltip
-  useEffect(() => {
-    if (!showAttachBlocker) return
-    const handler = (e: MouseEvent) => {
-      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
-        setShowAttachBlocker(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showAttachBlocker])
 
   // Auto-resize textarea
   useEffect(() => {
@@ -492,59 +477,34 @@ function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [message])
 
-  // Send is blocked — dashboard has no injection path into OpenClaw sessions
-  // (Telegram works because OpenClaw handles it natively via its own bot integration)
-  const canSend = false
-  const sendBlockedReason = 'Sending messages from the dashboard requires an OpenClaw session messaging API. Currently, agent messaging works via Telegram and CLI — the dashboard can observe but not inject into sessions yet.'
+  const handleSend = async () => {
+    const text = message.trim()
+    if (!text || sending) return
+
+    setSending(true)
+    try {
+      await sendChatMessage({
+        message: text,
+        conversation_id: `conv-${sessionId}`,
+      })
+      setMessage('')
+    } catch (err) {
+      console.error('Failed to send message:', err)
+    } finally {
+      setSending(false)
+    }
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      // Send is blocked — no-op
+      handleSend()
     }
   }
 
   return (
     <div className="border-t border-border bg-card/50 backdrop-blur-sm">
-      {/* Blocker banner */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/5 border-b border-amber-500/10">
-        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-        <p className="text-[10px] text-amber-400/80">
-          Dashboard messaging requires an OpenClaw session injection API. Agents can receive messages and images via Telegram today — dashboard parity depends on an equivalent API.
-        </p>
-      </div>
-
       <div className="flex items-end gap-2 px-4 py-3">
-        {/* Attachment button — disabled with explanation */}
-        <div className="relative" ref={attachRef}>
-          <button
-            onClick={() => setShowAttachBlocker(!showAttachBlocker)}
-            className="p-2 rounded-lg border border-border/30 text-muted-foreground/30 cursor-not-allowed transition-colors hover:bg-white/5"
-            title="Image/file attachments blocked"
-          >
-            <Paperclip className="w-4 h-4" />
-          </button>
-          {showAttachBlocker && (
-            <div className="absolute z-50 bottom-full left-0 mb-2 w-72 bg-card border border-border rounded-lg shadow-lg p-3">
-              <div className="flex items-start gap-2">
-                <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-medium text-foreground mb-1">Media attachments — waiting on API</p>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    Image/file attachments work via Telegram today — OpenClaw&apos;s native Telegram integration handles
-                    image delivery to agents internally. The dashboard needs an equivalent session injection API
-                    to support the same capability here.
-                  </p>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1.5">
-                    When available, this will match Telegram: drag-and-drop image(s) directly into the conversation thread,
-                    agent receives them inline.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Text input */}
         <div className="flex-1 relative">
           <textarea
@@ -553,27 +513,24 @@ function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            disabled={!canSend}
-            placeholder={canSend ? 'Send a message...' : 'Use Telegram or CLI to message agents — dashboard send coming soon'}
-            className="w-full bg-[#050506] border border-border/50 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder="Send a message to this agent..."
+            className="w-full bg-[#050506] border border-border/50 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors"
           />
         </div>
 
-        {/* Send button — disabled */}
-        <div className="relative group">
-          <button
-            disabled
-            className="p-2.5 rounded-xl bg-accent/20 text-accent/30 cursor-not-allowed transition-colors"
-            title={sendBlockedReason}
-          >
-            <Send className="w-4 h-4" />
-          </button>
-          <div className="absolute bottom-full right-0 mb-2 w-64 bg-card border border-border rounded-lg shadow-lg px-3 py-2 hidden group-hover:block z-50">
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
-              {sendBlockedReason}
-            </p>
-          </div>
-        </div>
+        {/* Send button */}
+        <button
+          onClick={handleSend}
+          disabled={!message.trim() || sending}
+          className={cn(
+            'p-2.5 rounded-xl transition-colors',
+            message.trim() && !sending
+              ? 'bg-accent text-white hover:bg-accent/80'
+              : 'bg-accent/20 text-accent/30 cursor-not-allowed'
+          )}
+        >
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        </button>
       </div>
     </div>
   )
