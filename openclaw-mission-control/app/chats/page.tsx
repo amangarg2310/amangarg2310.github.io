@@ -415,9 +415,10 @@ function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [message])
 
-  // Send is blocked — OpenClaw CLI doesn't expose session-based message injection
+  // Send is blocked — dashboard has no injection path into OpenClaw sessions
+  // (Telegram works because OpenClaw handles it natively via its own bot integration)
   const canSend = false
-  const sendBlockedReason = 'Sending messages requires the OpenClaw session messaging API (not yet available). Use the OpenClaw CLI directly to interact with agents.'
+  const sendBlockedReason = 'Sending messages from the dashboard requires an OpenClaw session messaging API. Currently, agent messaging works via Telegram and CLI — the dashboard can observe but not inject into sessions yet.'
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -432,7 +433,7 @@ function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps
       <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/5 border-b border-amber-500/10">
         <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
         <p className="text-[10px] text-amber-400/80">
-          Message sending requires the OpenClaw session messaging API. Use the CLI to interact with agents directly.
+          Dashboard messaging requires an OpenClaw session injection API. Agents can receive messages and images via Telegram today — dashboard parity depends on an equivalent API.
         </p>
       </div>
 
@@ -451,14 +452,15 @@ function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps
               <div className="flex items-start gap-2">
                 <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-medium text-foreground mb-1">Media attachments blocked</p>
+                  <p className="text-xs font-medium text-foreground mb-1">Media attachments — waiting on API</p>
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    Attaching images/files requires native media support on the OpenClaw session messaging API.
-                    The current CLI path (<code className="text-[9px] bg-white/5 px-1 rounded">openclaw agent --session-id ... --message ...</code>)
-                    does not support media payloads. This is a platform-level dependency, not a dashboard limitation.
+                    Image/file attachments work via Telegram today — OpenClaw&apos;s native Telegram integration handles
+                    image delivery to agents internally. The dashboard needs an equivalent session injection API
+                    to support the same capability here.
                   </p>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-1.5">
-                    When supported, this will work like Telegram: attach image(s) directly in the live conversation thread.
+                    When available, this will match Telegram: drag-and-drop image(s) directly into the conversation thread,
+                    agent receives them inline.
                   </p>
                 </div>
               </div>
@@ -475,7 +477,7 @@ function ChatComposer({ sessionId, agentId, isSessionActive }: ChatComposerProps
             onKeyDown={handleKeyDown}
             rows={1}
             disabled={!canSend}
-            placeholder={canSend ? 'Send a message...' : 'Message sending not yet available — use OpenClaw CLI'}
+            placeholder={canSend ? 'Send a message...' : 'Use Telegram or CLI to message agents — dashboard send coming soon'}
             className="w-full bg-[#050506] border border-border/50 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
