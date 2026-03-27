@@ -11,7 +11,7 @@ import {
   UserCheck,
   Clock,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ExecutionRecommendation, AgentStrategy } from '@/lib/task-recommender'
 import type { WorkflowChain } from '@/lib/workflow-chains'
 
@@ -45,8 +45,21 @@ const AGENT_STRATEGY_OPTIONS: { id: AgentStrategy; label: string; icon: typeof B
 
 function WhyBadge({ reason }: { reason: string }) {
   const [show, setShow] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (!show) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setShow(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [show])
+
   return (
-    <span className="relative inline-block">
+    <span className="relative inline-block" ref={ref}>
       <button
         onClick={() => setShow(!show)}
         className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
@@ -56,7 +69,7 @@ function WhyBadge({ reason }: { reason: string }) {
         why
       </button>
       {show && (
-        <div className="absolute z-50 bottom-full left-0 mb-1 w-56 bg-card border border-border rounded-lg shadow-lg px-3 py-2">
+        <div className="absolute z-[60] top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg px-3 py-2">
           <p className="text-[10px] text-muted-foreground leading-relaxed">{reason}</p>
         </div>
       )}

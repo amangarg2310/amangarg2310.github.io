@@ -65,6 +65,27 @@ export function fetchTasks(projectId?: string | null): Promise<Task[]> {
   return fetchJson<Task[]>(`/tasks${qs}`)
 }
 
+export async function createTaskDraft(data: {
+  goal: string
+  project_id: string
+  priority: string
+  role?: string | null
+  tier?: string | null
+  autonomy?: string | null
+  agent_strategy?: string | null
+  assigned_agent_id?: string | null
+  workflow_chain_id?: string | null
+}): Promise<Task> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`Failed to create task draft: ${res.status}`)
+  return res.json() as Promise<Task>
+}
+
 // --- Runs ---
 export function fetchRuns(projectId?: string | null): Promise<Run[]> {
   const qs = projectId ? `?project_id=${projectId}` : ''
@@ -232,6 +253,28 @@ export async function fetchRecommendation(
 // --- Workflows ---
 export function fetchWorkflows(projectId: string): Promise<WorkflowInstance[]> {
   return fetchJson<WorkflowInstance[]>(`/projects/${projectId}/workflows`)
+}
+
+export async function pauseWorkflow(projectId: string, workflowId: string): Promise<WorkflowInstance> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/workflows`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workflow_id: workflowId, action: 'pause' }),
+  })
+  if (!res.ok) throw new Error(`Failed to pause workflow: ${res.status}`)
+  return res.json() as Promise<WorkflowInstance>
+}
+
+export async function resumeWorkflow(projectId: string, workflowId: string): Promise<WorkflowInstance> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}/workflows`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workflow_id: workflowId, action: 'resume' }),
+  })
+  if (!res.ok) throw new Error(`Failed to resume workflow: ${res.status}`)
+  return res.json() as Promise<WorkflowInstance>
 }
 
 export async function startWorkflow(projectId: string, chainId: string): Promise<WorkflowInstance> {

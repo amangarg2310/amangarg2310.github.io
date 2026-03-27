@@ -32,6 +32,12 @@ export interface ReasoningDetail {
   chain_reason: string | null
 }
 
+export interface RecommendationOverrides {
+  tier?: ExecutionTier
+  autonomy?: AutonomyLevel
+  agent_strategy?: AgentStrategy
+}
+
 export interface ExecutionRecommendation {
   role: RoleLane
   role_label: string
@@ -132,6 +138,7 @@ export function recommendExecution(
   config: TaskLaunchConfig,
   agents: Agent[],
   assignments: RoleAssignment[],
+  overrides?: RecommendationOverrides,
 ): ExecutionRecommendation {
   // 1. Infer best role with keyword evidence
   const { role, matchedKeywords, score } = inferRole(config.goal)
@@ -142,17 +149,21 @@ export function recommendExecution(
   )
   const agent = assignment ? agents.find((a) => a.id === assignment.agent_id) : undefined
 
-  // 3. Compute tier and autonomy
-  const tier = recommendTier(role, config.urgency, config.tradeoff)
-  const model = recommendModelForTier(tier)
-  const autonomy = recommendAutonomy(role, config.urgency)
+  // 3. Compute tier and autonomy (system recommendations)
+  const systemTier = recommendTier(role, config.urgency, config.tradeoff)
+  const systemAutonomy = recommendAutonomy(role, config.urgency)
   const preferLocal = shouldPreferLocal(role, config.tradeoff)
 
-  // 4. Match workflow chain
+  // 4. Apply overrides
+  const tier = overrides?.tier ?? systemTier
+  const autonomy = overrides?.autonomy ?? systemAutonomy
+  const model = recommendModelForTier(tier)
+
+  // 5. Match workflow chain
   const chainMatches = matchChainsToGoal(config.goal)
   const chain = chainMatches[0] ?? null
 
-  // 5. Build structured reasoning
+  // 6. Build structured reasoning
   const roleReason = score > 0
     ? `Matched keywords: ${matchedKeywords.map((k) => `"${k}"`).join(', ')}. ${ROLE_LABELS[role]} is the best fit for this type of work.`
     : `No strong keyword match — defaulting to ${ROLE_LABELS[role]} as a safe starting point.`
@@ -161,9 +172,13 @@ export function recommendExecution(
     ? `${agent.name} is already assigned to ${ROLE_LABELS[role]} for this project. ${agent.total_runs ? `${agent.total_runs} prior runs.` : ''}`
     : `No agent is assigned to ${ROLE_LABELS[role]} for this project. You can create a persistent project agent or use a temporary one.`
 
-  const tierReason = explainRecommendation(role, tier, config.urgency, config.tradeoff, preferLocal)
+  const tierReason = overrides?.tier
+    ? `Manually set to ${TIER_LABELS[tier]} (system recommended ${TIER_LABELS[systemTier]}).`
+    : explainRecommendation(role, tier, config.urgency, config.tradeoff, preferLocal)
 
-  const autonomyReason = config.urgency === 'critical'
+  const autonomyReason = overrides?.autonomy
+    ? `Manually set to "${autonomy}" (system recommended "${systemAutonomy}").`
+    : config.urgency === 'critical'
     ? `Critical urgency requires human oversight — using "${autonomy}" mode.`
     : config.urgency === 'low'
     ? `Low urgency allows more agent freedom — using "${autonomy}" mode.`
@@ -173,8 +188,9 @@ export function recommendExecution(
     ? `Goal matches the "${chain.name}" pattern (${chain.steps.map((s) => ROLE_LABELS[s.role]).join(' → ')}). Multi-step workflow recommended.`
     : null
 
-  // 6. Determine agent strategy
-  const agentStrategy: AgentStrategy = agent ? 'reuse_existing' : 'create_persistent'
+  // 7. Determine agent strategy
+  const systemStrategy: AgentStrategy = agent ? 'reuse_existing' : 'create_persistent'
+  const agentStrategy = overrides?.agent_strategy ?? systemStrategy
 
   return {
     role,
@@ -195,6 +211,6 @@ export function recommendExecution(
       chain_reason: chainReason,
     },
     estimated_cost: TIER_COST_RANGES[tier],
-    prefer_local: preferLocal,
+    prefer_local: overrides?.tier ? false : preferLocal,
   }
 }

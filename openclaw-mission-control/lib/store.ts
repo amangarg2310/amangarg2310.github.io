@@ -429,6 +429,15 @@ class DataStore {
     this._persistProjects()
   }
 
+  updateWorkflowStatus(instanceId: string, status: WorkflowInstance['status']): WorkflowInstance | null {
+    const instance = this._workflowInstances.find((wi) => wi.id === instanceId)
+    if (!instance) return null
+    instance.status = status
+    instance.updated_at = new Date().toISOString()
+    this._persistProjects()
+    return instance
+  }
+
   advanceWorkflow(instanceId: string, runId: string): WorkflowInstance | null {
     const instance = this._workflowInstances.find((wi) => wi.id === instanceId)
     if (!instance) return null

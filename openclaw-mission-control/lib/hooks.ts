@@ -16,7 +16,7 @@ import type {
   AutomationConfig,
   CommandCenterData,
 } from './types'
-import type { ExecutionRecommendation, TaskLaunchConfig } from './task-recommender'
+import type { ExecutionRecommendation, TaskLaunchConfig, RecommendationOverrides } from './task-recommender'
 import type { WorkflowInstance } from './workflow-chains'
 import {
   fetchAgents,
@@ -257,7 +257,11 @@ export function useAutomations(projectId: string | null) {
 
 // --- Recommendations ---
 
-export function useRecommendation(projectId: string | null, config: Partial<TaskLaunchConfig>) {
+export function useRecommendation(
+  projectId: string | null,
+  config: Partial<TaskLaunchConfig>,
+  overrides?: RecommendationOverrides,
+) {
   const [data, setData] = useState<ExecutionRecommendation | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -270,7 +274,10 @@ export function useRecommendation(projectId: string | null, config: Partial<Task
     let cancelled = false
     const timer = setTimeout(() => {
       setLoading(true)
-      fetchRecommendation(projectId, config)
+      const payload = overrides
+        ? { ...config, overrides }
+        : config
+      fetchRecommendation(projectId, payload)
         .then((result) => {
           if (!cancelled) setData(result)
         })
@@ -287,7 +294,7 @@ export function useRecommendation(projectId: string | null, config: Partial<Task
       clearTimeout(timer)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, config.goal, config.urgency, config.tradeoff, config.recurring])
+  }, [projectId, config.goal, config.urgency, config.tradeoff, config.recurring, overrides?.tier, overrides?.autonomy, overrides?.agent_strategy])
 
   return { data, loading }
 }

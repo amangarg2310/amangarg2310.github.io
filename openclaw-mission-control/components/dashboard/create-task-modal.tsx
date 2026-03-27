@@ -9,9 +9,10 @@ import {
 } from 'lucide-react'
 import { useAgents, useProjects, useRecommendation } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
+import { createTaskDraft } from '@/lib/api'
 import { RecommendationPanel } from './recommendation-panel'
-import type { Urgency, Tradeoff } from '@/lib/execution-policy'
-import type { AgentStrategy } from '@/lib/task-recommender'
+import type { Urgency, Tradeoff, ExecutionTier, AutonomyLevel } from '@/lib/execution-policy'
+import type { AgentStrategy, RecommendationOverrides } from '@/lib/task-recommender'
 
 const URGENCY_OPTIONS: { id: Urgency; label: string; color: string }[] = [
   { id: 'low', label: 'Low', color: 'border-gray-500/30 text-gray-400 hover:border-gray-500/50' },
@@ -47,6 +48,30 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
   const [tierOverride, setTierOverride] = useState<string | null>(null)
   const [autonomyOverride, setAutonomyOverride] = useState<string | null>(null)
   const [agentStrategyOverride, setAgentStrategyOverride] = useState<AgentStrategy | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const handleSaveDraft = async () => {
+    if (!projectId || !goal || saving) return
+    setSaving(true)
+    try {
+      await createTaskDraft({
+        goal,
+        project_id: projectId,
+        priority: urgency,
+        role: recommendation?.role ?? null,
+        tier: tierOverride ?? recommendation?.tier ?? null,
+        autonomy: autonomyOverride ?? recommendation?.autonomy ?? null,
+        agent_strategy: agentStrategyOverride ?? recommendation?.agent_strategy ?? null,
+        assigned_agent_id: recommendation?.agent_id ?? null,
+        workflow_chain_id: recommendation?.workflow_chain?.id ?? null,
+      })
+      onClose()
+    } catch (err) {
+      console.error('Failed to save draft:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const config = useMemo(() => ({
     project_id: projectId,
@@ -57,9 +82,18 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
     recurrence_cadence: recurring ? cadence : undefined,
   }), [projectId, goal, urgency, tradeoff, recurring, cadence])
 
+  const overrides = useMemo<RecommendationOverrides | undefined>(() => {
+    const o: RecommendationOverrides = {}
+    if (tierOverride) o.tier = tierOverride as ExecutionTier
+    if (autonomyOverride) o.autonomy = autonomyOverride as AutonomyLevel
+    if (agentStrategyOverride) o.agent_strategy = agentStrategyOverride
+    return Object.keys(o).length > 0 ? o : undefined
+  }, [tierOverride, autonomyOverride, agentStrategyOverride])
+
   const { data: recommendation, loading: recLoading } = useRecommendation(
     projectId || null,
     config,
+    overrides,
   )
 
   if (!isOpen) return null
@@ -257,16 +291,16 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
               </button>
               <div className="relative group">
                 <button
-                  disabled={!projectId || !goal}
-                  className="px-6 py-2 bg-accent/50 text-white/70 text-sm font-medium rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 cursor-not-allowed"
-                  title="Requires OpenClaw execution API — task will be saved as draft"
+                  disabled={!projectId || !goal || saving}
+                  onClick={handleSaveDraft}
+                  className="px-6 py-2 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-lg shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <ArrowUpRight className="w-4 h-4" />
-                  Save Draft
+                  {saving ? 'Saving...' : 'Save Draft'}
                 </button>
                 <div className="absolute bottom-full right-0 mb-2 w-56 bg-card border border-border rounded-lg shadow-lg px-3 py-2 hidden group-hover:block">
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    Agent execution requires the OpenClaw control API (not yet available). Tasks are saved as drafts for now.
+                    Saves task as a queued draft. Agent execution requires the OpenClaw control API (not yet available).
                   </p>
                 </div>
               </div>

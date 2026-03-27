@@ -1,5 +1,5 @@
 import { store } from '@/lib/store'
-import { recommendExecution, type TaskLaunchConfig } from '@/lib/task-recommender'
+import { recommendExecution, type TaskLaunchConfig, type RecommendationOverrides } from '@/lib/task-recommender'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const body = await request.json() as Partial<TaskLaunchConfig>
+  const body = await request.json() as Partial<TaskLaunchConfig> & { overrides?: RecommendationOverrides }
 
   const config: TaskLaunchConfig = {
     project_id: id,
@@ -21,8 +21,9 @@ export async function POST(
 
   const agents = store.getAgents()
   const assignments = store.getRoleAssignments(id)
+  const overrides = body.overrides
 
-  const recommendation = recommendExecution(config, agents, assignments)
+  const recommendation = recommendExecution(config, agents, assignments, overrides)
 
   return Response.json(recommendation, {
     headers: { 'Access-Control-Allow-Origin': '*' },

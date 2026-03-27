@@ -58,11 +58,37 @@ export async function POST(
   })
 }
 
+export async function PATCH(request: Request) {
+  const body = await request.json()
+  const { workflow_id, action } = body as { workflow_id: string; action: 'pause' | 'resume' }
+
+  if (!workflow_id || !action) {
+    return Response.json({ error: 'workflow_id and action required' }, {
+      status: 400,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
+  }
+
+  const newStatus = action === 'pause' ? 'waiting' as const : 'running' as const
+  const updated = store.updateWorkflowStatus(workflow_id, newStatus)
+
+  if (!updated) {
+    return Response.json({ error: 'Workflow not found' }, {
+      status: 404,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
+  }
+
+  return Response.json(updated, {
+    headers: { 'Access-Control-Allow-Origin': '*' },
+  })
+}
+
 export async function OPTIONS() {
   return new Response(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   })

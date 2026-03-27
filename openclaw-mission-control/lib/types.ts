@@ -62,6 +62,11 @@ export interface Task {
   assigned_agent_id: string | null;
   created_by: string;
   project_id?: string | null;
+  role?: RoleLane | null;
+  tier?: string | null;
+  autonomy?: string | null;
+  agent_strategy?: string | null;
+  workflow_chain_id?: string | null;
   created_at: string;
   updated_at: string;
 }

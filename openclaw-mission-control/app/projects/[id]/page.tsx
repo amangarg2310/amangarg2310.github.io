@@ -13,6 +13,7 @@ import { NextActionsPanel } from '@/components/project/next-actions-panel'
 import { BudgetSummary } from '@/components/project/budget-summary'
 import { WorkflowStatus } from '@/components/project/workflow-status'
 import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
+import { pauseWorkflow, resumeWorkflow } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
 import {
   Activity,
@@ -88,7 +89,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </motion.div>
 
         {/* Active workflows */}
-        <WorkflowStatus workflows={activeWorkflows} />
+        <WorkflowStatus
+          workflows={activeWorkflows}
+          onPause={async (wfId) => {
+            await pauseWorkflow(id, wfId)
+            handleChange()
+          }}
+          onResume={async (wfId) => {
+            await resumeWorkflow(id, wfId)
+            handleChange()
+          }}
+        />
 
         {/* Role Lanes Grid */}
         <section>
