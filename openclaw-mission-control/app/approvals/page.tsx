@@ -39,10 +39,16 @@ interface ApprovalItem {
 }
 
 function getApprovalItems(tasks: Task[], runs: Run[], agents: Agent[]): ApprovalItem[] {
+  // Pending: tasks with needs_approval status
   const approvalTasks = tasks.filter(
     (t) => t.status === 'needs_approval'
   )
-  const completedTasks = tasks.filter((t) => t.status === 'completed').slice(0, 3)
+  const taskIds = new Set(approvalTasks.map((t) => t.id))
+
+  // Also surface runs with needs_approval whose task isn't already listed
+  const approvalRuns = runs.filter(
+    (r) => r.status === 'needs_approval' && !taskIds.has(r.task_id)
+  )
 
   const pending: ApprovalItem[] = approvalTasks.map((task) => {
     const agent = agents.find((a) => a.id === task.assigned_agent_id)
@@ -68,6 +74,26 @@ function getApprovalItems(tasks: Task[], runs: Run[], agents: Agent[]): Approval
     }
   })
 
+  // Runs that need approval but have no matching task entry
+  const runPending: ApprovalItem[] = approvalRuns.map((run) => {
+    const agent = agents.find((a) => a.id === run.agent_id)
+    return {
+      id: `approval-run-${run.id}`,
+      taskId: run.task_id,
+      title: run.task_id || 'Agent action',
+      agentName: agent?.name || 'Unknown',
+      agentColor: agent?.avatar_color || '#71717a',
+      model: run.actual_model_used || 'unknown',
+      cost: run.estimated_cost || 0,
+      reason: 'Agent action requires human approval',
+      timestamp: run.started_at,
+      priority: 'medium',
+      decision: 'pending',
+      runId: run.id,
+    }
+  })
+
+  const completedTasks = tasks.filter((t) => t.status === 'completed').slice(0, 3)
   const history: ApprovalItem[] = completedTasks.map((task) => {
     const agent = agents.find((a) => a.id === task.assigned_agent_id)
     const run = runs.find((r) => r.task_id === task.id)
@@ -87,7 +113,7 @@ function getApprovalItems(tasks: Task[], runs: Run[], agents: Agent[]): Approval
     }
   })
 
-  return [...pending, ...history]
+  return [...pending, ...runPending, ...history]
 }
 
 export default function ApprovalsPage() {

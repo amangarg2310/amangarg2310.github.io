@@ -11,7 +11,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as { name: string; description?: string; color?: string }
+  const body = await request.json() as {
+    name: string
+    description?: string
+    color?: string
+    repo_url?: string
+    repo_branch?: string
+  }
 
   if (!body.name || typeof body.name !== 'string') {
     return Response.json({ error: 'name is required' }, {
@@ -29,6 +35,8 @@ export async function POST(request: Request) {
     slug,
     description: body.description || '',
     color: body.color || '#3b82f6',
+    repo_url: body.repo_url || null,
+    repo_branch: body.repo_branch || null,
     created_at: now,
     updated_at: now,
   }

@@ -44,11 +44,30 @@ export async function PATCH(
   })
 }
 
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const deleted = store.deleteProject(id)
+
+  if (!deleted) {
+    return Response.json({ error: 'Project not found' }, {
+      status: 404,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
+  }
+
+  return Response.json({ ok: true }, {
+    headers: { 'Access-Control-Allow-Origin': '*' },
+  })
+}
+
 export async function OPTIONS() {
   return new Response(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   })

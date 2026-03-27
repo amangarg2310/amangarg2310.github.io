@@ -19,6 +19,31 @@ import {
   Info,
 } from 'lucide-react'
 
+/**
+ * Strip transport/debug metadata from message content.
+ * Removes lines like "Conversation info (untrusted metadata)", sender JSON blobs,
+ * and internal reply tags that leak from the raw transcript into text blocks.
+ */
+function cleanMessageContent(content: string): string {
+  if (!content) return content
+  return content
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim()
+      // Remove "Conversation info" transport headers
+      if (/^conversation info\s*\(/i.test(trimmed)) return false
+      // Remove sender JSON blobs like {"sender": ...}
+      if (/^\{"sender"\s*:/.test(trimmed)) return false
+      // Remove bare JSON objects that look like transport metadata
+      if (/^\{".+"\s*:\s*\{/.test(trimmed) && trimmed.length < 300) return false
+      // Remove internal reply tags
+      if (/<\/?reply\b/i.test(trimmed)) return false
+      return true
+    })
+    .join('\n')
+    .trim()
+}
+
 export default function ChatsPage() {
   const { activeProjectId } = useActiveProject()
   const { data: conversations } = useConversations(activeProjectId)
@@ -187,9 +212,9 @@ export default function ChatsPage() {
                           : {}
                       }
                     >
-                      {msg.content && (
+                      {msg.content && cleanMessageContent(msg.content) && (
                         <div className="whitespace-pre-wrap">
-                          {msg.content}
+                          {cleanMessageContent(msg.content)}
                         </div>
                       )}
 

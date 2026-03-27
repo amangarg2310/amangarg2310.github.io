@@ -161,11 +161,17 @@ export function fetchProjectContext(id: string): Promise<ProjectContext> {
   return fetchJson<ProjectContext>(`/projects/${id}`)
 }
 
+export async function deleteProject(id: string): Promise<void> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Failed to delete project: ${res.status}`)
+}
+
 export function fetchProjectRoles(id: string): Promise<RoleAssignment[]> {
   return fetchJson<RoleAssignment[]>(`/projects/${id}/roles`)
 }
 
-export async function createProject(data: { name: string; description?: string; color?: string }): Promise<Project> {
+export async function createProject(data: { name: string; description?: string; color?: string; repo_url?: string; repo_branch?: string }): Promise<Project> {
   const base = getBaseUrl()
   const res = await fetch(`${base}/projects`, {
     method: 'POST',

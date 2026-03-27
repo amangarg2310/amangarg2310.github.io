@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useProjects, useProjectContext } from '@/lib/hooks'
-import { createProject } from '@/lib/api'
+import { createProject, deleteProject } from '@/lib/api'
 import {
   FolderKanban,
   Activity,
@@ -12,12 +12,14 @@ import {
   CheckCircle2,
   Plus,
   X,
+  Trash2,
 } from 'lucide-react'
 
 const PROJECT_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899']
 
-function ProjectCard({ projectId, delay }: { projectId: string; delay: number }) {
+function ProjectCard({ projectId, delay, onDelete }: { projectId: string; delay: number; onDelete: (id: string) => void }) {
   const { data: context } = useProjectContext(projectId)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   if (!context) return null
 
   const { project, taskCount, activeRunCount, recentConversationCount } = context
@@ -27,6 +29,7 @@ function ProjectCard({ projectId, delay }: { projectId: string; delay: number })
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
+      className="relative"
     >
       <Link
         href={`/projects/${project.id}`}
@@ -61,8 +64,42 @@ function ProjectCard({ projectId, delay }: { projectId: string; delay: number })
           <span className="flex items-center gap-1">
             <MessageSquare className="w-3 h-3" /> {recentConversationCount} chats
           </span>
+          {project.repo_branch && (
+            <span className="font-mono text-muted-foreground/50">{project.repo_branch}</span>
+          )}
         </div>
       </Link>
+
+      {/* Delete button */}
+      <button
+        onClick={(e) => { e.preventDefault(); setConfirmDelete(true) }}
+        className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground/30 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+        title="Delete project"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="absolute inset-0 z-10 bg-card/95 border border-red-500/20 rounded-xl flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
+          <p className="text-sm text-foreground font-medium">Delete &ldquo;{project.name}&rdquo;?</p>
+          <p className="text-xs text-muted-foreground">This removes the project and its role assignments.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onDelete(project.id)}
+              className="px-3 py-1.5 text-xs bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -73,16 +110,35 @@ export default function ProjectsPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [color, setColor] = useState(PROJECT_COLORS[0])
+  const [repoUrl, setRepoUrl] = useState('')
+  const [repoBranch, setRepoBranch] = useState('')
   const [creating, setCreating] = useState(false)
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteProject(id)
+      window.location.reload()
+    } catch (err) {
+      console.error('Failed to delete project:', err)
+    }
+  }
 
   const handleCreate = async () => {
     if (!name.trim()) return
     setCreating(true)
     try {
-      await createProject({ name: name.trim(), description: description.trim(), color })
+      await createProject({
+        name: name.trim(),
+        description: description.trim(),
+        color,
+        repo_url: repoUrl.trim() || undefined,
+        repo_branch: repoBranch.trim() || undefined,
+      })
       setName('')
       setDescription('')
       setColor(PROJECT_COLORS[0])
+      setRepoUrl('')
+      setRepoBranch('')
       setShowCreate(false)
       // Reload page to pick up new project
       window.location.reload()
@@ -125,7 +181,7 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {projects.map((project, i) => (
-              <ProjectCard key={project.id} projectId={project.id} delay={0.1 + i * 0.05} />
+              <ProjectCard key={project.id} projectId={project.id} delay={0.1 + i * 0.05} onDelete={handleDelete} />
             ))}
           </div>
         )}
@@ -191,6 +247,28 @@ export default function ProjectsPage() {
                       />
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Repo URL <span className="text-muted-foreground/50">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    placeholder="e.g. https://github.com/org/repo"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Branch <span className="text-muted-foreground/50">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={repoBranch}
+                    onChange={(e) => setRepoBranch(e.target.value)}
+                    placeholder="e.g. main"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  />
                 </div>
               </div>
 

@@ -28,10 +28,10 @@ function MiniProgressRing({
   progress: number
   color: string
 }) {
+  const safeProgress = Number.isFinite(progress) ? Math.min(100, Math.max(0, progress)) : 0
   const radius = 10
   const circumference = 2 * Math.PI * radius
-  const strokeDashoffset =
-    circumference - (progress / 100) * circumference
+  const strokeDashoffset = circumference - (safeProgress / 100) * circumference
   return (
     <div className="relative w-6 h-6 flex items-center justify-center">
       <svg className="w-full h-full transform -rotate-90">
@@ -69,7 +69,8 @@ function MiniBar({
   max: number
   color: string
 }) {
-  const percentage = Math.min(100, (value / max) * 100)
+  const raw = max > 0 ? (value / max) * 100 : 0
+  const percentage = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 0
   return (
     <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
       <div
@@ -84,11 +85,11 @@ function AgentCard({ agent }: { agent: Agent }) {
   const [expanded, setExpanded] = useState(false)
   const isBusy = agent.status === 'busy'
   const color = agent.avatar_color || '#3b82f6'
-  const budgetUsed = Math.min(
-    100,
-    ((agent.avg_cost_per_run || 0) / agent.max_budget_per_run) * 100 * (agent.total_runs || 0)
-  )
-  const clampedBudget = Math.min(100, Math.max(0, budgetUsed))
+  const hasBudgetData = agent.max_budget_per_run > 0 && (agent.total_runs || 0) > 0
+  const budgetRaw = hasBudgetData
+    ? ((agent.avg_cost_per_run || 0) / agent.max_budget_per_run) * 100 * (agent.total_runs || 0)
+    : 0
+  const clampedBudget = Number.isFinite(budgetRaw) ? Math.min(100, Math.max(0, budgetRaw)) : 0
 
   return (
     <motion.div
@@ -204,13 +205,19 @@ function AgentCard({ agent }: { agent: Agent }) {
               Budget
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-mono tabular-nums text-foreground">
-                {formatCost(agent.max_budget_per_run)}
-              </span>
-              <MiniProgressRing
-                progress={clampedBudget}
-                color={clampedBudget > 90 ? '#ef4444' : color}
-              />
+              {hasBudgetData ? (
+                <>
+                  <span className="text-sm font-mono tabular-nums text-foreground">
+                    {formatCost(agent.max_budget_per_run)}
+                  </span>
+                  <MiniProgressRing
+                    progress={clampedBudget}
+                    color={clampedBudget > 90 ? '#ef4444' : color}
+                  />
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground/50">No data</span>
+              )}
             </div>
           </div>
         </div>

@@ -228,9 +228,17 @@ export function useSidebarStats() {
   const { data: tasks } = useTasks()
   const { data: agents } = useAgents()
 
+  // Count approvals from both tasks and runs to avoid mismatch
+  const taskApprovals = tasks.filter((t) => t.status === 'needs_approval')
+  const runApprovals = runs.filter((r) => r.status === 'needs_approval')
+  // Deduplicate: count tasks, plus runs whose task_id isn't already counted
+  const taskIds = new Set(taskApprovals.map((t) => t.id))
+  const extraRunApprovals = runApprovals.filter((r) => !taskIds.has(r.task_id))
+  const approvalCount = taskApprovals.length + extraRunApprovals.length
+
   return {
     activeRunCount: runs.filter((r) => r.status === 'running').length,
-    approvalCount: tasks.filter((t) => t.status === 'needs_approval').length,
+    approvalCount,
     onlineAgentCount: agents.filter((a) => a.is_active).length,
   }
 }

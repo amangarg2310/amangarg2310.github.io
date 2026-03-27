@@ -9,7 +9,6 @@ import {
   Bot,
   BarChart3,
   Settings,
-  TerminalSquare,
   ShieldCheck,
   LayoutGrid,
   Clock,
@@ -102,7 +101,13 @@ export function Sidebar() {
       <div className="h-16 flex items-center px-6 border-b border-border/50">
         <div className="flex items-center gap-3 text-foreground font-semibold tracking-wide">
           <div className="w-8 h-8 rounded-sm bg-accent/10 flex items-center justify-center border border-accent/20">
-            <TerminalSquare className="w-5 h-5 text-accent" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-accent">
+              <path d="M6 4C6 4 3 8 3 12C3 14 4 15.5 6 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M10 4C10 4 7 8 7 12C7 14 8 15.5 10 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M18 4C18 4 21 8 21 12C21 14 20 15.5 18 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M14 4C14 4 17 8 17 12C17 14 16 15.5 14 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M6 20L12 16L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
           OpenClaw
         </div>

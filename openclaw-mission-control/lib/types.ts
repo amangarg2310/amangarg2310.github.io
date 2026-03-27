@@ -202,6 +202,9 @@ export interface Project {
   description: string;
   color: string;
   focus?: ProjectFocus | null;
+  repo_url?: string | null;
+  repo_branch?: string | null;
+  repo_commit?: string | null;
   created_at: string;
   updated_at: string;
 }
