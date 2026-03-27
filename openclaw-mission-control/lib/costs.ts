@@ -1,23 +1,22 @@
 import { ModelTier } from './types';
 
-// Pricing per 1M tokens (input / output)
+// Pricing per 1M tokens (input / output) — Claude models only
 export const MODEL_PRICING: Record<string, { input: number; output: number; tier: ModelTier }> = {
-  'gpt-4o-mini': { input: 0.15, output: 0.60, tier: 'cheap' },
-  'claude-3.5-haiku': { input: 0.80, output: 4.00, tier: 'cheap' },
-  'gpt-4o': { input: 2.50, output: 10.00, tier: 'mid' },
-  'claude-3.5-sonnet': { input: 3.00, output: 15.00, tier: 'mid' },
-  'claude-3-opus': { input: 15.00, output: 75.00, tier: 'premium' },
-  'gpt-4-turbo': { input: 10.00, output: 30.00, tier: 'premium' },
-  'o1': { input: 15.00, output: 60.00, tier: 'premium' },
+  'claude-haiku-4-5': { input: 0.80, output: 4.00, tier: 'cheap' },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00, tier: 'mid' },
+  'claude-opus-4-5': { input: 15.00, output: 75.00, tier: 'premium' },
 };
 
 export function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING['gpt-4o-mini'];
+  // Normalize model name — strip "anthropic/" prefix if present
+  const normalized = model.replace('anthropic/', '')
+  const pricing = MODEL_PRICING[normalized] || MODEL_PRICING['claude-sonnet-4-6'];
   return (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
 }
 
 export function getModelTier(model: string): ModelTier {
-  return MODEL_PRICING[model]?.tier || 'mid';
+  const normalized = model.replace('anthropic/', '')
+  return MODEL_PRICING[normalized]?.tier || 'mid';
 }
 
 export function getTierColor(tier: ModelTier): string {
@@ -36,11 +35,11 @@ export function getTierLabel(tier: ModelTier): string {
   }
 }
 
-// Simple routing strategy
+// Model recommendation based on task complexity
 export function recommendModel(taskComplexity: 'simple' | 'normal' | 'complex'): string {
   switch (taskComplexity) {
-    case 'simple': return 'gpt-4o-mini';
-    case 'normal': return 'claude-3.5-sonnet';
-    case 'complex': return 'claude-3-opus';
+    case 'simple': return 'claude-haiku-4-5';
+    case 'normal': return 'claude-sonnet-4-6';
+    case 'complex': return 'claude-opus-4-5';
   }
 }

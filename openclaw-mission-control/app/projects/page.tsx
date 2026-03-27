@@ -148,7 +148,8 @@ function ProjectCard({ projectId, delay, onDelete }: { projectId: string; delay:
 }
 
 export default function ProjectsPage() {
-  const { data: projects, loading } = useProjects()
+  const [refreshKey, setRefreshKey] = useState(0)
+  const { data: projects, loading } = useProjects(refreshKey)
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -160,7 +161,7 @@ export default function ProjectsPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteProject(id)
-      window.location.reload()
+      setRefreshKey((k) => k + 1)
     } catch (err) {
       console.error('Failed to delete project:', err)
     }
@@ -183,8 +184,7 @@ export default function ProjectsPage() {
       setRepoUrl('')
       setRepoBranch('')
       setShowCreate(false)
-      // Reload page to pick up new project
-      window.location.reload()
+      setRefreshKey((k) => k + 1)
     } catch (err) {
       console.error('Failed to create project:', err)
     } finally {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useAgents, useTasks, useRuns, useProjects } from '@/lib/hooks'
 import { X, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,29 +15,34 @@ export function GettingStarted() {
 
   const steps = [
     {
-      label: 'Claude Code Connected',
-      done: agents.length > 0,
-      hint: 'Agents powered by Claude Code SDK',
+      label: 'Claude Code SDK Connected',
+      done: true,
+      hint: 'SDK is active — no API key needed',
+      link: null,
     },
     {
       label: 'Agents Registered',
       done: agents.length > 0,
-      hint: 'Create agents in your project settings',
+      hint: 'Go to a project and assign agents to role lanes',
+      link: projects.length > 0 ? `/projects/${projects[0].id}` : '/projects',
     },
     {
       label: 'Project Created',
       done: projects.length > 0,
-      hint: 'Create a project to organize work',
+      hint: 'Create your first project to organize work',
+      link: '/projects',
     },
     {
       label: 'Task Running',
       done: tasks.some((t) => t.status === 'running'),
-      hint: 'Assign tasks to agents',
+      hint: 'Open the chat and send a task to an agent',
+      link: '/chats',
     },
     {
       label: 'Run Completed',
       done: runs.some((r) => r.status === 'completed'),
-      hint: 'Review output in the Runs page',
+      hint: 'View completed runs and their output',
+      link: '/runs',
     },
   ]
   const completedCount = steps.filter((s) => s.done).length
@@ -95,9 +101,15 @@ export function GettingStarted() {
                 </span>
               </div>
               {!item.done && (
-                <span className="text-[10px] text-muted-foreground/50 ml-6">
-                  {item.hint}
-                </span>
+                item.link ? (
+                  <Link href={item.link} className="text-[10px] text-blue-400/70 hover:text-blue-400 ml-6 transition-colors">
+                    {item.hint} &rarr;
+                  </Link>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground/50 ml-6">
+                    {item.hint}
+                  </span>
+                )
               )}
             </div>
           ))}

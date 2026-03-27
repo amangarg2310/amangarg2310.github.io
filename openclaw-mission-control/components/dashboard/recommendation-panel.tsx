@@ -24,7 +24,6 @@ interface RecommendationPanelProps {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  local: 'border-gray-500/30 bg-gray-500/10 text-gray-400',
   economy: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
   standard: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
   premium: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -189,11 +188,11 @@ export function RecommendationPanel({
           </span>
           <span className="text-xs text-muted-foreground font-mono">{rec.estimated_cost}</span>
         </div>
-        {rec.prefer_local && (
-          <p className="text-[10px] text-emerald-400 mb-1.5">Local-first — comparable quality at lower cost</p>
+        {rec.prefer_economy && (
+          <p className="text-[10px] text-emerald-400 mb-1.5">Economy (Haiku) — fast and cost-effective for this role</p>
         )}
         <div className="flex gap-1.5">
-          {['local', 'economy', 'standard', 'premium'].map((t) => (
+          {['economy', 'standard', 'premium'].map((t) => (
             <button
               key={t}
               onClick={() => onOverrideTier?.(t)}

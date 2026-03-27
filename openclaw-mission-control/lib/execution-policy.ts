@@ -1,6 +1,6 @@
 import type { RoleLane } from './types'
 
-export type ExecutionTier = 'local' | 'economy' | 'standard' | 'premium'
+export type ExecutionTier = 'economy' | 'standard' | 'premium'
 export type Urgency = 'low' | 'medium' | 'high' | 'critical'
 export type Tradeoff = 'cost' | 'balanced' | 'quality'
 export type AutonomyLevel = 'observe' | 'plan' | 'confirm' | 'autonomous'
@@ -35,7 +35,7 @@ const ROLE_AUTONOMY_DEFAULTS: Record<RoleLane, AutonomyLevel> = {
   advisor: 'plan',
 }
 
-const TIER_ORDER: ExecutionTier[] = ['local', 'economy', 'standard', 'premium']
+const TIER_ORDER: ExecutionTier[] = ['economy', 'standard', 'premium']
 
 function tierIndex(tier: ExecutionTier): number {
   return TIER_ORDER.indexOf(tier)
@@ -66,11 +66,10 @@ export function recommendTier(role: RoleLane, urgency: Urgency, tradeoff: Tradeo
 
 /**
  * Map execution tier to a concrete model name.
- * Uses Anthropic model IDs matching the OpenClaw /model picker.
+ * Uses Claude Code SDK model shortnames (haiku/sonnet/opus).
  */
 export function recommendModelForTier(tier: ExecutionTier): string {
   switch (tier) {
-    case 'local': return 'local-llm'
     case 'economy': return 'anthropic/claude-haiku-4-5'
     case 'standard': return 'anthropic/claude-sonnet-4-6'
     case 'premium': return 'anthropic/claude-opus-4-5'
@@ -97,13 +96,12 @@ export function recommendAutonomy(role: RoleLane, urgency: Urgency): AutonomyLev
 }
 
 /**
- * Whether to prefer local execution for a given role + tradeoff.
+ * Whether to prefer the cheapest model (economy/Haiku) for a given role + tradeoff.
  */
-export function shouldPreferLocal(role: RoleLane, tradeoff: Tradeoff): boolean {
+export function shouldPreferEconomy(role: RoleLane, tradeoff: Tradeoff): boolean {
   if (tradeoff === 'quality') return false
-  // These roles do well with local models for routine work
-  const localFriendly: RoleLane[] = ['research', 'consumer_insights', 'content']
-  return localFriendly.includes(role) && tradeoff === 'cost'
+  const economyFriendly: RoleLane[] = ['research', 'consumer_insights', 'content']
+  return economyFriendly.includes(role) && tradeoff === 'cost'
 }
 
 /**
@@ -114,15 +112,15 @@ export function explainRecommendation(
   tier: ExecutionTier,
   urgency: Urgency,
   tradeoff: Tradeoff,
-  preferLocal: boolean,
+  preferEconomy: boolean,
 ): string {
   const roleName = ROLE_LABELS[role]
   const tierName = TIER_LABELS[tier]
 
   const parts: string[] = []
 
-  if (preferLocal) {
-    parts.push(`Local-first recommended for ${roleName} — comparable output quality at lower cost.`)
+  if (preferEconomy) {
+    parts.push(`Economy (Haiku) recommended for ${roleName} — fast and cost-effective.`)
   }
 
   const baseTier = ROLE_TIER_DEFAULTS[role]
@@ -157,14 +155,12 @@ export const ROLE_LABELS: Record<RoleLane, string> = {
 }
 
 export const TIER_LABELS: Record<ExecutionTier, string> = {
-  local: 'Local',
-  economy: 'Economy',
-  standard: 'Standard',
-  premium: 'Premium',
+  economy: 'Economy (Haiku)',
+  standard: 'Standard (Sonnet)',
+  premium: 'Premium (Opus)',
 }
 
 export const TIER_COST_RANGES: Record<ExecutionTier, string> = {
-  local: '$0.00',
   economy: '$0.01 – $0.05',
   standard: '$0.10 – $0.30',
   premium: '$0.50 – $2.00',

@@ -3,7 +3,7 @@ import {
   recommendTier,
   recommendModelForTier,
   recommendAutonomy,
-  shouldPreferLocal,
+  shouldPreferEconomy,
   explainRecommendation,
   TIER_COST_RANGES,
   type ExecutionTier,
@@ -51,7 +51,7 @@ export interface ExecutionRecommendation {
   workflow_chain: WorkflowChain | null
   reasons: ReasoningDetail
   estimated_cost: string
-  prefer_local: boolean
+  prefer_economy: boolean
 }
 
 /**
@@ -99,10 +99,9 @@ const ROLE_LABELS: Record<RoleLane, string> = {
 }
 
 const TIER_LABELS: Record<ExecutionTier, string> = {
-  local: 'Local',
-  economy: 'Economy',
-  standard: 'Standard',
-  premium: 'Premium',
+  economy: 'Economy (Haiku)',
+  standard: 'Standard (Sonnet)',
+  premium: 'Premium (Opus)',
 }
 
 /**
@@ -152,7 +151,7 @@ export function recommendExecution(
   // 3. Compute tier and autonomy (system recommendations)
   const systemTier = recommendTier(role, config.urgency, config.tradeoff)
   const systemAutonomy = recommendAutonomy(role, config.urgency)
-  const preferLocal = shouldPreferLocal(role, config.tradeoff)
+  const preferEconomy = shouldPreferEconomy(role, config.tradeoff)
 
   // 4. Apply overrides
   const tier = overrides?.tier ?? systemTier
@@ -174,7 +173,7 @@ export function recommendExecution(
 
   const tierReason = overrides?.tier
     ? `Manually set to ${TIER_LABELS[tier]} (system recommended ${TIER_LABELS[systemTier]}).`
-    : explainRecommendation(role, tier, config.urgency, config.tradeoff, preferLocal)
+    : explainRecommendation(role, tier, config.urgency, config.tradeoff, preferEconomy)
 
   const autonomyReason = overrides?.autonomy
     ? `Manually set to "${autonomy}" (system recommended "${systemAutonomy}").`
@@ -211,6 +210,6 @@ export function recommendExecution(
       chain_reason: chainReason,
     },
     estimated_cost: TIER_COST_RANGES[tier],
-    prefer_local: overrides?.tier ? false : preferLocal,
+    prefer_economy: overrides?.tier ? false : preferEconomy,
   }
 }

@@ -161,16 +161,16 @@ describe('recommendExecution', () => {
       assert.equal(rec.agent_strategy, 'create_temporary')
     })
 
-    it('clears prefer_local when tier is overridden', () => {
+    it('clears prefer_economy when tier is overridden', () => {
       const config = makeConfig({ goal: 'research market data', tradeoff: 'cost' })
-      // Without override, research + cost should prefer local
+      // Without override, research + cost should prefer economy
       const rec1 = recommendExecution(config, [], [])
-      assert.equal(rec1.prefer_local, true)
+      assert.equal(rec1.prefer_economy, true)
 
-      // With tier override, prefer_local should be false
+      // With tier override, prefer_economy should be false
       const overrides: RecommendationOverrides = { tier: 'standard' }
       const rec2 = recommendExecution(config, [], [], overrides)
-      assert.equal(rec2.prefer_local, false)
+      assert.equal(rec2.prefer_economy, false)
     })
   })
 

@@ -9,6 +9,7 @@ import { AgentAvatar } from '@/components/ui/agent-avatar';
 import { ModelBadge } from '@/components/ui/model-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tooltip } from '@/components/ui/tooltip';
+import { stopAgentRun, sendChatMessage } from '@/lib/api';
 import { formatCost, formatTokens, formatDuration, timeAgo, cn } from '@/lib/utils';
 import { RunStatus } from '@/lib/types';
 import {
@@ -196,7 +197,21 @@ export default function RunsPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center gap-0.5 justify-end">
                         {run.status === 'failed' && (
-                          <button className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground" title="Retry this run with the same agent and model">
+                          <button
+                            className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                            title="Retry this run with the same agent and model"
+                            onClick={async () => {
+                              try {
+                                await sendChatMessage({
+                                  message: 'Retry: ' + run.task_title,
+                                  project_id: run.project_id || undefined,
+                                  agent_id: run.agent_id,
+                                });
+                              } catch (err) {
+                                window.alert('Failed to retry run: ' + (err instanceof Error ? err.message : String(err)));
+                              }
+                            }}
+                          >
                             <RotateCcw className="h-3.5 w-3.5" />
                           </button>
                         )}
@@ -211,7 +226,17 @@ export default function RunsPage() {
                           </button>
                         )}
                         {['running', 'stalled'].includes(run.status) && (
-                          <button className="p-1 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400" title="Stop this run">
+                          <button
+                            className="p-1 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
+                            title="Stop this run"
+                            onClick={async () => {
+                              try {
+                                await stopAgentRun(run.id);
+                              } catch (err) {
+                                window.alert('Failed to stop run: ' + (err instanceof Error ? err.message : String(err)));
+                              }
+                            }}
+                          >
                             <XCircle className="h-3.5 w-3.5" />
                           </button>
                         )}

@@ -194,8 +194,8 @@ export function useActivity(limit = 20, projectId?: string | null) {
 
 // --- Project hooks ---
 
-export function useProjects() {
-  return useApi<Project[]>(fetchProjects, [])
+export function useProjects(refreshKey?: number) {
+  return useApi<Project[]>(fetchProjects, [], [refreshKey])
 }
 
 export function useProjectContext(projectId: string | null) {
