@@ -1,5 +1,4 @@
 import { store } from '@/lib/store'
-import { isSessionActive } from '@/lib/agent-runtime'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +25,11 @@ export async function GET(
   const messages = store.getMessages(id)
   const sessionId = id.startsWith('conv-') ? id.slice(5) : id
   const events = store.getRunEvents(sessionId)
-  const isLocked = isSessionActive(id)
+  let isLocked = false
+  try {
+    const { isSessionActive } = await import('@/lib/agent-runtime')
+    isLocked = isSessionActive(id)
+  } catch { /* SDK not available */ }
 
   return Response.json(
     {

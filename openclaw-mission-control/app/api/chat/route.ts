@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { spawnAgentRun, sendMessage } from '@/lib/agent-runtime'
 import { store } from '@/lib/store'
 import crypto from 'crypto'
 
@@ -24,6 +23,7 @@ export async function POST(req: Request) {
 
     // Continue existing conversation
     if (conversation_id) {
+      const { sendMessage } = await import('@/lib/agent-runtime')
       await sendMessage(conversation_id, message)
       return NextResponse.json({ ok: true, conversation_id })
     }
@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     })
 
     // Spawn the agent
+    const { spawnAgentRun } = await import('@/lib/agent-runtime')
     const { runId, conversationId } = await spawnAgentRun({
       taskId,
       agentId: agent_id,

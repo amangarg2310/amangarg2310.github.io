@@ -9,8 +9,6 @@
  * Server-only — never import from client components.
  */
 
-import { getActiveRunIds } from './agent-runtime'
-
 let syncTimer: ReturnType<typeof setInterval> | null = null
 let lastSyncAt: string | null = null
 let syncCount = 0
@@ -20,6 +18,7 @@ let syncCount = 0
  */
 export async function syncOnce(): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
   try {
+    const { getActiveRunIds } = await import('./agent-runtime')
     const activeRuns = getActiveRunIds()
     syncCount++
     lastSyncAt = new Date().toISOString()

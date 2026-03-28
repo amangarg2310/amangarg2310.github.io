@@ -18,8 +18,17 @@ import crypto from 'crypto'
 let queryFn: any = null
 async function getQuery() {
   if (!queryFn) {
-    const sdk = await import('@anthropic-ai/claude-code')
-    queryFn = sdk.query
+    try {
+      // Use createRequire to avoid Turbopack/webpack static analysis of the import
+      const { createRequire } = await import('node:module')
+      const require = createRequire(import.meta.url)
+      const sdk = require('@anthropic-ai/claude-code')
+      queryFn = sdk.query || sdk.default?.query
+    } catch {
+      throw new Error(
+        'Claude Code SDK not installed. Run: npm install @anthropic-ai/claude-code'
+      )
+    }
   }
   return queryFn
 }
