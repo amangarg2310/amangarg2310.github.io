@@ -141,9 +141,9 @@ describe('recommendExecution', () => {
       const overrides: RecommendationOverrides = { tier: 'premium' }
       const rec = recommendExecution(config, [], [], overrides)
       assert.equal(rec.tier, 'premium')
-      assert.equal(rec.tier_label, 'Premium')
-      assert.ok(rec.reasons.tier_reason.includes('Manually set to Premium'))
-      assert.ok(rec.reasons.tier_reason.includes('system recommended Economy'))
+      assert.equal(rec.tier_label, 'Premium (Opus)')
+      assert.ok(rec.reasons.tier_reason.includes('Manually set to Premium (Opus)'))
+      assert.ok(rec.reasons.tier_reason.includes('system recommended Economy (Haiku)'))
     })
 
     it('applies autonomy override', () => {
