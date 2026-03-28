@@ -44,9 +44,12 @@ function cleanMessageContent(content: string): string {
     .trim()
 }
 
+const CHAT_POLL_INTERVAL = 5_000 // 5 seconds
+
 export default function ChatsPage() {
   const { activeProjectId } = useActiveProject()
-  const { data: conversations } = useConversations(activeProjectId)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const { data: conversations } = useConversations(activeProjectId, CHAT_POLL_INTERVAL, refreshKey)
   const { data: agents } = useAgents()
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
   const [showNewChat, setShowNewChat] = useState(false)
@@ -375,6 +378,7 @@ export default function ChatsPage() {
             onCreated={(convId) => {
               setSelectedConvId(convId)
               setShowNewChat(false)
+              setRefreshKey((k) => k + 1)
             }}
           />
         </div>

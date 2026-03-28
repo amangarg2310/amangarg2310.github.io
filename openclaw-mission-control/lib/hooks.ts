@@ -122,11 +122,12 @@ export function useRunDetail(id: string) {
   )
 }
 
-export function useConversations(projectId?: string | null) {
+export function useConversations(projectId?: string | null, refetchInterval?: number, refreshKey?: number) {
   return useApi<Conversation[]>(
     () => fetchConversations(projectId),
     [],
-    [projectId ?? null]
+    [projectId ?? null, refreshKey ?? 0],
+    refetchInterval,
   )
 }
 
@@ -145,7 +146,7 @@ const EMPTY_DETAIL: ConversationDetail = {
   session: { isLocked: false, agentId: null, sessionId: '' },
 }
 
-export function useConversationDetail(conversationId: string) {
+export function useConversationDetail(conversationId: string, pollInterval = 5_000) {
   const [data, setData] = useState<ConversationDetail>(EMPTY_DETAIL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -173,6 +174,17 @@ export function useConversationDetail(conversationId: string) {
       })
     return () => { cancelled = true }
   }, [conversationId])
+
+  // Poll for new messages
+  useEffect(() => {
+    if (!conversationId || !pollInterval) return
+    const interval = setInterval(() => {
+      fetchConversationDetail(conversationId)
+        .then(setData)
+        .catch(() => {})
+    }, pollInterval)
+    return () => clearInterval(interval)
+  }, [conversationId, pollInterval])
 
   return { data, loading, error }
 }
