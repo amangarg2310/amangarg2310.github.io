@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
 import { sendChatMessage } from '@/lib/api'
 import { useActiveProject } from '@/lib/project-context'
+import { Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { formatCost, formatTokens, timeAgo, cn } from '@/lib/utils'
 import {
@@ -15,6 +16,7 @@ import {
   Clock,
   Loader2,
   Send,
+  Plus,
 } from 'lucide-react'
 
 /**
@@ -47,6 +49,7 @@ export default function ChatsPage() {
   const { data: conversations } = useConversations(activeProjectId)
   const { data: agents } = useAgents()
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
+  const [showNewChat, setShowNewChat] = useState(false)
 
   // Auto-select first conversation when data loads
   const activeConvId = selectedConvId || conversations[0]?.id || null
@@ -96,10 +99,21 @@ export default function ChatsPage() {
       {/* Left Panel: Chat List */}
       <div className="w-72 border-r border-border flex flex-col bg-[#050506]">
         <div className="p-4 border-b border-border/50">
-          <h2 className="text-sm font-medium text-foreground">Conversations</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {conversations.length} session{conversations.length !== 1 ? 's' : ''}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-medium text-foreground">Conversations</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {conversations.length} session{conversations.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <button
+              onClick={() => { setShowNewChat(true); setSelectedConvId(null) }}
+              className="p-1.5 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+              title="New chat"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
           {conversations.length === 0 && (
@@ -123,7 +137,7 @@ export default function ChatsPage() {
             return (
               <button
                 key={chat.id}
-                onClick={() => setSelectedConvId(chat.id)}
+                onClick={() => { setSelectedConvId(chat.id); setShowNewChat(false) }}
                 className={cn(
                   'w-full text-left p-3 rounded-lg transition-colors border',
                   activeConvId === chat.id
@@ -158,7 +172,7 @@ export default function ChatsPage() {
       </div>
 
       {/* Center Panel: Thread */}
-      {selectedConv && agent ? (
+      {selectedConv && agent && !showNewChat ? (
         <div className="flex-1 flex flex-col relative">
           {/* Header */}
           <header className="h-14 border-b border-border flex items-center px-6 bg-card/30 backdrop-blur-sm z-10">
@@ -355,17 +369,19 @@ export default function ChatsPage() {
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-3">
-            <MessageSquare className="h-10 w-10 text-muted-foreground mx-auto opacity-30" />
-            <p className="text-sm text-muted-foreground">
-              Select a conversation
-            </p>
-          </div>
+          <NewChatComposer
+            projectId={activeProjectId}
+            agents={agents}
+            onCreated={(convId) => {
+              setSelectedConvId(convId)
+              setShowNewChat(false)
+            }}
+          />
         </div>
       )}
 
       {/* Right Panel: Metadata Sidebar */}
-      {selectedConv && agent && (
+      {selectedConv && agent && !showNewChat && (
         <div className="w-64 border-l border-border bg-card/30 flex flex-col">
           <div className="p-4 border-b border-border/50">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -531,6 +547,117 @@ function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatCo
         >
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
+      </div>
+    </div>
+  )
+}
+
+// --- New Chat Composer ---
+
+function NewChatComposer({
+  projectId,
+  agents,
+  onCreated,
+}: {
+  projectId: string | null
+  agents: Agent[]
+  onCreated: (conversationId: string) => void
+}) {
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Pick the first available agent, or the default one
+  const defaultAgent = agents.find(a => a.id === 'agent-default') || agents[0]
+  const effectiveProjectId = projectId || 'proj-default'
+
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px'
+  }, [message])
+
+  const handleSend = async () => {
+    const text = message.trim()
+    if (!text || sending || !defaultAgent) return
+
+    setSending(true)
+    try {
+      const res = await sendChatMessage({
+        message: text,
+        project_id: effectiveProjectId,
+        agent_id: defaultAgent.id,
+      })
+      if (res.conversation_id) {
+        onCreated(res.conversation_id)
+      }
+      setMessage('')
+    } catch (err) {
+      console.error('Failed to start chat:', err)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  return (
+    <div className="w-full max-w-2xl px-8 space-y-6">
+      <div className="text-center space-y-2">
+        <MessageSquare className="w-10 h-10 text-accent mx-auto opacity-60" />
+        <h2 className="text-lg font-semibold text-foreground">New Conversation</h2>
+        <p className="text-sm text-muted-foreground">
+          Send a message to start a new task. It will be routed to an agent and appear in your boards.
+        </p>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {defaultAgent && (
+            <>
+              <AgentAvatar name={defaultAgent.name} color={defaultAgent.avatar_color} size="sm" />
+              <span>{defaultAgent.name}</span>
+              <span className="text-muted-foreground/30">|</span>
+            </>
+          )}
+          <span>Project: {effectiveProjectId === 'proj-default' ? 'General' : effectiveProjectId}</span>
+        </div>
+
+        <textarea
+          ref={textareaRef}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={3}
+          placeholder="Describe a task, ask a question, or start a conversation..."
+          className="w-full bg-background border border-border/50 rounded-lg px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors"
+          autoFocus
+        />
+
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">
+            Enter to send · Shift+Enter for new line
+          </span>
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || sending || !defaultAgent}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              message.trim() && !sending
+                ? 'bg-accent text-white hover:bg-accent/80'
+                : 'bg-accent/20 text-accent/30 cursor-not-allowed'
+            )}
+          >
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sending ? 'Sending...' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   )

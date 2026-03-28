@@ -461,9 +461,67 @@ class DataStore {
       workflowInstances: this._workflowInstances,
     })
   }
+
+  /**
+   * Bootstrap default project and agent if the store is completely empty.
+   * Called once at startup so users can immediately start chatting.
+   */
+  bootstrap(): void {
+    // Only bootstrap if no projects exist
+    if (this._projects.length > 0) return
+
+    const now = new Date().toISOString()
+
+    // Default project
+    const defaultProject: Project = {
+      id: 'proj-default',
+      name: 'General',
+      slug: 'general',
+      description: 'Default project for quick tasks and conversations',
+      color: '#3b82f6',
+      created_at: now,
+      updated_at: now,
+    }
+    this.upsertProject(defaultProject)
+
+    // Default agent
+    const defaultAgent: Agent = {
+      id: 'agent-default',
+      name: 'Claude',
+      slug: 'claude',
+      description: 'General-purpose assistant powered by Claude Code SDK',
+      system_prompt: 'You are a helpful AI assistant working on startup projects. Be concise and actionable.',
+      specialization: 'General',
+      default_model: 'anthropic/claude-sonnet-4-6',
+      escalation_model: 'anthropic/claude-opus-4-5',
+      max_budget_per_run: 5.0,
+      allowed_tools: [],
+      avatar_color: '#3b82f6',
+      is_active: true,
+      total_runs: 0,
+      created_at: now,
+      updated_at: now,
+    }
+    this.upsertAgent(defaultAgent)
+
+    // Assign agent to project as advisor role
+    this.upsertRoleAssignment({
+      id: 'ra-default',
+      project_id: 'proj-default',
+      role: 'advisor',
+      agent_id: 'agent-default',
+      notes: 'Default agent assignment',
+      created_at: now,
+    })
+
+    console.log('[store] Bootstrapped default project and agent')
+  }
 }
 
 // Singleton — survives across API route invocations in dev/prod
 const globalForStore = globalThis as unknown as { __dataStore?: DataStore }
 export const store = globalForStore.__dataStore ?? new DataStore()
 globalForStore.__dataStore = store
+
+// Auto-bootstrap on first load
+store.bootstrap()
