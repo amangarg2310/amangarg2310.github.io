@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useId } from 'react'
 
 interface SparkLineProps {
   data: number[]
@@ -43,7 +43,8 @@ export function SparkLine({
       .join(' ')
 
   const areaD = `${pathD} L ${width},${height} L 0,${height} Z`
-  const gradientId = `spark-gradient-${Math.random().toString(36).substr(2, 9)}`
+  const reactId = useId()
+  const gradientId = `spark-gradient-${reactId.replace(/:/g, '')}`
 
   return (
     <svg
