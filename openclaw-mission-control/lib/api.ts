@@ -63,6 +63,17 @@ export function fetchTasks(projectId?: string | null): Promise<Task[]> {
   return fetchJson<Task[]>(`/tasks${qs}`)
 }
 
+export async function updateTaskStatus(taskId: string, status: string): Promise<Task> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/tasks/${taskId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!res.ok) throw new Error(`Failed to update task status: ${res.status}`)
+  return res.json() as Promise<Task>
+}
+
 export async function createTaskDraft(data: {
   goal: string
   project_id: string

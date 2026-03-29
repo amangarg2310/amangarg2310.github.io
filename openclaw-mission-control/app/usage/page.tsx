@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useUsage, useAgents, useRuns } from '@/lib/hooks'
 import { MetricCard } from '@/components/ui/metric-card'
@@ -11,6 +12,8 @@ import {
   Cpu,
   BarChart3,
 } from 'lucide-react'
+
+type TimeRange = '7d' | '30d' | 'all'
 import {
   AreaChart,
   Area,
@@ -25,10 +28,20 @@ import {
 } from 'recharts'
 
 export default function UsagePage() {
+  const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const { data: usage } = useUsage()
   const { data: agents } = useAgents()
   const { data: runs } = useRuns()
-  const { daily: dailyUsage, models: modelUsage } = usage
+  const { daily: rawDailyUsage, models: modelUsage } = usage
+
+  const dailyUsage = useMemo(() => {
+    if (timeRange === 'all') return rawDailyUsage
+    const now = new Date()
+    const days = timeRange === '7d' ? 7 : 30
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+    return rawDailyUsage.filter(d => new Date(d.date) >= cutoff)
+  }, [rawDailyUsage, timeRange])
+
   const totalCost = dailyUsage.reduce(
     (sum, d) => sum + d.estimated_cost,
     0
@@ -94,22 +107,26 @@ export default function UsagePage() {
             </p>
           </div>
           <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-1">
-            <button className="px-3 py-1.5 text-sm font-medium rounded-md bg-accent/10 text-accent">
-              7 Days
-            </button>
-            <button className="px-3 py-1.5 text-sm font-medium rounded-md text-muted-foreground hover:text-foreground">
-              30 Days
-            </button>
-            <button className="px-3 py-1.5 text-sm font-medium rounded-md text-muted-foreground hover:text-foreground">
-              All Time
-            </button>
+            {([['7d', '7 Days'], ['30d', '30 Days'], ['all', 'All Time']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setTimeRange(value)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  timeRange === value
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </header>
 
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
-            title="Est. Spend (7d)"
+            title={`Est. Spend (${timeRange === 'all' ? 'all' : timeRange})`}
             value={formatCost(totalCost)}
             icon={<DollarSign className="w-5 h-5" />}
             accentColor="#a855f7"

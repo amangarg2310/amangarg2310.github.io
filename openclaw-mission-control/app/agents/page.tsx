@@ -277,7 +277,18 @@ function AgentCard({ agent }: { agent: Agent }) {
 }
 
 export default function AgentsPage() {
+  const [searchQuery, setSearchQuery] = useState('')
   const { data: agents } = useAgents()
+
+  const filteredAgents = agents.filter((agent) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      agent.name.toLowerCase().includes(q) ||
+      agent.description?.toLowerCase().includes(q)
+    )
+  })
+
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
       <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">
@@ -297,6 +308,8 @@ export default function AgentsPage() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search agents..."
                 className="bg-card border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground focus:outline-none focus:border-accent w-64 transition-colors"
               />
@@ -310,7 +323,7 @@ export default function AgentsPage() {
 
         {/* Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-6">
-          {agents.map((agent) => (
+          {filteredAgents.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
         </div>

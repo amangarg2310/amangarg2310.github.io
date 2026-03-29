@@ -216,12 +216,26 @@ export default function RunsPage() {
                           </button>
                         )}
                         {(run.status === 'failed' || run.status === 'stalled') && (
-                          <button className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground" title="Reassign to a different agent">
+                          <button
+                            className="p-1 rounded text-muted-foreground/50 cursor-not-allowed"
+                            title="Coming soon"
+                            disabled
+                          >
                             <ArrowRightLeft className="h-3.5 w-3.5" />
                           </button>
                         )}
                         {run.status === 'running' && (
-                          <button className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground" title="Pause this run">
+                          <button
+                            className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                            title="Pause this run"
+                            onClick={async () => {
+                              try {
+                                await stopAgentRun(run.id);
+                              } catch (err) {
+                                window.alert('Failed to pause run: ' + (err instanceof Error ? err.message : String(err)));
+                              }
+                            }}
+                          >
                             <Pause className="h-3.5 w-3.5" />
                           </button>
                         )}

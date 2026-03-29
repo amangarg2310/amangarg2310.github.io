@@ -98,20 +98,20 @@ export function useAgents() {
   return useApi<Agent[]>(fetchAgents, [])
 }
 
-export function useTasks(projectId?: string | null, refetchInterval?: number) {
+export function useTasks(projectId?: string | null, refetchInterval?: number, refreshKey?: number) {
   return useApi<Task[]>(
     () => fetchTasks(projectId),
     [],
-    [projectId ?? null],
+    [projectId ?? null, refreshKey ?? 0],
     refetchInterval,
   )
 }
 
-export function useRuns(projectId?: string | null) {
+export function useRuns(projectId?: string | null, refreshKey?: number) {
   return useApi<Run[]>(
     () => fetchRuns(projectId),
     [],
-    [projectId ?? null]
+    [projectId ?? null, refreshKey ?? 0]
   )
 }
 
@@ -277,21 +277,21 @@ export function useSidebarStats() {
 
 // --- Command Center ---
 
-export function useCommandCenter(projectId: string | null) {
+export function useCommandCenter(projectId: string | null, refreshKey?: number) {
   return useApi<CommandCenterData | null>(
     () => projectId ? fetchCommandCenter(projectId) : Promise.resolve(null),
     null,
-    [projectId],
+    [projectId, refreshKey ?? 0],
   )
 }
 
 // --- Automations ---
 
-export function useAutomations(projectId: string | null) {
+export function useAutomations(projectId: string | null, refreshKey?: number) {
   return useApi<AutomationConfig[]>(
     () => projectId ? fetchAutomations(projectId) : Promise.resolve([]),
     [],
-    [projectId],
+    [projectId, refreshKey ?? 0],
   )
 }
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTasks, useAgents } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
+import { updateTaskStatus as apiUpdateTaskStatus } from '@/lib/api'
 import { Task, Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -195,9 +196,9 @@ function lastRefreshLabel(lastFetchedAt: number | null): string {
 
 export default function BoardsPage() {
   const { activeProjectId } = useActiveProject()
-  const { data: tasks, lastFetchedAt } = useTasks(activeProjectId, BOARD_POLL_INTERVAL)
-  const { data: agents } = useAgents()
   const [refreshKey, setRefreshKey] = useState(0)
+  const { data: tasks, lastFetchedAt } = useTasks(activeProjectId, BOARD_POLL_INTERVAL, refreshKey)
+  const { data: agents } = useAgents()
 
   // Tick every 5s so the "refreshed X ago" label stays fresh
   const [, setTick] = useState(0)
@@ -206,14 +207,9 @@ export default function BoardsPage() {
     return () => clearInterval(t)
   }, [])
 
-  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/tasks/${taskId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      })
-      if (!res.ok) throw new Error('Failed to update task')
+      await apiUpdateTaskStatus(taskId, newStatus)
       setRefreshKey(k => k + 1)
     } catch (err) {
       console.error('Failed to update task status:', err)
@@ -284,8 +280,8 @@ export default function BoardsPage() {
                         key={task.id}
                         task={task}
                         agents={agents}
-                        onPromote={PROMOTE_STATUS[task.status] ? () => updateTaskStatus(task.id, PROMOTE_STATUS[task.status]) : undefined}
-                        onDemote={DEMOTE_STATUS[task.status] ? () => updateTaskStatus(task.id, DEMOTE_STATUS[task.status]) : undefined}
+                        onPromote={PROMOTE_STATUS[task.status] ? () => handleStatusChange(task.id, PROMOTE_STATUS[task.status]) : undefined}
+                        onDemote={DEMOTE_STATUS[task.status] ? () => handleStatusChange(task.id, DEMOTE_STATUS[task.status]) : undefined}
                       />
                     ))
                   ) : (

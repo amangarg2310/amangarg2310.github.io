@@ -24,16 +24,15 @@ import {
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { data: cc, loading } = useCommandCenter(id)
-  const { data: agents } = useAgents()
-  const { data: automationConfigs } = useAutomations(id)
   const router = useRouter()
   const [refreshKey, setRefreshKey] = useState(0)
   const [showTaskModal, setShowTaskModal] = useState(false)
+  const { data: cc, loading } = useCommandCenter(id, refreshKey)
+  const { data: agents } = useAgents()
+  const { data: automationConfigs } = useAutomations(id, refreshKey)
 
   const handleChange = useCallback(() => {
     setRefreshKey((k) => k + 1)
-    window.location.reload()
   }, [])
 
   if (loading || !cc) {
