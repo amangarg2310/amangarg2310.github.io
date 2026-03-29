@@ -12,7 +12,6 @@ import { BlockersBanner } from '@/components/project/blockers-banner'
 import { NextActionsPanel } from '@/components/project/next-actions-panel'
 import { BudgetSummary } from '@/components/project/budget-summary'
 import { WorkflowStatus } from '@/components/project/workflow-status'
-import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
 import { pauseWorkflow, resumeWorkflow } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
 import {
@@ -26,7 +25,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params)
   const router = useRouter()
   const [refreshKey, setRefreshKey] = useState(0)
-  const [showTaskModal, setShowTaskModal] = useState(false)
   const { data: cc, loading } = useCommandCenter(id, refreshKey)
   const { data: agents } = useAgents()
   const { data: automationConfigs } = useAutomations(id, refreshKey)
@@ -52,7 +50,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <CommandCenterHeader
           project={project}
           focus={focus}
-          onFocusUpdated={handleChange}
+          agents={agents}
+          onChanged={handleChange}
         />
 
         {/* Blockers banner */}
@@ -135,7 +134,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     lastActivity={summary?.lastActivity ?? undefined}
                     automationConfigs={roleAutomations}
                     onAssignmentChange={handleChange}
-                    onCreateTask={() => setShowTaskModal(true)}
                     onViewOutput={(agentId) => router.push(`/chats?agent=${agentId}`)}
                   />
                 </motion.div>
@@ -186,7 +184,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <BudgetSummary budget={budgetSummary} />
       </div>
 
-      <CreateTaskModal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} />
     </div>
   )
 }

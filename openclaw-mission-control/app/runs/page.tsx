@@ -41,6 +41,7 @@ export default function RunsPage() {
   const { data: projects } = useProjects();
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const filteredRuns = runs.filter(r => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
@@ -77,6 +78,14 @@ export default function RunsPage() {
           />
         </div>
       </PageHeader>
+
+      {/* Action error banner */}
+      {actionError && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2.5 text-[13px] text-red-400">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400/60 hover:text-red-400 text-xs font-medium">Dismiss</button>
+        </div>
+      )}
 
       {/* Status filters */}
       <div className="flex items-center gap-1 overflow-auto">
@@ -116,7 +125,7 @@ export default function RunsPage() {
             <>
               <p className="text-base font-medium">No runs yet</p>
               <p className="text-[13px] text-muted-foreground max-w-sm mx-auto">
-                Runs appear here as agents execute tasks. Create a task in a project to get started.
+                Runs appear here when agents process conversations and execute tasks. Start a conversation in the chat workspace to get going.
               </p>
             </>
           )}
@@ -201,6 +210,7 @@ export default function RunsPage() {
                             className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground"
                             title="Retry this run with the same agent and model"
                             onClick={async () => {
+                              setActionError(null);
                               try {
                                 await sendChatMessage({
                                   message: 'Retry: ' + run.task_title,
@@ -208,7 +218,7 @@ export default function RunsPage() {
                                   agent_id: run.agent_id,
                                 });
                               } catch (err) {
-                                window.alert('Failed to retry run: ' + (err instanceof Error ? err.message : String(err)));
+                                setActionError('Failed to retry run: ' + (err instanceof Error ? err.message : String(err)));
                               }
                             }}
                           >
@@ -229,10 +239,11 @@ export default function RunsPage() {
                             className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground"
                             title="Pause this run"
                             onClick={async () => {
+                              setActionError(null);
                               try {
                                 await stopAgentRun(run.id);
                               } catch (err) {
-                                window.alert('Failed to pause run: ' + (err instanceof Error ? err.message : String(err)));
+                                setActionError('Failed to pause run: ' + (err instanceof Error ? err.message : String(err)));
                               }
                             }}
                           >
@@ -244,10 +255,11 @@ export default function RunsPage() {
                             className="p-1 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
                             title="Stop this run"
                             onClick={async () => {
+                              setActionError(null);
                               try {
                                 await stopAgentRun(run.id);
                               } catch (err) {
-                                window.alert('Failed to stop run: ' + (err instanceof Error ? err.message : String(err)));
+                                setActionError('Failed to stop run: ' + (err instanceof Error ? err.message : String(err)));
                               }
                             }}
                           >

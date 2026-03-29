@@ -14,7 +14,6 @@ import {
   X,
   Zap,
   Play,
-  FileText,
   MessageSquare,
   RefreshCw,
   Info,
@@ -91,9 +90,11 @@ export function RoleLaneCard({
     }
   }
 
+  const isAssigned = !!agent && !!assignment
+
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden card-glow">
-      <div className="h-1" style={{ backgroundColor: role.color }} />
+    <div className={`bg-card border rounded-xl overflow-hidden ${isAssigned ? 'border-border card-glow' : 'border-dashed border-border/50 opacity-75 hover:opacity-100 transition-opacity'}`}>
+      <div className="h-1" style={{ backgroundColor: isAssigned ? role.color : role.color + '40' }} />
 
       <div className="p-4 space-y-3">
         {/* Header */}
@@ -187,11 +188,6 @@ export function RoleLaneCard({
               disabled
               title="Run task with assigned agent"
               onClick={() => {}}
-            />
-            <ActionButton
-              icon={<FileText className="w-3 h-3" />}
-              label="Create task"
-              onClick={() => onCreateTask?.(role.id)}
             />
             <ActionButton
               icon={<MessageSquare className="w-3 h-3" />}

@@ -361,7 +361,7 @@ export default function ApprovalsPage() {
               </p>
               <p className="text-xs text-muted-foreground/50 mt-1">
                 {items.length === 0
-                  ? 'Approvals appear here when agents hit budget thresholds or need human sign-off.'
+                  ? 'Approvals appear here when agents need your sign-off before proceeding. Critical tasks and budget-exceeding actions require human review.'
                   : 'Try changing your filter.'}
               </p>
             </div>
