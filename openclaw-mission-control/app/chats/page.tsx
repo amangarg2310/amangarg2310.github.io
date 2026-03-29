@@ -17,6 +17,8 @@ import {
   Loader2,
   Send,
   Plus,
+  ImagePlus,
+  X,
 } from 'lucide-react'
 
 /**
@@ -282,6 +284,21 @@ export default function ChatsPage() {
                         </div>
                       )}
 
+                      {/* Attached images */}
+                      {msg.images && msg.images.length > 0 && (
+                        <div className="flex gap-2 flex-wrap mt-2">
+                          {msg.images.map((img) => (
+                            <a key={img.id} href={img.data} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={img.data}
+                                alt={img.name}
+                                className="max-h-48 w-auto rounded-lg border border-border/50 cursor-pointer hover:opacity-90 transition-opacity"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Tool Call Terminal Block */}
                       {msg.tool_calls &&
                         msg.tool_calls.length > 0 &&
@@ -486,8 +503,10 @@ interface ChatComposerProps {
 
 function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatComposerProps) {
   const [message, setMessage] = useState('')
+  const [images, setImages] = useState<{ data: string; name: string; type: string }[]>([])
   const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Auto-resize textarea
   useEffect(() => {
@@ -497,17 +516,37 @@ function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatCo
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [message])
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        setImages((prev) => [...prev, { data: reader.result as string, name: file.name, type: file.type }])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const handleSend = async () => {
     const text = message.trim()
-    if (!text || sending) return
+    if ((!text && images.length === 0) || sending) return
 
     setSending(true)
     try {
       await sendChatMessage({
-        message: text,
+        message: text || '(see attached image)',
+        images: images.length > 0 ? images : undefined,
         conversation_id: `conv-${sessionId}`,
       })
       setMessage('')
+      setImages([])
     } catch (err) {
       console.error('Failed to send message:', err)
     } finally {
@@ -522,9 +561,53 @@ function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatCo
     }
   }
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) continue
+        const reader = new FileReader()
+        reader.onload = () => {
+          setImages((prev) => [...prev, { data: reader.result as string, name: `paste-${Date.now()}.png`, type: file.type }])
+        }
+        reader.readAsDataURL(file)
+      }
+    }
+  }
+
+  const canSend = (message.trim() || images.length > 0) && !sending
+
   return (
     <div className="border-t border-border bg-card/50 backdrop-blur-sm">
+      {/* Image previews */}
+      {images.length > 0 && (
+        <div className="flex gap-2 px-4 pt-3 flex-wrap">
+          {images.map((img, i) => (
+            <div key={i} className="relative group">
+              <img src={img.data} alt={img.name} className="h-16 w-auto rounded-lg border border-border object-cover" />
+              <button
+                onClick={() => removeImage(i)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex items-end gap-2 px-4 py-3">
+        {/* Image upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          title="Attach image or screenshot"
+        >
+          <ImagePlus className="w-4 h-4" />
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
+
         {/* Text input */}
         <div className="flex-1 relative">
           <textarea
@@ -532,6 +615,7 @@ function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatCo
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             rows={1}
             placeholder="Send a message to this agent..."
             className="w-full bg-[#050506] border border-border/50 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors"
@@ -541,10 +625,10 @@ function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatCo
         {/* Send button */}
         <button
           onClick={handleSend}
-          disabled={!message.trim() || sending}
+          disabled={!canSend}
           className={cn(
             'p-2.5 rounded-xl transition-colors',
-            message.trim() && !sending
+            canSend
               ? 'bg-accent text-white hover:bg-accent/80'
               : 'bg-accent/20 text-accent/30 cursor-not-allowed'
           )}
@@ -568,10 +652,11 @@ function NewChatComposer({
   onCreated: (conversationId: string) => void
 }) {
   const [message, setMessage] = useState('')
+  const [images, setImages] = useState<{ data: string; name: string; type: string }[]>([])
   const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Pick the first available agent, or the default one
   const defaultAgent = agents.find(a => a.id === 'agent-default') || agents[0]
   const effectiveProjectId = projectId || 'proj-default'
 
@@ -582,14 +667,49 @@ function NewChatComposer({
     el.style.height = Math.min(el.scrollHeight, 160) + 'px'
   }, [message])
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        setImages((prev) => [...prev, { data: reader.result as string, name: file.name, type: file.type }])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) continue
+        const reader = new FileReader()
+        reader.onload = () => {
+          setImages((prev) => [...prev, { data: reader.result as string, name: `paste-${Date.now()}.png`, type: file.type }])
+        }
+        reader.readAsDataURL(file)
+      }
+    }
+  }
+
   const handleSend = async () => {
     const text = message.trim()
-    if (!text || sending || !defaultAgent) return
+    if ((!text && images.length === 0) || sending || !defaultAgent) return
 
     setSending(true)
     try {
       const res = await sendChatMessage({
-        message: text,
+        message: text || '(see attached image)',
+        images: images.length > 0 ? images : undefined,
         project_id: effectiveProjectId,
         agent_id: defaultAgent.id,
       })
@@ -597,6 +717,7 @@ function NewChatComposer({
         onCreated(res.conversation_id)
       }
       setMessage('')
+      setImages([])
     } catch (err) {
       console.error('Failed to start chat:', err)
     } finally {
@@ -611,13 +732,15 @@ function NewChatComposer({
     }
   }
 
+  const canSend = (message.trim() || images.length > 0) && !sending && !!defaultAgent
+
   return (
     <div className="w-full max-w-2xl px-8 space-y-6">
       <div className="text-center space-y-2">
         <MessageSquare className="w-10 h-10 text-accent mx-auto opacity-60" />
         <h2 className="text-lg font-semibold text-foreground">New Conversation</h2>
         <p className="text-sm text-muted-foreground">
-          Send a message to start a new task. It will be routed to an agent and appear in your boards.
+          Start a conversation with Claude. Just like Claude Code — ask questions, discuss ideas, share screenshots.
         </p>
       </div>
 
@@ -633,27 +756,56 @@ function NewChatComposer({
           <span>Project: {effectiveProjectId === 'proj-default' ? 'General' : effectiveProjectId}</span>
         </div>
 
+        {/* Image previews */}
+        {images.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {images.map((img, i) => (
+              <div key={i} className="relative group">
+                <img src={img.data} alt={img.name} className="h-20 w-auto rounded-lg border border-border object-cover" />
+                <button
+                  onClick={() => removeImage(i)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           rows={3}
-          placeholder="Describe a task, ask a question, or start a conversation..."
+          placeholder="Ask a question, discuss ideas, or share a screenshot..."
           className="w-full bg-background border border-border/50 rounded-lg px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none focus:border-accent/30 transition-colors"
           autoFocus
         />
 
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">
-            Enter to send · Shift+Enter for new line
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              title="Attach image or screenshot"
+            >
+              <ImagePlus className="w-4 h-4" />
+              <span>Add image</span>
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
+            <span className="text-[10px] text-muted-foreground/50">
+              Paste screenshots with Cmd+V
+            </span>
+          </div>
           <button
             onClick={handleSend}
-            disabled={!message.trim() || sending || !defaultAgent}
+            disabled={!canSend}
             className={cn(
               'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              message.trim() && !sending
+              canSend
                 ? 'bg-accent text-white hover:bg-accent/80'
                 : 'bg-accent/20 text-accent/30 cursor-not-allowed'
             )}

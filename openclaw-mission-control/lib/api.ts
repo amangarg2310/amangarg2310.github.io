@@ -295,6 +295,7 @@ export async function startWorkflow(projectId: string, chainId: string): Promise
 // --- Chat ---
 export async function sendChatMessage(data: {
   message: string
+  images?: { data: string; name: string; type: string }[]
   conversation_id?: string
   project_id?: string
   agent_id?: string

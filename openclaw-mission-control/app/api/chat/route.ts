@@ -11,21 +11,27 @@ export const dynamic = 'force-dynamic'
  * Creates/continues conversations. Does NOT auto-create tasks.
  * Tasks are created by the agent when it identifies actionable work.
  *
- * Body: { message, conversation_id?, project_id?, agent_id?, role? }
+ * Body: { message, images?, conversation_id?, project_id?, agent_id?, role? }
  */
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { message, conversation_id, project_id, agent_id, role } = body
+    const { message, images, conversation_id, project_id, agent_id, role } = body
 
     if (!message) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 })
     }
 
+    // Build images array for storage
+    const messageImages = images?.map((img: { data: string; name: string; type: string }) => ({
+      id: `img-${crypto.randomUUID().slice(0, 8)}`,
+      ...img,
+    }))
+
     // Continue existing conversation
     if (conversation_id) {
       const { sendMessage } = await import('@/lib/agent-runtime')
-      await sendMessage(conversation_id, message)
+      await sendMessage(conversation_id, message, messageImages)
       return NextResponse.json({ ok: true, conversation_id })
     }
 
@@ -53,12 +59,13 @@ export async function POST(req: Request) {
       project_id,
     })
 
-    // Store the user's message
+    // Store the user's message (with images if any)
     store.addMessage({
       id: `msg-${crypto.randomUUID().slice(0, 8)}`,
       conversation_id: conversationId,
       role: 'user',
       content: message,
+      images: messageImages,
       agent_id: null,
       model: null,
       input_tokens: null,

@@ -287,13 +287,17 @@ Be conversational, helpful, and actionable. This is a real working conversation,
  * Stores the message and starts a new agent turn.
  * Does NOT create tasks — the agent decides when to create tasks.
  */
-export async function sendMessage(conversationId: string, content: string): Promise<void> {
-  // Add user message to store
-  store.addMessage(makeMessage({
+export async function sendMessage(conversationId: string, content: string, images?: import('./types').MessageImage[]): Promise<void> {
+  // Add user message to store (with images if any)
+  const msg = makeMessage({
     conversation_id: conversationId,
     role: 'user',
     content,
-  }))
+  })
+  if (images?.length) {
+    msg.images = images
+  }
+  store.addMessage(msg)
 
   // Update conversation
   const conv = store.getConversation(conversationId)

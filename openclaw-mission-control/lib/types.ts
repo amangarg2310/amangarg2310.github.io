@@ -104,11 +104,19 @@ export interface RunEvent {
   tool_name: string | null;
 }
 
+export interface MessageImage {
+  id: string;
+  data: string; // base64 data URL
+  name: string;
+  type: string; // mime type
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
   role: MessageRole;
   content: string;
+  images?: MessageImage[];
   agent_id: string | null;
   model: string | null;
   input_tokens: number | null;

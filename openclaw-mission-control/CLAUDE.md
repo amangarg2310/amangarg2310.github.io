@@ -17,6 +17,7 @@ At its core, this functions like a multi-agent task force: agents can collaborat
 3. **Primary agent + sub-agents**: Each project has a primary agent that orchestrates. For complex work, the primary agent spawns sub-agents (per role lane), coordinates their output, and synthesizes results.
 4. **Multi-agent collaboration**: Agents share context, compare research, challenge conclusions, and build on each other's work. The dashboard is the meeting room where this coordination is visible.
 5. **No mock data, no demo mode**: All data is real-time from agent runtime. Store starts empty, fills with real conversations and tasks.
+6. **Image/screenshot support**: Chat workspace supports image upload (file picker + paste) just like Claude Code. Images are stored with messages and displayed inline in the thread.
 
 ## Tech Stack
 
