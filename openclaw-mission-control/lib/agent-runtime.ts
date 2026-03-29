@@ -19,8 +19,9 @@ let queryFn: any = null
 async function getQuery() {
   if (!queryFn) {
     try {
-      // Hide the module path from Turbopack's static analysis completely
-      const modName = ['@anthropic-ai', 'claude-code'].join('/')
+      // The SDK package is @anthropic-ai/claude-agent-sdk (NOT claude-code, which is the CLI)
+      // Hide module path from Turbopack's static analysis
+      const modName = ['@anthropic-ai', 'claude-agent-sdk'].join('/')
       // eslint-disable-next-line no-eval
       const sdk = await eval(`import('${modName}')`)
       queryFn = sdk.query || sdk.default?.query
@@ -29,7 +30,7 @@ async function getQuery() {
       const msg = (err as Error).message
       if (msg.includes('query function not found')) throw err
       throw new Error(
-        `Claude Code SDK error: ${msg}. Ensure it is installed: npm install @anthropic-ai/claude-code`
+        `Claude Agent SDK error: ${msg}. Install it: npm install @anthropic-ai/claude-agent-sdk`
       )
     }
   }

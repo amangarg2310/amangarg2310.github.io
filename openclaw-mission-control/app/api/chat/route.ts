@@ -90,7 +90,7 @@ export async function POST(req: Request) {
         id: `msg-${crypto.randomUUID().slice(0, 8)}`,
         conversation_id: conversationId,
         role: 'assistant',
-        content: `I'm not able to respond right now. The Claude Code SDK needs to be installed and you need to be logged in via \`claude login\`.\n\nTo fix this:\n1. Run \`npm install @anthropic-ai/claude-code\`\n2. Run \`claude login\` in your terminal\n3. Restart the dev server`,
+        content: `I'm not able to respond right now. The Claude Agent SDK needs to be installed and you need to be logged in via \`claude login\`.\n\nTo fix this:\n1. Run \`npm install @anthropic-ai/claude-agent-sdk\`\n2. Run \`claude login\` in your terminal\n3. Restart the dev server`,
         agent_id,
         model: null,
         input_tokens: null,
