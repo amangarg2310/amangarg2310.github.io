@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useConversations, useAgents, useConversationDetail } from '@/lib/hooks'
+import { useConversations, useAgents, useConversationDetail, useProjects, useTasks } from '@/lib/hooks'
 import { sendChatMessage } from '@/lib/api'
 import { useActiveProject } from '@/lib/project-context'
 import { Agent } from '@/lib/types'
@@ -20,6 +20,7 @@ import {
   ImagePlus,
   X,
   CheckSquare,
+  FolderKanban,
 } from 'lucide-react'
 
 /**
@@ -50,7 +51,22 @@ function cleanMessageContent(content: string): string {
 const CHAT_POLL_INTERVAL = 5_000 // 5 seconds
 
 export default function ChatsPage() {
+  const { activeProjectId, setActiveProjectId } = useActiveProject()
+  const { data: projects } = useProjects()
+  const { data: allTasks } = useTasks(undefined)
+
+  // If no project is selected, show project selection screen
+  if (!activeProjectId) {
+    return <ProjectSelectionScreen projects={projects} allTasks={allTasks} onSelect={setActiveProjectId} icon="chat" />
+  }
+
+  return <ChatsPageInner />
+}
+
+function ChatsPageInner() {
   const { activeProjectId } = useActiveProject()
+  const { data: projects } = useProjects()
+  const activeProject = projects.find((p) => p.id === activeProjectId)
   const [refreshKey, setRefreshKey] = useState(0)
   const { data: conversations } = useConversations(activeProjectId, CHAT_POLL_INTERVAL, refreshKey)
   const { data: agents } = useAgents()
@@ -182,6 +198,15 @@ export default function ChatsPage() {
         <div className="flex-1 flex flex-col relative">
           {/* Header */}
           <header className="h-14 border-b border-border flex items-center px-6 bg-card/30 backdrop-blur-sm z-10">
+            {activeProject && (
+              <span className="flex items-center gap-1.5 mr-3 text-xs text-muted-foreground bg-white/5 border border-border/50 px-2 py-1 rounded-md">
+                <div
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: activeProject.color }}
+                />
+                {activeProject.name}
+              </span>
+            )}
             <h2 className="text-sm font-medium text-foreground">
               {selectedConv.title}
             </h2>
@@ -789,10 +814,8 @@ function NewChatComposer({
             <>
               <AgentAvatar name={defaultAgent.name} color={defaultAgent.avatar_color} size="sm" />
               <span>{defaultAgent.name}</span>
-              <span className="text-muted-foreground/30">|</span>
             </>
           )}
-          <span>Project: {effectiveProjectId === 'proj-default' ? 'General' : effectiveProjectId}</span>
         </div>
 
         {/* Image previews */}
@@ -853,6 +876,87 @@ function NewChatComposer({
             {sending ? 'Sending...' : 'Send'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Project Selection Screen ---
+
+import type { Project, Task } from '@/lib/types'
+
+function ProjectSelectionScreen({
+  projects,
+  allTasks,
+  onSelect,
+  icon,
+}: {
+  projects: Project[]
+  allTasks: Task[]
+  onSelect: (id: string) => void
+  icon: 'chat' | 'board'
+}) {
+  const taskCountByProject = (projectId: string) =>
+    allTasks.filter((t) => t.project_id === projectId).length
+
+  return (
+    <div className="flex-1 h-screen bg-background flex items-center justify-center">
+      <div className="w-full max-w-2xl px-8 space-y-8">
+        <div className="text-center space-y-3">
+          {icon === 'chat' ? (
+            <MessageSquare className="w-12 h-12 text-accent mx-auto opacity-50" />
+          ) : (
+            <FolderKanban className="w-12 h-12 text-accent mx-auto opacity-50" />
+          )}
+          <h2 className="text-xl font-semibold text-foreground">
+            {icon === 'chat' ? 'Select a project to start chatting' : 'Select a project to view its board'}
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            {icon === 'chat'
+              ? 'Choose a project below to open its chat workspace. Conversations are scoped to the selected project.'
+              : 'Choose a project below to view its task board. Each project has its own Kanban board.'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {projects.map((project) => {
+            const taskCount = taskCountByProject(project.id)
+            return (
+              <button
+                key={project.id}
+                onClick={() => onSelect(project.id)}
+                className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-accent/30 hover:bg-accent/5 transition-all text-left group"
+              >
+                <div
+                  className="w-3 h-3 rounded-full shrink-0 mt-1"
+                  style={{ backgroundColor: project.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground group-hover:text-accent transition-colors">
+                    {project.name}
+                  </div>
+                  {project.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      {project.description}
+                    </p>
+                  )}
+                  <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-mono">
+                    {taskCount} task{taskCount !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {projects.length === 0 && (
+          <div className="text-center py-8 space-y-2">
+            <FolderKanban className="w-8 h-8 text-muted-foreground/30 mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              No projects yet. Create one from the Projects page to get started.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

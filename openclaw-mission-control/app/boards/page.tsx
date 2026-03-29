@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { useTasks, useAgents } from '@/lib/hooks'
+import { useTasks, useAgents, useProjects } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { updateTaskStatus as apiUpdateTaskStatus } from '@/lib/api'
 import { Task, Agent } from '@/lib/types'
@@ -22,7 +22,10 @@ import {
   User as UserIcon,
   Info,
   X,
+  FolderKanban,
+  ChevronDown,
 } from 'lucide-react'
+import { Project, Task } from '@/lib/types'
 
 const BOARD_POLL_INTERVAL = 10_000
 

@@ -50,10 +50,11 @@ export function RoleLaneCard({
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showTierInfo, setShowTierInfo] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [overrideTier, setOverrideTier] = useState<ExecutionTier | null>(null)
 
-  const defaultTier = ROLE_TIER_DEFAULTS[role.id] as ExecutionTier
-  const tierLabel = TIER_LABELS[defaultTier]
-  const tierCost = TIER_COST_RANGES[defaultTier]
+  const activeTier = overrideTier || (ROLE_TIER_DEFAULTS[role.id] as ExecutionTier)
+  const tierLabel = TIER_LABELS[activeTier]
+  const tierCost = TIER_COST_RANGES[activeTier]
   const enabledCount = automationConfigs.filter((ac) => ac.enabled).length
 
   const handleAssign = async (agentId: string) => {
@@ -112,15 +113,25 @@ export function RoleLaneCard({
               <Info className="w-2.5 h-2.5" />
             </button>
             {showTierInfo && (
-              <div className="absolute z-30 right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-lg p-3">
-                <p className="text-[10px] text-foreground font-medium mb-1">Default: {tierLabel}</p>
-                <p className="text-[10px] text-muted-foreground mb-1.5">Est. cost: {tierCost}</p>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  {defaultTier === 'economy' && `${role.label} defaults to Economy — local-first, escalate for deep synthesis.`}
-                  {defaultTier === 'standard' && `${role.label} defaults to Standard — needs reasoning quality for reliable output.`}
-                  {defaultTier === 'premium' && `${role.label} defaults to Premium — high-stakes decisions need top models.`}
-                </p>
-                <button onClick={() => setShowTierInfo(false)} className="text-[9px] text-accent mt-1.5">Close</button>
+              <div className="absolute z-30 right-0 top-full mt-1 w-52 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2">
+                <p className="text-[10px] text-foreground font-medium">Model Tier</p>
+                {(['economy', 'standard', 'premium'] as ExecutionTier[]).map(tier => (
+                  <button
+                    key={tier}
+                    onClick={() => { setOverrideTier(tier === (ROLE_TIER_DEFAULTS[role.id] as ExecutionTier) ? null : tier); setShowTierInfo(false) }}
+                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] transition-colors ${
+                      activeTier === tier ? 'bg-accent/10 text-accent border border-accent/20' : 'hover:bg-white/5 text-muted-foreground'
+                    }`}
+                  >
+                    <span className="font-medium">{TIER_LABELS[tier]}</span>
+                    <span className="text-muted-foreground/60">{TIER_COST_RANGES[tier]}</span>
+                  </button>
+                ))}
+                {overrideTier && (
+                  <button onClick={() => { setOverrideTier(null); setShowTierInfo(false) }} className="text-[9px] text-muted-foreground hover:text-foreground w-full text-center mt-1">
+                    Reset to default
+                  </button>
+                )}
               </div>
             )}
           </div>

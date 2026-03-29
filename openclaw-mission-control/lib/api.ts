@@ -180,12 +180,12 @@ export function fetchProjectRoles(id: string): Promise<RoleAssignment[]> {
   return fetchJson<RoleAssignment[]>(`/projects/${id}/roles`)
 }
 
-export async function createProject(data: { name: string; description?: string; color?: string; repo_url?: string; repo_branch?: string }): Promise<Project> {
+export async function createProject(data: { name: string }): Promise<Project> {
   const base = getBaseUrl()
   const res = await fetch(`${base}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ name: data.name }),
   })
   if (!res.ok) throw new Error(`Failed to create project: ${res.status}`)
   return res.json() as Promise<Project>

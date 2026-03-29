@@ -195,10 +195,6 @@ export default function ProjectsPage() {
   const { data: agents } = useAgents()
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [color, setColor] = useState(PROJECT_COLORS[0])
-  const [repoUrl, setRepoUrl] = useState('')
-  const [repoBranch, setRepoBranch] = useState('')
   const [creating, setCreating] = useState(false)
 
   const handleDelete = async (id: string) => {
@@ -214,20 +210,9 @@ export default function ProjectsPage() {
     if (!name.trim()) return
     setCreating(true)
     try {
-      const newProject = await createProject({
-        name: name.trim(),
-        description: description.trim(),
-        color,
-        repo_url: repoUrl.trim() || undefined,
-        repo_branch: repoBranch.trim() || undefined,
-      })
+      const newProject = await createProject({ name: name.trim() })
       setName('')
-      setDescription('')
-      setColor(PROJECT_COLORS[0])
-      setRepoUrl('')
-      setRepoBranch('')
       setShowCreate(false)
-      // Navigate to the new project so the user can assign a primary agent
       router.push(`/projects/${newProject.id}`)
     } catch (err) {
       console.error('Failed to create project:', err)
@@ -274,7 +259,7 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Create Project Modal */}
+      {/* Create Project — minimal modal */}
       <AnimatePresence>
         {showCreate && (
           <motion.div
@@ -282,98 +267,40 @@ export default function ProjectsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowCreate(false)}
+            onClick={() => { setShowCreate(false); setName('') }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-card border border-border rounded-xl p-6 w-full max-w-md space-y-5 shadow-xl"
+              className="bg-card border border-border rounded-xl p-5 w-full max-w-sm shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-foreground">New Project</h2>
-                <button onClick={() => setShowCreate(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. BiteClimb, ScoutAI"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Description</label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="What is this project about?"
-                    rows={2}
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-none"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Color</label>
-                  <div className="flex items-center gap-2">
-                    {PROJECT_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setColor(c)}
-                        className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-card' : 'hover:scale-110'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Repo URL <span className="text-muted-foreground/50">(optional)</span></label>
-                  <input
-                    type="text"
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    placeholder="e.g. https://github.com/org/repo"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Branch <span className="text-muted-foreground/50">(optional)</span></label>
-                  <input
-                    type="text"
-                    value={repoBranch}
-                    onChange={(e) => setRepoBranch(e.target.value)}
-                    placeholder="e.g. main"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+              <h2 className="text-sm font-semibold text-foreground mb-3">New Project</h2>
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleCreate() }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Project name, e.g. ScoutAI"
+                  className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  autoFocus
+                  disabled={creating}
+                />
                 <button
-                  onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
+                  type="submit"
                   disabled={!name.trim() || creating}
-                  className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  {creating ? 'Creating...' : 'Create & Assign Agent'}
+                  {creating ? 'Creating...' : 'Create'}
                 </button>
-              </div>
+              </form>
+              <p className="text-[10px] text-muted-foreground/50 mt-2">
+                A primary agent and advisor role will be set up automatically.
+              </p>
             </motion.div>
           </motion.div>
         )}
