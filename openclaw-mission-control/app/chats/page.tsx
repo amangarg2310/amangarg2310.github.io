@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { useConversations, useAgents, useConversationDetail, useProjects, useTasks } from '@/lib/hooks'
 import { sendChatMessage } from '@/lib/api'
 import { useActiveProject } from '@/lib/project-context'
@@ -314,8 +315,8 @@ function ChatsPageInner() {
                       }
                     >
                       {msg.content && cleanMessageContent(msg.content) && (
-                        <div className="whitespace-pre-wrap">
-                          {cleanMessageContent(msg.content)}
+                        <div className="prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-hr:my-3 prose-a:text-accent prose-strong:text-foreground">
+                          <ReactMarkdown>{cleanMessageContent(msg.content)}</ReactMarkdown>
                         </div>
                       )}
 
