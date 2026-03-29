@@ -41,9 +41,13 @@ npm run test      # Bridge layer tests
 - Agents spawned via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) `query()` function
 - Uses existing Claude Code login — NO API key needed
 - Full tool access: Read, Write, Bash, Grep, WebFetch, WebSearch, etc.
-- Multi-agent support via subagent definitions per role
+- **Project-aware context**: System prompt includes project name, objective, focus, existing tasks, and recent findings from other agents
+- **Inter-agent sharing**: Each agent sees summaries of recent conversations by other agents on the same project
+- **Task extraction**: Parses `[TASK: title="..." priority="..." description="..."]` from agent output (flexible: single/double quotes)
+- **Sub-agent delegation**: Primary agents can output `[DELEGATE: role="research" goal="..." priority="..."]` to auto-spawn sub-agents
+- **Auto sub-agent creation**: When primary agent delegates to a role with no assigned agent, one is created automatically
 - Role-based system prompts in `ROLE_PROMPTS` map
-- Active sessions tracked in `activeSessions` Map (keyed by run ID)
+- Active sessions tracked in `activeSessions` Map (keyed by conversation ID)
 - Cost estimation: `(inputTokens * 3 + outputTokens * 15) / 1_000_000` (Sonnet pricing)
 
 ### Store (`lib/store.ts`)
