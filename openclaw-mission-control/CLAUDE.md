@@ -4,7 +4,19 @@ Project-centric founder operating system powered by Claude Code SDK. Manages mul
 
 ## Vision
 
-One dashboard to consolidate all projects. Within each project, different agents with different roles. Track what each is working on, have agents collaborate and strategize based on findings. Chat interface routes new tasks to the right agents automatically.
+This platform is a centralized mission control where the founder can run, manage, and oversee all Claude agents in one place. Each project — whether it is an app, a research initiative, or another type of build — has a primary agent that can break a larger objective into smaller tasks by creating sub-agents as needed based on the complexity of the work. Those sub-agents execute their individual assignments, feed their outputs back to the primary agent, and the primary agent reviews, synthesizes, and escalates work to the founder when human input or approval is needed.
+
+The chat workspace exists to make this the single operating environment for everything, so that instead of juggling multiple windows and fragmented workflows, the founder can do in this platform everything they would otherwise need to do across separate interfaces (including Claude Code itself). At any moment, they should be able to toggle between projects and instantly understand what every agent and sub-agent is working on, what stage each task is in, and where attention is needed.
+
+At its core, this functions like a multi-agent task force: agents can collaborate, compare notes, strategize together, build on one another's work, and coordinate intelligently toward a shared outcome, while still giving the founder clear oversight and control from one unified command center.
+
+### Key Principles
+
+1. **Chat = Claude Code mirror**: The chat workspace mirrors actual Claude Code conversations. What the founder types there runs through Claude Code. Messages, tool calls, and responses should all be visible. This replaces the need to use Claude Code separately.
+2. **Agents identify tasks, not users**: Tasks are NOT created by sending a chat message. The agent identifies actionable work during conversation and creates tasks that appear in the Backlog. The founder promotes tasks to In Progress when ready.
+3. **Primary agent + sub-agents**: Each project has a primary agent that orchestrates. For complex work, the primary agent spawns sub-agents (per role lane), coordinates their output, and synthesizes results.
+4. **Multi-agent collaboration**: Agents share context, compare research, challenge conclusions, and build on each other's work. The dashboard is the meeting room where this coordination is visible.
+5. **No mock data, no demo mode**: All data is real-time from agent runtime. Store starts empty, fills with real conversations and tasks.
 
 ## Tech Stack
 
@@ -142,7 +154,8 @@ types/
 - Cards: `bg-card border border-border rounded-xl` with `card-glow` class
 - Status colors: `text-status-running`, `text-status-success`, `text-status-failed`, etc.
 - Role colors defined in `lib/roles.ts`
-- Chat: `sendChatMessage()` → `POST /api/chat` → `agent-runtime.spawnAgentRun()`
+- Chat: `sendChatMessage()` → `POST /api/chat` → `agent-runtime.startConversation()` (conversational, no auto-task)
+- Task creation: Agent identifies work → outputs `[TASK: title="..." priority="..." description="..."]` → parsed by runtime → appears in Backlog
 - All cost values prefixed with "Est." (estimated from token counts)
 - Empty states: descriptive text + relevant icon at 30% opacity
 - No mock/demo data anywhere — store always starts empty
