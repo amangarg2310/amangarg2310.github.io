@@ -162,11 +162,15 @@ function buildProjectContext(projectId: string): string {
 function extractAndCreateTasks(content: string, projectId: string, agentId: string): Task[] {
   const created: Task[] = []
 
-  // Flexible pattern: handles double or single quotes, optional spacing
-  const taskPattern = /\[TASK:\s*title\s*=\s*["']([^"']+)["']\s*priority\s*=\s*["']([^"']+)["']\s*description\s*=\s*["']([^"']+)["']\s*\]/gi
+  // Flexible pattern: handles double or single quotes, allows apostrophes inside double-quoted strings
+  // Uses alternation: "([^"]+)" or '([^']+)' for each field
+  const taskPattern = /\[TASK:\s*title\s*=\s*(?:"([^"]+)"|'([^']+)')\s*priority\s*=\s*(?:"([^"]+)"|'([^']+)')\s*description\s*=\s*(?:"([^"]+)"|'([^']+)')\s*\]/gi
   let match
   while ((match = taskPattern.exec(content)) !== null) {
-    const [, title, priority, description] = match
+    // Alternation groups: [1] or [2] for title, [3] or [4] for priority, [5] or [6] for description
+    const title = match[1] || match[2]
+    const priority = match[3] || match[4]
+    const description = match[5] || match[6]
     const taskId = `task-${crypto.randomUUID().slice(0, 8)}`
     const now = new Date().toISOString()
     const task: Task = {
@@ -193,10 +197,12 @@ function extractAndCreateTasks(content: string, projectId: string, agentId: stri
  * Format: [DELEGATE: role="research" goal="Analyze competitor pricing" priority="high"]
  */
 function extractAndDelegate(content: string, projectId: string, parentAgentId: string): void {
-  const delegatePattern = /\[DELEGATE:\s*role\s*=\s*["']([^"']+)["']\s*goal\s*=\s*["']([^"']+)["']\s*(?:priority\s*=\s*["']([^"']+)["'])?\s*\]/gi
+  const delegatePattern = /\[DELEGATE:\s*role\s*=\s*(?:"([^"]+)"|'([^']+)')\s*goal\s*=\s*(?:"([^"]+)"|'([^']+)')\s*(?:priority\s*=\s*(?:"([^"]+)"|'([^']+)'))?\s*\]/gi
   let match
   while ((match = delegatePattern.exec(content)) !== null) {
-    const [, role, goal, priority] = match
+    const role = match[1] || match[2]
+    const goal = match[3] || match[4]
+    const priority = match[5] || match[6]
     const roleLane = role as RoleLane
 
     if (!ROLE_PROMPTS[roleLane]) {
