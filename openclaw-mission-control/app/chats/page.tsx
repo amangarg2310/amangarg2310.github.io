@@ -336,9 +336,9 @@ export default function ChatsPage() {
                     </div>
 
                     {/* Message Footer */}
-                    {msg.role === 'assistant' && (msg.estimated_cost || msg.input_tokens || msg.output_tokens) && (
+                    {msg.role === 'assistant' && ((msg.estimated_cost != null && msg.estimated_cost > 0) || (msg.input_tokens != null && msg.input_tokens > 0) || (msg.output_tokens != null && msg.output_tokens > 0)) && (
                       <div className="mt-1.5 ml-1 text-[10px] text-muted-foreground font-mono flex items-center gap-3">
-                        {(msg.input_tokens || msg.output_tokens) && (
+                        {((msg.input_tokens ?? 0) + (msg.output_tokens ?? 0)) > 0 && (
                           <span>
                             {formatTokens(
                               (msg.input_tokens || 0) +
