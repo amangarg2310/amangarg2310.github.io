@@ -19,6 +19,7 @@ import {
   Zap,
   PlayCircle,
   PauseCircle,
+  Shield,
 } from 'lucide-react'
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,10 +44,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const { project, focus, roleSummaries, blockers, nextActions, budgetSummary, recentActivity, automationSummary, activeWorkflows } = cc
 
+  const assignedRoles = roleSummaries.filter((r) => r.agent_id).length
+  const totalBlockers = blockers.length
+
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
       <div className="max-w-6xl mx-auto px-8 py-8 space-y-6">
-        {/* Header with editable focus */}
+        {/* Header with primary agent, objective, and focus */}
         <CommandCenterHeader
           project={project}
           focus={focus}
@@ -56,6 +60,37 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Blockers banner */}
         <BlockersBanner blockers={blockers} />
+
+        {/* War room status bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className={`rounded-xl px-4 py-3 border ${
+            totalBlockers > 0
+              ? 'bg-red-500/5 border-red-500/20'
+              : assignedRoles === 7
+                ? 'bg-emerald-500/5 border-emerald-500/20'
+                : 'bg-amber-500/5 border-amber-500/20'
+          }`}
+        >
+          <div className="flex items-center gap-3 text-xs">
+            <Shield className={`w-4 h-4 ${
+              totalBlockers > 0 ? 'text-red-400' : assignedRoles === 7 ? 'text-emerald-400' : 'text-amber-400'
+            }`} />
+            <span className="font-medium text-foreground">
+              {totalBlockers > 0
+                ? `${totalBlockers} blocker${totalBlockers !== 1 ? 's' : ''} require attention`
+                : assignedRoles === 7
+                  ? 'All role lanes staffed -- operations nominal'
+                  : `${7 - assignedRoles} role lane${7 - assignedRoles !== 1 ? 's' : ''} unassigned`
+              }
+            </span>
+            <span className="text-muted-foreground ml-auto">
+              {assignedRoles}/7 roles assigned
+            </span>
+          </div>
+        </motion.div>
 
         {/* Metric cards */}
         <motion.div
@@ -82,7 +117,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <MetricCard
             icon={<Activity className="w-4 h-4 text-amber-400" />}
             label="Roles Assigned"
-            value={`${roleSummaries.filter((r) => r.agent_id).length} / 7`}
+            value={`${assignedRoles} / 7`}
           />
         </motion.div>
 
@@ -101,7 +136,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Role Lanes Grid */}
         <section>
-          <h2 className="text-sm font-medium text-foreground mb-4">Role Lanes</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium text-foreground">Role Lanes</h2>
+            <span className="text-[10px] text-muted-foreground">
+              {assignedRoles} of 7 staffed
+            </span>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {ROLE_LANES.map((role, i) => {
               const summary = roleSummaries.find((s) => s.role === role.id)
@@ -183,7 +223,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         {/* Budget */}
         <BudgetSummary budget={budgetSummary} />
       </div>
-
     </div>
   )
 }
