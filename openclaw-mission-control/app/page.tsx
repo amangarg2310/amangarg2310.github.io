@@ -1,12 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Activity,
   AlertTriangle,
   DollarSign,
-  Plus,
 } from 'lucide-react'
 import { MetricCard } from '@/components/ui/metric-card'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
@@ -14,13 +12,11 @@ import { RunStatusBoard } from '@/components/dashboard/run-status-board'
 import { ModelUsageChart } from '@/components/dashboard/model-usage-chart'
 import { TeamView } from '@/components/dashboard/team-view'
 import { GettingStarted } from '@/components/dashboard/getting-started'
-import { CreateTaskModal } from '@/components/dashboard/create-task-modal'
 import { useDashboardStats, useRuns } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { formatCost } from '@/lib/utils'
 
 export default function DashboardPage() {
-  const [showCreateTask, setShowCreateTask] = useState(false)
   const { activeProjectId } = useActiveProject()
 
   const { activeRuns, needsApproval, failedRuns, todayUsage: today } = useDashboardStats(activeProjectId)
@@ -47,13 +43,6 @@ export default function DashboardPage() {
               })}
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateTask(true)}
-            className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-accent"
-          >
-            <Plus className="w-4 h-4" />
-            Create Task
-          </button>
         </header>
 
         {/* Approval Banner */}
@@ -133,11 +122,6 @@ export default function DashboardPage() {
         <ActivityFeed />
       </div>
 
-      {/* Create task modal */}
-      <CreateTaskModal
-        isOpen={showCreateTask}
-        onClose={() => setShowCreateTask(false)}
-      />
     </div>
   )
 }

@@ -4,20 +4,21 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTasks, useAgents } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
-import { createTaskDraft } from '@/lib/api'
 import { Task, Agent } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { cn, timeAgo } from '@/lib/utils'
 import {
   LayoutGrid,
-  Plus,
   CheckCircle2,
   Circle,
   Loader2,
   Eye,
   RefreshCw,
-  X,
+  ArrowRight,
+  ArrowLeft,
+  Bot,
+  User as UserIcon,
 } from 'lucide-react'
 
 const BOARD_POLL_INTERVAL = 10_000
@@ -61,7 +62,34 @@ const columns: KanbanColumn[] = [
   },
 ]
 
-function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
+// Map column transitions for promote/demote
+const PROMOTE_STATUS: Record<string, string> = {
+  queued: 'running',        // Backlog → In Progress
+  running: 'needs_approval', // In Progress → Review
+  waiting: 'needs_approval',
+  needs_approval: 'completed', // Review → Done
+  stalled: 'completed',
+}
+const DEMOTE_STATUS: Record<string, string> = {
+  running: 'queued',        // In Progress → Backlog
+  waiting: 'queued',
+  needs_approval: 'running', // Review → In Progress
+  stalled: 'running',
+  completed: 'needs_approval', // Done → Review
+  failed: 'queued',         // Failed → Backlog (retry)
+}
+
+function TaskCard({
+  task,
+  agents,
+  onPromote,
+  onDemote,
+}: {
+  task: Task
+  agents: Agent[]
+  onPromote?: () => void
+  onDemote?: () => void
+}) {
   const agent = agents.find((a) => a.id === task.assigned_agent_id)
   const priorityColors: Record<string, string> = {
     critical: 'bg-red-500',
@@ -72,6 +100,7 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
 
   const isRecent = Date.now() - new Date(task.updated_at).getTime() < 2 * 60 * 1000
   const isFailed = task.status === 'failed'
+  const isAgentCreated = task.created_by === 'agent'
 
   return (
     <motion.div
@@ -91,10 +120,23 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
       </div>
 
       {task.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+        <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
           {task.description}
         </p>
       )}
+
+      {/* Task origin badge */}
+      <div className="flex items-center gap-1 mb-3">
+        {isAgentCreated ? (
+          <span className="inline-flex items-center gap-1 text-[10px] text-accent/70 bg-accent/10 px-1.5 py-0.5 rounded">
+            <Bot className="w-2.5 h-2.5" /> Agent identified
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 bg-white/5 px-1.5 py-0.5 rounded">
+            <UserIcon className="w-2.5 h-2.5" /> Manual
+          </span>
+        )}
+      </div>
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -115,6 +157,28 @@ function TaskCard({ task, agents }: { task: Task; agents: Agent[] }) {
           </span>
         </div>
       </div>
+
+      {/* Promote / Demote buttons — visible on hover */}
+      <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {onDemote && DEMOTE_STATUS[task.status] && (
+          <button
+            onClick={onDemote}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors"
+            title="Move back"
+          >
+            <ArrowLeft className="w-2.5 h-2.5" /> Back
+          </button>
+        )}
+        {onPromote && PROMOTE_STATUS[task.status] && (
+          <button
+            onClick={onPromote}
+            className="flex items-center gap-1 text-[10px] text-accent hover:text-white px-2 py-1 rounded bg-accent/10 hover:bg-accent/30 transition-colors ml-auto"
+            title="Promote forward"
+          >
+            Promote <ArrowRight className="w-2.5 h-2.5" />
+          </button>
+        )}
+      </div>
     </motion.div>
   )
 }
@@ -129,72 +193,10 @@ function lastRefreshLabel(lastFetchedAt: number | null): string {
   return s > 0 ? `${m}m ${s}s ago` : `${m}m ago`
 }
 
-/** Inline quick-add form for creating tasks directly on the board */
-function QuickAddTask({
-  projectId,
-  onCreated,
-  onCancel,
-}: {
-  projectId: string | null
-  onCreated: () => void
-  onCancel: () => void
-}) {
-  const [title, setTitle] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const handleSubmit = async () => {
-    if (!title.trim() || !projectId) return
-    setSaving(true)
-    try {
-      await createTaskDraft({
-        goal: title.trim(),
-        project_id: projectId,
-        priority: 'medium',
-      })
-      setTitle('')
-      onCreated()
-    } catch (err) {
-      console.error('Failed to create task:', err)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="bg-card border border-accent/30 rounded-lg p-3 space-y-2">
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') handleSubmit()
-          if (e.key === 'Escape') onCancel()
-        }}
-        placeholder="Task title..."
-        className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none"
-      />
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">Enter to save, Esc to cancel</span>
-        <div className="flex gap-1">
-          <button onClick={onCancel} className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded">Cancel</button>
-          <button
-            onClick={handleSubmit}
-            disabled={!title.trim() || saving || !projectId}
-            className="text-[10px] bg-accent text-white px-2 py-1 rounded disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function BoardsPage() {
   const { activeProjectId } = useActiveProject()
   const { data: tasks, lastFetchedAt } = useTasks(activeProjectId, BOARD_POLL_INTERVAL)
   const { data: agents } = useAgents()
-  const [addingToColumn, setAddingToColumn] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   // Tick every 5s so the "refreshed X ago" label stays fresh
@@ -203,6 +205,20 @@ export default function BoardsPage() {
     const t = setInterval(() => setTick((n) => n + 1), 5000)
     return () => clearInterval(t)
   }, [])
+
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) throw new Error('Failed to update task')
+      setRefreshKey(k => k + 1)
+    } catch (err) {
+      console.error('Failed to update task status:', err)
+    }
+  }
 
   const totalTasks = tasks.length
   const activeTasks = tasks.filter(t => t.status === 'running' || t.status === 'waiting').length
@@ -220,7 +236,7 @@ export default function BoardsPage() {
             {totalTasks > 0 ? (
               <span>{totalTasks} task{totalTasks !== 1 ? 's' : ''}{activeTasks > 0 ? ` · ${activeTasks} active` : ''}</span>
             ) : (
-              <span>Task board for your agent fleet</span>
+              <span>Tasks appear here as agents identify work from conversations</span>
             )}
             {lastFetchedAt && (
               <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50">
@@ -230,13 +246,6 @@ export default function BoardsPage() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => setAddingToColumn('backlog')}
-          className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-        >
-          <Plus className="w-4 h-4" />
-          New Task
-        </button>
       </header>
 
       {/* Kanban Board */}
@@ -269,36 +278,20 @@ export default function BoardsPage() {
 
                 {/* Column Body */}
                 <div className="flex-1 bg-white/[0.01] border border-dashed border-border/50 rounded-xl p-3 space-y-3 overflow-y-auto min-h-0">
-                  {/* Quick-add form if this column is targeted */}
-                  {addingToColumn === column.id && (
-                    <QuickAddTask
-                      projectId={activeProjectId}
-                      onCreated={() => {
-                        setAddingToColumn(null)
-                        setRefreshKey(k => k + 1)
-                      }}
-                      onCancel={() => setAddingToColumn(null)}
-                    />
-                  )}
-
                   {columnTasks.length > 0 ? (
                     columnTasks.map((task) => (
-                      <TaskCard key={task.id} task={task} agents={agents} />
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        agents={agents}
+                        onPromote={PROMOTE_STATUS[task.status] ? () => updateTaskStatus(task.id, PROMOTE_STATUS[task.status]) : undefined}
+                        onDemote={DEMOTE_STATUS[task.status] ? () => updateTaskStatus(task.id, DEMOTE_STATUS[task.status]) : undefined}
+                      />
                     ))
-                  ) : addingToColumn !== column.id ? (
+                  ) : (
                     <div className="flex flex-col items-center justify-center h-24 gap-1">
                       <span className="text-xs text-muted-foreground/50">No tasks</span>
                     </div>
-                  ) : null}
-
-                  {/* Add task button at bottom (only for backlog column) */}
-                  {column.id === 'backlog' && addingToColumn !== column.id && (
-                    <button
-                      onClick={() => setAddingToColumn(column.id)}
-                      className="w-full py-2 rounded-lg border border-dashed border-border/50 text-xs text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/5 transition-all flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> Add task
-                    </button>
                   )}
                 </div>
               </div>
