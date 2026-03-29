@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { useTasks, useAgents, useProjects } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { updateTaskStatus as apiUpdateTaskStatus } from '@/lib/api'
-import { Task, Agent } from '@/lib/types'
+import { Task, Agent, Project } from '@/lib/types'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { cn, timeAgo } from '@/lib/utils'
@@ -25,7 +25,7 @@ import {
   FolderKanban,
   ChevronDown,
 } from 'lucide-react'
-import { Project, Task } from '@/lib/types'
+
 
 const BOARD_POLL_INTERVAL = 10_000
 
@@ -207,9 +207,25 @@ function lastRefreshLabel(lastFetchedAt: number | null): string {
 }
 
 export default function BoardsPage() {
-  const { activeProjectId } = useActiveProject()
+  const { activeProjectId, setActiveProjectId } = useActiveProject()
+  const { data: projects } = useProjects()
+  const { data: allTasks } = useTasks(undefined)
+
+  // If no project is selected, show project selection screen
+  if (!activeProjectId) {
+    return <BoardProjectSelectionScreen projects={projects} allTasks={allTasks} onSelect={setActiveProjectId} />
+  }
+
+  return <BoardsPageInner />
+}
+
+function BoardsPageInner() {
+  const { activeProjectId, setActiveProjectId } = useActiveProject()
+  const { data: projects } = useProjects()
+  const activeProject = projects.find((p) => p.id === activeProjectId)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [showProjectMenu, setShowProjectMenu] = useState(false)
   const { data: tasks, lastFetchedAt } = useTasks(activeProjectId, BOARD_POLL_INTERVAL, refreshKey)
   const { data: agents } = useAgents()
 
@@ -239,21 +255,59 @@ export default function BoardsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight flex items-center gap-2">
             <LayoutGrid className="w-6 h-6 text-accent" />
-            Boards
+            {activeProject ? `${activeProject.name} Board` : 'Boards'}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-            {totalTasks > 0 ? (
-              <span>{totalTasks} task{totalTasks !== 1 ? 's' : ''}{activeTasks > 0 ? ` · ${activeTasks} active` : ''}</span>
-            ) : (
-              <span>Tasks appear here as agents identify work from conversations</span>
-            )}
-            {lastFetchedAt && (
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50">
-                <RefreshCw className="w-2.5 h-2.5" />
-                {lastRefreshLabel(lastFetchedAt)}
-              </span>
-            )}
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            {/* Project toggle/selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowProjectMenu(!showProjectMenu)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground bg-white/5 border border-border/50 px-2.5 py-1 rounded-md hover:border-accent/30 hover:text-foreground transition-all"
+              >
+                {activeProject && (
+                  <div
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: activeProject.color }}
+                  />
+                )}
+                <span>{activeProject?.name || 'Select project'}</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {showProjectMenu && (
+                <div className="absolute z-50 top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
+                  {projects.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setActiveProjectId(p.id); setShowProjectMenu(false) }}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-white/5 transition-colors',
+                        activeProjectId === p.id ? 'text-accent bg-accent/5' : 'text-foreground'
+                      )}
+                    >
+                      <div
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: p.color }}
+                      />
+                      <span className="truncate">{p.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              {totalTasks > 0 ? (
+                <span>{totalTasks} task{totalTasks !== 1 ? 's' : ''}{activeTasks > 0 ? ` · ${activeTasks} active` : ''}</span>
+              ) : (
+                <span>Tasks appear here as agents identify work from conversations</span>
+              )}
+              {lastFetchedAt && (
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50">
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  {lastRefreshLabel(lastFetchedAt)}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
       </header>
 
@@ -326,6 +380,77 @@ export default function BoardsPage() {
             )
           })}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Project Selection Screen for Boards ---
+
+function BoardProjectSelectionScreen({
+  projects,
+  allTasks,
+  onSelect,
+}: {
+  projects: Project[]
+  allTasks: Task[]
+  onSelect: (id: string) => void
+}) {
+  const taskCountByProject = (projectId: string) =>
+    allTasks.filter((t) => t.project_id === projectId).length
+
+  return (
+    <div className="flex-1 h-screen bg-background flex items-center justify-center">
+      <div className="w-full max-w-2xl px-8 space-y-8">
+        <div className="text-center space-y-3">
+          <LayoutGrid className="w-12 h-12 text-accent mx-auto opacity-50" />
+          <h2 className="text-xl font-semibold text-foreground">
+            Select a project to view its board
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Choose a project below to view its task board. Each project has its own Kanban board.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {projects.map((project) => {
+            const taskCount = taskCountByProject(project.id)
+            return (
+              <button
+                key={project.id}
+                onClick={() => onSelect(project.id)}
+                className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-accent/30 hover:bg-accent/5 transition-all text-left group"
+              >
+                <div
+                  className="w-3 h-3 rounded-full shrink-0 mt-1"
+                  style={{ backgroundColor: project.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground group-hover:text-accent transition-colors">
+                    {project.name}
+                  </div>
+                  {project.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      {project.description}
+                    </p>
+                  )}
+                  <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-mono">
+                    {taskCount} task{taskCount !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {projects.length === 0 && (
+          <div className="text-center py-8 space-y-2">
+            <FolderKanban className="w-8 h-8 text-muted-foreground/30 mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              No projects yet. Create one from the Projects page to get started.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
