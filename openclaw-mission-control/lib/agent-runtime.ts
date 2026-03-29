@@ -19,10 +19,9 @@ let queryFn: any = null
 async function getQuery() {
   if (!queryFn) {
     try {
-      // Use createRequire to avoid Turbopack/webpack static analysis of the import
-      const { createRequire } = await import('node:module')
-      const require = createRequire(import.meta.url)
-      const sdk = require('@anthropic-ai/claude-code')
+      // Use eval'd require to completely hide from Turbopack static analysis
+      // eslint-disable-next-line no-eval
+      const sdk = eval("require('@anthropic-ai/claude-code')")
       queryFn = sdk.query || sdk.default?.query
     } catch {
       throw new Error(
