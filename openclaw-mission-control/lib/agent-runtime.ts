@@ -33,12 +33,12 @@ async function getQuery() {
   return queryFn
 }
 
-/** Active agent sessions keyed by run ID */
+/** Active agent sessions keyed by conversation ID */
 const activeSessions = new Map<string, {
   abortController: AbortController
-  conversationId: string
   agentId: string
   projectId: string
+  runId?: string
 }>()
 
 /** Role-based system prompts for each lane */
@@ -51,6 +51,14 @@ const ROLE_PROMPTS: Record<RoleLane, string> = {
   consumer_insights: `You are a Consumer Insights Lead. Your job is to analyze reviews, sentiment, user feedback, and behavioral patterns. Surface the voice of the customer.`,
   advisor: `You are a Strategic Advisor. Your job is to provide founder-level guidance, synthesize across all workstreams, identify blind spots, and recommend priorities. Be candid and actionable.`,
 }
+
+const TASK_CREATION_PROMPT = `
+
+When you identify specific actionable work items during our conversation, create tasks by outputting them in this exact format on their own line:
+
+[TASK: title="Brief task title" priority="high|medium|low" description="What needs to be done"]
+
+Only create tasks for concrete, actionable items — not for every topic discussed. Tasks should represent work that needs to be tracked and executed. The user will decide when to prioritize and start working on them.`
 
 /** Map model tier to SDK model param */
 function resolveModel(tier?: string): 'sonnet' | 'opus' | 'haiku' {
@@ -89,114 +97,94 @@ function makeMessage(fields: {
 }
 
 /**
- * Spawn a new agent run. Creates the run + conversation in the store,
- * then starts the SDK query in the background.
+ * Parse [TASK: ...] markers from agent responses and create tasks in the store.
  */
-export async function spawnAgentRun(opts: {
-  taskId: string
+function extractAndCreateTasks(content: string, projectId: string, agentId: string): void {
+  const taskPattern = /\[TASK:\s*title="([^"]+)"\s*priority="([^"]+)"\s*description="([^"]+)"\]/g
+  let match
+  while ((match = taskPattern.exec(content)) !== null) {
+    const [, title, priority, description] = match
+    const taskId = `task-${crypto.randomUUID().slice(0, 8)}`
+    const now = new Date().toISOString()
+    store.upsertTask({
+      id: taskId,
+      title,
+      description,
+      priority: (priority as 'high' | 'medium' | 'low') || 'medium',
+      status: 'queued', // Always starts in Backlog
+      assigned_agent_id: agentId,
+      created_by: 'agent',
+      project_id: projectId,
+      created_at: now,
+      updated_at: now,
+    })
+    console.log(`[agent-runtime] Agent created task: "${title}" (${taskId})`)
+  }
+}
+
+/**
+ * Start a new conversation with Claude. This is the primary chat interface.
+ * Does NOT create any tasks — Claude will identify tasks during conversation.
+ */
+export function startConversation(opts: {
+  conversationId: string
   agentId: string
   projectId: string
   prompt: string
   role?: RoleLane
   model?: string
   cwd?: string
-}): Promise<{ runId: string; conversationId: string }> {
-  const runId = `run-${crypto.randomUUID().slice(0, 8)}`
-  const conversationId = `conv-${crypto.randomUUID().slice(0, 8)}`
-  const now = new Date().toISOString()
-
-  const agent = store.getAgent(opts.agentId)
-  const task = store.getTask(opts.taskId)
-
-  // Create the run record
-  const run: Run = {
-    id: runId,
-    task_id: opts.taskId,
-    agent_id: opts.agentId,
-    status: 'running',
-    actual_model_used: opts.model || agent?.default_model || 'anthropic/claude-sonnet-4-6',
-    started_at: now,
-    ended_at: null,
-    input_tokens: 0,
-    output_tokens: 0,
-    estimated_cost: 0,
-    retry_count: 0,
-    parent_run_id: null,
-    project_id: opts.projectId,
-    agent_name: agent?.name || 'Agent',
-    task_title: task?.title || opts.prompt.slice(0, 100),
-  }
-  store.upsertRun(run)
-
-  // Create conversation record
-  const conversation: Conversation = {
-    id: conversationId,
-    agent_id: opts.agentId,
-    title: task?.title || opts.prompt.slice(0, 80),
-    task_id: null,
-    status: 'active',
-    message_count: 1,
-    total_cost: 0,
-    last_message_at: now,
-    project_id: opts.projectId,
-  }
-  store.upsertConversation(conversation)
-
-  // Add the user's initial message
-  store.addMessage(makeMessage({
-    conversation_id: conversationId,
-    role: 'user',
-    content: opts.prompt,
-  }))
-
-  // Update task status
-  if (task) {
-    store.updateTaskStatus(opts.taskId, 'running')
-  }
-
-  // Start the agent in the background
-  _runAgent(runId, conversationId, opts).catch((err) => {
-    console.error(`[agent-runtime] Run ${runId} crashed:`, err)
-    const failedRun = store.getRun(runId)
-    if (failedRun) {
-      failedRun.status = 'failed'
-      failedRun.ended_at = new Date().toISOString()
-      store.upsertRun(failedRun)
+}): void {
+  // Run the agent in the background
+  _runConversation(opts).catch((err) => {
+    console.error(`[agent-runtime] Conversation ${opts.conversationId} error:`, err)
+    // Add error as assistant message so the user sees it in chat
+    store.addMessage(makeMessage({
+      conversation_id: opts.conversationId,
+      role: 'assistant',
+      content: `Error: ${(err as Error).message}`,
+      agent_id: opts.agentId,
+    }))
+    // Update conversation status
+    const conv = store.getConversation(opts.conversationId)
+    if (conv) {
+      conv.status = 'completed'
+      conv.message_count = store.getMessages(opts.conversationId).length
+      conv.last_message_at = new Date().toISOString()
+      store.upsertConversation(conv)
     }
   })
-
-  return { runId, conversationId }
 }
 
 /**
- * Internal: execute the agent via the SDK.
+ * Internal: run a conversation turn via the SDK.
  */
-async function _runAgent(
-  runId: string,
-  conversationId: string,
-  opts: {
-    agentId: string
-    projectId: string
-    prompt: string
-    role?: RoleLane
-    model?: string
-    cwd?: string
-  }
-): Promise<void> {
+async function _runConversation(opts: {
+  conversationId: string
+  agentId: string
+  projectId: string
+  prompt: string
+  role?: RoleLane
+  model?: string
+  cwd?: string
+}): Promise<void> {
   const query = await getQuery()
   const abortController = new AbortController()
 
-  activeSessions.set(runId, {
+  activeSessions.set(opts.conversationId, {
     abortController,
-    conversationId,
     agentId: opts.agentId,
     projectId: opts.projectId,
   })
 
   const agent = store.getAgent(opts.agentId)
-  const systemPrompt = opts.role
-    ? `${ROLE_PROMPTS[opts.role]}\n\nProject context: You are working on behalf of the founder. Be concise and actionable.`
-    : agent?.system_prompt || 'You are a helpful AI assistant working on a startup project.'
+  const rolePrompt = opts.role ? ROLE_PROMPTS[opts.role] : ''
+  const basePrompt = rolePrompt || agent?.system_prompt || 'You are a helpful AI assistant working on startup projects.'
+  const systemPrompt = `${basePrompt}
+
+You are part of Mission Control — a founder's operating system for managing multiple startup projects. The founder is chatting with you directly, like they would in Claude Code.
+
+Be conversational, helpful, and actionable. This is a real working conversation, not a task queue.${TASK_CREATION_PROMPT}`
 
   let totalInputTokens = 0
   let totalOutputTokens = 0
@@ -234,7 +222,7 @@ async function _runAgent(
         )
         for (const tool of toolBlocks) {
           store.addMessage(makeMessage({
-            conversation_id: conversationId,
+            conversation_id: opts.conversationId,
             role: 'tool',
             content: `Tool: ${tool.name}`,
             agent_id: opts.agentId,
@@ -254,8 +242,11 @@ async function _runAgent(
         totalOutputTokens += message.output_tokens || 0
 
         if (assistantContent.trim()) {
+          // Extract any tasks the agent identified
+          extractAndCreateTasks(assistantContent, opts.projectId, opts.agentId)
+
           store.addMessage(makeMessage({
-            conversation_id: conversationId,
+            conversation_id: opts.conversationId,
             role: 'assistant',
             content: assistantContent.trim(),
             agent_id: opts.agentId,
@@ -268,62 +259,36 @@ async function _runAgent(
       }
     }
 
-    // Mark run as completed
-    const run = store.getRun(runId)
-    if (run) {
-      run.status = 'completed'
-      run.ended_at = new Date().toISOString()
-      run.input_tokens = totalInputTokens
-      run.output_tokens = totalOutputTokens
-      run.estimated_cost = estimateCost(totalInputTokens, totalOutputTokens)
-      store.upsertRun(run)
-    }
-
     // Update conversation
-    const conv = store.getConversation(conversationId)
+    const conv = store.getConversation(opts.conversationId)
     if (conv) {
-      conv.status = 'completed'
-      conv.total_cost = estimateCost(totalInputTokens, totalOutputTokens)
-      conv.message_count = store.getMessages(conversationId).length
+      conv.status = 'active' // Keep active for follow-ups (not 'completed')
+      conv.total_cost += estimateCost(totalInputTokens, totalOutputTokens)
+      conv.message_count = store.getMessages(opts.conversationId).length
       conv.last_message_at = new Date().toISOString()
       store.upsertConversation(conv)
     }
-
-    // Update task status
-    const task = store.getTask(store.getRun(runId)?.task_id || '')
-    if (task) {
-      store.updateTaskStatus(task.id, 'completed')
-    }
   } catch (err) {
-    const run = store.getRun(runId)
-    if (run) {
-      run.status = 'failed'
-      run.ended_at = new Date().toISOString()
-      run.input_tokens = totalInputTokens
-      run.output_tokens = totalOutputTokens
-      run.estimated_cost = estimateCost(totalInputTokens, totalOutputTokens)
-      store.upsertRun(run)
-    }
-
     // Add error message to conversation
     store.addMessage(makeMessage({
-      conversation_id: conversationId,
+      conversation_id: opts.conversationId,
       role: 'assistant',
       content: `Error: ${(err as Error).message}`,
       agent_id: opts.agentId,
     }))
-
     throw err
   } finally {
-    activeSessions.delete(runId)
+    activeSessions.delete(opts.conversationId)
   }
 }
 
 /**
- * Send a follow-up message to an active agent session.
+ * Send a follow-up message in an existing conversation.
+ * Stores the message and starts a new agent turn.
+ * Does NOT create tasks — the agent decides when to create tasks.
  */
 export async function sendMessage(conversationId: string, content: string): Promise<void> {
-  // Add user message to store regardless
+  // Add user message to store
   store.addMessage(makeMessage({
     conversation_id: conversationId,
     role: 'user',
@@ -338,61 +303,140 @@ export async function sendMessage(conversationId: string, content: string): Prom
     store.upsertConversation(conv)
   }
 
-  // Find the active session for this conversation
-  const session = [...activeSessions.values()].find(s => s.conversationId === conversationId)
+  // Start a new agent turn for this conversation
+  const conversation = store.getConversation(conversationId)
+  if (!conversation) throw new Error(`Conversation ${conversationId} not found`)
 
-  if (!session) {
-    // No active session — start a new run for this conversation
-    const conversation = store.getConversation(conversationId)
-    if (!conversation) throw new Error(`Conversation ${conversationId} not found`)
+  const agent = store.getAgent(conversation.agent_id)
 
-    const agent = store.getAgent(conversation.agent_id)
-    const projectId = conversation.project_id || ''
-
-    // Create a task for this message
-    const taskId = `task-${crypto.randomUUID().slice(0, 8)}`
-    store.upsertTask({
-      id: taskId,
-      title: content.slice(0, 100),
-      description: content,
-      priority: 'medium',
-      status: 'queued',
-      assigned_agent_id: conversation.agent_id,
-      created_by: 'user',
-      project_id: projectId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-
-    await spawnAgentRun({
-      taskId,
-      agentId: conversation.agent_id,
-      projectId,
-      prompt: content,
-      model: agent?.default_model,
-    })
-  }
+  startConversation({
+    conversationId,
+    agentId: conversation.agent_id,
+    projectId: conversation.project_id || '',
+    prompt: content,
+    model: agent?.default_model,
+  })
 }
 
 /**
- * Stop an active agent run.
+ * Spawn a task-oriented agent run (for explicit task execution from boards).
+ * This is separate from conversational chat.
+ */
+export async function spawnAgentRun(opts: {
+  taskId: string
+  agentId: string
+  projectId: string
+  prompt: string
+  role?: RoleLane
+  model?: string
+  cwd?: string
+}): Promise<{ runId: string; conversationId: string }> {
+  const runId = `run-${crypto.randomUUID().slice(0, 8)}`
+  const conversationId = `conv-${crypto.randomUUID().slice(0, 8)}`
+  const now = new Date().toISOString()
+
+  const agent = store.getAgent(opts.agentId)
+  const task = store.getTask(opts.taskId)
+
+  // Create the run record
+  const run: Run = {
+    id: runId,
+    task_id: opts.taskId,
+    agent_id: opts.agentId,
+    status: 'running',
+    actual_model_used: opts.model || agent?.default_model || 'anthropic/claude-sonnet-4-6',
+    started_at: now,
+    ended_at: null,
+    input_tokens: 0,
+    output_tokens: 0,
+    estimated_cost: 0,
+    retry_count: 0,
+    parent_run_id: null,
+    project_id: opts.projectId,
+    agent_name: agent?.name || 'Agent',
+    task_title: task?.title || opts.prompt.slice(0, 100),
+  }
+  store.upsertRun(run)
+
+  // Create conversation for the run
+  store.upsertConversation({
+    id: conversationId,
+    agent_id: opts.agentId,
+    title: task?.title || opts.prompt.slice(0, 80),
+    task_id: opts.taskId,
+    status: 'active',
+    message_count: 1,
+    total_cost: 0,
+    last_message_at: now,
+    project_id: opts.projectId,
+  })
+
+  // Add user's prompt
+  store.addMessage(makeMessage({
+    conversation_id: conversationId,
+    role: 'user',
+    content: opts.prompt,
+  }))
+
+  // Update task status
+  if (task) {
+    store.updateTaskStatus(opts.taskId, 'running')
+  }
+
+  // Start agent in background
+  _runConversation({
+    conversationId,
+    agentId: opts.agentId,
+    projectId: opts.projectId,
+    prompt: opts.prompt,
+    role: opts.role,
+    model: opts.model,
+    cwd: opts.cwd,
+  }).then(() => {
+    // Mark run completed
+    const r = store.getRun(runId)
+    if (r) {
+      r.status = 'completed'
+      r.ended_at = new Date().toISOString()
+      store.upsertRun(r)
+    }
+    if (task) store.updateTaskStatus(opts.taskId, 'completed')
+  }).catch((err) => {
+    console.error(`[agent-runtime] Run ${runId} crashed:`, err)
+    const r = store.getRun(runId)
+    if (r) {
+      r.status = 'failed'
+      r.ended_at = new Date().toISOString()
+      store.upsertRun(r)
+    }
+  })
+
+  return { runId, conversationId }
+}
+
+/**
+ * Stop an active conversation or run.
  */
 export function stopRun(runId: string): boolean {
+  // Try by run ID first (legacy), then by conversation ID
   const session = activeSessions.get(runId)
-  if (!session) return false
-  session.abortController.abort()
-  return true
+  if (session) {
+    session.abortController.abort()
+    activeSessions.delete(runId)
+    return true
+  }
+  return false
 }
 
 /**
- * Check if an agent session is currently active.
+ * Check if a conversation has an active agent session.
  */
 export function isSessionActive(conversationId: string): boolean {
-  return [...activeSessions.values()].some(s => s.conversationId === conversationId)
+  return activeSessions.has(conversationId)
 }
 
 /**
- * Get all active run IDs.
+ * Get all active session IDs (conversation IDs).
  */
 export function getActiveRunIds(): string[] {
   return [...activeSessions.keys()]
@@ -400,6 +444,5 @@ export function getActiveRunIds(): string[] {
 
 /** Rough cost estimation based on Claude Sonnet pricing */
 function estimateCost(inputTokens: number, outputTokens: number): number {
-  // Sonnet: $3/M input, $15/M output (approximate)
   return (inputTokens * 3 + outputTokens * 15) / 1_000_000
 }
