@@ -452,6 +452,26 @@ class DataStore {
     return true
   }
 
+  // --- Project Objective ---
+  updateProjectObjective(projectId: string, objective: string): boolean {
+    const project = this._projects.find((p) => p.id === projectId)
+    if (!project) return false
+    project.objective = objective || null
+    project.updated_at = new Date().toISOString()
+    this._persistProjects()
+    return true
+  }
+
+  // --- Project Primary Agent ---
+  updateProjectPrimaryAgent(projectId: string, agentId: string | null): boolean {
+    const project = this._projects.find((p) => p.id === projectId)
+    if (!project) return false
+    project.primary_agent_id = agentId
+    project.updated_at = new Date().toISOString()
+    this._persistProjects()
+    return true
+  }
+
   // --- Internal ---
   private _persistProjects(): void {
     saveProjectData(stateDir, {

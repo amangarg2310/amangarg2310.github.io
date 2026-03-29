@@ -46,6 +46,10 @@ export interface Agent {
   avatar_color: string;
   created_at: string;
   updated_at: string;
+  // Project assignment
+  project_id?: string | null;
+  project_name?: string | null;
+  designation?: 'primary' | 'sub-agent' | null;
   // Computed/aggregated
   total_runs?: number;
   avg_cost_per_run?: number;
@@ -210,6 +214,8 @@ export interface Project {
   description: string;
   color: string;
   focus?: ProjectFocus | null;
+  objective?: string | null;
+  primary_agent_id?: string | null;
   repo_url?: string | null;
   repo_branch?: string | null;
   repo_commit?: string | null;

@@ -20,15 +20,15 @@ import {
 import { cn } from '@/lib/utils'
 import { useSidebarStats, useProjects } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 const mainNav = [
   { name: 'Mission Control', href: '/', icon: LayoutDashboard },
+  { name: 'Chat Workspace', href: '/chats', icon: MessageSquare },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'Boards', href: '/boards', icon: LayoutGrid },
   { name: 'Approvals', href: '/approvals', icon: ShieldCheck },
   { name: 'Run Inspector', href: '/runs', icon: Activity },
-  { name: 'Chat Workspace', href: '/chats', icon: MessageSquare },
 ]
 
 const manageNav = [
@@ -44,6 +44,19 @@ export function Sidebar() {
   const { data: projects } = useProjects()
   const { activeProjectId, setActiveProjectId } = useActiveProject()
   const [showProjectMenu, setShowProjectMenu] = useState(false)
+  const projectMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close project menu on click outside
+  useEffect(() => {
+    if (!showProjectMenu) return
+    const handler = (e: MouseEvent) => {
+      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
+        setShowProjectMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showProjectMenu])
 
   const activeProject = projects.find((p) => p.id === activeProjectId)
 
@@ -115,7 +128,7 @@ export function Sidebar() {
 
       {/* Project Switcher */}
       <div className="px-3 pt-3 pb-1">
-        <div className="relative">
+        <div className="relative" ref={projectMenuRef}>
           <button
             onClick={() => setShowProjectMenu(!showProjectMenu)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-white/[0.02] text-sm hover:border-accent/30 hover:bg-white/[0.04] transition-all"
@@ -209,7 +222,7 @@ export function Sidebar() {
       <div className="p-4 border-t border-border/50">
         <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-blue-600 flex items-center justify-center text-white text-xs font-bold">
-            OC
+            MC
           </div>
           <div className="flex flex-col items-start">
             <span className="text-sm font-medium text-foreground">

@@ -224,6 +224,28 @@ export async function updateProjectFocus(projectId: string, focus: string): Prom
   return res.json() as Promise<ProjectContext>
 }
 
+export async function updateProjectObjective(projectId: string, objective: string): Promise<ProjectContext> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ objective }),
+  })
+  if (!res.ok) throw new Error(`Failed to update objective: ${res.status}`)
+  return res.json() as Promise<ProjectContext>
+}
+
+export async function updateProjectPrimaryAgent(projectId: string, primaryAgentId: string | null): Promise<ProjectContext> {
+  const base = getBaseUrl()
+  const res = await fetch(`${base}/projects/${projectId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ primary_agent_id: primaryAgentId }),
+  })
+  if (!res.ok) throw new Error(`Failed to update primary agent: ${res.status}`)
+  return res.json() as Promise<ProjectContext>
+}
+
 // --- Command Center ---
 export function fetchCommandCenter(projectId: string): Promise<CommandCenterData> {
   return fetchJson<CommandCenterData>(`/projects/${projectId}/command-center`)

@@ -15,34 +15,34 @@ export function GettingStarted() {
 
   const steps = [
     {
-      label: 'Claude Code SDK Connected',
+      label: 'SDK Connected',
       done: true,
-      hint: 'SDK is active — no API key needed',
+      hint: 'Claude Code SDK is active — uses your existing login, no API key needed',
       link: null,
-    },
-    {
-      label: 'Agents Registered',
-      done: agents.length > 0,
-      hint: 'Go to a project and assign agents to role lanes',
-      link: projects.length > 0 ? `/projects/${projects[0].id}` : '/projects',
     },
     {
       label: 'Project Created',
       done: projects.length > 0,
-      hint: 'Create your first project to organize work',
+      hint: 'Create a project to organize agents and work',
       link: '/projects',
     },
     {
-      label: 'Task Running',
-      done: tasks.some((t) => t.status === 'running'),
-      hint: 'Open the chat and send a task to an agent',
+      label: 'Agent Assigned',
+      done: agents.length > 0,
+      hint: 'Assign agents to role lanes in your project command center',
+      link: projects.length > 0 ? `/projects/${projects[0].id}` : '/projects',
+    },
+    {
+      label: 'First Conversation',
+      done: runs.length > 0,
+      hint: 'Start a chat — agents discover tasks from conversation',
       link: '/chats',
     },
     {
-      label: 'Run Completed',
+      label: 'Task Completed',
       done: runs.some((r) => r.status === 'completed'),
-      hint: 'View completed runs and their output',
-      link: '/runs',
+      hint: 'Agents create tasks in Backlog; promote and track them here',
+      link: '/boards',
     },
   ]
   const completedCount = steps.filter((s) => s.done).length

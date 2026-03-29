@@ -19,6 +19,7 @@ import {
   Plus,
   ImagePlus,
   X,
+  CheckSquare,
 } from 'lucide-react'
 
 /**
@@ -125,10 +126,10 @@ export default function ChatsPage() {
             <div className="text-center py-8 space-y-2">
               <MessageSquare className="w-6 h-6 text-muted-foreground/30 mx-auto" />
               <p className="text-xs text-muted-foreground/50">
-                No conversations yet
+                Start your first conversation
               </p>
-              <p className="text-[10px] text-muted-foreground/30">
-                Conversations appear as agents start sessions.
+              <p className="text-[10px] text-muted-foreground/30 leading-relaxed px-2">
+                This works just like Claude Code — ask questions, discuss ideas, share screenshots, and Claude will identify tasks as they come up.
               </p>
             </div>
           )}
@@ -154,7 +155,7 @@ export default function ChatsPage() {
                   {chatAgent && (
                     <AgentAvatar name={chatAgent.name} color={chatAgent.avatar_color} size="sm" />
                   )}
-                  <span className="text-sm font-medium truncate flex-1">
+                  <span className="text-sm font-medium flex-1 line-clamp-2 leading-snug">
                     {chat.title}
                   </span>
                   {isActive && (
@@ -184,6 +185,15 @@ export default function ChatsPage() {
             <h2 className="text-sm font-medium text-foreground">
               {selectedConv.title}
             </h2>
+            {/* Model badge — derived from last assistant message */}
+            {(() => {
+              const lastModel = [...convMessages].reverse().find(m => m.role === 'assistant' && m.model)?.model
+              return lastModel ? (
+                <span className="ml-3 text-[11px] font-mono text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-md">
+                  {lastModel}
+                </span>
+              ) : null
+            })()}
             <span className={cn(
               'ml-3 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium',
               conversationStatus === 'responding'
@@ -486,6 +496,35 @@ export default function ChatsPage() {
                 )}
               </div>
             </div>
+
+            {/* Tasks identified during this conversation */}
+            {(() => {
+              const taskPattern = /\[TASK:\s*title="([^"]+)"/g
+              const tasks: string[] = []
+              convMessages.forEach(m => {
+                if (m.role !== 'assistant') return
+                let match
+                while ((match = taskPattern.exec(m.content)) !== null) {
+                  tasks.push(match[1])
+                }
+              })
+              if (tasks.length === 0) return null
+              return (
+                <div className="bg-card border border-border rounded-xl p-3 card-glow">
+                  <div className="flex items-center gap-2 mb-3 text-sm font-medium text-foreground">
+                    <CheckSquare className="w-4 h-4 text-status-success" /> Tasks Created
+                  </div>
+                  <div className="space-y-1.5">
+                    {tasks.map((title, i) => (
+                      <div key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                        <span className="text-status-success mt-0.5 shrink-0">+</span>
+                        <span>{title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -501,7 +540,7 @@ interface ChatComposerProps {
   isSessionActive: boolean
 }
 
-function ChatComposer({ sessionId, agentId, isSessionActive: _isActive }: ChatComposerProps) {
+function ChatComposer({ sessionId, isSessionActive: _isActive }: ChatComposerProps) {
   const [message, setMessage] = useState('')
   const [images, setImages] = useState<{ data: string; name: string; type: string }[]>([])
   const [sending, setSending] = useState(false)
@@ -740,7 +779,7 @@ function NewChatComposer({
         <MessageSquare className="w-10 h-10 text-accent mx-auto opacity-60" />
         <h2 className="text-lg font-semibold text-foreground">New Conversation</h2>
         <p className="text-sm text-muted-foreground">
-          Start a conversation with Claude. Just like Claude Code — ask questions, discuss ideas, share screenshots.
+          Start a conversation with Claude about any project. Share screenshots, discuss ideas, and Claude will identify tasks as they come up.
         </p>
       </div>
 

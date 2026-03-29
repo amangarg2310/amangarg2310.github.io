@@ -5,6 +5,8 @@ import {
   Activity,
   AlertTriangle,
   DollarSign,
+  MessageSquare,
+  Inbox,
 } from 'lucide-react'
 import { MetricCard } from '@/components/ui/metric-card'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
@@ -12,19 +14,22 @@ import { RunStatusBoard } from '@/components/dashboard/run-status-board'
 import { ModelUsageChart } from '@/components/dashboard/model-usage-chart'
 import { TeamView } from '@/components/dashboard/team-view'
 import { GettingStarted } from '@/components/dashboard/getting-started'
-import { useDashboardStats, useRuns } from '@/lib/hooks'
+import { AgentTasks } from '@/components/dashboard/agent-tasks'
+import { useDashboardStats, useRuns, useConversations, useTasks } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { formatCost } from '@/lib/utils'
 
 export default function DashboardPage() {
   const { activeProjectId } = useActiveProject()
 
-  const { activeRuns, needsApproval, failedRuns, todayUsage: today } = useDashboardStats(activeProjectId)
+  const { activeRuns, needsApproval, failedRuns, queuedTasks, todayUsage: today } = useDashboardStats(activeProjectId)
   const { data: runs } = useRuns(activeProjectId)
+  const { data: conversations } = useConversations(activeProjectId)
 
   const totalCostToday = today.cost
   const totalTokensToday = today.tokens
   const idleRuns = runs.filter((r) => r.status === 'idle')
+  const activeConversations = conversations.filter((c) => c.status === 'active')
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-background">
@@ -67,7 +72,7 @@ export default function DashboardPage() {
         )}
 
         {/* Metric Cards Row — all live data, no fake deltas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <MetricCard
             title="Active Runs"
             value={String(activeRuns.length)}
@@ -77,12 +82,20 @@ export default function DashboardPage() {
             delay={0.1}
           />
           <MetricCard
-            title="Idle Sessions"
-            value={String(idleRuns.length)}
-            icon={<Activity className="w-5 h-5" />}
-            accentColor="#71717a"
-            sparkData={[idleRuns.length]}
-            delay={0.15}
+            title="Conversations"
+            value={String(activeConversations.length)}
+            icon={<MessageSquare className="w-5 h-5" />}
+            accentColor="#10b981"
+            sparkData={[activeConversations.length]}
+            delay={0.13}
+          />
+          <MetricCard
+            title="Backlog"
+            value={String(queuedTasks.length)}
+            icon={<Inbox className="w-5 h-5" />}
+            accentColor="#f59e0b"
+            sparkData={[queuedTasks.length]}
+            delay={0.16}
           />
           <MetricCard
             title="Failed"
@@ -107,6 +120,9 @@ export default function DashboardPage() {
 
         {/* Active Agent Teams - Pipeline View */}
         <TeamView />
+
+        {/* Agent-Created Tasks / Backlog Items */}
+        <AgentTasks />
 
         {/* Two Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

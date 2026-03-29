@@ -103,7 +103,7 @@ export default function UsagePage() {
               Usage & Cost
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Monitor API spend and performance metrics. All costs are <span className="text-amber-400/70 font-medium">estimated</span> from token counts.
+              Estimated costs based on Claude Agent SDK usage. All costs are <span className="text-amber-400/70 font-medium">estimated</span> from token counts.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-1">
@@ -123,6 +123,15 @@ export default function UsagePage() {
           </div>
         </header>
 
+        {dailyUsage.length === 0 && modelUsage.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <BarChart3 className="w-12 h-12 text-muted-foreground/30 mb-4" />
+            <p className="text-sm text-muted-foreground">
+              Usage data appears as agents run conversations and tasks.
+            </p>
+          </div>
+        ) : (
+        <>
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
@@ -168,7 +177,7 @@ export default function UsagePage() {
             className="lg:col-span-2 bg-card border border-border rounded-xl p-5 card-glow"
           >
             <h3 className="text-sm font-medium text-foreground mb-6">
-              Spend over time
+              Est. Spend over time
             </h3>
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -224,7 +233,7 @@ export default function UsagePage() {
                     }}
                     formatter={(value) => [
                       `$${Number(value).toFixed(2)}`,
-                      'Cost',
+                      'Est. Cost',
                     ]}
                   />
                   <Area
@@ -247,7 +256,7 @@ export default function UsagePage() {
             className="bg-card border border-border rounded-xl p-5 card-glow flex flex-col"
           >
             <h3 className="text-sm font-medium text-foreground mb-6">
-              Spend by Model
+              Est. Spend by Model
             </h3>
             <div className="w-full h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -288,7 +297,7 @@ export default function UsagePage() {
                     }}
                     formatter={(value) => [
                       `$${Number(value).toFixed(2)}`,
-                      'Cost',
+                      'Est. Cost',
                     ]}
                   />
                   <Bar dataKey="cost" radius={[0, 4, 4, 0]} barSize={20}>
@@ -312,7 +321,7 @@ export default function UsagePage() {
             className="bg-card border border-border rounded-xl p-5 card-glow"
           >
             <h3 className="text-sm font-medium text-foreground mb-4">
-              Spend by Agent
+              Est. Spend by Agent
             </h3>
             <div className="space-y-4">
               {agentCosts.map((agent) => (
@@ -407,6 +416,8 @@ export default function UsagePage() {
             </div>
           </motion.div>
         </div>
+        </>
+        )}
       </div>
     </div>
   )

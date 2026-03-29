@@ -25,7 +25,7 @@ export default function SettingsPage() {
             Settings
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Agent configuration and model routing for Mission Control.
+            Agent configuration and model routing powered by Claude Agent SDK.
           </p>
         </header>
 
@@ -43,10 +43,11 @@ export default function SettingsPage() {
           <div className="bg-status-success/5 border border-status-success/20 rounded-lg px-4 py-3 flex items-start gap-3">
             <Zap className="w-5 h-5 text-status-success shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-foreground">Claude Code SDK</p>
+              <p className="text-sm font-medium text-foreground">Claude Agent SDK</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Agents authenticate using your existing Claude Code login. No API key, no credentials stored.
-                All agent sessions run as Claude Code subprocesses on your machine.
+                No API key needed — uses Claude Code login. All agent sessions run via{' '}
+                <code className="text-accent/80 bg-accent/5 px-1 py-0.5 rounded text-[11px]">@anthropic-ai/claude-agent-sdk</code>{' '}
+                as subprocesses on your machine.
               </p>
             </div>
           </div>
@@ -78,6 +79,11 @@ export default function SettingsPage() {
                 standard: 'bg-status-running',
                 premium: 'bg-status-approval',
               }
+              const modelNames: Record<string, string> = {
+                economy: 'claude-haiku-4-5',
+                standard: 'claude-sonnet-4-6',
+                premium: 'claude-opus-4-5',
+              }
               return (
                 <div key={tier} className={`border rounded-lg p-4 ${colors[tier] || ''}`}>
                   <div className="flex items-center gap-2 mb-2">
@@ -85,7 +91,10 @@ export default function SettingsPage() {
                     <span className="text-sm font-medium text-foreground">{label}</span>
                   </div>
                   <p className="text-xs text-muted-foreground font-mono">
-                    {TIER_COST_RANGES[tier as keyof typeof TIER_COST_RANGES]} / task
+                    {modelNames[tier] || tier}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    Est. {TIER_COST_RANGES[tier as keyof typeof TIER_COST_RANGES]} / task
                   </p>
                 </div>
               )
@@ -148,7 +157,7 @@ export default function SettingsPage() {
             Claude Pricing Reference
           </h2>
           <p className="text-xs text-muted-foreground">
-            Costs are estimated from token counts. Actual billing is through your Claude Code subscription.
+            Costs are estimated from token counts. Actual billing is through your Claude Code login (no separate API key needed).
           </p>
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm text-left">

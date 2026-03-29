@@ -131,12 +131,25 @@ function AgentCard({ agent }: { agent: Agent }) {
             <div>
               <h3 className="text-foreground font-medium flex items-center gap-2">
                 {agent.name}
+                {agent.designation && (
+                  <span className={cn(
+                    'text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium',
+                    agent.designation === 'primary'
+                      ? 'bg-accent/10 text-accent border border-accent/20'
+                      : 'bg-muted-foreground/10 text-muted-foreground border border-muted-foreground/20'
+                  )}>
+                    {agent.designation === 'primary' ? 'Primary' : 'Sub-agent'}
+                  </span>
+                )}
                 <StatusBadge
                   status={agent.is_active ? 'running' : 'inactive'}
                   size="sm"
                 />
               </h3>
               <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">
+                {agent.project_name && (
+                  <span className="text-accent/70 font-medium">{agent.project_name} &middot; </span>
+                )}
                 {agent.description}
               </p>
             </div>
@@ -300,7 +313,7 @@ export default function AgentsPage() {
               Agent Registry
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Manage and configure your autonomous workforce.
+              Manage and monitor your project agents and sub-agents.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -314,7 +327,11 @@ export default function AgentsPage() {
                 className="bg-card border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground focus:outline-none focus:border-accent w-64 transition-colors"
               />
             </div>
-            <button className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+            <button
+              disabled
+              title="Agents are created automatically when assigned to project roles"
+              className="flex items-center gap-2 bg-accent/40 text-white/50 px-4 py-2 rounded-lg font-medium text-sm cursor-not-allowed"
+            >
               <Plus className="w-4 h-4" />
               New Agent
             </button>
@@ -322,11 +339,22 @@ export default function AgentsPage() {
         </header>
 
         {/* Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-6">
-          {filteredAgents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} />
-          ))}
-        </div>
+        {filteredAgents.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-6">
+            {filteredAgents.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <Bot className="w-12 h-12 text-muted-foreground/30 mb-4" />
+            <p className="text-sm text-muted-foreground">
+              {searchQuery
+                ? 'No agents match your search.'
+                : 'Agents appear here as you create projects and assign roles.'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

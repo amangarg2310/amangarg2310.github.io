@@ -67,8 +67,6 @@ export function TeamView() {
 
   if (taskGroups.length === 0) return null
 
-  const pipelineAgents = taskGroups[0]?.agents || []
-
   return (
     <motion.section
       initial={{ opacity: 0 }}
@@ -79,55 +77,62 @@ export function TeamView() {
       <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider section-header-fade">
         Active Agent Teams
       </h2>
-      <div className="bg-card border border-border rounded-xl p-8 card-glow overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[600px] max-w-4xl mx-auto">
-          {pipelineAgents.map((agent, i) => {
-            if (!agent) return null
-            const run = taskGroups[0]?.runs.find(
-              (r) => r.agent_id === agent.id
-            )
-            const statusKey =
-              run?.status === 'completed'
-                ? 'success'
-                : run?.status === 'needs_approval'
-                  ? 'approval'
-                  : run?.status || 'queued'
+      <div className="space-y-4">
+        {taskGroups.map((group) => {
+          const pipelineAgents = group.agents || []
+          return (
+            <div key={group.task!.id} className="bg-card border border-border rounded-xl p-8 card-glow overflow-x-auto">
+              <div className="flex items-center justify-between min-w-[600px] max-w-4xl mx-auto">
+                {pipelineAgents.map((agent, i) => {
+                  if (!agent) return null
+                  const run = group.runs.find(
+                    (r) => r.agent_id === agent.id
+                  )
+                  const statusKey =
+                    run?.status === 'completed'
+                      ? 'success'
+                      : run?.status === 'needs_approval'
+                        ? 'approval'
+                        : run?.status || 'queued'
 
-            return (
-              <div key={agent.id} className="contents">
-                {i > 0 && (
-                  <PipelineEdge
-                    active={
-                      run?.status === 'running' ||
-                      run?.status === 'completed'
-                    }
-                  />
-                )}
-                <Link href={run ? `/runs/${run.id}` : '/runs'}>
-                  <div className="flex flex-col items-center gap-3 z-10">
-                    <div className="relative">
-                      <AgentAvatar
-                        name={agent.name}
-                        color={agent.avatar_color}
-                        size="lg"
-                      />
-                      <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
-                        <StatusBadge status={statusKey} size="sm" />
-                      </div>
+                  return (
+                    <div key={agent.id} className="contents">
+                      {i > 0 && (
+                        <PipelineEdge
+                          active={
+                            run?.status === 'running' ||
+                            run?.status === 'completed'
+                          }
+                        />
+                      )}
+                      <Link href={run ? `/runs/${run.id}` : '/runs'}>
+                        <div className="flex flex-col items-center gap-3 z-10">
+                          <div className="relative">
+                            <AgentAvatar
+                              name={agent.name}
+                              color={agent.avatar_color}
+                              size="lg"
+                            />
+                            <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
+                              <StatusBadge status={statusKey} size="sm" />
+                            </div>
+                          </div>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {agent.name}
+                          </span>
+                        </div>
+                      </Link>
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {agent.name}
-                    </span>
-                  </div>
-                </Link>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
-        <div className="text-center mt-4 text-xs text-muted-foreground">
-          {taskGroups[0]?.task?.title} ·{' '}
-          {formatCost(taskGroups[0]?.totalCost || 0)}
-        </div>
+              <div className="text-center mt-4 text-xs text-muted-foreground">
+                {group.task?.title} ·{' '}
+                {formatCost(group.totalCost)}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </motion.section>
   )

@@ -31,7 +31,6 @@ interface RoleLaneCardProps {
   lastActivity?: string
   automationConfigs?: AutomationConfig[]
   onAssignmentChange: () => void
-  onCreateTask?: (role: string) => void
   onViewOutput?: (agentId: string) => void
 }
 
@@ -46,7 +45,6 @@ export function RoleLaneCard({
   lastActivity,
   automationConfigs = [],
   onAssignmentChange,
-  onCreateTask,
   onViewOutput,
 }: RoleLaneCardProps) {
   const [showJobs, setShowJobs] = useState(false)

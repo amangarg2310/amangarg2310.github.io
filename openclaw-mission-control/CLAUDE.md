@@ -21,7 +21,7 @@ At its core, this functions like a multi-agent task force: agents can collaborat
 
 ## Tech Stack
 
-Next.js 16, React 19, TypeScript, TailwindCSS 4, Framer Motion, Radix UI, Recharts, @anthropic-ai/claude-code (Agent SDK)
+Next.js 16, React 19, TypeScript, TailwindCSS 4, Framer Motion, Radix UI, Recharts, @anthropic-ai/claude-agent-sdk
 
 ## Key Commands
 
@@ -38,7 +38,7 @@ npm run test      # Bridge layer tests
 
 ### Agent Runtime (`lib/agent-runtime.ts`)
 
-- Agents spawned via Claude Agent SDK (`@anthropic-ai/claude-code`) `query()` function
+- Agents spawned via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) `query()` function
 - Uses existing Claude Code login — NO API key needed
 - Full tool access: Read, Write, Bash, Grep, WebFetch, WebSearch, etc.
 - Multi-agent support via subagent definitions per role

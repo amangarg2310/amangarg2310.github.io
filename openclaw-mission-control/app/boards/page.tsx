@@ -20,9 +20,18 @@ import {
   ArrowLeft,
   Bot,
   User as UserIcon,
+  Info,
+  X,
 } from 'lucide-react'
 
 const BOARD_POLL_INTERVAL = 10_000
+
+const COLUMN_EMPTY_HINTS: Record<string, string> = {
+  backlog: 'Tasks appear here when agents identify work during conversations',
+  'in-progress': 'Promote tasks from Backlog when ready to start',
+  review: 'Tasks waiting for your review or approval',
+  done: 'Completed and closed tasks',
+}
 
 type KanbanColumn = {
   id: string
@@ -196,6 +205,7 @@ function lastRefreshLabel(lastFetchedAt: number | null): string {
 
 export default function BoardsPage() {
   const { activeProjectId } = useActiveProject()
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const { data: tasks, lastFetchedAt } = useTasks(activeProjectId, BOARD_POLL_INTERVAL, refreshKey)
   const { data: agents } = useAgents()
@@ -244,6 +254,22 @@ export default function BoardsPage() {
         </div>
       </header>
 
+      {/* Info banner */}
+      {!bannerDismissed && (
+        <div className="mx-8 mb-4 flex items-center gap-3 rounded-lg border border-accent/20 bg-accent/5 px-4 py-2.5">
+          <Info className="w-4 h-4 text-accent shrink-0" />
+          <p className="text-xs text-muted-foreground flex-1">
+            Tasks are created by agents during conversations. Use the <strong className="text-foreground">Promote</strong> button to move tasks to In Progress.
+          </p>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="text-muted-foreground/50 hover:text-foreground transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Kanban Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-8 pb-8">
         <div className="inline-flex gap-5 h-full align-top">
@@ -285,8 +311,11 @@ export default function BoardsPage() {
                       />
                     ))
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-24 gap-1">
-                      <span className="text-xs text-muted-foreground/50">No tasks</span>
+                    <div className="flex flex-col items-center justify-center h-32 gap-2 px-4 text-center">
+                      <Icon className="w-5 h-5 text-muted-foreground/30" />
+                      <span className="text-xs text-muted-foreground/50 leading-relaxed">
+                        {COLUMN_EMPTY_HINTS[column.id]}
+                      </span>
                     </div>
                   )}
                 </div>

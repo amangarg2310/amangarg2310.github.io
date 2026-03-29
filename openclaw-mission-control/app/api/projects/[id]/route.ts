@@ -38,6 +38,14 @@ export async function PATCH(
     }
   }
 
+  if (body.objective !== undefined) {
+    store.updateProjectObjective(id, body.objective)
+  }
+
+  if (body.primary_agent_id !== undefined) {
+    store.updateProjectPrimaryAgent(id, body.primary_agent_id)
+  }
+
   const context = store.getProjectContext(id)
   return Response.json(context, {
     headers: { 'Access-Control-Allow-Origin': '*' },

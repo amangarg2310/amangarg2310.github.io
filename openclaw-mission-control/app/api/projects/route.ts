@@ -17,6 +17,8 @@ export async function POST(request: Request) {
     color?: string
     repo_url?: string
     repo_branch?: string
+    objective?: string
+    primary_agent_id?: string
   }
 
   if (!body.name || typeof body.name !== 'string') {
@@ -35,6 +37,8 @@ export async function POST(request: Request) {
     slug,
     description: body.description || '',
     color: body.color || '#3b82f6',
+    objective: body.objective || null,
+    primary_agent_id: body.primary_agent_id || null,
     repo_url: body.repo_url || null,
     repo_branch: body.repo_branch || null,
     created_at: now,
