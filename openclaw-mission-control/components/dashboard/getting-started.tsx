@@ -34,14 +34,14 @@ export function GettingStarted() {
     {
       label: 'First Conversation',
       done: runs.length > 0,
-      hint: 'Start a chat — agents discover tasks from conversation',
-      link: '/chats',
+      hint: 'Open a project → Chat tab to start a conversation',
+      link: projects.length > 0 ? `/projects/${projects[0].id}` : '/projects',
     },
     {
       label: 'Task Completed',
       done: runs.some((r) => r.status === 'completed'),
-      hint: 'Agents create tasks in Backlog; promote and track them here',
-      link: '/boards',
+      hint: 'Agents create tasks in Backlog; track them in the Boards tab',
+      link: projects.length > 0 ? `/projects/${projects[0].id}?tab=boards` : '/projects',
     },
   ]
   const completedCount = steps.filter((s) => s.done).length

@@ -60,7 +60,7 @@ export function AgentTasks() {
           Agent-Created Tasks
         </h2>
         <Link
-          href="/boards"
+          href="/projects"
           className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
         >
           View Backlog &rarr;
@@ -80,7 +80,7 @@ export function AgentTasks() {
             return (
               <Link
                 key={task.id}
-                href="/boards"
+                href="/projects"
                 className="flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">

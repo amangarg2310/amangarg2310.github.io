@@ -354,8 +354,8 @@ export default function ActivityPage() {
               {allEntries.length === 0 && (
                 <p className="text-xs text-muted-foreground/50 mt-1 max-w-sm mx-auto">
                   Activity appears here as agents run tasks. Head to the{' '}
-                  <Link href="/chats" className="text-accent hover:underline">
-                    chat workspace
+                  <Link href="/projects" className="text-accent hover:underline">
+                    a project workspace
                   </Link>{' '}
                   to start a conversation and kick off your first run.
                 </p>
