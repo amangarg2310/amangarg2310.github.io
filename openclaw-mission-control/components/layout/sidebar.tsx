@@ -75,7 +75,7 @@ export function Sidebar() {
         key={item.name}
         href={item.href}
         className={cn(
-          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#050506]',
+          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[#141414]',
           isActive
             ? 'bg-accent/10 text-accent border-l-2 border-accent rounded-l-sm'
             : 'text-muted-foreground hover:bg-white/5 hover:text-foreground border-l-2 border-transparent rounded-l-sm'
@@ -105,17 +105,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 h-screen flex flex-col bg-[#050506] border-r border-border flex-shrink-0">
+    <aside className="w-64 h-screen flex flex-col bg-[#141414] border-r border-border flex-shrink-0">
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 border-b border-border/50">
         <div className="flex items-center gap-3 text-foreground font-semibold tracking-wide">
-          <div className="w-8 h-8 rounded-sm bg-accent/10 flex items-center justify-center border border-accent/20">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-accent">
-              <path d="M6 4C6 4 3 8 3 12C3 14 4 15.5 6 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="M10 4C10 4 7 8 7 12C7 14 8 15.5 10 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="M18 4C18 4 21 8 21 12C21 14 20 15.5 18 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="M14 4C14 4 17 8 17 12C17 14 16 15.5 14 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="M6 20L12 16L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center border border-accent/20">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-accent">
+              <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="currentColor" />
             </svg>
           </div>
           Mission Control
@@ -217,7 +213,7 @@ export function Sidebar() {
       {/* User Profile Footer */}
       <div className="p-4 border-t border-border/50">
         <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-blue-600 flex items-center justify-center text-white text-xs font-bold">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-amber-800 flex items-center justify-center text-white text-xs font-bold">
             MC
           </div>
           <div className="flex flex-col items-start">

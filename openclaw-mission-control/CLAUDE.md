@@ -107,27 +107,29 @@ Each project has 7 role lanes, each mappable to a Claude agent:
 ```
 app/
   page.tsx                    # Dashboard (metrics, getting-started, team-view, activity)
-  boards/page.tsx             # Kanban board (Backlog/In Progress/Review/Done)
+  projects/page.tsx           # Project grid with status breakdown
+  projects/[id]/page.tsx      # Project workspace (Chat | Boards | Activity tabs)
   runs/page.tsx               # Run inspector table with filters/search
-  chats/page.tsx              # Chat workspace (3-panel: list, thread, details)
   activity/page.tsx           # Activity timeline with date headers
   approvals/page.tsx          # Approval queue for human oversight
   settings/page.tsx           # Model providers, budgets, pricing
   usage/page.tsx              # Usage & cost dashboard
-  projects/page.tsx           # Project grid with status breakdown
-  projects/[id]/page.tsx      # Project command center (7 role lanes)
+  boards/page.tsx             # Redirects → /projects
+  chats/page.tsx              # Redirects → /projects
   api/chat/route.ts           # POST: send message, spawn agent
   api/agents/route.ts         # GET: list agents
+  api/agents/[id]/route.ts    # GET: single agent detail
   api/tasks/route.ts          # GET/POST: list/create tasks
+  api/tasks/[id]/status/      # PATCH: update task status
   api/runs/route.ts           # GET: list runs
+  api/runs/[id]/stop/         # POST: stop a run
   api/conversations/          # GET: list/detail conversations
   api/projects/[id]/          # CRUD + command-center, roles, automations, workflows, recommend
 
 components/
-  dashboard/                  # Dashboard widgets (model-usage-chart, getting-started, run-status-board, team-view, activity-feed, create-task-modal)
-  project/                    # Command center (role-lane-card, blockers-banner, workflow-status)
+  dashboard/                  # Dashboard widgets (getting-started, run-status-board, team-view, activity-feed, agent-tasks, create-task-modal)
   layout/                     # Sidebar navigation
-  ui/                         # Reusable primitives (status-badge, agent-avatar, model-badge, tooltip, page-header)
+  ui/                         # Reusable primitives (status-badge, agent-avatar, model-badge, tooltip, page-header, toast)
 
 lib/
   agent-runtime.ts           # Claude Agent SDK wrapper (server-only)
@@ -143,7 +145,9 @@ lib/
   workflow-chains.ts         # Predefined workflow templates
   workflow-orchestrator.ts   # Auto-advance workflows on run completion
   project-store.ts           # Disk persistence for dashboard-owned data
+  project-context.tsx        # Active project context (React context + localStorage)
   project-mapper.ts          # Session→project mapping
+  costs.ts                   # Model pricing and tier utilities
   mock-data.ts               # All empty arrays (no mock data)
   bridge/                    # Legacy OpenClaw bridge (unused, kept for reference)
 
@@ -165,43 +169,26 @@ types/
 - Empty states: descriptive text + relevant icon at 30% opacity
 - No mock/demo data anywhere — store always starts empty
 
-## Current Status & Remaining Work
+## Current Status
 
-### Completed
-- Replaced OpenClaw backend with Claude Code Agent SDK
-- Dashboard components use real data from hooks (not hardcoded)
-- Chat composer sends real messages (was disabled)
-- All OpenClaw references removed from UI
-- Projects page: status breakdown bar, blocked indicators, last activity
-- Runs page: project context, working search, smart sort
-- Activity page: date headers, clickable run links
-- Chat sidebar: sorted by recency, agent avatars, active LED
-- Trust labeling: "Est." on all costs, honest empty states
+### Architecture (Completed)
+- **Project-centric workspace**: Chat, Boards, Activity are tabs inside each project (not standalone pages)
+- Sidebar: Mission Control / Projects / Approvals / Run Inspector + Manage section
+- /chats and /boards routes redirect to /projects (backwards compatible)
+- Toast notification system (Framer Motion + React context)
+- Unified ModelTier: economy / standard / premium (no more cheap/mid/local)
+- Full ESLint/TypeScript audit: 0 errors, 0 warnings, 65/65 tests passing
 
-### Remaining Backlog (8 items)
-1. **Settings page**: Separate default model from available providers, show "no API key needed" clearly
-2. **Boards as real backlog**: Make all 4 columns (Backlog/In Progress/Review/Done) functional
-3. **Extend backlog to project/role views**: Per-project and per-role task boards
-4. **Smart model recommendation**: Recommend model based on task type, show reasoning
-5. **Model override UI**: Let users override recommended model per task
-6. **Cost-efficient routing**: Bias toward cheapest acceptable model by default
-7. **Multi-agent per project**: Allow multiple role-specific agents with smart allocation
-8. **Full audit & UX pass**: Button handlers, pagination, error states, type safety
-
-### Known Issues from Audit
-- Run action buttons (Retry, Pause, Stop) have no onClick handlers
-- Approval decisions are component-local state (not persisted)
-- Usage page time range buttons (7d/30d/All) are non-functional
-- Team view only shows first task's pipeline
-- Getting-started steps 1 & 2 are redundant
-- `execution-policy.ts` still has a 'local' tier that doesn't map to any real model
-- Project delete uses `window.location.reload()` instead of optimistic update
-- Chat transcript pagination (load more) not implemented
+### Remaining Backlog
+1. **Run action buttons**: Retry, Pause, Stop handlers need wiring
+2. **Approval persistence**: Decisions are component-local state (not persisted to store)
+3. **Usage page time range**: 7d/30d/All filter buttons non-functional
+4. **Chat pagination**: Load more messages in conversation thread
+5. **Multi-agent per project**: Allow multiple role-specific agents with smart allocation
 
 ## Development Notes
 
-- Branch: `claude/openclaw-mission-control-GuJE2`
-- All changes go in this one branch (user's explicit instruction)
+- GitHub repo: `amangarg2310/Mission-Control-Dashboard`
+- Cloud monorepo path: `openclaw-mission-control/` in `amangarg2310.github.io`
 - The bridge/ directory is legacy OpenClaw code — don't modify, don't delete (kept for reference)
 - Owner: Aman Garg (amangarg2310)
-- Projects being managed: ScoutAI, Fetchly, Heritage, and others

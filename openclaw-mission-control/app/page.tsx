@@ -74,7 +74,7 @@ export default function DashboardPage() {
             title="Active Runs"
             value={String(activeRuns.length)}
             icon={<Activity className="w-5 h-5" />}
-            accentColor="#3b82f6"
+            accentColor="#c8956c"
             sparkData={[activeRuns.length]}
             delay={0.1}
           />
@@ -82,7 +82,7 @@ export default function DashboardPage() {
             title="Conversations"
             value={String(activeConversations.length)}
             icon={<MessageSquare className="w-5 h-5" />}
-            accentColor="#10b981"
+            accentColor="#6db889"
             sparkData={[activeConversations.length]}
             delay={0.13}
           />
@@ -90,7 +90,7 @@ export default function DashboardPage() {
             title="Backlog"
             value={String(queuedTasks.length)}
             icon={<Inbox className="w-5 h-5" />}
-            accentColor="#f59e0b"
+            accentColor="#dba04c"
             sparkData={[queuedTasks.length]}
             delay={0.16}
           />
@@ -98,7 +98,7 @@ export default function DashboardPage() {
             title="Failed"
             value={String(failedRuns.length)}
             icon={<AlertTriangle className="w-5 h-5" />}
-            accentColor="#ef4444"
+            accentColor="#cf6b6b"
             sparkData={[failedRuns.length]}
             delay={0.2}
           />
@@ -106,7 +106,7 @@ export default function DashboardPage() {
             title="Est. Cost Today"
             value={totalCostToday > 0 ? formatCost(totalCostToday) : '$0.00'}
             icon={<DollarSign className="w-5 h-5" />}
-            accentColor="#a855f7"
+            accentColor="#b090c8"
             sparkData={[totalCostToday]}
             delay={0.25}
           />

@@ -3,23 +3,23 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  /* Warm neutral palette inspired by Linear */
-  --background: #0a0a0c;
-  --foreground: #f5f5f4;
-  --card: #161618;
-  --card-foreground: #f5f5f4;
-  --muted: #252528;
-  --muted-foreground: #a0a0a8;
-  --border: #252528;
-  --ring: #3b82f6;
-  --accent: #3b82f6;
+  /* Claude-inspired warm palette */
+  --background: #191919;
+  --foreground: #e8e0d4;
+  --card: #232323;
+  --card-foreground: #e8e0d4;
+  --muted: #2c2c2c;
+  --muted-foreground: #a39e93;
+  --border: #333330;
+  --ring: #c8956c;
+  --accent: #c8956c;
   /* Status colors */
-  --status-success: #10b981;
-  --status-running: #3b82f6;
-  --status-approval: #f59e0b;
-  --status-failed: #ef4444;
-  --status-model: #a855f7;
-  --status-tool: #06b6d4;
+  --status-success: #6db889;
+  --status-running: #c8956c;
+  --status-approval: #dba04c;
+  --status-failed: #cf6b6b;
+  --status-model: #b090c8;
+  --status-tool: #6db0b0;
 }
 
 @theme inline {
@@ -51,7 +51,7 @@ body {
 }
 
 ::selection {
-  background: rgba(59, 130, 246, 0.3);
+  background: rgba(200, 149, 108, 0.3);
   color: white;
 }
 
@@ -64,15 +64,15 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #252528;
+  background: #333330;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #444440;
 }
 
 * {
-  scrollbar-color: #252528 transparent;
+  scrollbar-color: #333330 transparent;
 }
 
 /* Focus rings for accessibility */
@@ -91,7 +91,7 @@ button, a, input, select, textarea {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 4px 24px -8px rgba(0, 0, 0, 0.5);
 }
 .card-hover {
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3), 0 8px 32px -8px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 1px rgba(200, 149, 108, 0.3), 0 8px 32px -8px rgba(0, 0, 0, 0.6);
 }
 
 /* Tabular nums for metrics */
@@ -110,7 +110,7 @@ button, a, input, select, textarea {
   left: 0;
   right: 0;
   height: 16px;
-  background: linear-gradient(to bottom, rgba(10, 10, 12, 1), rgba(10, 10, 12, 0));
+  background: linear-gradient(to bottom, rgba(25, 25, 25, 1), rgba(25, 25, 25, 0));
   pointer-events: none;
   z-index: 10;
 }
@@ -148,9 +148,9 @@ button, a, input, select, textarea {
 
 /* Keyframes */
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-  70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(200, 149, 108, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(200, 149, 108, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(200, 149, 108, 0); }
 }
 
 @keyframes flow {
