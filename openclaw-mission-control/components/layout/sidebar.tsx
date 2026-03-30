@@ -201,7 +201,7 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-2 space-y-4 overflow-y-auto">
         <div className="space-y-0.5">
           <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50 font-medium">
-            Workspace (v2)
+            Workspace
           </div>
           {mainNav.map(renderNavItem)}
         </div>
