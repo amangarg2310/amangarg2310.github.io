@@ -5,7 +5,6 @@ import { timeAgo } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
   Zap,
-  Terminal,
   CheckCircle2,
   AlertTriangle,
   Clock,

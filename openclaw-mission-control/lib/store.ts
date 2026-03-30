@@ -1,5 +1,5 @@
 import { Agent, Task, Run, RunEvent, Message, Conversation, DailyUsage, ModelUsage, Project, RoleAssignment, ProjectContext, AutomationConfig } from './types'
-import type { WorkflowInstance } from './workflow-chains'
+import { WORKFLOW_CHAINS, type WorkflowInstance } from './workflow-chains'
 import { loadProjectData, saveProjectData } from './project-store'
 
 /**
@@ -430,8 +430,7 @@ class DataStore {
     instance.updated_at = new Date().toISOString()
 
     // Check if chain is complete
-    const { WORKFLOW_CHAINS } = require('./workflow-chains')
-    const chain = WORKFLOW_CHAINS.find((c: { id: string }) => c.id === instance.chain_id)
+    const chain = WORKFLOW_CHAINS.find((c) => c.id === instance.chain_id)
     if (chain && instance.current_step >= chain.steps.length) {
       instance.status = 'completed'
     } else {

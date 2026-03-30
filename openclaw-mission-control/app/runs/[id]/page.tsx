@@ -19,8 +19,6 @@ import {
   Search,
 } from 'lucide-react'
 
-type EventType = 'model' | 'tool' | 'success' | 'error' | 'system'
-
 const typeColors: Record<string, string> = {
   model_called: 'bg-status-model',
   tool_call: 'bg-status-tool',
@@ -57,6 +55,8 @@ export default function RunDetailPage({
   const run = runData.run
   const events = runData.events
   const selectedEvent = events.find((e) => e.id === selectedEventId)
+  const [now] = useState(() => Date.now())
+  const runEndTime = run?.ended_at ? new Date(run.ended_at).getTime() : now
 
   if (loading) {
     return (
@@ -80,9 +80,6 @@ export default function RunDetailPage({
   }
 
   const runStartTime = new Date(run.started_at).getTime()
-  const runEndTime = run.ended_at
-    ? new Date(run.ended_at).getTime()
-    : Date.now()
   const totalDuration = runEndTime - runStartTime
 
   function getEventOffset(event: RunEvent): number {

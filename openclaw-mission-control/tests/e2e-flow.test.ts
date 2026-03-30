@@ -22,14 +22,9 @@ import assert from 'node:assert/strict'
 // Since extractAndCreateTasks and extractAndDelegate aren't exported,
 // we'll import the module and use the store to verify outcomes.
 
-// Mock the project-store to avoid disk I/O
-const mockProjectStore = {
-  loadProjectData: () => null,
-  saveProjectData: () => {},
-}
-
 // We'll test through the store directly
 import { store } from '../lib/store.js'
+import type { RoleLane, Task } from '../lib/types.js'
 
 describe('End-to-End User Journey', () => {
   // Helper to create timestamps
@@ -315,7 +310,7 @@ Based on this analysis, I've identified these actionable tasks:
         store.upsertRoleAssignment({
           id: `ra-${d.role}-test`,
           project_id: 'proj-scoutai',
-          role: d.role as any,
+          role: d.role as RoleLane,
           agent_id: subAgentId,
           notes: 'Auto-created by delegation',
           created_at: ts,
@@ -325,7 +320,7 @@ Based on this analysis, I've identified these actionable tasks:
           id: `task-delegated-${d.role}`,
           title: d.goal.slice(0, 100),
           description: d.goal,
-          priority: d.priority as any,
+          priority: d.priority as Task['priority'],
           status: 'queued',
           assigned_agent_id: subAgentId,
           created_by: 'agent',

@@ -171,11 +171,11 @@ export default function SettingsPage() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {Object.entries(MODEL_PRICING).map(([model, pricing]) => {
-                  const tierColor = pricing.tier === 'cheap'
-                    ? 'border-status-success' : pricing.tier === 'mid'
+                  const tierColor = pricing.tier === 'economy'
+                    ? 'border-status-success' : pricing.tier === 'standard'
                     ? 'border-status-running' : 'border-status-approval'
-                  const tierBgColor = pricing.tier === 'cheap'
-                    ? 'text-status-success bg-status-success/10' : pricing.tier === 'mid'
+                  const tierBgColor = pricing.tier === 'economy'
+                    ? 'text-status-success bg-status-success/10' : pricing.tier === 'standard'
                     ? 'text-status-running bg-status-running/10' : 'text-status-approval bg-status-approval/10'
                   return (
                     <tr key={model} className="bg-background/30 hover:bg-white/5 transition-colors">

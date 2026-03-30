@@ -2,14 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useAgents, useTasks, useRuns, useProjects } from '@/lib/hooks'
+import { useAgents, useRuns, useProjects } from '@/lib/hooks'
 import { X, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export function GettingStarted() {
   const [dismissed, setDismissed] = useState(false)
   const { data: agents } = useAgents()
-  const { data: tasks } = useTasks()
   const { data: runs } = useRuns()
   const { data: projects } = useProjects()
 

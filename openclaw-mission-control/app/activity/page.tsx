@@ -17,9 +17,7 @@ import {
   Clock,
   Bot,
   Search,
-  Filter,
   Wrench,
-  User,
 } from 'lucide-react'
 
 type ActivityType = 'all' | 'agent' | 'tool' | 'system' | 'error'

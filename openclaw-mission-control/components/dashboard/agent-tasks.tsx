@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { timeAgo } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { Inbox, Bot } from 'lucide-react'
+import { Bot } from 'lucide-react'
 
 export function AgentTasks() {
   const { activeProjectId } = useActiveProject()

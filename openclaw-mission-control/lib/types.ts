@@ -29,7 +29,7 @@ export type EventType =
   | 'paused'
   | 'resumed';
 
-export type ModelTier = 'cheap' | 'mid' | 'premium';
+export type ModelTier = 'economy' | 'standard' | 'premium';
 
 export interface Agent {
   id: string;

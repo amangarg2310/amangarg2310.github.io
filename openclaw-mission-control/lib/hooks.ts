@@ -153,6 +153,7 @@ export function useConversationDetail(conversationId: string, pollInterval = 5_0
 
   useEffect(() => {
     if (!conversationId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset state when conversation deselected
       setData(EMPTY_DETAIL)
       setLoading(false)
       return

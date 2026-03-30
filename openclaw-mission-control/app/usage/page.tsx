@@ -79,9 +79,9 @@ export default function UsagePage() {
     cost: m.estimated_cost,
     tier: m.tier,
     color:
-      m.tier === 'cheap'
+      m.tier === 'economy'
         ? '#10b981'
-        : m.tier === 'mid'
+        : m.tier === 'standard'
           ? '#3b82f6'
           : '#f59e0b',
   }))
@@ -375,15 +375,15 @@ export default function UsagePage() {
                 <tbody className="divide-y divide-border/50">
                   {modelUsage.map((m) => {
                     const tierColor =
-                      m.tier === 'cheap'
+                      m.tier === 'economy'
                         ? 'bg-status-success'
-                        : m.tier === 'mid'
+                        : m.tier === 'standard'
                           ? 'bg-status-running'
                           : 'bg-status-approval'
                     const textColor =
-                      m.tier === 'cheap'
+                      m.tier === 'economy'
                         ? 'text-status-success'
-                        : m.tier === 'mid'
+                        : m.tier === 'standard'
                           ? 'text-status-running'
                           : 'text-status-approval'
                     return (

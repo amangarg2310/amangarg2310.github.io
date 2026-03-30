@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 
 interface ProjectContextValue {
   activeProjectId: string | null
@@ -15,15 +15,11 @@ const ProjectCtx = createContext<ProjectContextValue>({
 const STORAGE_KEY = 'oc-active-project'
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null)
-  const [hydrated, setHydrated] = useState(false)
-
-  // Read from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) setActiveProjectIdState(stored)
-    setHydrated(true)
-  }, [])
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem(STORAGE_KEY)
+  })
+  const hydrated = true
 
   const setActiveProjectId = (id: string | null) => {
     setActiveProjectIdState(id)

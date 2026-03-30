@@ -19,7 +19,6 @@ import {
   LayoutGrid,
   Plus,
   ArrowRight,
-  Command,
 } from 'lucide-react'
 
 interface SearchResult {
@@ -155,9 +154,7 @@ export function CommandPalette() {
     }
   }, [open])
 
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [query])
+  // Selection index is reset in the onChange handler above
 
   const handleSelect = (result: SearchResult) => {
     setOpen(false)
@@ -211,7 +208,7 @@ export function CommandPalette() {
               <input
                 ref={inputRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0) }}
                 onKeyDown={handleInputKeyDown}
                 placeholder="Search pages, agents, tasks, runs..."
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"

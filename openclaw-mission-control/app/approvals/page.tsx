@@ -15,11 +15,9 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
-  MessageSquare,
   Clock,
   AlertTriangle,
   Filter,
-  ChevronDown,
 } from 'lucide-react'
 
 type Decision = 'pending' | 'approved' | 'rejected'
@@ -214,7 +212,6 @@ export default function ApprovalsPage() {
                 decisions[item.id] || item.decision
               const isPending = effectiveDecision === 'pending'
               const isApproved = effectiveDecision === 'approved'
-              const isRejected = effectiveDecision === 'rejected'
 
               return (
                 <motion.div

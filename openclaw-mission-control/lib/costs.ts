@@ -2,8 +2,8 @@ import { ModelTier } from './types';
 
 // Pricing per 1M tokens (input / output) — Claude models only
 export const MODEL_PRICING: Record<string, { input: number; output: number; tier: ModelTier }> = {
-  'claude-haiku-4-5': { input: 0.80, output: 4.00, tier: 'cheap' },
-  'claude-sonnet-4-6': { input: 3.00, output: 15.00, tier: 'mid' },
+  'claude-haiku-4-5': { input: 0.80, output: 4.00, tier: 'economy' },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00, tier: 'standard' },
   'claude-opus-4-5': { input: 15.00, output: 75.00, tier: 'premium' },
 };
 
@@ -16,21 +16,21 @@ export function estimateCost(model: string, inputTokens: number, outputTokens: n
 
 export function getModelTier(model: string): ModelTier {
   const normalized = model.replace('anthropic/', '')
-  return MODEL_PRICING[normalized]?.tier || 'mid';
+  return MODEL_PRICING[normalized]?.tier || 'standard';
 }
 
 export function getTierColor(tier: ModelTier): string {
   switch (tier) {
-    case 'cheap': return 'text-emerald-400';
-    case 'mid': return 'text-blue-400';
+    case 'economy': return 'text-emerald-400';
+    case 'standard': return 'text-blue-400';
     case 'premium': return 'text-amber-400';
   }
 }
 
 export function getTierLabel(tier: ModelTier): string {
   switch (tier) {
-    case 'cheap': return 'Economy';
-    case 'mid': return 'Standard';
+    case 'economy': return 'Economy';
+    case 'standard': return 'Standard';
     case 'premium': return 'Premium';
   }
 }

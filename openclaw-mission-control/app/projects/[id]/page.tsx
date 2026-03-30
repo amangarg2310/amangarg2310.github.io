@@ -17,6 +17,7 @@ import {
   updateProjectFocus,
 } from '@/lib/api'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
+import { useToast } from '@/components/ui/toast'
 import { timeAgo, cn } from '@/lib/utils'
 import type { Task, Message } from '@/lib/types'
 import {
@@ -76,6 +77,8 @@ export default function ProjectWorkspacePage({
     window.history.replaceState(null, '', url.toString())
   }, [activeTab])
 
+  const { showToast } = useToast()
+
   async function saveObjective() {
     if (!project || !objectiveDraft.trim()) {
       setEditingObjective(false)
@@ -84,6 +87,9 @@ export default function ProjectWorkspacePage({
     setSaving(true)
     try {
       await updateProjectObjective(id, objectiveDraft.trim())
+      showToast('Objective updated', 'success')
+    } catch {
+      showToast('Failed to update objective', 'error')
     } finally {
       setSaving(false)
       setEditingObjective(false)
@@ -98,6 +104,9 @@ export default function ProjectWorkspacePage({
     setSaving(true)
     try {
       await updateProjectFocus(id, focusDraft.trim())
+      showToast('Focus updated', 'success')
+    } catch {
+      showToast('Failed to update focus', 'error')
     } finally {
       setSaving(false)
       setEditingFocus(false)
@@ -283,6 +292,7 @@ export default function ProjectWorkspacePage({
 function ChatTab({ projectId }: { projectId: string }) {
   const [conversationRefreshKey, setConversationRefreshKey] = useState(0)
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const { showToast } = useToast()
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const [pendingImages, setPendingImages] = useState<
@@ -328,8 +338,8 @@ function ChatTab({ projectId }: { projectId: string }) {
         setSelectedConversationId(result.conversation_id)
       }
       setConversationRefreshKey((k) => k + 1)
-    } catch (err) {
-      console.error('Send failed:', err)
+    } catch {
+      showToast('Failed to send message', 'error')
     } finally {
       setSending(false)
     }
@@ -436,6 +446,16 @@ function ChatTab({ projectId }: { projectId: string }) {
             </div>
           ) : (
             detail.messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+          )}
+          {sending && (
+            <div className="flex gap-3 justify-start">
+              <div className="w-7 h-7 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0">
+                <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" />
+              </div>
+              <div className="px-3.5 py-2.5 rounded-xl text-sm bg-card border border-border text-muted-foreground rounded-tl-sm animate-pulse">
+                Thinking...
+              </div>
+            </div>
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -569,12 +589,17 @@ function MessageBubble({ message }: { message: Message }) {
 // ─── Boards Tab ───────────────────────────────────────────────────────────────
 
 function BoardsTab({ projectId }: { projectId: string }) {
+  const { showToast } = useToast()
   const [refreshKey, setRefreshKey] = useState(0)
   const { data: tasks } = useTasks(projectId, 10000, refreshKey)
 
   async function moveTask(taskId: string, newStatus: Task['status']) {
-    await updateTaskStatus(taskId, newStatus)
-    setRefreshKey((k) => k + 1)
+    try {
+      await updateTaskStatus(taskId, newStatus)
+      setRefreshKey((k) => k + 1)
+    } catch {
+      showToast('Failed to move task', 'error')
+    }
   }
 
   return (
@@ -587,6 +612,15 @@ function BoardsTab({ projectId }: { projectId: string }) {
         </span>
       </div>
 
+      {tasks.length === 0 && (
+        <div className="text-center py-12 space-y-3 mb-4">
+          <LayoutGrid className="w-8 h-8 text-muted-foreground/30 mx-auto" />
+          <p className="text-sm text-muted-foreground">No tasks yet</p>
+          <p className="text-xs text-muted-foreground/50">
+            Chat with your agent to create tasks. They&apos;ll appear here in the Backlog.
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-4">
         {TASK_STATUSES.map((colStatus, colIndex) => {
           const colTasks = tasks.filter((t) => t.status === colStatus)

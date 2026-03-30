@@ -8,6 +8,7 @@ import { useProjects, useProjectContext, useAgents } from '@/lib/hooks'
 import { createProject, deleteProject } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
+import { useToast } from '@/components/ui/toast'
 import type { Agent } from '@/lib/types'
 import {
   FolderKanban,
@@ -16,12 +17,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Plus,
-  X,
   Trash2,
   Bot,
 } from 'lucide-react'
-
-const PROJECT_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899']
 
 function getHealthStatus(context: { blockedCount: number; activeRunCount: number; taskCount: number }): { color: string; label: string; dot: string } {
   if (context.blockedCount > 0) {
@@ -193,6 +191,7 @@ export default function ProjectsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const { data: projects, loading } = useProjects(refreshKey)
   const { data: agents } = useAgents()
+  const { showToast } = useToast()
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -201,8 +200,9 @@ export default function ProjectsPage() {
     try {
       await deleteProject(id)
       setRefreshKey((k) => k + 1)
-    } catch (err) {
-      console.error('Failed to delete project:', err)
+      showToast('Project deleted', 'success')
+    } catch {
+      showToast('Failed to delete project', 'error')
     }
   }
 
@@ -214,8 +214,8 @@ export default function ProjectsPage() {
       setName('')
       setShowCreate(false)
       router.push(`/projects/${newProject.id}`)
-    } catch (err) {
-      console.error('Failed to create project:', err)
+    } catch {
+      showToast('Failed to create project', 'error')
     } finally {
       setCreating(false)
     }

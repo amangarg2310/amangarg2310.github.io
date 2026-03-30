@@ -10,12 +10,10 @@ import type {
 import type {
   RawAgent,
   RawSession,
-  RawSessionList,
   RawTranscriptLine,
   RawTranscriptMessage,
   RawAssistantMessage,
   RawToolResultMessage,
-  RawUsage,
   RawContentBlock,
 } from './raw-types'
 import { estimateCost, getModelTier } from '../costs'

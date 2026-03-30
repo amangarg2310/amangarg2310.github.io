@@ -11,7 +11,6 @@ import assert from 'node:assert/strict'
 import {
   recommendExecution,
   type TaskLaunchConfig,
-  type AgentStrategy,
   type RecommendationOverrides,
 } from '../lib/task-recommender'
 import type { Agent, RoleAssignment } from '../lib/types'

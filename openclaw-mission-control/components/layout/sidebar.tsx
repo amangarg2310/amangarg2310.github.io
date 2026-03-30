@@ -5,12 +5,10 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Activity,
-  MessageSquare,
   Bot,
   BarChart3,
   Settings,
   ShieldCheck,
-  LayoutGrid,
   Clock,
   Search,
   Command,

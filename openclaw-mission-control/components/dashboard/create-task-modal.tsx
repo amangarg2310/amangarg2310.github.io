@@ -7,7 +7,7 @@ import {
   Repeat,
   ArrowUpRight,
 } from 'lucide-react'
-import { useAgents, useProjects, useRecommendation } from '@/lib/hooks'
+import { useProjects, useRecommendation } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { createTaskDraft } from '@/lib/api'
 import { RecommendationPanel } from './recommendation-panel'
@@ -37,7 +37,6 @@ interface CreateTaskModalProps {
 export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
   const { data: projects } = useProjects()
   const { activeProjectId } = useActiveProject()
-  const { data: agents } = useAgents()
 
   const [projectId, setProjectId] = useState(activeProjectId || '')
   const [goal, setGoal] = useState('')

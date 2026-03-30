@@ -15,7 +15,7 @@ import { ModelUsageChart } from '@/components/dashboard/model-usage-chart'
 import { TeamView } from '@/components/dashboard/team-view'
 import { GettingStarted } from '@/components/dashboard/getting-started'
 import { AgentTasks } from '@/components/dashboard/agent-tasks'
-import { useDashboardStats, useRuns, useConversations, useTasks } from '@/lib/hooks'
+import { useDashboardStats, useConversations } from '@/lib/hooks'
 import { useActiveProject } from '@/lib/project-context'
 import { formatCost } from '@/lib/utils'
 
@@ -23,12 +23,9 @@ export default function DashboardPage() {
   const { activeProjectId } = useActiveProject()
 
   const { activeRuns, needsApproval, failedRuns, queuedTasks, todayUsage: today } = useDashboardStats(activeProjectId)
-  const { data: runs } = useRuns(activeProjectId)
   const { data: conversations } = useConversations(activeProjectId)
 
   const totalCostToday = today.cost
-  const totalTokensToday = today.tokens
-  const idleRuns = runs.filter((r) => r.status === 'idle')
   const activeConversations = conversations.filter((c) => c.status === 'active')
 
   return (

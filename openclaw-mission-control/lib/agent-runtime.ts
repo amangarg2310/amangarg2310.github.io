@@ -11,7 +11,7 @@
  * Server-only — never import from client components.
  */
 
-import type { Run, Message, Conversation, RoleLane, Task } from './types'
+import type { Run, Message, RoleLane, Task } from './types'
 import { store } from './store'
 import crypto from 'crypto'
 
@@ -21,7 +21,6 @@ async function getQuery() {
   if (!queryFn) {
     try {
       const modName = ['@anthropic-ai', 'claude-agent-sdk'].join('/')
-      // eslint-disable-next-line no-eval
       const sdk = await eval(`import('${modName}')`)
       queryFn = sdk.query || sdk.default?.query
       if (!queryFn) throw new Error('SDK loaded but query function not found')
@@ -196,6 +195,7 @@ function extractAndCreateTasks(content: string, projectId: string, agentId: stri
  * Parse [DELEGATE:] markers from agent responses and spawn sub-agent runs.
  * Format: [DELEGATE: role="research" goal="Analyze competitor pricing" priority="high"]
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- parentAgentId reserved for future sub-agent tracking
 function extractAndDelegate(content: string, projectId: string, parentAgentId: string): void {
   const delegatePattern = /\[DELEGATE:\s*role\s*=\s*(?:"([^"]+)"|'([^']+)')\s*goal\s*=\s*(?:"([^"]+)"|'([^']+)')\s*(?:priority\s*=\s*(?:"([^"]+)"|'([^']+)'))?\s*\]/gi
   let match

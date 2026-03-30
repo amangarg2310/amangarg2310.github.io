@@ -17,6 +17,9 @@ export function SparkLine({
   height = 24,
   className = '',
 }: SparkLineProps) {
+  const reactId = useId()
+  const gradientId = `spark-gradient-${reactId.replace(/:/g, '')}`
+
   if (!data || data.length === 0) return null
 
   const max = Math.max(...data)
@@ -43,8 +46,6 @@ export function SparkLine({
       .join(' ')
 
   const areaD = `${pathD} L ${width},${height} L 0,${height} Z`
-  const reactId = useId()
-  const gradientId = `spark-gradient-${reactId.replace(/:/g, '')}`
 
   return (
     <svg
