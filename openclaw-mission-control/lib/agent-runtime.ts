@@ -301,27 +301,38 @@ function buildSystemPrompt(opts: {
 
   const projectContext = buildProjectContext(opts.projectId)
 
-  const taskPrompt = `
+  const orchestrationPrompt = `
 
-When you identify specific actionable work items during our conversation, create tasks by outputting them on their own line in this format:
+You are the founder's primary AI agent for this project. When the founder describes what they need, you should:
+
+1. **Understand the request** — ask clarifying questions if needed
+2. **Break it down** — identify the specific tasks required
+3. **Create a task plan** — output tasks that will appear in the project's Backlog for the founder to review and approve
+
+When you identify tasks, output them in this format (one per line):
 
 [TASK: title="Brief task title" priority="high|medium|low" description="What needs to be done"]
 
-Only create tasks for concrete, actionable items. Don't duplicate existing tasks listed in the project context above.`
+For complex requests that need specialized work, delegate to role-specific sub-agents:
 
-  const delegationPrompt = opts.isPrimary ? `
+[DELEGATE: role="research|strategy|product|content|performance_marketing|consumer_insights|advisor" goal="Clear description of what the sub-agent should do" priority="high|medium|low"]
 
-As the primary agent for this project, you can delegate work to specialized sub-agents. When a task requires deep expertise in a specific area, delegate it:
+Available roles:
+- research: Data gathering, trend analysis, competitive intelligence
+- strategy: Strategic recommendations, opportunity evaluation, memos
+- product: Product positioning, feature priorities, go-to-market
+- content: Content planning, copywriting, brand voice
+- performance_marketing: Ad campaigns, ROAS optimization, budget allocation
+- consumer_insights: User feedback analysis, sentiment, behavioral patterns
+- advisor: High-level guidance, cross-workstream synthesis
 
-[DELEGATE: role="research|strategy|product|content|performance_marketing|consumer_insights|advisor" goal="Clear description of what needs to be done" priority="high|medium|low"]
-
-The sub-agent will work independently and their findings will be available in the project context for future conversations. Use delegation for substantial work — quick questions don't need delegation.` : ''
+The founder will review your task plan in the Boards view and approve items before work begins. Don't duplicate existing tasks. Be specific about what each task/delegation accomplishes.`
 
   return `${basePrompt}
 
-You are part of Mission Control — a founder's operating system for managing multiple startup projects. The founder is chatting with you directly, like they would in Claude Code.
+You are part of Mission Control — a founder's operating system for managing startup projects. The founder is chatting with you directly.
 
-Be conversational, helpful, and actionable. This is a real working conversation, not a task queue.${projectContext}${taskPrompt}${delegationPrompt}`
+Be conversational, helpful, and actionable. When they describe a need, analyze it and create a structured plan with tasks and delegations.${projectContext}${orchestrationPrompt}`
 }
 
 // ---------------------------------------------------------------------------
@@ -376,15 +387,12 @@ async function _runConversation(opts: {
     projectId: opts.projectId,
   })
 
-  // Determine if this is the primary agent
-  const project = store.getProject(opts.projectId)
-  const isPrimary = project?.primary_agent_id === opts.agentId
-
+  // Every agent gets full orchestration capabilities
   const systemPrompt = buildSystemPrompt({
     role: opts.role,
     agentId: opts.agentId,
     projectId: opts.projectId,
-    isPrimary,
+    isPrimary: true, // Every agent gets full orchestration capabilities
   })
 
   let totalInputTokens = 0
