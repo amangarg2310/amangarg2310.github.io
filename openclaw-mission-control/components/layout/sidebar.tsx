@@ -24,9 +24,7 @@ import { useState, useRef, useEffect } from 'react'
 
 const mainNav = [
   { name: 'Mission Control', href: '/', icon: LayoutDashboard },
-  { name: 'Chat Workspace', href: '/chats', icon: MessageSquare },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
-  { name: 'Boards', href: '/boards', icon: LayoutGrid },
   { name: 'Approvals', href: '/approvals', icon: ShieldCheck },
   { name: 'Run Inspector', href: '/runs', icon: Activity },
 ]
