@@ -99,6 +99,32 @@
     color: var(--intel-accent);
 }
 
+.intel-nav-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.intel-nav-user-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--intel-text-secondary);
+}
+
+.intel-nav-logout {
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: all var(--intel-transition);
+}
+
+.intel-nav-logout:hover {
+    color: var(--intel-text);
+    background: var(--intel-surface-hover);
+}
+
 .intel-nav-links {
     display: flex;
     align-items: center;
@@ -671,6 +697,112 @@
     background: var(--intel-surface-hover);
     padding: 2px 8px;
     border-radius: 10px;
+}
+
+/* ── Taxonomy Tree ── */
+.intel-taxonomy-section {
+    max-height: 40vh;
+    overflow-y: auto;
+    padding-bottom: 4px;
+}
+
+.intel-taxonomy-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 16px 8px;
+}
+
+.intel-taxonomy-tree {
+    padding: 0 8px 8px;
+}
+
+.intel-tree-node {
+    /* Nested indentation handled by data-level */
+}
+
+.intel-tree-node[data-level="1"] {
+    padding-left: 12px;
+}
+
+.intel-tree-node[data-level="2"] {
+    padding-left: 24px;
+}
+
+.intel-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: var(--intel-radius-xs);
+    cursor: pointer;
+    transition: all var(--intel-transition);
+    min-height: 32px;
+}
+
+.intel-tree-row:hover {
+    background: var(--intel-surface-hover);
+}
+
+.intel-tree-toggle {
+    font-size: 10px;
+    color: var(--intel-text-tertiary);
+    width: 14px;
+    text-align: center;
+    transition: transform var(--intel-transition);
+    flex-shrink: 0;
+}
+
+.intel-tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.intel-tree-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.intel-tree-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--intel-text-secondary);
+    text-decoration: none;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.intel-tree-name:hover {
+    color: var(--intel-text);
+}
+
+.intel-tree-name.active {
+    color: var(--intel-accent);
+    font-weight: 600;
+}
+
+.intel-tree-count {
+    font-size: 10px;
+    color: var(--intel-text-tertiary);
+    background: var(--intel-surface-hover);
+    padding: 1px 6px;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.intel-tree-children {
+    /* shown by default */
+}
+
+.intel-tree-children.collapsed {
+    display: none;
+}
+
+.intel-panel-divider {
+    height: 1px;
+    background: var(--intel-border-light);
+    margin: 8px 16px;
 }
 
 /* ── Add Source Button ── */

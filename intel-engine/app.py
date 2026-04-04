@@ -15,10 +15,12 @@ from pathlib import Path
 from flask import (
     Flask, render_template, request, redirect, url_for, jsonify, session,
 )
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 
 import config
 from migrations import run_migrations
+from auth import User
 
 # Run migrations at import time so they execute under gunicorn too
 run_migrations()
@@ -26,6 +28,14 @@ run_migrations()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32).hex())
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+# Flask-Login setup
+login_manager = LoginManager(app)
+login_manager.login_view = 'login_page'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(int(user_id))
 
 logger = logging.getLogger(__name__)
 
@@ -77,21 +87,81 @@ def add_security_headers(response):
 
 
 # ══════════════════════════════════════════════════════════════
+# Authentication
+# ══════════════════════════════════════════════════════════════
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    """Login page."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == "POST":
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+        user = User.get_by_email(email)
+        if user and user.check_password(password):
+            login_user(user, remember=True)
+            return redirect(request.args.get('next') or url_for('index'))
+        return render_template("login.html", error="Invalid email or password.")
+
+    return render_template("login.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register_page():
+    """Registration page."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == "POST":
+        display_name = request.form.get('display_name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+        if not email or not password:
+            return render_template("register.html", error="Email and password are required.")
+        if len(password) < 6:
+            return render_template("register.html", error="Password must be at least 6 characters.")
+
+        existing = User.get_by_email(email)
+        if existing:
+            return render_template("register.html", error="An account with this email already exists.")
+
+        user = User.create(email, password, display_name or None)
+        login_user(user, remember=True)
+        return redirect(url_for('index'))
+
+    return render_template("register.html")
+
+
+@app.route("/logout")
+def logout():
+    """Log out and redirect to login."""
+    logout_user()
+    return redirect(url_for('login_page'))
+
+
+# ══════════════════════════════════════════════════════════════
 # Pages
 # ══════════════════════════════════════════════════════════════
 
 @app.route("/")
+@login_required
 def index():
     """Main page — URL input + domain grid."""
     if needs_setup():
         return redirect(url_for('setup_page'))
 
+    uid = current_user.id
     conn = None
     domains = []
     try:
         conn = get_db()
         domains = [dict(r) for r in conn.execute(
-            "SELECT * FROM domains ORDER BY updated_at DESC"
+            "SELECT * FROM domains WHERE (user_id = ? OR user_id IS NULL) AND level <= 1 ORDER BY updated_at DESC",
+            (uid,),
         ).fetchall()]
     except sqlite3.OperationalError:
         pass
@@ -103,6 +173,7 @@ def index():
 
 
 @app.route("/domain/<domain_name>")
+@login_required
 def domain_page(domain_name):
     """Domain detail — synthesis + chat + sources."""
     if needs_setup():
@@ -117,8 +188,10 @@ def domain_page(domain_name):
     try:
         conn = get_db()
 
+        uid = current_user.id
         domain = conn.execute(
-            "SELECT * FROM domains WHERE name = ? COLLATE NOCASE", (domain_name,)
+            "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL)",
+            (domain_name, uid),
         ).fetchone()
         if not domain:
             return redirect(url_for('index'))
@@ -161,8 +234,24 @@ def domain_page(domain_name):
         """, (domain['id'],)).fetchall()]
 
         domains = [dict(r) for r in conn.execute(
-            "SELECT * FROM domains ORDER BY updated_at DESC"
+            "SELECT * FROM domains WHERE (user_id = ? OR user_id IS NULL) AND level <= 1 ORDER BY updated_at DESC",
+            (uid,),
         ).fetchall()]
+
+        # Build domain tree for sidebar
+        tree_rows = [dict(r) for r in conn.execute(
+            "SELECT id, name, description, icon, parent_id, level, path, source_count, insight_count FROM domains WHERE (user_id = ? OR user_id IS NULL) ORDER BY level ASC, name ASC",
+            (uid,),
+        ).fetchall()]
+        by_id = {r['id']: {**r, 'children': []} for r in tree_rows}
+        domain_tree = []
+        for r in tree_rows:
+            node = by_id[r['id']]
+            pid = r.get('parent_id')
+            if pid and pid in by_id:
+                by_id[pid]['children'].append(node)
+            elif r.get('level', 0) == 0 or not pid:
+                domain_tree.append(node)
 
     except sqlite3.OperationalError:
         return redirect(url_for('index'))
@@ -176,7 +265,8 @@ def domain_page(domain_name):
                            synthesis_html=synthesis_html,
                            suggested_questions=suggested_questions,
                            sources=sources,
-                           domains=domains)
+                           domains=domains,
+                           domain_tree=domain_tree)
 
 
 @app.route("/setup")
@@ -213,6 +303,7 @@ def save_setup():
 # ══════════════════════════════════════════════════════════════
 
 @app.route("/api/ingest", methods=["POST"])
+@login_required
 def api_ingest():
     """Accept a URL (YouTube or article) and start background processing."""
     from pipeline import (
@@ -299,6 +390,7 @@ def api_ingest():
 
 
 @app.route("/api/upload", methods=["POST"])
+@login_required
 def api_upload():
     """Accept a file upload and start background processing."""
     from pipeline import (
@@ -350,6 +442,7 @@ def api_upload():
 
 
 @app.route("/api/ingest-text", methods=["POST"])
+@login_required
 def api_ingest_text():
     """Accept pasted text and start background processing."""
     from pipeline import run_text_pipeline, _update_status, _generate_source_id
@@ -387,13 +480,16 @@ def api_status(video_id):
 
 
 @app.route("/api/domains")
+@login_required
 def api_domains():
-    """List all knowledge domains."""
+    """List all knowledge domains for current user."""
+    uid = current_user.id
     conn = None
     try:
         conn = get_db()
         domains = [dict(r) for r in conn.execute(
-            "SELECT * FROM domains ORDER BY updated_at DESC"
+            "SELECT * FROM domains WHERE (user_id = ? OR user_id IS NULL) ORDER BY updated_at DESC",
+            (uid,),
         ).fetchall()]
         return jsonify({"domains": domains})
     except sqlite3.OperationalError:
@@ -403,7 +499,40 @@ def api_domains():
             conn.close()
 
 
+@app.route("/api/domain-tree")
+@login_required
+def api_domain_tree():
+    """Return the full domain hierarchy as nested JSON for the current user."""
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id, name, description, icon, parent_id, level, path, source_count, insight_count FROM domains WHERE (user_id = ? OR user_id IS NULL) ORDER BY level ASC, name ASC",
+            (uid,),
+        ).fetchall()]
+
+        # Build tree structure
+        by_id = {r['id']: {**r, 'children': []} for r in rows}
+        roots = []
+        for r in rows:
+            node = by_id[r['id']]
+            parent_id = r.get('parent_id')
+            if parent_id and parent_id in by_id:
+                by_id[parent_id]['children'].append(node)
+            elif r.get('level', 0) == 0 or not parent_id:
+                roots.append(node)
+
+        return jsonify({"tree": roots})
+    except sqlite3.OperationalError:
+        return jsonify({"tree": []})
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.route("/api/source/<int:source_id>", methods=["DELETE"])
+@login_required
 def api_delete_source(source_id):
     """Delete a source and re-synthesize the domain."""
     from pipeline import _update_status
@@ -496,6 +625,7 @@ def api_delete_source(source_id):
 
 
 @app.route("/api/reprocess/<int:source_id>", methods=["POST"])
+@login_required
 def api_reprocess(source_id):
     """Re-process an existing source with current extraction prompts."""
     from pipeline import reprocess_pipeline, _update_status
@@ -539,6 +669,7 @@ def api_reprocess(source_id):
 
 
 @app.route("/api/query", methods=["POST"])
+@login_required
 def api_query():
     """Ask a question against a domain's knowledge."""
     from intel_query import query_domain
@@ -558,6 +689,7 @@ def api_query():
 
 
 @app.route("/api/backfill-embeddings", methods=["POST"])
+@login_required
 def api_backfill_embeddings():
     """Generate embeddings for all insights missing them."""
     from embeddings import batch_generate_embeddings, serialize_embedding
@@ -599,6 +731,7 @@ def api_backfill_embeddings():
 
 
 @app.route("/api/generate-visual/<int:domain_id>", methods=["POST"])
+@login_required
 def api_generate_visual(domain_id):
     """Generate an interactive HTML/SVG visual from domain synthesis using Claude."""
     from visual_generator import generate_visual

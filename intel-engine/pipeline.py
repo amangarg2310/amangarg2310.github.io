@@ -25,7 +25,7 @@ from pathlib import Path
 import config
 from youtube_ingest import ingest_video, chunk_transcript, extract_video_id
 from insight_extractor import extract_insights
-from domain_detector import detect_domain
+from domain_detector import detect_domain_hierarchical
 from domain_synthesizer import synthesize_domain, resynthesize_domain_full
 from embeddings import batch_generate_embeddings, serialize_embedding
 
@@ -554,6 +554,7 @@ def _run_shared_pipeline(
     source_date: str,
     db_path=None,
     start_progress: int = 35,
+    user_id: int = None,
 ) -> dict:
     """
     Shared pipeline steps: chunk → detect domain → extract insights → store → synthesize.
@@ -567,11 +568,11 @@ def _run_shared_pipeline(
                    title=title, channel=channel)
     chunks = chunk_transcript(transcript)
 
-    # Step 4: Auto-detect domain
+    # Step 4: Auto-detect domain (hierarchical)
     _update_status(video_id, 'processing', 'Detecting domain...', start_progress + 10,
                    title=title, channel=channel)
-    domain_result = detect_domain(
-        title, channel, chunks[0] if chunks else transcript, db_path
+    domain_result = detect_domain_hierarchical(
+        title, channel, chunks[0] if chunks else transcript, db_path, user_id=user_id
     )
     domain_id = domain_result['domain_id']
     domain_name = domain_result['domain_name']

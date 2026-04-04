@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account — Distylme</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='intel.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+<div class="intel-page">
+    <nav class="intel-nav">
+        <div class="intel-nav-brand">
+            <div class="intel-nav-logo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <span class="intel-nav-wordmark">distyl<span class="intel-nav-wordmark-accent">me</span></span>
+        </div>
+    </nav>
+
+    <div class="intel-hero">
+        <h1 class="intel-hero-title">Get started.</h1>
+        <p class="intel-hero-subtitle">Create your account to start building your knowledge base.</p>
+
+        {% if error %}
+        <div style="background: var(--intel-red-light); color: var(--intel-red); padding: 12px 20px; border-radius: 12px; font-size: 14px; margin-bottom: 24px; max-width: 400px; width: 100%;">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('register_page') }}" style="width: 100%; max-width: 400px;">
+            <div style="margin-bottom: 12px;">
+                <input type="text" name="display_name" class="intel-input" placeholder="Your name" required
+                       style="padding: 14px 20px;" value="{{ request.form.get('display_name', '') }}">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <input type="email" name="email" class="intel-input" placeholder="Email" required
+                       style="padding: 14px 20px;" value="{{ request.form.get('email', '') }}">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <input type="password" name="password" class="intel-input" placeholder="Password (6+ characters)" required minlength="6"
+                       style="padding: 14px 20px;">
+            </div>
+            <button type="submit" class="intel-hub-submit wide">Create Account</button>
+        </form>
+
+        <p style="margin-top: 24px; font-size: 14px; color: var(--intel-text-secondary);">
+            Already have an account? <a href="{{ url_for('login_page') }}" style="color: var(--intel-accent); text-decoration: none; font-weight: 500;">Sign in</a>
+        </p>
+    </div>
+</div>
+</body>
+</html>

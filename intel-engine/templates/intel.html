@@ -22,6 +22,12 @@
             </div>
             <span class="intel-nav-wordmark">distyl<span class="intel-nav-wordmark-accent">me</span></span>
         </a>
+        {% if current_user and current_user.is_authenticated %}
+        <div class="intel-nav-user">
+            <span class="intel-nav-user-name">{{ current_user.display_name }}</span>
+            <a href="{{ url_for('logout') }}" class="intel-nav-logout">Sign out</a>
+        </div>
+        {% endif %}
     </nav>
 
     {% if domain %}
@@ -30,8 +36,58 @@
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-detail-layout">
 
-        <!-- ── Sources Sidebar (Left) ── -->
+        <!-- ── Sidebar (Left) ── -->
         <aside class="intel-sources-panel">
+
+            <!-- Taxonomy Tree -->
+            {% if domain_tree %}
+            <div class="intel-taxonomy-section">
+                <div class="intel-taxonomy-header">
+                    <span class="intel-sources-title">Domains</span>
+                </div>
+                <div class="intel-taxonomy-tree">
+                    {% for node in domain_tree %}
+                    {% include "partials/tree_node.html" ignore missing %}
+                    <div class="intel-tree-node {% if domain and domain.id == node.id %}active{% endif %}" data-level="{{ node.level }}">
+                        <div class="intel-tree-row" {% if node.children %}onclick="toggleTreeChildren(this)"{% endif %}>
+                            {% if node.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
+                            <span class="intel-tree-icon">{{ node.icon }}</span>
+                            <a href="{{ url_for('domain_page', domain_name=node.name) }}" class="intel-tree-name {% if domain and domain.name == node.name %}active{% endif %}">{{ node.name }}</a>
+                            {% if node.source_count %}<span class="intel-tree-count">{{ node.source_count }}</span>{% endif %}
+                        </div>
+                        {% if node.children %}
+                        <div class="intel-tree-children {% if not (domain and domain.path and node.name in domain.path|default('', true)) %}collapsed{% endif %}">
+                            {% for child in node.children %}
+                            <div class="intel-tree-node {% if domain and domain.id == child.id %}active{% endif %}" data-level="{{ child.level }}">
+                                <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %}>
+                                    {% if child.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
+                                    <span class="intel-tree-icon">{{ child.icon }}</span>
+                                    <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-tree-name {% if domain and domain.name == child.name %}active{% endif %}">{{ child.name }}</a>
+                                    {% if child.source_count %}<span class="intel-tree-count">{{ child.source_count }}</span>{% endif %}
+                                </div>
+                                {% if child.children %}
+                                <div class="intel-tree-children collapsed">
+                                    {% for sub in child.children %}
+                                    <div class="intel-tree-node" data-level="{{ sub.level }}">
+                                        <div class="intel-tree-row">
+                                            <span class="intel-tree-icon">•</span>
+                                            <a href="{{ url_for('domain_page', domain_name=sub.name) }}" class="intel-tree-name {% if domain and domain.name == sub.name %}active{% endif %}">{{ sub.name }}</a>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="intel-panel-divider"></div>
+            {% endif %}
+
             <div class="intel-sources-header">
                 <span class="intel-sources-title">Sources</span>
                 <span class="intel-sources-count">{{ sources|length if sources else 0 }}</span>
@@ -785,6 +841,18 @@ function pollSidebarStatus(videoId) {
                 hideSidebarStatus();
             });
     }, 1000);
+}
+
+// ── Taxonomy Tree ──
+
+function toggleTreeChildren(rowEl) {
+    const nodeEl = rowEl.closest('.intel-tree-node');
+    const children = nodeEl.querySelector('.intel-tree-children');
+    const toggle = rowEl.querySelector('.intel-tree-toggle');
+    if (children) {
+        children.classList.toggle('collapsed');
+        if (toggle) toggle.classList.toggle('expanded');
+    }
 }
 
 // ── Admin Tools ──

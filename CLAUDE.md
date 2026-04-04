@@ -57,11 +57,11 @@ See `outlier-content-engine/CLAUDE.md` for detailed documentation.
 
 ---
 
-## Domain Intelligence Engine
+## Distylme (intel-engine/)
 
-**What it is:** Paste a YouTube URL → automatically extracts insights, detects the knowledge domain, and builds a compounding knowledge base. Each new video enriches existing domain synthesis.
+**What it is:** A domain intelligence engine that ingests expert content from multiple sources (YouTube, articles, PDFs, images, text), processes it through an LLM pipeline, and builds a compounding knowledge base with hierarchical domain taxonomy. Deployed at [distylme.com](https://distylme.com).
 
-**Tech Stack:** Python 3.11, Flask, SQLite, OpenAI GPT-4o-mini, yt-dlp, youtube-transcript-api
+**Tech Stack:** Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings), OpenAI GPT-4o-mini, Anthropic Claude (visuals), Supadata (transcript fallback)
 
 ### Key Commands
 
@@ -74,19 +74,25 @@ python app.py           # Run at http://localhost:5002
 
 ### Architecture
 
-- **Pipeline** (`pipeline.py`): URL → ingest → chunk → extract insights → detect domain → synthesize
-- **Backend** (`app.py`): Flask web server with API endpoints
-- **Frontend** (`templates/intel.html`, `static/intel.css`): Apple-inspired minimal UI
-- **Database:** SQLite with tables: domains, sources, insights, syntheses
+- **Pipeline** (`pipeline.py`): Source → ingest → chunk → extract insights → detect domain hierarchy → embed → synthesize
+- **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata), `article_ingest.py` (trafilatura), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
+- **Domain taxonomy** (`domain_detector.py`): Hierarchical — parent category → specific domain → sub-topics (like biology taxonomy)
+- **RAG query** (`intel_query.py`): Hybrid search (vector embeddings + FTS5 keyword) → GPT answer synthesis
+- **Auth** (`auth.py`): Flask-Login session-based, multi-user with per-user data isolation
+- **Backend** (`app.py`): Flask web server with REST API
+- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired two-panel layout with taxonomy sidebar
+- **Database:** SQLite with tables: users, domains (hierarchical), sources, insights (with embeddings), syntheses, usage_logs
 
 ### How It Works
 
-1. User pastes a YouTube URL
-2. `youtube_ingest.py` fetches metadata + transcript via yt-dlp
-3. `insight_extractor.py` sends chunks to GPT → structured insights
-4. `domain_detector.py` auto-classifies into existing or new domain
-5. `domain_synthesizer.py` merges new insights with existing synthesis
-6. Knowledge compounds — each video makes the domain smarter
+1. User registers/logs in, then adds a source (YouTube URL, article URL, file upload, or paste text)
+2. Source ingested → text extracted (type-specific ingestor)
+3. `insight_extractor.py` chunks text → GPT extracts granular, actionable insights
+4. `domain_detector.py` classifies into specific hierarchical domain (e.g., AI Tools → OpenClaw → Setup)
+5. `embeddings.py` generates vector embeddings for semantic search
+6. `domain_synthesizer.py` merges new insights with existing synthesis (temporal awareness — newer info supersedes old)
+7. User can search within any domain via the AI search bar (hybrid RAG) or browse the synthesized knowledge brief
+8. Each new source compounds the domain's knowledge
 
 ---
 

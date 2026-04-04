@@ -29,10 +29,19 @@ def run_migrations(db_path=None):
             updated_at TEXT NOT NULL
         );
 
-        -- Knowledge domains (auto-created from video content)
+        -- Users
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        -- Knowledge domains (hierarchical)
         CREATE TABLE IF NOT EXISTS domains (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+            name TEXT NOT NULL COLLATE NOCASE,
             description TEXT,
             icon TEXT DEFAULT '📚',
             source_count INTEGER DEFAULT 0,
@@ -41,7 +50,7 @@ def run_migrations(db_path=None):
             updated_at TEXT NOT NULL
         );
 
-        -- Ingested YouTube videos
+        -- Ingested sources
         CREATE TABLE IF NOT EXISTS sources (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             video_id TEXT UNIQUE NOT NULL,
@@ -59,7 +68,7 @@ def run_migrations(db_path=None):
             FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE SET NULL
         );
 
-        -- Extracted insights from video transcripts
+        -- Extracted insights
         CREATE TABLE IF NOT EXISTS insights (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_id INTEGER NOT NULL,
@@ -75,7 +84,7 @@ def run_migrations(db_path=None):
             FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
         );
 
-        -- Synthesized domain knowledge (compounds over time)
+        -- Synthesized domain knowledge
         CREATE TABLE IF NOT EXISTS syntheses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             domain_id INTEGER NOT NULL,
@@ -87,7 +96,19 @@ def run_migrations(db_path=None):
             FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
         );
 
-        -- General config (key-value store)
+        -- Usage tracking
+        CREATE TABLE IF NOT EXISTS usage_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            service TEXT NOT NULL,
+            action TEXT NOT NULL,
+            tokens_in INTEGER DEFAULT 0,
+            tokens_out INTEGER DEFAULT 0,
+            estimated_cost REAL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
+        -- General config
         CREATE TABLE IF NOT EXISTS app_config (
             key TEXT PRIMARY KEY,
             value TEXT
@@ -99,12 +120,25 @@ def run_migrations(db_path=None):
         CREATE INDEX IF NOT EXISTS idx_insights_domain ON insights(domain_id);
         CREATE INDEX IF NOT EXISTS idx_insights_source ON insights(source_id);
         CREATE INDEX IF NOT EXISTS idx_syntheses_domain ON syntheses(domain_id, version DESC);
+        CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_id);
+        CREATE INDEX IF NOT EXISTS idx_domains_user ON domains(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sources_user ON sources(user_id);
+        CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id, created_at);
     """)
 
     # Schema evolution — add columns for multi-source support
     _add_column(conn, "sources", "source_type", "TEXT DEFAULT 'youtube'")
     _add_column(conn, "sources", "file_path", "TEXT")
     _add_column(conn, "sources", "original_filename", "TEXT")
+
+    # Schema evolution — domain hierarchy
+    _add_column(conn, "domains", "parent_id", "INTEGER")
+    _add_column(conn, "domains", "level", "INTEGER DEFAULT 0")
+    _add_column(conn, "domains", "path", "TEXT")
+
+    # Schema evolution — user ownership
+    _add_column(conn, "domains", "user_id", "INTEGER")
+    _add_column(conn, "sources", "user_id", "INTEGER")
 
     # Schema evolution — vector embeddings for RAG
     _add_column(conn, "insights", "embedding", "TEXT")
