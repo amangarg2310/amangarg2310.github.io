@@ -215,37 +215,46 @@
             </div>
             {% endif %}
 
-            <!-- ── CHAT (Secondary, collapsed by default) ── -->
-            <div class="intel-chat-toggle" id="chatToggle" onclick="toggleChat()">
-                <span class="intel-chat-toggle-text">Have questions? Ask the knowledge base</span>
-                <span class="intel-chat-toggle-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"/>
+            <!-- ── AI SEARCH (SafetyWing-style inline answers) ── -->
+            <div class="intel-search-section">
+                <h3 class="intel-search-heading">Ask anything about {{ domain.name }}</h3>
+
+                {% if suggested_questions %}
+                <div class="intel-suggested-questions" id="suggestedQuestions">
+                    {% for q in suggested_questions %}
+                    <button class="intel-suggested-q" onclick="askQuestion(this.textContent)">{{ q }}</button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="intel-search-bar" id="searchBar">
+                    <svg class="intel-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
-                </span>
-            </div>
-            <div class="intel-chat-container" id="chatContainer">
-                <div class="intel-chat">
-                    <div class="intel-chat-messages" id="chatMessages">
-                        <div class="intel-chat-empty">
-                            Ask a question to explore what you've learned about {{ domain.name }}.
-                        </div>
-                    </div>
-                    {% if suggested_questions %}
-                    <div class="intel-suggested-questions" id="suggestedQuestions">
-                        {% for q in suggested_questions %}
-                        <button class="intel-suggested-q" onclick="askSuggested(this.textContent)">{{ q }}</button>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    <div class="intel-chat-input-wrap">
-                        <input type="text"
-                               class="intel-chat-input"
-                               id="chatInput"
-                               placeholder="Ask about {{ domain.name }}..."
-                               autocomplete="off">
-                        <button class="intel-chat-send" id="chatSendBtn" onclick="sendChat()">Ask</button>
-                    </div>
+                    <input type="text"
+                           class="intel-search-input"
+                           id="searchInput"
+                           placeholder="What do you want to know?"
+                           autocomplete="off"
+                           onkeydown="if(event.key==='Enter')askQuestion()">
+                    <button class="intel-search-ai-btn" id="searchBtn" onclick="askQuestion()" title="Search with AI">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Answer appears inline here -->
+                <div class="intel-search-answer" id="searchAnswer" style="display:none">
+                    <div class="intel-search-answer-content" id="searchAnswerContent"></div>
+                    <div class="intel-search-answer-meta" id="searchAnswerMeta"></div>
+                </div>
+
+                <!-- Loading state -->
+                <div class="intel-search-loading" id="searchLoading" style="display:none">
+                    <div class="intel-spinner"></div>
+                    <span>Searching knowledge base...</span>
                 </div>
             </div>
         </main>
@@ -1002,82 +1011,41 @@ function generateVisual() {
         });
 }
 
-// Chat toggle
-function toggleChat() {
-    const toggle = document.getElementById('chatToggle');
-    const container = document.getElementById('chatContainer');
-    if (!toggle || !container) return;
-
-    const isExpanded = container.classList.contains('expanded');
-    container.classList.toggle('expanded');
-    toggle.classList.toggle('expanded');
-
-    if (!isExpanded) {
-        const input = document.getElementById('chatInput');
-        if (input) setTimeout(() => input.focus(), 100);
-    }
-}
-
-// Suggested questions
+// Suggested questions — now routes through askQuestion
 function askSuggested(question) {
-    const input = document.getElementById('chatInput');
-    if (input) {
-        input.value = question;
-        // Auto-expand chat if collapsed
-        const container = document.getElementById('chatContainer');
-        const toggle = document.getElementById('chatToggle');
-        if (container && !container.classList.contains('expanded')) {
-            container.classList.add('expanded');
-            if (toggle) toggle.classList.add('expanded');
-        }
-        sendChat();
-    }
+    askQuestion(question);
 }
 
 // ══════════════════════════════════════════════════════════
-// Chat Interface
+// AI Search (SafetyWing-style inline answers)
 // ══════════════════════════════════════════════════════════
 
-const chatInput = document.getElementById('chatInput');
-const chatSendBtn = document.getElementById('chatSendBtn');
-const chatMessages = document.getElementById('chatMessages');
-
-if (chatInput) {
-    chatInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') sendChat();
-    });
-}
-
-function sendChat() {
-    const question = chatInput.value.trim();
+function askQuestion(questionText) {
+    const input = document.getElementById('searchInput');
+    const question = questionText || (input ? input.value.trim() : '');
     if (!question) return;
 
     const domainId = {{ domain.id if domain else 'null' }};
     if (!domainId) return;
 
-    const emptyEl = chatMessages.querySelector('.intel-chat-empty');
-    if (emptyEl) emptyEl.remove();
+    // Set input value if from suggested question
+    if (input && questionText) input.value = questionText;
 
-    addChatMessage('user', question);
-    chatInput.value = '';
-    chatInput.disabled = true;
-    chatSendBtn.disabled = true;
+    const answerEl = document.getElementById('searchAnswer');
+    const contentEl = document.getElementById('searchAnswerContent');
+    const metaEl = document.getElementById('searchAnswerMeta');
+    const loadingEl = document.getElementById('searchLoading');
+    const btn = document.getElementById('searchBtn');
 
-    const typingEl = document.createElement('div');
-    typingEl.className = 'intel-chat-msg assistant';
-    typingEl.id = 'typingIndicator';
-    typingEl.innerHTML = `
-        <div class="intel-chat-msg-label">Intelligence</div>
-        <div class="intel-chat-msg-bubble">
-            <div class="intel-typing">
-                <div class="intel-typing-dot"></div>
-                <div class="intel-typing-dot"></div>
-                <div class="intel-typing-dot"></div>
-            </div>
-        </div>
-    `;
-    chatMessages.appendChild(typingEl);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    // Show loading, hide previous answer
+    answerEl.style.display = 'none';
+    loadingEl.style.display = 'flex';
+    if (btn) btn.disabled = true;
+    if (input) input.disabled = true;
+
+    // Hide suggested questions after first use
+    const suggestedEl = document.getElementById('suggestedQuestions');
+    if (suggestedEl) suggestedEl.style.display = 'none';
 
     fetch('/api/query', {
         method: 'POST',
@@ -1086,55 +1054,58 @@ function sendChat() {
     })
     .then(r => r.json())
     .then(data => {
-        const ti = document.getElementById('typingIndicator');
-        if (ti) ti.remove();
-        addChatMessage('assistant', data.answer || 'No answer available.');
-        chatInput.disabled = false;
-        chatSendBtn.disabled = false;
-        chatInput.focus();
+        loadingEl.style.display = 'none';
+        if (btn) btn.disabled = false;
+        if (input) input.disabled = false;
+
+        // Format the answer as rich HTML
+        let html = escapeHtml(data.answer || 'No answer available.');
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Convert markdown-style lists and paragraphs
+        const lines = html.split('\n');
+        let inList = false;
+        let processed = '';
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+                if (!inList) { processed += '<ul>'; inList = true; }
+                processed += `<li>${trimmed.slice(2)}</li>`;
+            } else if (/^\d+\.\s/.test(trimmed)) {
+                if (!inList) { processed += '<ol>'; inList = true; }
+                processed += `<li>${trimmed.replace(/^\d+\.\s/, '')}</li>`;
+            } else {
+                if (inList) { processed += inList === true ? '</ul>' : '</ol>'; inList = false; }
+                if (trimmed) processed += `<p>${trimmed}</p>`;
+            }
+        }
+        if (inList) processed += '</ul>';
+        html = processed || html;
+
+        contentEl.innerHTML = html;
+
+        // Meta info
+        const sources = data.sources_used || 0;
+        const insights = data.insights_found || 0;
+        metaEl.textContent = `Based on ${insights} relevant insight${insights !== 1 ? 's' : ''} from ${sources} source${sources !== 1 ? 's' : ''}`;
+
+        answerEl.style.display = 'block';
+
+        // Scroll to answer
+        answerEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        if (input) input.focus();
     })
     .catch(err => {
-        const ti = document.getElementById('typingIndicator');
-        if (ti) ti.remove();
-        addChatMessage('assistant', 'Something went wrong. Please try again.');
-        chatInput.disabled = false;
-        chatSendBtn.disabled = false;
+        loadingEl.style.display = 'none';
+        if (btn) btn.disabled = false;
+        if (input) input.disabled = false;
+        contentEl.innerHTML = '<p>Something went wrong. Please try again.</p>';
+        metaEl.textContent = '';
+        answerEl.style.display = 'block';
     });
-}
-
-function addChatMessage(role, content) {
-    const msgEl = document.createElement('div');
-    msgEl.className = `intel-chat-msg ${role} intel-animate-in`;
-
-    const label = role === 'user' ? 'You' : 'Intelligence';
-
-    let html = escapeHtml(content);
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    const lines = html.split('\n');
-    let inList = false;
-    let processed = '';
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('- ')) {
-            if (!inList) { processed += '<ul>'; inList = true; }
-            processed += `<li>${trimmed.slice(2)}</li>`;
-        } else {
-            if (inList) { processed += '</ul>'; inList = false; }
-            processed += line + '<br>';
-        }
-    }
-    if (inList) processed += '</ul>';
-    html = processed;
-
-    msgEl.innerHTML = `
-        <div class="intel-chat-msg-label">${label}</div>
-        <div class="intel-chat-msg-bubble">${html}</div>
-    `;
-
-    chatMessages.appendChild(msgEl);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 </script>
 
