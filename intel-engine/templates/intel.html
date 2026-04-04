@@ -178,7 +178,52 @@
                 </p>
             </div>
 
-            <!-- ── SYNTHESIS (Hero Feature) ── -->
+            <!-- ── AI SEARCH (top of page) ── -->
+            <div class="intel-search-section">
+                <h3 class="intel-search-heading">Ask anything about {{ domain.name }}</h3>
+
+                <div class="intel-search-bar" id="searchBar">
+                    <svg class="intel-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text"
+                           class="intel-search-input"
+                           id="searchInput"
+                           placeholder="What do you want to know?"
+                           autocomplete="off"
+                           oninput="onSearchInput()"
+                           onkeydown="if(event.key==='Enter')askQuestion()">
+                    <button class="intel-search-ai-btn" id="searchBtn" onclick="askQuestion()" title="Search with AI">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Suggested questions (hidden until user starts typing) -->
+                {% if suggested_questions %}
+                <div class="intel-suggested-questions" id="suggestedQuestions" style="display:none">
+                    {% for q in suggested_questions %}
+                    <button class="intel-suggested-q" onclick="askQuestion(this.textContent)">{{ q }}</button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Answer appears inline here -->
+                <div class="intel-search-answer" id="searchAnswer" style="display:none">
+                    <div class="intel-search-answer-content" id="searchAnswerContent"></div>
+                    <div class="intel-search-answer-meta" id="searchAnswerMeta"></div>
+                </div>
+
+                <!-- Loading state -->
+                <div class="intel-search-loading" id="searchLoading" style="display:none">
+                    <div class="intel-spinner"></div>
+                    <span>Searching knowledge base...</span>
+                </div>
+            </div>
+
+            <!-- ── SYNTHESIS ── -->
             {% if synthesis and synthesis.content %}
             <div class="intel-brief-header">
                 <h2 class="intel-brief-title">Knowledge Brief</h2>
@@ -194,69 +239,7 @@
             <div class="intel-synthesis intel-animate-in" id="synthesisContent">
                 {{ synthesis_html | safe }}
             </div>
-
-            <!-- Visual Summary -->
-            <div class="intel-visual-section">
-                <div class="intel-visual-header">
-                    <span class="intel-visual-title">Visual Summary</span>
-                    <button class="intel-generate-visual-btn" id="generateVisualBtn" onclick="generateVisual()">
-                        Generate Visual
-                    </button>
-                </div>
-                <div class="intel-visual-frame" id="visualFrame">
-                    {% if synthesis.visual_html %}
-                    <iframe id="visualIframe" sandbox="allow-scripts" srcdoc="{{ synthesis.visual_html | e }}"></iframe>
-                    {% else %}
-                    <div class="intel-visual-empty" id="visualEmpty">
-                        Click "Generate Visual" to create an interactive diagram of this knowledge base using Claude AI.
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
             {% endif %}
-
-            <!-- ── AI SEARCH (SafetyWing-style inline answers) ── -->
-            <div class="intel-search-section">
-                <h3 class="intel-search-heading">Ask anything about {{ domain.name }}</h3>
-
-                {% if suggested_questions %}
-                <div class="intel-suggested-questions" id="suggestedQuestions">
-                    {% for q in suggested_questions %}
-                    <button class="intel-suggested-q" onclick="askQuestion(this.textContent)">{{ q }}</button>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                <div class="intel-search-bar" id="searchBar">
-                    <svg class="intel-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8"/>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text"
-                           class="intel-search-input"
-                           id="searchInput"
-                           placeholder="What do you want to know?"
-                           autocomplete="off"
-                           onkeydown="if(event.key==='Enter')askQuestion()">
-                    <button class="intel-search-ai-btn" id="searchBtn" onclick="askQuestion()" title="Search with AI">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <!-- Answer appears inline here -->
-                <div class="intel-search-answer" id="searchAnswer" style="display:none">
-                    <div class="intel-search-answer-content" id="searchAnswerContent"></div>
-                    <div class="intel-search-answer-meta" id="searchAnswerMeta"></div>
-                </div>
-
-                <!-- Loading state -->
-                <div class="intel-search-loading" id="searchLoading" style="display:none">
-                    <div class="intel-spinner"></div>
-                    <span>Searching knowledge base...</span>
-                </div>
-            </div>
         </main>
     </div>
 
@@ -1011,9 +994,17 @@ function generateVisual() {
         });
 }
 
-// Suggested questions — now routes through askQuestion
-function askSuggested(question) {
-    askQuestion(question);
+// Show suggested questions when user starts typing
+function onSearchInput() {
+    const input = document.getElementById('searchInput');
+    const suggestedEl = document.getElementById('suggestedQuestions');
+    if (!suggestedEl) return;
+
+    if (input && input.value.trim().length > 0) {
+        suggestedEl.style.display = 'flex';
+    } else {
+        suggestedEl.style.display = 'none';
+    }
 }
 
 // ══════════════════════════════════════════════════════════
