@@ -114,15 +114,12 @@ def run_migrations(db_path=None):
             value TEXT
         );
 
-        -- Indexes
+        -- Indexes (only on columns defined in CREATE TABLE above)
         CREATE INDEX IF NOT EXISTS idx_sources_domain ON sources(domain_id);
         CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status);
         CREATE INDEX IF NOT EXISTS idx_insights_domain ON insights(domain_id);
         CREATE INDEX IF NOT EXISTS idx_insights_source ON insights(source_id);
         CREATE INDEX IF NOT EXISTS idx_syntheses_domain ON syntheses(domain_id, version DESC);
-        CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_id);
-        CREATE INDEX IF NOT EXISTS idx_domains_user ON domains(user_id);
-        CREATE INDEX IF NOT EXISTS idx_sources_user ON sources(user_id);
         CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id, created_at);
     """)
 
@@ -139,6 +136,14 @@ def run_migrations(db_path=None):
     # Schema evolution — user ownership
     _add_column(conn, "domains", "user_id", "INTEGER")
     _add_column(conn, "sources", "user_id", "INTEGER")
+
+    # Indexes on columns added via ALTER TABLE (must come after _add_column)
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_domains_user ON domains(user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_sources_user ON sources(user_id)")
+    except sqlite3.OperationalError:
+        pass
 
     # Schema evolution — vector embeddings for RAG
     _add_column(conn, "insights", "embedding", "TEXT")
