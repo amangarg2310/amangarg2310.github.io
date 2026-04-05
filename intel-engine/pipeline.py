@@ -134,6 +134,8 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
 
 def detect_source_type(url: str) -> str:
     """Auto-detect source type from a URL."""
+    if 'list=' in url and 'youtube.com' in url:
+        return 'playlist'
     if re.search(r'(?:youtube\.com/watch|youtu\.be/|youtube\.com/shorts/)', url):
         return 'youtube'
     return 'article'
@@ -218,6 +220,51 @@ def run_pipeline(url: str, db_path=None) -> dict:
         except Exception:
             pass
         return {'status': 'error', 'video_id': video_id, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# Playlist Pipeline
+# ══════════════════════════════════════════════════════════════
+
+def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict:
+    """Ingest all videos from a YouTube playlist sequentially."""
+    from youtube_ingest import extract_playlist_id, fetch_playlist_videos
+
+    db_path = db_path or config.DB_PATH
+    playlist_id = extract_playlist_id(playlist_url)
+    if not playlist_id:
+        return {'status': 'error', 'error': 'Invalid playlist URL'}
+
+    playlist_vid = _generate_source_id("playlist")
+
+    try:
+        _update_status(playlist_vid, 'processing', 'Fetching playlist...', 5)
+        videos = fetch_playlist_videos(playlist_id)
+        _update_status(playlist_vid, 'processing', f'Found {len(videos)} videos', 10)
+
+        results = []
+        for i, video in enumerate(videos):
+            progress = 10 + int((i / max(len(videos), 1)) * 85)
+            _update_status(playlist_vid, 'processing',
+                           f'Processing {i+1}/{len(videos)}: {video["title"][:50]}...', progress)
+
+            url = f'https://www.youtube.com/watch?v={video["video_id"]}'
+            try:
+                result = run_pipeline(url, db_path=db_path)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Playlist video failed ({video['video_id']}): {e}")
+                results.append({'status': 'error', 'video_id': video['video_id'], 'error': str(e)})
+
+        succeeded = sum(1 for r in results if r.get('status') in ('complete', 'already_exists'))
+        _update_status(playlist_vid, 'complete',
+                       f'Done — {succeeded}/{len(videos)} videos processed', 100)
+        return {'status': 'complete', 'video_id': playlist_vid, 'total': len(videos), 'succeeded': succeeded, 'results': results}
+
+    except Exception as e:
+        logger.error(f"Playlist pipeline failed: {e}", exc_info=True)
+        _update_status(playlist_vid, 'error', 'Playlist failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': playlist_vid, 'error': str(e)}
 
 
 # ══════════════════════════════════════════════════════════════

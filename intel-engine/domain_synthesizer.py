@@ -43,6 +43,14 @@ RULES:
 8. Source dates are approximate (when the source was added). Treat them as indicators of relative recency.
 
 FORMAT as clean markdown:
+
+Start with a ## TLDR section (3-5 bullet points) summarizing the most important takeaways:
+- What this domain is about (1 sentence)
+- The single most important thing to know
+- Key tools/commands/resources mentioned
+- Any critical warnings or gotchas
+
+Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
 - Numbered steps for procedures (1. Do X, 2. Then Y...)
 - Bullet points for tips, options, and alternatives
@@ -75,6 +83,14 @@ RULES:
    - Do NOT present outdated information alongside current information as if both are valid.
 
 FORMAT as clean markdown:
+
+Start with a ## TLDR section (3-5 bullet points) summarizing the most important takeaways:
+- What this domain is about (1 sentence)
+- The single most important thing to know
+- Key tools/commands/resources mentioned
+- Any critical warnings or gotchas
+
+Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
 - Numbered steps for procedures (1. Do X, 2. Then Y...)
 - Bullet points for tips, options, and alternatives

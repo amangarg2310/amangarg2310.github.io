@@ -47,9 +47,8 @@
                 </div>
                 <div class="intel-taxonomy-tree">
                     {% for node in domain_tree %}
-                    {% include "partials/tree_node.html" ignore missing %}
-                    <div class="intel-tree-node {% if domain and domain.id == node.id %}active{% endif %}" data-level="{{ node.level }}">
-                        <div class="intel-tree-row" {% if node.children %}onclick="toggleTreeChildren(this)"{% endif %}>
+                    <div class="intel-tree-node {% if domain and domain.id == node.id %}active{% endif %}" data-level="{{ node.level }}" data-domain-id="{{ node.id }}" data-domain-name="{{ node.name }}">
+                        <div class="intel-tree-row" {% if node.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ node.id }}, '{{ node.name }}', {{ node.level }})">
                             {% if node.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
                             <span class="intel-tree-icon">{{ node.icon }}</span>
                             <a href="{{ url_for('domain_page', domain_name=node.name) }}" class="intel-tree-name {% if domain and domain.name == node.name %}active{% endif %}">{{ node.name }}</a>
@@ -58,8 +57,8 @@
                         {% if node.children %}
                         <div class="intel-tree-children {% if not (domain and domain.path and node.name in domain.path|default('', true)) %}collapsed{% endif %}">
                             {% for child in node.children %}
-                            <div class="intel-tree-node {% if domain and domain.id == child.id %}active{% endif %}" data-level="{{ child.level }}">
-                                <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %}>
+                            <div class="intel-tree-node {% if domain and domain.id == child.id %}active{% endif %}" data-level="{{ child.level }}" data-domain-id="{{ child.id }}" data-domain-name="{{ child.name }}">
+                                <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ child.id }}, '{{ child.name }}', {{ child.level }})">
                                     {% if child.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
                                     <span class="intel-tree-icon">{{ child.icon }}</span>
                                     <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-tree-name {% if domain and domain.name == child.name %}active{% endif %}">{{ child.name }}</a>
@@ -68,8 +67,8 @@
                                 {% if child.children %}
                                 <div class="intel-tree-children collapsed">
                                     {% for sub in child.children %}
-                                    <div class="intel-tree-node" data-level="{{ sub.level }}">
-                                        <div class="intel-tree-row">
+                                    <div class="intel-tree-node" data-level="{{ sub.level }}" data-domain-id="{{ sub.id }}" data-domain-name="{{ sub.name }}">
+                                        <div class="intel-tree-row" oncontextmenu="showDomainMenu(event, {{ sub.id }}, '{{ sub.name }}', {{ sub.level }})">
                                             <span class="intel-tree-icon">•</span>
                                             <a href="{{ url_for('domain_page', domain_name=sub.name) }}" class="intel-tree-name {% if domain and domain.name == sub.name %}active{% endif %}">{{ sub.name }}</a>
                                         </div>
@@ -432,6 +431,29 @@
 
     {% endif %}
 
+</div>
+
+<!-- Domain Context Menu -->
+<div class="intel-context-menu" id="domainContextMenu" style="display:none;">
+    <div class="intel-context-item" onclick="domainAction('rename')">Rename</div>
+    <div class="intel-context-item" onclick="domainAction('merge')">Merge into...</div>
+    <div class="intel-context-item" onclick="domainAction('move')">Move to...</div>
+    <div class="intel-context-divider"></div>
+    <div class="intel-context-item intel-context-danger" onclick="domainAction('delete')">Delete</div>
+</div>
+
+<!-- Domain Merge/Move Modal -->
+<div class="intel-modal-overlay" id="domainModal" style="display:none;" onclick="if(event.target===this)closeDomainModal()">
+    <div class="intel-modal">
+        <div class="intel-modal-header">
+            <h3 id="domainModalTitle">Merge Domain</h3>
+            <button class="intel-modal-close" onclick="closeDomainModal()">&times;</button>
+        </div>
+        <div class="intel-modal-body">
+            <p id="domainModalDesc">Select the target domain:</p>
+            <div class="intel-modal-list" id="domainModalList"></div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -853,6 +875,129 @@ function toggleTreeChildren(rowEl) {
         children.classList.toggle('collapsed');
         if (toggle) toggle.classList.toggle('expanded');
     }
+}
+
+// ── Domain Management (context menu, merge, rename, delete) ──
+
+let _ctxDomain = { id: null, name: '', level: 0 };
+
+function showDomainMenu(e, id, name, level) {
+    e.preventDefault();
+    e.stopPropagation();
+    _ctxDomain = { id, name, level };
+    const menu = document.getElementById('domainContextMenu');
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+}
+
+document.addEventListener('click', () => {
+    document.getElementById('domainContextMenu').style.display = 'none';
+});
+
+function domainAction(action) {
+    document.getElementById('domainContextMenu').style.display = 'none';
+    if (action === 'rename') {
+        const newName = prompt('Rename domain:', _ctxDomain.name);
+        if (newName && newName !== _ctxDomain.name) {
+            fetch('/api/domains/rename', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ domain_id: _ctxDomain.id, new_name: newName })
+            }).then(r => r.json()).then(d => {
+                if (d.status === 'ok') location.reload();
+                else alert(d.error || 'Rename failed');
+            });
+        }
+    } else if (action === 'delete') {
+        if (confirm(`Delete "${_ctxDomain.name}" and all its sources/insights? This cannot be undone.`)) {
+            fetch(`/api/domains/${_ctxDomain.id}`, { method: 'DELETE' })
+                .then(r => r.json()).then(d => {
+                    if (d.status === 'ok') location.href = '/';
+                    else alert(d.error || 'Delete failed');
+                });
+        }
+    } else if (action === 'merge' || action === 'move') {
+        openDomainModal(action);
+    }
+}
+
+function openDomainModal(action) {
+    const modal = document.getElementById('domainModal');
+    const title = document.getElementById('domainModalTitle');
+    const desc = document.getElementById('domainModalDesc');
+    const list = document.getElementById('domainModalList');
+
+    title.textContent = action === 'merge' ? `Merge "${_ctxDomain.name}" into...` : `Move "${_ctxDomain.name}" to...`;
+    desc.textContent = action === 'merge' ? 'Select the target domain (sources and insights will be moved):' : 'Select the new parent category:';
+    list.innerHTML = '<div style="padding:12px;color:var(--intel-text-tertiary)">Loading...</div>';
+    modal.style.display = 'flex';
+
+    fetch('/api/domain-tree').then(r => r.json()).then(data => {
+        list.innerHTML = '';
+        const tree = data.tree || [];
+        tree.forEach(parent => {
+            if (action === 'move') {
+                // Show parent categories to move under
+                if (parent.id !== _ctxDomain.id) {
+                    const el = document.createElement('div');
+                    el.className = 'intel-modal-option';
+                    el.textContent = `${parent.icon} ${parent.name}`;
+                    el.onclick = () => executeDomainAction(action, parent.id, parent.name);
+                    list.appendChild(el);
+                }
+            } else {
+                // Show all domains at same level for merge
+                (parent.children || []).forEach(child => {
+                    if (child.id !== _ctxDomain.id && child.level === _ctxDomain.level) {
+                        const el = document.createElement('div');
+                        el.className = 'intel-modal-option';
+                        el.textContent = `${child.icon} ${child.name} (${child.source_count || 0} sources)`;
+                        el.onclick = () => executeDomainAction(action, child.id, child.name);
+                        list.appendChild(el);
+                    }
+                });
+                // Also show parent-level for merging parent categories
+                if (_ctxDomain.level === 0 && parent.id !== _ctxDomain.id) {
+                    const el = document.createElement('div');
+                    el.className = 'intel-modal-option';
+                    el.textContent = `${parent.icon} ${parent.name}`;
+                    el.onclick = () => executeDomainAction(action, parent.id, parent.name);
+                    list.appendChild(el);
+                }
+            }
+        });
+        if (!list.children.length) {
+            list.innerHTML = '<div style="padding:12px;color:var(--intel-text-tertiary)">No other domains available</div>';
+        }
+    });
+}
+
+function executeDomainAction(action, targetId, targetName) {
+    if (action === 'merge') {
+        if (!confirm(`Merge "${_ctxDomain.name}" into "${targetName}"? This will move all sources and insights.`)) return;
+        fetch('/api/domains/merge', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ source_id: _ctxDomain.id, target_id: targetId })
+        }).then(r => r.json()).then(d => {
+            closeDomainModal();
+            if (d.status === 'ok') {
+                location.href = '/domain/' + encodeURIComponent(d.target_name || targetName);
+            } else alert(d.error || 'Merge failed');
+        });
+    } else if (action === 'move') {
+        fetch('/api/domains/move', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ domain_id: _ctxDomain.id, new_parent_id: targetId })
+        }).then(r => r.json()).then(d => {
+            closeDomainModal();
+            if (d.status === 'ok') location.reload();
+            else alert(d.error || 'Move failed');
+        });
+    }
+}
+
+function closeDomainModal() {
+    document.getElementById('domainModal').style.display = 'none';
 }
 
 // ── Admin Tools ──

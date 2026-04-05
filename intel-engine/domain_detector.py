@@ -41,16 +41,33 @@ DETECTION_PROMPT = """You are a domain taxonomy classifier. Given content metada
 
 {existing_domains_section}
 
-RULES:
-1. **Be SPECIFIC**: Use the actual tool, product, framework, or concept name — NOT a generic category.
-   - Good: "OpenClaw" / Bad: "AI Automation Tools"
-   - Good: "React Router" / Bad: "Web Development"
-   - Good: "Product-Led Growth" / Bad: "Growth"
-2. **Suggest a parent category** (2-3 words) that groups related domains together.
-3. **Detect sub-topics** present in this specific content (2-5 sub-topics).
-4. If the content clearly fits an EXISTING domain (exact match), return that domain name.
-5. If it's a new specific topic, create a new domain — don't force it into a generic existing one.
-6. Domain names should be professional and recognizable (proper noun if it's a named tool/product).
+CLASSIFICATION PRIORITY:
+1. **PRIMARY SIGNAL — TITLE**: The content TITLE tells you WHAT this is about. Use it as the main classification signal.
+2. **SECONDARY — EXCERPT**: The excerpt provides supporting context to confirm the domain and detect sub-topics.
+3. **MATCH FIRST**: Before creating anything new, check if this content belongs to an EXISTING domain:
+   - Same tool/product/concept? → Use the existing domain name EXACTLY.
+   - Same broader category? → Create a SIBLING domain under the SAME existing parent.
+   - Truly new topic with no related parent? → Only then create a new parent + domain.
+
+SIBLING RULE:
+If the content is about a DIFFERENT tool/product within an existing parent category, create it as a SIBLING under that SAME parent. NEVER create a near-duplicate parent.
+  - Existing: "AI Tools" → "OpenClaw"
+  - New video about Claude Code → "AI Tools" → "Claude Code" (sibling under SAME parent)
+  - WRONG: Creating "AI Automation" or "AI Development" alongside existing "AI Tools"
+
+DOMAIN NAMING:
+- Be SPECIFIC: Use the actual tool, product, framework, or concept name — NOT a generic category.
+  - Good: "OpenClaw" / Bad: "AI Automation Tools"
+  - Good: "React Router" / Bad: "Web Development"
+  - Good: "Product-Led Growth" / Bad: "Growth"
+- Domain names should be professional and recognizable (proper noun if it's a named tool/product).
+
+SUB-TOPIC RULES:
+- Sub-topics should be BROAD workflow categories, not specific steps.
+- Good: "Setup & Installation", "Daily Workflows", "Troubleshooting"
+- Bad: "Installing Docker Container", "Configuring Port 3000", "Fixing SSL Errors"
+- Aim for 3-5 sub-topics that could each contain MULTIPLE sources.
+- Think of sub-topics as CHAPTERS in a book, not individual pages.
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
@@ -92,18 +109,35 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
     existing = get_existing_domains(db_path, user_id)
 
     if existing:
-        # Show hierarchy to GPT
-        lines = []
+        # Show hierarchy to GPT grouped by parent
+        parents = {}
+        orphans = []
         for d in existing:
-            indent = "  " * (d.get('level') or 0)
-            count = d.get('source_count') or 0
-            desc = d.get('description') or ''
-            lines.append(f"{indent}- {d['name']} ({count} sources): {desc}")
-        existing_section = f"EXISTING DOMAIN HIERARCHY:\n" + "\n".join(lines) + "\n"
+            level = d.get('level') or 0
+            if level == 0:
+                parents[d['name']] = {'desc': d.get('description', ''), 'count': d.get('source_count', 0), 'children': []}
+            elif level == 1:
+                # Find parent name from path
+                path = d.get('path', '')
+                parent_name = path.split('/')[1] if path and len(path.split('/')) > 1 else None
+                if parent_name and parent_name in parents:
+                    parents[parent_name]['children'].append(d)
+                else:
+                    orphans.append(d)
+            # Skip level 2 (sub-topics) — GPT doesn't need them for classification
+        lines = []
+        for pname, pdata in parents.items():
+            lines.append(f"Parent: {pname}")
+            for child in pdata['children']:
+                count = child.get('source_count', 0)
+                lines.append(f"  └─ {child['name']} ({count} sources): {child.get('description', '')}")
+        for d in orphans:
+            lines.append(f"  - {d['name']} ({d.get('source_count', 0)} sources)")
+        existing_section = "EXISTING DOMAIN HIERARCHY (reuse these parents when possible!):\n" + "\n".join(lines) + "\n"
     else:
         existing_section = "No existing domains yet — create a new hierarchy.\n"
 
-    words = transcript_excerpt.split()[:500]
+    words = transcript_excerpt.split()[:300]  # Reduced from 500 — title is primary signal
     excerpt = " ".join(words)
 
     client = OpenAI(api_key=api_key)
@@ -170,6 +204,49 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
     }
 
 
+_PARENT_STOP_WORDS = {'tools', 'development', 'management', 'engineering', 'automation', 'technology', 'platform', 'software', 'systems'}
+
+
+def _normalize_parent(name: str) -> str:
+    """Strip common suffixes for fuzzy parent comparison."""
+    words = name.lower().split()
+    core = [w for w in words if w not in _PARENT_STOP_WORDS]
+    return ' '.join(core) if core else name.lower()
+
+
+def _find_matching_parent(conn, parent_name: str, user_id=None) -> tuple[int, str] | None:
+    """Find an existing parent category that matches semantically. Returns (id, name) or None."""
+    # 1. Exact case-insensitive match
+    if user_id:
+        row = conn.execute(
+            "SELECT id, name FROM domains WHERE name = ? COLLATE NOCASE AND level = 0 AND (user_id = ? OR user_id IS NULL)",
+            (parent_name, user_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id, name FROM domains WHERE name = ? COLLATE NOCASE AND level = 0",
+            (parent_name,),
+        ).fetchone()
+    if row:
+        return (row[0], row[1])
+
+    # 2. Normalized stem match (e.g., "AI Automation" matches "AI Tools" → both normalize to "ai")
+    normalized = _normalize_parent(parent_name)
+    if user_id:
+        parents = conn.execute(
+            "SELECT id, name FROM domains WHERE level = 0 AND (user_id = ? OR user_id IS NULL)", (user_id,)
+        ).fetchall()
+    else:
+        parents = conn.execute("SELECT id, name FROM domains WHERE level = 0").fetchall()
+
+    for p in parents:
+        if _normalize_parent(p[1]) == normalized:
+            logger.info(f"Auto-merged parent '{parent_name}' → existing '{p[1]}'")
+            return (p[0], p[1])
+
+    return None
+
+
 def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, description: str = "",
                             db_path=None, user_id=None) -> int:
     """Create the full domain hierarchy (parent → domain → sub-topics) and return the domain_id."""
@@ -177,13 +254,17 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
     conn = sqlite3.connect(str(db_path))
     now = datetime.now(timezone.utc).isoformat()
 
-    # 1. Find or create parent (level 0)
-    parent_id = _find_or_create_domain(
-        conn, parent_name, level=0, parent_id=None,
-        path=f"/{parent_name}",
-        description=f"Category: {parent_name}",
-        user_id=user_id, now=now,
-    )
+    # 1. Find existing parent via fuzzy match, or create new one
+    matched = _find_matching_parent(conn, parent_name, user_id)
+    if matched:
+        parent_id, parent_name = matched  # Use the existing parent's actual name
+    else:
+        parent_id = _find_or_create_domain(
+            conn, parent_name, level=0, parent_id=None,
+            path=f"/{parent_name}",
+            description=f"Category: {parent_name}",
+            user_id=user_id, now=now,
+        )
 
     # 2. Find or create main domain (level 1)
     domain_id = _find_or_create_domain(
@@ -193,16 +274,29 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
         user_id=user_id, now=now,
     )
 
-    # 3. Find or create sub-topics (level 2)
-    for sub in (sub_topics or [])[:5]:  # Cap at 5
+    # 3. Find or create sub-topics (level 2) — with hard cap
+    existing_subs = conn.execute(
+        "SELECT name FROM domains WHERE parent_id = ? AND level = 2", (domain_id,)
+    ).fetchall()
+    existing_sub_count = len(existing_subs)
+
+    for sub in (sub_topics or [])[:5]:  # Cap at 5 per ingestion
         sub = sub.strip()
-        if sub:
-            _find_or_create_domain(
-                conn, sub, level=2, parent_id=domain_id,
-                path=f"/{parent_name}/{name}/{sub}",
-                description=f"{name} — {sub}",
-                user_id=user_id, now=now,
-            )
+        if not sub:
+            continue
+        if existing_sub_count >= 7:  # Hard cap at 7 sub-topics per domain
+            logger.info(f"Sub-topic cap reached for domain {name}, skipping '{sub}'")
+            break
+        _find_or_create_domain(
+            conn, sub, level=2, parent_id=domain_id,
+            path=f"/{parent_name}/{name}/{sub}",
+            description=f"{name} — {sub}",
+            user_id=user_id, now=now,
+        )
+        # Only increment if we actually created a new one (not found existing)
+        existing_sub_names = {r[0].lower() for r in existing_subs}
+        if sub.lower() not in existing_sub_names:
+            existing_sub_count += 1
 
     conn.commit()
     conn.close()

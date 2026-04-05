@@ -805,6 +805,104 @@
     margin: 8px 16px;
 }
 
+/* ── Domain Context Menu ── */
+.intel-context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: 8px;
+    padding: 4px 0;
+    min-width: 160px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.intel-context-item {
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--intel-text-secondary);
+}
+.intel-context-item:hover {
+    background: var(--intel-surface-hover);
+    color: var(--intel-text);
+}
+.intel-context-danger { color: #e53935; }
+.intel-context-danger:hover { background: #ffeaea; color: #c62828; }
+.intel-context-divider {
+    height: 1px;
+    background: var(--intel-border-light);
+    margin: 4px 0;
+}
+
+/* ── Domain Modal ── */
+.intel-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.intel-modal {
+    background: var(--intel-surface);
+    border-radius: 16px;
+    width: 400px;
+    max-width: 90vw;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+}
+.intel-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--intel-border-light);
+}
+.intel-modal-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+.intel-modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--intel-text-tertiary);
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+.intel-modal-close:hover { background: var(--intel-surface-hover); }
+.intel-modal-body {
+    padding: 16px 24px 24px;
+    overflow-y: auto;
+}
+.intel-modal-body p {
+    font-size: 13px;
+    color: var(--intel-text-tertiary);
+    margin: 0 0 12px;
+}
+.intel-modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.intel-modal-option {
+    padding: 10px 14px;
+    font-size: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--intel-text-secondary);
+    transition: background 0.15s;
+}
+.intel-modal-option:hover {
+    background: var(--intel-surface-hover);
+    color: var(--intel-text);
+}
+
 /* ── Add Source Button ── */
 .intel-add-source-btn {
     display: flex;
@@ -1233,6 +1331,15 @@
     border-radius: 0 8px 8px 0;
     font-style: italic;
     color: var(--intel-text-secondary);
+}
+
+/* ── TLDR Highlight ── */
+.intel-synthesis h2:first-of-type + ul {
+    background: var(--intel-accent-light);
+    border-left: 3px solid var(--intel-accent);
+    padding: 16px 16px 16px 32px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 24px;
 }
 
 /* ── Chat / Query Section ── */

@@ -237,6 +237,52 @@ def ingest_video(url: str) -> VideoMeta:
     )
 
 
+def extract_playlist_id(url: str) -> Optional[str]:
+    """Extract playlist ID from a YouTube playlist URL."""
+    match = re.search(r'[?&]list=([a-zA-Z0-9_-]+)', url)
+    return match.group(1) if match else None
+
+
+def fetch_playlist_videos(playlist_id: str) -> list[dict]:
+    """Fetch video IDs and titles from a YouTube playlist via RSS feed (no API key needed).
+
+    Returns up to ~15 most recent videos (YouTube RSS limit).
+    """
+    import xml.etree.ElementTree as ET
+
+    rss_url = f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}"
+    try:
+        req = urllib.request.Request(rss_url, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; IntelEngine/1.0)',
+        })
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            xml_data = resp.read().decode()
+    except urllib.error.HTTPError as e:
+        raise ValueError(f"Could not fetch playlist (HTTP {e.code}). Check the playlist URL or ensure it's public.")
+    except Exception as e:
+        raise ValueError(f"Failed to fetch playlist RSS: {e}")
+
+    # Parse Atom XML feed
+    ns = {
+        'atom': 'http://www.w3.org/2005/Atom',
+        'yt': 'http://www.youtube.com/xml/schemas/2015',
+        'media': 'http://search.yahoo.com/mrss/',
+    }
+    root = ET.fromstring(xml_data)
+    videos = []
+    for entry in root.findall('atom:entry', ns):
+        vid_el = entry.find('yt:videoId', ns)
+        title_el = entry.find('atom:title', ns)
+        if vid_el is not None and vid_el.text:
+            videos.append({
+                'video_id': vid_el.text,
+                'title': title_el.text if title_el is not None else 'Untitled',
+            })
+    if not videos:
+        raise ValueError("No videos found in playlist. It may be empty or private.")
+    return videos
+
+
 def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
     """Split transcript into overlapping chunks for processing."""
     words = transcript.split()

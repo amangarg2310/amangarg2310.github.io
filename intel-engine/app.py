@@ -307,8 +307,9 @@ def save_setup():
 def api_ingest():
     """Accept a URL (YouTube or article) and start background processing."""
     from pipeline import (
-        run_pipeline, run_article_pipeline, check_already_ingested,
-        _update_status, detect_source_type,
+        run_pipeline, run_article_pipeline, run_playlist_pipeline,
+        check_already_ingested, _update_status, detect_source_type,
+        _generate_source_id,
     )
     from youtube_ingest import extract_video_id
     from article_ingest import generate_article_id
@@ -318,9 +319,24 @@ def api_ingest():
     if not url:
         return jsonify({"error": "No URL provided"}), 400
 
+    uid = current_user.id
     source_type = detect_source_type(url)
 
-    if source_type == 'youtube':
+    if source_type == 'playlist':
+        playlist_vid = _generate_source_id("playlist")
+        _update_status(playlist_vid, 'processing', 'Extracting playlist...', 5)
+
+        def _run():
+            try:
+                run_playlist_pipeline(url, user_id=uid)
+            except Exception as e:
+                _update_status(playlist_vid, 'error', 'Failed', 0, error=str(e))
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return jsonify({"status": "started", "video_id": playlist_vid, "is_playlist": True})
+
+    elif source_type == 'youtube':
         video_id = extract_video_id(url)
         if not video_id:
             return jsonify({"error": "Invalid YouTube URL"}), 400
@@ -526,6 +542,179 @@ def api_domain_tree():
         return jsonify({"tree": roots})
     except sqlite3.OperationalError:
         return jsonify({"tree": []})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/domains/merge", methods=["POST"])
+@login_required
+def api_merge_domains():
+    """Merge source domain into target domain. Moves sources + insights, re-synthesizes."""
+    from domain_synthesizer import resynthesize_domain_full
+
+    data = request.get_json() or {}
+    source_id = data.get('source_id')
+    target_id = data.get('target_id')
+    if not source_id or not target_id or source_id == target_id:
+        return jsonify({"error": "Invalid source_id or target_id"}), 400
+
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        # Verify both domains belong to current user
+        src = conn.execute("SELECT id, name, level FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (source_id, uid)).fetchone()
+        tgt = conn.execute("SELECT id, name, level FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (target_id, uid)).fetchone()
+        if not src or not tgt:
+            return jsonify({"error": "Domain not found"}), 404
+
+        # Move sources and insights to target
+        conn.execute("UPDATE sources SET domain_id = ? WHERE domain_id = ?", (target_id, source_id))
+        conn.execute("UPDATE insights SET domain_id = ? WHERE domain_id = ?", (target_id, source_id))
+
+        # Move sub-topics (children) to target
+        conn.execute("UPDATE domains SET parent_id = ? WHERE parent_id = ? AND level = 2", (target_id, source_id))
+
+        # Update counts on target
+        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ?", (target_id,)).fetchone()[0]
+        ins_count = conn.execute("SELECT COUNT(*) FROM insights WHERE domain_id = ?", (target_id,)).fetchone()[0]
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute("UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+                      (src_count, ins_count, now, target_id))
+
+        # Delete source domain
+        conn.execute("DELETE FROM domains WHERE id = ?", (source_id,))
+        conn.commit()
+
+        # Re-synthesize target in background
+        def _resynthesize():
+            try:
+                resynthesize_domain_full(target_id)
+            except Exception as e:
+                logger.error(f"Re-synthesis after merge failed: {e}")
+
+        thread = threading.Thread(target=_resynthesize, daemon=True)
+        thread.start()
+
+        return jsonify({"status": "ok", "message": f"Merged '{src['name']}' into '{tgt['name']}'", "target_name": tgt['name']})
+    except Exception as e:
+        logger.error(f"Domain merge failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/domains/move", methods=["POST"])
+@login_required
+def api_move_domain():
+    """Move a domain under a different parent."""
+    data = request.get_json() or {}
+    domain_id = data.get('domain_id')
+    new_parent_id = data.get('new_parent_id')
+    if not domain_id:
+        return jsonify({"error": "domain_id required"}), 400
+
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        domain = conn.execute("SELECT id, name, level FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (domain_id, uid)).fetchone()
+        if not domain:
+            return jsonify({"error": "Domain not found"}), 404
+
+        if new_parent_id:
+            parent = conn.execute("SELECT id, name, path FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (new_parent_id, uid)).fetchone()
+            if not parent:
+                return jsonify({"error": "Parent not found"}), 404
+            new_path = f"{parent['path']}/{domain['name']}"
+            conn.execute("UPDATE domains SET parent_id = ?, path = ?, updated_at = ? WHERE id = ?",
+                          (new_parent_id, new_path, datetime.now(timezone.utc).isoformat(), domain_id))
+        else:
+            # Move to root (make it a parent category)
+            conn.execute("UPDATE domains SET parent_id = NULL, level = 0, path = ?, updated_at = ? WHERE id = ?",
+                          (f"/{domain['name']}", datetime.now(timezone.utc).isoformat(), domain_id))
+
+        conn.commit()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        logger.error(f"Domain move failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/domains/rename", methods=["POST"])
+@login_required
+def api_rename_domain():
+    """Rename a domain."""
+    data = request.get_json() or {}
+    domain_id = data.get('domain_id')
+    new_name = (data.get('new_name') or '').strip()
+    if not domain_id or not new_name:
+        return jsonify({"error": "domain_id and new_name required"}), 400
+
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        domain = conn.execute("SELECT id, name, path FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (domain_id, uid)).fetchone()
+        if not domain:
+            return jsonify({"error": "Domain not found"}), 404
+
+        old_name = domain['name']
+        old_path = domain['path'] or ''
+        new_path = old_path.replace(f"/{old_name}", f"/{new_name}") if old_path else f"/{new_name}"
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute("UPDATE domains SET name = ?, path = ?, updated_at = ? WHERE id = ?",
+                      (new_name, new_path, now, domain_id))
+
+        # Update children paths too
+        children = conn.execute("SELECT id, path FROM domains WHERE parent_id = ?", (domain_id,)).fetchall()
+        for child in children:
+            if child['path']:
+                child_new_path = child['path'].replace(f"/{old_name}/", f"/{new_name}/")
+                conn.execute("UPDATE domains SET path = ?, updated_at = ? WHERE id = ?",
+                              (child_new_path, now, child['id']))
+
+        conn.commit()
+        return jsonify({"status": "ok", "new_name": new_name})
+    except Exception as e:
+        logger.error(f"Domain rename failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/domains/<int:domain_id>", methods=["DELETE"])
+@login_required
+def api_delete_domain(domain_id):
+    """Delete a domain and all its sources/insights."""
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        domain = conn.execute("SELECT id, name FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (domain_id, uid)).fetchone()
+        if not domain:
+            return jsonify({"error": "Domain not found"}), 404
+
+        # Delete insights, sources, syntheses, sub-topics, then domain
+        conn.execute("DELETE FROM insights WHERE domain_id = ?", (domain_id,))
+        conn.execute("DELETE FROM sources WHERE domain_id = ?", (domain_id,))
+        conn.execute("DELETE FROM syntheses WHERE domain_id = ?", (domain_id,))
+        # Delete sub-topics (level 2 children)
+        conn.execute("DELETE FROM domains WHERE parent_id = ? AND level = 2", (domain_id,))
+        conn.execute("DELETE FROM domains WHERE id = ?", (domain_id,))
+        conn.commit()
+
+        return jsonify({"status": "ok", "message": f"Deleted '{domain['name']}'"})
+    except Exception as e:
+        logger.error(f"Domain delete failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
     finally:
         if conn:
             conn.close()
