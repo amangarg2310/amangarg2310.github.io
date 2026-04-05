@@ -134,10 +134,14 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
 
 def detect_source_type(url: str) -> str:
     """Auto-detect source type from a URL."""
-    if 'list=' in url and 'youtube.com' in url:
-        return 'playlist'
+    # A watch?v= URL is ALWAYS a single video, even if it has &list= context
     if re.search(r'(?:youtube\.com/watch|youtu\.be/|youtube\.com/shorts/)', url):
         return 'youtube'
+    # Only youtube.com/playlist?list=XXX (no video ID) is a playlist
+    if 'youtube.com/playlist' in url and 'list=' in url:
+        list_match = re.search(r'[?&]list=([a-zA-Z0-9_-]+)', url)
+        if list_match and list_match.group(1) not in ('WL', 'LL', 'FL'):
+            return 'playlist'
     return 'article'
 
 

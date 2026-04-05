@@ -640,21 +640,44 @@ function pollHomeStatus(videoId) {
 function showHomeStatus(status, title, step, progress, domain, sourceId) {
     if (!statusCard) return;
 
-    let iconContent = '';
-    let iconClass = '';
     let fillClass = '';
+    let ringContent = '';
+    const circ = 125.66;  // 2 * π * 20
+    const offset = circ * (1 - (progress || 0) / 100);
 
     if (status === 'processing') {
-        iconContent = '<div class="intel-spinner"></div>';
-        iconClass = 'processing';
+        fillClass = '';
+        ringContent = `
+            <div class="intel-progress-ring-wrapper">
+                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
+                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
+                    <circle class="intel-ring-fill" cx="24" cy="24" r="20"
+                        stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
+                </svg>
+                <span class="intel-ring-pct">${progress}%</span>
+            </div>`;
     } else if (status === 'complete' || status === 'already_exists') {
-        iconContent = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
-        iconClass = 'complete';
         fillClass = 'complete';
+        ringContent = `
+            <div class="intel-progress-ring-wrapper">
+                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
+                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
+                    <circle class="intel-ring-fill complete" cx="24" cy="24" r="20"
+                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
+                </svg>
+                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </div>`;
     } else if (status === 'error') {
-        iconContent = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        iconClass = 'error';
         fillClass = 'error';
+        ringContent = `
+            <div class="intel-progress-ring-wrapper">
+                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
+                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
+                    <circle class="intel-ring-fill error" cx="24" cy="24" r="20"
+                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
+                </svg>
+                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+            </div>`;
     }
 
     let stepHtml = escapeHtml(step || '');
@@ -665,7 +688,7 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
     statusCard.innerHTML = `
         <div class="intel-status-card">
             <div class="intel-status-header">
-                <div class="intel-status-icon ${iconClass}">${iconContent}</div>
+                ${ringContent}
                 <div class="intel-status-info">
                     <div class="intel-status-title">${escapeHtml(title)}</div>
                     <div class="intel-status-step">${stepHtml}</div>
