@@ -395,6 +395,7 @@ def api_ingest():
             try:
                 run_pipeline(url, user_id=uid)
             except Exception as e:
+                logger.error(f"Pipeline thread failed for {video_id}: {e}", exc_info=True)
                 _update_status(video_id, 'error', 'Failed', 0, error=str(e))
 
         thread = threading.Thread(target=_run, daemon=True)

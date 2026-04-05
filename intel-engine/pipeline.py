@@ -627,16 +627,25 @@ def _run_shared_pipeline(
     # Step 4: Auto-detect domain (hierarchical)
     _update_status(video_id, 'processing', 'Detecting domain...', start_progress + 10,
                    title=title, channel=channel)
-    domain_result = detect_domain_hierarchical(
-        title, channel, chunks[0] if chunks else transcript, db_path, user_id=user_id
-    )
-    domain_id = domain_result['domain_id']
-    domain_name = domain_result['domain_name']
+    try:
+        domain_result = detect_domain_hierarchical(
+            title, channel, chunks[0] if chunks else transcript, db_path, user_id=user_id
+        )
+        domain_id = domain_result['domain_id']
+        domain_name = domain_result['domain_name']
+    except Exception as e:
+        logger.error(f"Domain detection failed: {e}", exc_info=True)
+        _update_status(video_id, 'error', f'Domain detection failed: {e}', 0, error=str(e))
+        raise
 
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Failed to update source domain: {e}", exc_info=True)
+        raise
 
     _update_status(video_id, 'processing', f'Domain: {domain_name}', start_progress + 15,
                    title=title, channel=channel, domain=domain_name)
