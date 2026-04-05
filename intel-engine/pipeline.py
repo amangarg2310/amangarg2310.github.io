@@ -154,7 +154,7 @@ def _generate_source_id(prefix: str) -> str:
 # YouTube Pipeline (existing, refactored)
 # ══════════════════════════════════════════════════════════════
 
-def run_pipeline(url: str, db_path=None) -> dict:
+def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
     """
     Run the full intelligence pipeline for a YouTube URL.
     Called from Flask route in a background thread.
@@ -188,10 +188,10 @@ def run_pipeline(url: str, db_path=None) -> dict:
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             INSERT OR REPLACE INTO sources
-            (video_id, url, title, channel, thumbnail, duration_seconds, transcript, source_type, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'youtube', 'processing', ?)
+            (video_id, url, title, channel, thumbnail, duration_seconds, transcript, source_type, status, created_at, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'youtube', 'processing', ?, ?)
         """, (video.video_id, url, video.title, video.channel, video.thumbnail,
-              video.duration_seconds, video.transcript, now))
+              video.duration_seconds, video.transcript, now, user_id))
         conn.commit()
         source_id = conn.execute(
             "SELECT id FROM sources WHERE video_id = ?", (video.video_id,)
@@ -208,6 +208,7 @@ def run_pipeline(url: str, db_path=None) -> dict:
             source_date=now,
             db_path=db_path,
             start_progress=35,
+            user_id=user_id,
         )
 
     except Exception as e:
@@ -254,7 +255,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict
 
             url = f'https://www.youtube.com/watch?v={video["video_id"]}'
             try:
-                result = run_pipeline(url, db_path=db_path)
+                result = run_pipeline(url, db_path=db_path, user_id=user_id)
                 results.append(result)
             except Exception as e:
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
@@ -275,7 +276,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict
 # Article Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_article_pipeline(url: str, db_path=None) -> dict:
+def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
     """Run the pipeline for a web article URL."""
     from article_ingest import ingest_article, generate_article_id
 
@@ -304,9 +305,9 @@ def run_article_pipeline(url: str, db_path=None) -> dict:
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             INSERT OR REPLACE INTO sources
-            (video_id, url, title, channel, transcript, source_type, status, created_at)
-            VALUES (?, ?, ?, ?, ?, 'article', 'processing', ?)
-        """, (source_vid, url, article.title, article.site_name, article.text_content, now))
+            (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
+            VALUES (?, ?, ?, ?, ?, 'article', 'processing', ?, ?)
+        """, (source_vid, url, article.title, article.site_name, article.text_content, now, user_id))
         conn.commit()
         source_id = conn.execute(
             "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
@@ -322,6 +323,7 @@ def run_article_pipeline(url: str, db_path=None) -> dict:
             source_date=now,
             db_path=db_path,
             start_progress=35,
+            user_id=user_id,
         )
 
     except Exception as e:
@@ -334,7 +336,7 @@ def run_article_pipeline(url: str, db_path=None) -> dict:
 # File Pipeline (PDF, DOCX, PPTX)
 # ══════════════════════════════════════════════════════════════
 
-def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None) -> dict:
+def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None, user_id=None) -> dict:
     """Run the pipeline for an uploaded document."""
     from file_ingest import ingest_file
 
@@ -354,10 +356,10 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             INSERT INTO sources
-            (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?)
+            (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)
         """, (source_vid, "", original_filename, source_type.upper(),
-              text_content, source_type, file_path, original_filename, now))
+              text_content, source_type, file_path, original_filename, now, user_id))
         conn.commit()
         source_id = conn.execute(
             "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
@@ -373,6 +375,7 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
             source_date=now,
             db_path=db_path,
             start_progress=35,
+            user_id=user_id,
         )
 
     except Exception as e:
@@ -385,7 +388,7 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
 # Image Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_image_pipeline(file_path: str, original_filename: str, db_path=None) -> dict:
+def run_image_pipeline(file_path: str, original_filename: str, db_path=None, user_id=None) -> dict:
     """Run the pipeline for an uploaded image/screenshot."""
     from image_ingest import ingest_image
 
@@ -405,9 +408,9 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None) -> 
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             INSERT INTO sources
-            (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at)
-            VALUES (?, ?, ?, 'Image', ?, 'image', ?, ?, 'processing', ?)
-        """, (source_vid, "", original_filename, text_content, file_path, original_filename, now))
+            (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
+            VALUES (?, ?, ?, 'Image', ?, 'image', ?, ?, 'processing', ?, ?)
+        """, (source_vid, "", original_filename, text_content, file_path, original_filename, now, user_id))
         conn.commit()
         source_id = conn.execute(
             "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
@@ -423,6 +426,7 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None) -> 
             source_date=now,
             db_path=db_path,
             start_progress=35,
+            user_id=user_id,
         )
 
     except Exception as e:
@@ -435,7 +439,7 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None) -> 
 # Text Pipeline (pasted text)
 # ══════════════════════════════════════════════════════════════
 
-def run_text_pipeline(title: str, text_content: str, db_path=None) -> dict:
+def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None) -> dict:
     """Run the pipeline for pasted text."""
     db_path = db_path or config.DB_PATH
     source_vid = _generate_source_id("text")
@@ -448,9 +452,9 @@ def run_text_pipeline(title: str, text_content: str, db_path=None) -> dict:
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             INSERT INTO sources
-            (video_id, url, title, channel, transcript, source_type, status, created_at)
-            VALUES (?, '', ?, 'Text Note', ?, 'text', 'processing', ?)
-        """, (source_vid, title, text_content, now))
+            (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
+            VALUES (?, '', ?, 'Text Note', ?, 'text', 'processing', ?, ?)
+        """, (source_vid, title, text_content, now, user_id))
         conn.commit()
         source_id = conn.execute(
             "SELECT id FROM sources WHERE video_id = ?", (source_vid,)
@@ -466,6 +470,7 @@ def run_text_pipeline(title: str, text_content: str, db_path=None) -> dict:
             source_date=now,
             db_path=db_path,
             start_progress=25,
+            user_id=user_id,
         )
 
     except Exception as e:

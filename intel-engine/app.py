@@ -363,7 +363,7 @@ def api_ingest():
 
         def _run():
             try:
-                run_pipeline(url)
+                run_pipeline(url, user_id=uid)
             except Exception as e:
                 _update_status(video_id, 'error', 'Failed', 0, error=str(e))
 
@@ -396,7 +396,7 @@ def api_ingest():
 
         def _run():
             try:
-                run_article_pipeline(url)
+                run_article_pipeline(url, user_id=uid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
 
@@ -437,10 +437,11 @@ def api_upload():
     _update_status(source_vid, 'processing', f'Uploading {original_filename}...', 5,
                    title=original_filename)
 
+    uid = current_user.id
     if source_type == 'image':
         def _run():
             try:
-                run_image_pipeline(file_path, original_filename)
+                run_image_pipeline(file_path, original_filename, user_id=uid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
         thread = threading.Thread(target=_run, daemon=True)
@@ -448,7 +449,7 @@ def api_upload():
     else:
         def _run():
             try:
-                run_file_pipeline(file_path, original_filename, source_type)
+                run_file_pipeline(file_path, original_filename, source_type, user_id=uid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
         thread = threading.Thread(target=_run, daemon=True)
@@ -473,12 +474,13 @@ def api_ingest_text():
     if not title:
         title = content[:60] + ("..." if len(content) > 60 else "")
 
+    uid = current_user.id
     source_vid = _generate_source_id("text")
     _update_status(source_vid, 'processing', 'Processing text...', 5, title=title)
 
     def _run():
         try:
-            run_text_pipeline(title, content)
+            run_text_pipeline(title, content, user_id=uid)
         except Exception as e:
             _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
 
@@ -727,12 +729,13 @@ def api_delete_source(source_id):
     from pipeline import _update_status
     from domain_synthesizer import resynthesize_domain_full
 
+    uid = current_user.id
     conn = None
     try:
         conn = get_db()
         source = conn.execute(
-            "SELECT id, video_id, domain_id, file_path FROM sources WHERE id = ?",
-            (source_id,),
+            "SELECT id, video_id, domain_id, file_path FROM sources WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+            (source_id, uid),
         ).fetchone()
 
         if not source:
@@ -819,12 +822,13 @@ def api_reprocess(source_id):
     """Re-process an existing source with current extraction prompts."""
     from pipeline import reprocess_pipeline, _update_status
 
+    uid = current_user.id
     conn = None
     try:
         conn = get_db()
         source = conn.execute(
-            "SELECT id, video_id, title FROM sources WHERE id = ?",
-            (source_id,),
+            "SELECT id, video_id, title FROM sources WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+            (source_id, uid),
         ).fetchone()
         conn.close()
         conn = None
@@ -870,6 +874,14 @@ def api_query():
     if not domain_id or not question:
         return jsonify({"answer": "Please provide a question.", "sources_used": 0})
 
+    # Verify domain belongs to current user
+    uid = current_user.id
+    conn = get_db()
+    domain = conn.execute("SELECT id FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (int(domain_id), uid)).fetchone()
+    conn.close()
+    if not domain:
+        return jsonify({"answer": "Domain not found.", "sources_used": 0})
+
     try:
         result = query_domain(int(domain_id), question)
     except (ValueError, TypeError):
@@ -886,8 +898,12 @@ def api_backfill_embeddings():
     conn = None
     try:
         conn = get_db()
+        uid = current_user.id
         rows = conn.execute(
-            "SELECT id, title, content FROM insights WHERE embedding IS NULL"
+            """SELECT i.id, i.title, i.content FROM insights i
+               JOIN domains d ON i.domain_id = d.id
+               WHERE i.embedding IS NULL AND (d.user_id = ? OR d.user_id IS NULL)""",
+            (uid,),
         ).fetchall()
 
         if not rows:
@@ -925,9 +941,15 @@ def api_generate_visual(domain_id):
     """Generate an interactive HTML/SVG visual from domain synthesis using Claude."""
     from visual_generator import generate_visual
 
+    uid = current_user.id
     conn = None
     try:
         conn = get_db()
+
+        # Verify domain belongs to user
+        domain = conn.execute("SELECT id FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (domain_id, uid)).fetchone()
+        if not domain:
+            return jsonify({"error": "Domain not found"}), 404
 
         # Get latest synthesis
         synthesis_row = conn.execute(
@@ -963,11 +985,17 @@ def api_generate_visual(domain_id):
 
 
 @app.route("/api/visual/<int:domain_id>")
+@login_required
 def api_visual(domain_id):
     """Return cached visual HTML for a domain."""
+    uid = current_user.id
     conn = None
     try:
         conn = get_db()
+        # Verify domain belongs to user
+        domain = conn.execute("SELECT id FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)", (domain_id, uid)).fetchone()
+        if not domain:
+            return jsonify({"error": "Domain not found"}), 404
         row = conn.execute(
             "SELECT visual_html FROM syntheses WHERE domain_id = ? AND visual_html IS NOT NULL ORDER BY version DESC LIMIT 1",
             (domain_id,),
