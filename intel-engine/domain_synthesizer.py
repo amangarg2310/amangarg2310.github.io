@@ -102,6 +102,21 @@ Then continue with detailed sections:
 Be THOROUGH. This is a reference document, not an executive summary."""
 
 
+def _update_parent_counts(conn, domain_id: int, now: str):
+    """Roll up source/insight counts to the parent category."""
+    parent_row = conn.execute("SELECT parent_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    if parent_row and parent_row[0]:
+        parent_id = parent_row[0]
+        agg = conn.execute("""
+            SELECT COALESCE(SUM(source_count), 0), COALESCE(SUM(insight_count), 0)
+            FROM domains WHERE parent_id = ? AND level = 1
+        """, (parent_id,)).fetchone()
+        conn.execute(
+            "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+            (agg[0], agg[1], now, parent_id),
+        )
+
+
 def get_current_synthesis(domain_id: int, db_path=None) -> dict | None:
     """Get the latest synthesis for a domain."""
     db_path = db_path or config.DB_PATH
@@ -203,6 +218,8 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
         (source_count, insight_count, now, domain_id),
     )
+    # Roll up counts to parent category
+    _update_parent_counts(conn, domain_id, now)
     conn.commit()
     conn.close()
 
@@ -330,6 +347,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
         (source_count, insight_count, now, domain_id),
     )
+    _update_parent_counts(conn, domain_id, now)
     conn.commit()
     conn.close()
 

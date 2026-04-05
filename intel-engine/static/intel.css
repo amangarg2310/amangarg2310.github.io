@@ -678,6 +678,7 @@
 }
 
 .intel-domain-icon { font-size: 32px; margin-bottom: 16px; display: block; }
+.intel-domain-parent { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--intel-text-tertiary); margin-bottom: 4px; }
 .intel-domain-name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
 .intel-domain-desc { font-size: 13px; color: var(--intel-text-secondary); line-height: 1.5; margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .intel-domain-stats { display: flex; gap: 16px; font-size: 12px; color: var(--intel-text-tertiary); }
@@ -1368,14 +1369,36 @@
     color: var(--intel-text-secondary);
 }
 
-/* ── TLDR Highlight ── */
-.intel-synthesis h2:first-of-type + ul {
+/* ── TLDR Card & Deep-Dive Toggle ── */
+.intel-tldr-card {
     background: var(--intel-accent-light);
-    border-left: 3px solid var(--intel-accent);
-    padding: 16px 16px 16px 32px;
-    border-radius: 0 8px 8px 0;
-    margin-bottom: 24px;
+    border-left: 4px solid var(--intel-accent);
+    border-radius: 0 12px 12px 0;
+    padding: 24px 28px;
+    margin-bottom: 16px;
 }
+.intel-tldr-card h2 { margin-top: 0; font-size: 16px; font-weight: 700; }
+.intel-tldr-card ul { margin-bottom: 0; }
+.intel-tldr-card li { font-size: 14px; line-height: 1.7; color: var(--intel-text-secondary); }
+
+.intel-detail-toggle {
+    background: none;
+    border: 1px solid var(--intel-border);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--intel-accent);
+    cursor: pointer;
+    margin-bottom: 20px;
+    width: 100%;
+    transition: background 0.15s;
+}
+.intel-detail-toggle:hover { background: var(--intel-surface-hover); }
+.intel-detail-content.collapsed { display: none; }
+
+/* Sub-topic labels (non-clickable) */
+.intel-tree-label { cursor: default; color: var(--intel-text-tertiary); font-size: 12px; }
 
 /* ── Chat / Query Section ── */
 .intel-chat {

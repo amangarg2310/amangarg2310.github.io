@@ -160,7 +160,11 @@ def index():
     try:
         conn = get_db()
         domains = [dict(r) for r in conn.execute(
-            "SELECT * FROM domains WHERE (user_id = ? OR user_id IS NULL) AND level <= 1 ORDER BY updated_at DESC",
+            """SELECT d.*, p.name as parent_name
+               FROM domains d
+               LEFT JOIN domains p ON d.parent_id = p.id
+               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+               ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
     except sqlite3.OperationalError:
@@ -197,11 +201,32 @@ def domain_page(domain_name):
             return redirect(url_for('index'))
         domain = dict(domain)
 
-        # Latest synthesis
-        synthesis_row = conn.execute(
-            "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
-            (domain['id'],),
-        ).fetchone()
+        # Level-2 sub-topics redirect to their parent domain (the actual knowledge base)
+        if domain.get('level') == 2 and domain.get('parent_id'):
+            parent = conn.execute("SELECT name FROM domains WHERE id = ?", (domain['parent_id'],)).fetchone()
+            if parent:
+                conn.close()
+                return redirect(url_for('domain_page', domain_name=parent[0]))
+
+        # Determine content source based on hierarchy level
+        content_domain_ids = [domain['id']]
+        if domain.get('level') == 0:
+            # Parent category: aggregate all child domains
+            child_ids = [r[0] for r in conn.execute(
+                "SELECT id FROM domains WHERE parent_id = ? AND level = 1", (domain['id'],)
+            ).fetchall()]
+            if child_ids:
+                content_domain_ids = child_ids
+
+        # Latest synthesis (for level-0, find first child with synthesis)
+        synthesis_row = None
+        for cid in content_domain_ids:
+            synthesis_row = conn.execute(
+                "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                (cid,),
+            ).fetchone()
+            if synthesis_row:
+                break
         synthesis = dict(synthesis_row) if synthesis_row else None
         synthesis_html = ""
         suggested_questions = []
@@ -223,18 +248,23 @@ def domain_page(domain_name):
             except (json.JSONDecodeError, TypeError):
                 suggested_questions = []
 
-        # Sources with insight counts and source_type
-        sources = [dict(r) for r in conn.execute("""
+        # Sources with insight counts — aggregate from all content domains
+        placeholders = ','.join('?' * len(content_domain_ids))
+        sources = [dict(r) for r in conn.execute(f"""
             SELECT s.*, COUNT(i.id) as insight_count
             FROM sources s
             LEFT JOIN insights i ON i.source_id = s.id
-            WHERE s.domain_id = ? AND s.status = 'processed'
+            WHERE s.domain_id IN ({placeholders}) AND s.status = 'processed'
             GROUP BY s.id
             ORDER BY s.created_at DESC
-        """, (domain['id'],)).fetchall()]
+        """, content_domain_ids).fetchall()]
 
         domains = [dict(r) for r in conn.execute(
-            "SELECT * FROM domains WHERE (user_id = ? OR user_id IS NULL) AND level <= 1 ORDER BY updated_at DESC",
+            """SELECT d.*, p.name as parent_name
+               FROM domains d
+               LEFT JOIN domains p ON d.parent_id = p.id
+               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+               ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
 
