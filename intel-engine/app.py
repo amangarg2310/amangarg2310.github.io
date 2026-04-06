@@ -205,8 +205,11 @@ def domain_page(domain_name):
         if domain.get('level') == 2 and domain.get('parent_id'):
             parent = conn.execute("SELECT name FROM domains WHERE id = ?", (domain['parent_id'],)).fetchone()
             if parent:
+                # Don't close conn here — finally block handles it
+                redirect_name = parent[0]
                 conn.close()
-                return redirect(url_for('domain_page', domain_name=parent[0]))
+                conn = None  # Prevent finally from double-closing
+                return redirect(url_for('domain_page', domain_name=redirect_name))
 
         # Determine content source based on hierarchy level
         content_domain_ids = [domain['id']]
@@ -220,6 +223,8 @@ def domain_page(domain_name):
 
         # Latest synthesis (for level-0, find first child with synthesis)
         synthesis_row = None
+        if not content_domain_ids:
+            synthesis_row = None
         for cid in content_domain_ids:
             synthesis_row = conn.execute(
                 "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",

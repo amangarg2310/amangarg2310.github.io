@@ -270,11 +270,13 @@ def _find_matching_domain(conn, name: str, parent_id: int, user_id=None) -> tupl
     for s in siblings:
         s_lower = s[1].lower()
         # "Claude Code" in "Claude Code Marketing Team" → reuse "Claude Code"
-        if s_lower in name_lower or name_lower in s_lower:
+        # Only match if the shorter name is at least 3 chars (avoid "AI" matching everything)
+        shorter = min(len(s_lower), len(name_lower))
+        if shorter >= 3 and (s_lower in name_lower or name_lower in s_lower):
             logger.info(f"Fuzzy-matched domain '{name}' → existing '{s[1]}'")
             return (s[0], s[1])
 
-    # 3. Also check across ALL parents (in case same domain exists under different parent)
+    # 3. Also check across ALL parents — only exact or near-exact matches (not substring)
     if user_id:
         all_domains = conn.execute(
             "SELECT id, name FROM domains WHERE level = 1 AND (user_id = ? OR user_id IS NULL)",
@@ -285,8 +287,12 @@ def _find_matching_domain(conn, name: str, parent_id: int, user_id=None) -> tupl
 
     for d in all_domains:
         d_lower = d[1].lower()
-        if d_lower == name_lower or d_lower in name_lower or name_lower in d_lower:
-            logger.info(f"Cross-parent fuzzy-matched domain '{name}' → existing '{d[1]}'")
+        # Cross-parent: only exact match or the existing name is a prefix of the new name
+        if d_lower == name_lower:
+            logger.info(f"Cross-parent exact-matched domain '{name}' → existing '{d[1]}'")
+            return (d[0], d[1])
+        if len(d_lower) >= 5 and d_lower in name_lower:
+            logger.info(f"Cross-parent prefix-matched domain '{name}' → existing '{d[1]}'")
             return (d[0], d[1])
 
     return None
@@ -314,7 +320,12 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
     # 2. Find existing domain via fuzzy match, or create new one (level 1)
     domain_match = _find_matching_domain(conn, name, parent_id, user_id)
     if domain_match:
-        domain_id, name = domain_match  # Reuse existing domain name
+        domain_id, name = domain_match
+        # If matched domain is under a different parent, update its parent to the matched one
+        actual = conn.execute("SELECT parent_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
+        if actual and actual[0] and actual[0] != parent_id:
+            logger.info(f"Domain '{name}' found under different parent, keeping original parent_id={actual[0]}")
+            parent_id = actual[0]  # Use the domain's actual parent, don't move it
     else:
         domain_id = _find_or_create_domain(
             conn, name, level=1, parent_id=parent_id,
