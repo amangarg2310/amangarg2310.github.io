@@ -2,12 +2,13 @@
 
 ## Repository Structure
 
-This is a monorepo hosted on GitHub Pages containing two projects:
+This is a monorepo hosted on GitHub Pages containing three projects:
 
 ```
-├── biteclimb/          # Community-driven product tier ranking app
+├── biteclimb/               # Community-driven product tier ranking app
 ├── outlier-content-engine/  # AI-powered competitive intelligence platform (ScoutAI)
-└── render.yaml         # Render.com deployment config
+├── intel-engine/            # Domain Intelligence Engine — YouTube knowledge platform
+└── render.yaml              # Render.com deployment config
 ```
 
 ---
@@ -56,8 +57,47 @@ See `outlier-content-engine/CLAUDE.md` for detailed documentation.
 
 ---
 
+## Distylme (intel-engine/)
+
+**What it is:** A domain intelligence engine that ingests expert content from multiple sources (YouTube, articles, PDFs, images, text), processes it through an LLM pipeline, and builds a compounding knowledge base with hierarchical domain taxonomy. Deployed at [distylme.com](https://distylme.com).
+
+**Tech Stack:** Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings), OpenAI GPT-4o-mini, Anthropic Claude (visuals), Supadata (transcript fallback)
+
+### Key Commands
+
+```bash
+cd intel-engine
+pip install -r requirements.txt
+python migrations.py    # Create database tables
+python app.py           # Run at http://localhost:5002
+```
+
+### Architecture
+
+- **Pipeline** (`pipeline.py`): Source → ingest → chunk → extract insights → detect domain hierarchy → embed → synthesize
+- **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata), `article_ingest.py` (trafilatura), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
+- **Domain taxonomy** (`domain_detector.py`): Hierarchical — parent category → specific domain → sub-topics (like biology taxonomy)
+- **RAG query** (`intel_query.py`): Hybrid search (vector embeddings + FTS5 keyword) → GPT answer synthesis
+- **Auth** (`auth.py`): Flask-Login session-based, multi-user with per-user data isolation
+- **Backend** (`app.py`): Flask web server with REST API
+- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired two-panel layout with taxonomy sidebar
+- **Database:** SQLite with tables: users, domains (hierarchical), sources, insights (with embeddings), syntheses, usage_logs
+
+### How It Works
+
+1. User registers/logs in, then adds a source (YouTube URL, article URL, file upload, or paste text)
+2. Source ingested → text extracted (type-specific ingestor)
+3. `insight_extractor.py` chunks text → GPT extracts granular, actionable insights
+4. `domain_detector.py` classifies into specific hierarchical domain (e.g., AI Tools → OpenClaw → Setup)
+5. `embeddings.py` generates vector embeddings for semantic search
+6. `domain_synthesizer.py` merges new insights with existing synthesis (temporal awareness — newer info supersedes old)
+7. User can search within any domain via the AI search bar (hybrid RAG) or browse the synthesized knowledge brief
+8. Each new source compounds the domain's knowledge
+
+---
+
 ## Development Notes
 
 - The BiteClimb frontend proxies API requests to `localhost:3001` in dev mode
 - SQLite databases are file-based and gitignored
-- Both projects deploy independently on Render.com
+- All three projects deploy independently on Render.com

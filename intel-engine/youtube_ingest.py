@@ -1,0 +1,305 @@
+"""
+YouTube video ingestion — fetch metadata and transcript from a YouTube URL.
+
+Uses YouTube oEmbed API for metadata (no auth required, works on cloud servers)
+and youtube-transcript-api for transcripts, with Supadata.ai as a free fallback
+when YouTube blocks cloud server IPs.
+"""
+
+import json
+import logging
+import os
+import re
+import urllib.request
+import urllib.error
+from dataclasses import dataclass
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class VideoMeta:
+    """Metadata extracted from a YouTube video."""
+    video_id: str
+    url: str
+    title: str
+    channel: str
+    thumbnail: str
+    duration_seconds: int
+    transcript: str
+
+
+def extract_video_id(url: str) -> Optional[str]:
+    """Extract YouTube video ID from various URL formats."""
+    patterns = [
+        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/)([a-zA-Z0-9_-]{11})',
+        r'(?:youtube\.com/shorts/)([a-zA-Z0-9_-]{11})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def fetch_video_metadata(video_id: str) -> dict:
+    """Fetch video metadata using YouTube oEmbed API (no auth, no bot detection)."""
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    oembed_url = f"https://www.youtube.com/oembed?url={urllib.request.quote(video_url, safe='')}&format=json"
+
+    try:
+        req = urllib.request.Request(oembed_url, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; IntelEngine/1.0)',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 401 or e.code == 403:
+            raise ValueError(f"Video is private or unavailable: {video_id}")
+        elif e.code == 404:
+            raise ValueError(f"Video not found: {video_id}")
+        else:
+            raise ValueError(f"Could not fetch video metadata (HTTP {e.code}): {video_id}")
+    except Exception as e:
+        raise ValueError(f"Could not fetch video metadata: {e}")
+
+    # oEmbed gives title, author_name, thumbnail_url but not duration
+    return {
+        'title': data.get('title', 'Untitled'),
+        'channel': data.get('author_name', 'Unknown'),
+        'thumbnail': data.get('thumbnail_url', f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'),
+        'duration': 0,  # oEmbed doesn't provide duration; not critical for pipeline
+    }
+
+
+def _build_transcript_api():
+    """Build YouTubeTranscriptApi instance with proxy if configured."""
+    from youtube_transcript_api import YouTubeTranscriptApi
+
+    proxy_user = os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip()
+    proxy_pass = os.environ.get('WEBSHARE_PROXY_PASSWORD', '').strip()
+
+    if proxy_user and proxy_pass:
+        try:
+            from youtube_transcript_api.proxies import WebshareProxyConfig
+            logger.info("Using Webshare proxy for transcript fetching")
+            return YouTubeTranscriptApi(
+                proxy_config=WebshareProxyConfig(
+                    proxy_username=proxy_user,
+                    proxy_password=proxy_pass,
+                )
+            )
+        except ImportError:
+            logger.warning("WebshareProxyConfig not available, using direct connection")
+
+    return YouTubeTranscriptApi()
+
+
+def _extract_text(transcript) -> str:
+    """Extract text from transcript entries (works with both old and new API formats)."""
+    return " ".join(
+        entry.text if hasattr(entry, 'text') else entry.get('text', '')
+        for entry in transcript
+    )
+
+
+def _fetch_transcript_supadata(video_id: str) -> str:
+    """Fetch transcript via Supadata.ai free API (100 req/month free, no proxy needed)."""
+    api_key = os.environ.get('SUPADATA_API_KEY', '').strip()
+    if not api_key:
+        return ""
+
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    # Try official Python SDK first (handles auth/headers properly)
+    try:
+        from supadata import Supadata
+        client = Supadata(api_key=api_key)
+        transcript = client.transcript(url=video_url, mode="native")
+        if transcript and transcript.content:
+            # content is a list of TranscriptEntry objects or a string
+            if isinstance(transcript.content, str):
+                if transcript.content.strip():
+                    logger.info(f"Got transcript via Supadata SDK for {video_id}")
+                    return transcript.content
+            elif isinstance(transcript.content, list):
+                text = " ".join(
+                    entry.text if hasattr(entry, 'text') else str(entry)
+                    for entry in transcript.content
+                )
+                if text.strip():
+                    logger.info(f"Got transcript via Supadata SDK for {video_id}")
+                    return text
+    except ImportError:
+        logger.info("Supadata SDK not installed, trying raw HTTP")
+    except Exception as e:
+        logger.warning(f"Supadata SDK failed for {video_id}: {e}")
+
+    # Fallback: raw HTTP with browser-like headers
+    api_url = f"https://api.supadata.ai/v1/transcript?url={urllib.request.quote(video_url, safe='')}&mode=native"
+    try:
+        req = urllib.request.Request(api_url, headers={
+            'x-api-key': api_key,
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        })
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+
+        content = data.get('content', '')
+
+        if isinstance(content, str) and content.strip():
+            logger.info(f"Got transcript via Supadata HTTP for {video_id}")
+            return content
+
+        if isinstance(content, list) and content:
+            text = " ".join(
+                s.get('text', '') if isinstance(s, dict) else str(s)
+                for s in content
+            )
+            if text.strip():
+                logger.info(f"Got transcript via Supadata HTTP for {video_id}")
+                return text
+
+    except urllib.error.HTTPError as e:
+        body = ''
+        try:
+            body = e.read().decode()
+        except Exception:
+            pass
+        logger.warning(f"Supadata HTTP error for {video_id}: HTTP {e.code} - {body}")
+    except Exception as e:
+        logger.warning(f"Supadata HTTP failed for {video_id}: {e}")
+
+    return ""
+
+
+def fetch_transcript(video_id: str) -> str:
+    """Fetch video transcript. Tries direct API first, then Supadata fallback."""
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+    except ImportError:
+        raise ImportError("youtube-transcript-api required. Install with: pip install youtube-transcript-api")
+
+    ytt_api = _build_transcript_api()
+
+    # Try direct fetch first
+    try:
+        transcript = ytt_api.fetch(video_id)
+        return _extract_text(transcript)
+    except Exception as e:
+        logger.warning(f"Direct transcript fetch failed for {video_id}: {e}")
+        # Try with English language filter
+        try:
+            transcript = ytt_api.fetch(video_id, languages=['en'])
+            return _extract_text(transcript)
+        except Exception:
+            pass
+
+    # Fallback: Supadata.ai free API
+    supadata_text = _fetch_transcript_supadata(video_id)
+    if supadata_text:
+        return supadata_text
+
+    return ""
+
+
+def ingest_video(url: str) -> VideoMeta:
+    """Full ingestion: URL → metadata + transcript."""
+    video_id = extract_video_id(url)
+    if not video_id:
+        raise ValueError(f"Could not extract video ID from URL: {url}")
+
+    logger.info(f"Ingesting video: {video_id}")
+    meta = fetch_video_metadata(video_id)
+    transcript = fetch_transcript(video_id)
+
+    if not transcript:
+        has_supadata = bool(os.environ.get('SUPADATA_API_KEY', '').strip())
+        has_proxy = bool(os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip())
+        if not has_supadata and not has_proxy:
+            raise ValueError(
+                "YouTube is blocking transcript requests from this server. "
+                "Set SUPADATA_API_KEY env var (free at supadata.ai, 100 videos/month) "
+                "to fix this."
+            )
+        raise ValueError(f"No transcript available for video: {video_id}")
+
+    return VideoMeta(
+        video_id=video_id,
+        url=url,
+        title=meta['title'],
+        channel=meta['channel'],
+        thumbnail=meta['thumbnail'],
+        duration_seconds=meta['duration'],
+        transcript=transcript,
+    )
+
+
+def extract_playlist_id(url: str) -> Optional[str]:
+    """Extract playlist ID from a YouTube playlist URL."""
+    match = re.search(r'[?&]list=([a-zA-Z0-9_-]+)', url)
+    return match.group(1) if match else None
+
+
+def fetch_playlist_videos(playlist_id: str) -> list[dict]:
+    """Fetch video IDs and titles from a YouTube playlist via RSS feed (no API key needed).
+
+    Returns up to ~15 most recent videos (YouTube RSS limit).
+    """
+    import xml.etree.ElementTree as ET
+
+    rss_url = f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}"
+    try:
+        req = urllib.request.Request(rss_url, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; IntelEngine/1.0)',
+        })
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            xml_data = resp.read().decode()
+    except urllib.error.HTTPError as e:
+        raise ValueError(f"Could not fetch playlist (HTTP {e.code}). Check the playlist URL or ensure it's public.")
+    except Exception as e:
+        raise ValueError(f"Failed to fetch playlist RSS: {e}")
+
+    # Parse Atom XML feed
+    ns = {
+        'atom': 'http://www.w3.org/2005/Atom',
+        'yt': 'http://www.youtube.com/xml/schemas/2015',
+        'media': 'http://search.yahoo.com/mrss/',
+    }
+    root = ET.fromstring(xml_data)
+    videos = []
+    for entry in root.findall('atom:entry', ns):
+        vid_el = entry.find('yt:videoId', ns)
+        title_el = entry.find('atom:title', ns)
+        if vid_el is not None and vid_el.text:
+            videos.append({
+                'video_id': vid_el.text,
+                'title': title_el.text if title_el is not None else 'Untitled',
+            })
+    if not videos:
+        raise ValueError("No videos found in playlist. It may be empty or private.")
+    return videos
+
+
+def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
+    """Split transcript into overlapping chunks for processing."""
+    words = transcript.split()
+    max_words = int(max_tokens * 1.3)
+    overlap_words = int(overlap * 1.3)
+
+    if len(words) <= max_words:
+        return [transcript]
+
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + max_words
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        if end >= len(words):
+            break
+        start = end - overlap_words
+
+    return chunks

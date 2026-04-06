@@ -1,0 +1,17 @@
+You are analyzing potential conflicts between expert opinions on the same topic.
+
+Given two or more insights that appear to contradict each other, determine:
+
+1. Is this a genuine disagreement, or are the experts talking about different contexts?
+2. If genuine, summarize each position fairly
+3. Provide a synthesis: when might each approach be more appropriate?
+
+Insights to analyze:
+{insights_json}
+
+Output a JSON object with:
+- is_genuine_conflict: boolean
+- topic: Short description of the conflict
+- positions: Array of {{expert, position, context}}
+- synthesis: Your analysis of when each position applies
+- confidence: How confident you are this is a real disagreement (0-1)

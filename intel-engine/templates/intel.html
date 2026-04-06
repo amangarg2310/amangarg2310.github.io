@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if domain %}{{ domain.name }} — {% endif %}Distylme</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='intel.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+<div class="intel-page">
+
+    <!-- ── Navigation ── -->
+    <nav class="intel-nav">
+        <a href="{{ url_for('index') }}" class="intel-nav-brand">
+            <div class="intel-nav-logo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <span class="intel-nav-wordmark">distyl<span class="intel-nav-wordmark-accent">me</span></span>
+        </a>
+        {% if current_user and current_user.is_authenticated %}
+        <div class="intel-nav-user">
+            <span class="intel-nav-user-name">{{ current_user.display_name }}</span>
+            <a href="{{ url_for('logout') }}" class="intel-nav-logout">Sign out</a>
+        </div>
+        {% endif %}
+    </nav>
+
+    {% if domain %}
+    <!-- ══════════════════════════════════════════════════════════
+         DOMAIN DETAIL — Two-Panel Layout
+         ══════════════════════════════════════════════════════════ -->
+    <div class="intel-detail-layout">
+
+        <!-- ── Sidebar (Left) ── -->
+        <aside class="intel-sources-panel">
+
+            <!-- Taxonomy Tree -->
+            {% if domain_tree %}
+            <div class="intel-taxonomy-section">
+                <div class="intel-taxonomy-header">
+                    <span class="intel-sources-title">Domains</span>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <a href="javascript:void(0)" onclick="openGraphView()" class="intel-reset-link" title="Knowledge graph view">Graph</a>
+                        <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link" title="Reset all data">Reset</a>
+                    </div>
+                </div>
+                <div class="intel-taxonomy-tree">
+                    {% for node in domain_tree %}
+                    <div class="intel-tree-node {% if domain and domain.id == node.id %}active{% endif %}" data-level="{{ node.level }}" data-domain-id="{{ node.id }}" data-domain-name="{{ node.name }}">
+                        <div class="intel-tree-row" {% if node.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ node.id }}, '{{ node.name }}', {{ node.level }})">
+                            {% if node.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
+                            <span class="intel-tree-icon">{{ node.icon }}</span>
+                            <a href="{{ url_for('domain_page', domain_name=node.name) }}" class="intel-tree-name {% if domain and domain.name == node.name %}active{% endif %}">{{ node.name }}</a>
+                            {% if node.source_count %}<span class="intel-tree-count">{{ node.source_count }}</span>{% endif %}
+                        </div>
+                        {% if node.children %}
+                        <div class="intel-tree-children {% if not (domain and domain.path and node.name in domain.path|default('', true)) %}collapsed{% endif %}">
+                            {% for child in node.children %}
+                            <div class="intel-tree-node {% if domain and domain.id == child.id %}active{% endif %}" data-level="{{ child.level }}" data-domain-id="{{ child.id }}" data-domain-name="{{ child.name }}">
+                                <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ child.id }}, '{{ child.name }}', {{ child.level }})">
+                                    {% if child.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
+                                    <span class="intel-tree-icon">{{ child.icon }}</span>
+                                    <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-tree-name {% if domain and domain.name == child.name %}active{% endif %}">{{ child.name }}</a>
+                                    {% if child.source_count %}<span class="intel-tree-count">{{ child.source_count }}</span>{% endif %}
+                                </div>
+                                {% if child.children %}
+                                <div class="intel-tree-children collapsed">
+                                    {% for sub in child.children %}
+                                    <div class="intel-tree-node" data-level="{{ sub.level }}" data-domain-id="{{ sub.id }}" data-domain-name="{{ sub.name }}">
+                                        <div class="intel-tree-row">
+                                            <span class="intel-tree-icon">•</span>
+                                            <span class="intel-tree-name intel-tree-label">{{ sub.name }}</span>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="intel-panel-divider"></div>
+            {% endif %}
+
+            <div class="intel-sources-header">
+                <span class="intel-sources-title">Sources</span>
+                <span class="intel-sources-count">{{ sources|length if sources else 0 }}</span>
+            </div>
+
+            <!-- Add Source Button -->
+            <button class="intel-add-source-btn" onclick="toggleAddPanel()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add source
+            </button>
+
+            <!-- Add Source Panel (hidden by default) -->
+            <div class="intel-add-panel" id="addPanel">
+                <div class="intel-add-tabs">
+                    <button class="intel-add-tab active" onclick="switchAddTab('link')">Link</button>
+                    <button class="intel-add-tab" onclick="switchAddTab('upload')">Upload</button>
+                    <button class="intel-add-tab" onclick="switchAddTab('text')">Text</button>
+                </div>
+                <div class="intel-add-content">
+                    <!-- Link Tab -->
+                    <div class="intel-add-pane active" id="addPaneLink">
+                        <input type="text" class="intel-add-input" id="addLinkInput"
+                               placeholder="Paste YouTube, playlist (max 15 videos), or article URL..."
+                               onkeydown="if(event.key==='Enter')submitLink()">
+                        <button class="intel-add-submit" onclick="submitLink()">Add Link</button>
+                    </div>
+                    <!-- Upload Tab -->
+                    <div class="intel-add-pane" id="addPaneUpload">
+                        <div class="intel-drop-zone" id="sidebarDropZone"
+                             onclick="document.getElementById('sidebarFileInput').click()">
+                            <span class="intel-drop-zone-icon">📎</span>
+                            Drop files or click to browse
+                            <div style="margin-top:4px;font-size:11px;color:var(--intel-text-tertiary)">
+                                PDF, DOCX, PPTX, PNG, JPG
+                            </div>
+                        </div>
+                        <input type="file" class="intel-file-input" id="sidebarFileInput"
+                               accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
+                               onchange="uploadFile(this.files[0])">
+                    </div>
+                    <!-- Text Tab -->
+                    <div class="intel-add-pane" id="addPaneText">
+                        <input type="text" class="intel-add-input" id="addTextTitle"
+                               placeholder="Title (optional)" style="margin-bottom:6px">
+                        <textarea class="intel-add-textarea" id="addTextContent"
+                                  placeholder="Paste your notes, text, or content..."></textarea>
+                        <button class="intel-add-submit" onclick="submitText()">Add Text</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Processing Status -->
+            <div class="intel-sidebar-status" id="sidebarStatus">
+                <div class="intel-sidebar-progress-card">
+                    <div class="intel-sidebar-progress-header">
+                        <div class="intel-progress-ring-wrapper small">
+                            <svg class="intel-progress-ring" width="36" height="36" viewBox="0 0 36 36">
+                                <circle class="intel-ring-bg" cx="18" cy="18" r="14"/>
+                                <circle class="intel-ring-fill" id="sidebarRingFill" cx="18" cy="18" r="14"
+                                    stroke-dasharray="87.96" stroke-dashoffset="87.96"/>
+                            </svg>
+                            <span class="intel-ring-pct small" id="sidebarRingPct">0%</span>
+                        </div>
+                        <div class="intel-sidebar-progress-info">
+                            <span id="sidebarStatusText">Processing...</span>
+                        </div>
+                    </div>
+                    <div class="intel-progress-track">
+                        <div class="intel-progress-fill" id="sidebarProgressFill" style="width:0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Source List -->
+            <div class="intel-source-list">
+                {% if sources %}
+                {% for source in sources %}
+                <div class="intel-source-item intel-animate-in" id="source-{{ source.id }}"
+                     style="animation-delay: {{ loop.index0 * 0.04 }}s"
+                     data-source-id="{{ source.id }}"
+                     data-video-id="{{ source.video_id }}">
+                    <div class="intel-source-type-icon">
+                        {% if source.source_type == 'youtube' or not source.source_type %}🎥
+                        {% elif source.source_type == 'article' %}📄
+                        {% elif source.source_type == 'pdf' %}📑
+                        {% elif source.source_type == 'docx' %}📝
+                        {% elif source.source_type == 'pptx' %}📊
+                        {% elif source.source_type == 'image' %}🖼️
+                        {% elif source.source_type == 'text' %}📋
+                        {% else %}📄{% endif %}
+                    </div>
+                    <div class="intel-source-item-info">
+                        <div class="intel-source-item-title">{{ source.title }}</div>
+                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights</div>
+                    </div>
+                    <div class="intel-source-actions">
+                        <button class="intel-source-action-btn reprocess" title="Re-process"
+                                onclick="event.stopPropagation(); reprocessSource({{ source.id }}, '{{ source.video_id }}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                        </button>
+                        <button class="intel-source-action-btn delete" title="Delete"
+                                onclick="event.stopPropagation(); showDeleteConfirm({{ source.id }})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Delete confirmation (hidden) -->
+                <div class="intel-source-confirm" id="confirm-{{ source.id }}">
+                    <div class="intel-source-confirm-text">Remove this source and re-synthesize?</div>
+                    <div class="intel-source-confirm-actions">
+                        <button class="intel-source-confirm-cancel" onclick="hideDeleteConfirm({{ source.id }})">Cancel</button>
+                        <button class="intel-source-confirm-remove" onclick="deleteSource({{ source.id }}, '{{ source.video_id }}')">Remove</button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div style="padding:24px 8px;text-align:center;color:var(--intel-text-tertiary);font-size:13px;">
+                    No sources yet. Add a link, upload a file, or paste text to get started.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Admin tools -->
+            <div style="padding:12px 16px;border-top:1px solid var(--intel-border-light);">
+                <button onclick="backfillEmbeddings()" id="backfillBtn"
+                    style="width:100%;padding:8px;font-size:12px;color:var(--intel-text-tertiary);background:none;border:1px solid var(--intel-border-light);border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);">
+                    Backfill Embeddings
+                </button>
+                <button onclick="resetAllData()" id="resetBtn"
+                    style="width:100%;padding:8px;font-size:12px;color:#ff3b30;background:none;border:1px solid #ffcdd2;border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);margin-top:6px;">
+                    Reset All Data
+                </button>
+            </div>
+        </aside>
+
+        <!-- ── Main Content (Right) ── -->
+        <main class="intel-main-content">
+            <div class="intel-detail-header">
+                <div class="intel-detail-icon">{{ domain.icon }}</div>
+                <h1 class="intel-detail-title">{{ domain.name }}</h1>
+                <p class="intel-detail-meta">
+                    {{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} &middot;
+                    {{ domain.insight_count }} insight{{ 's' if domain.insight_count != 1 else '' }}
+                    {% if synthesis %} &middot; Synthesis v{{ synthesis.version }}{% endif %}
+                </p>
+            </div>
+
+            <!-- ── AI SEARCH (top of page) ── -->
+            <div class="intel-search-section">
+                <h3 class="intel-search-heading">Ask anything about {{ domain.name }}</h3>
+
+                <div class="intel-search-bar" id="searchBar">
+                    <svg class="intel-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text"
+                           class="intel-search-input"
+                           id="searchInput"
+                           placeholder="What do you want to know?"
+                           autocomplete="off"
+                           oninput="onSearchInput()"
+                           onkeydown="if(event.key==='Enter')askQuestion()">
+                    <button class="intel-search-ai-btn" id="searchBtn" onclick="askQuestion()" title="Search with AI">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Suggested questions (hidden until user starts typing) -->
+                {% if suggested_questions %}
+                <div class="intel-suggested-questions" id="suggestedQuestions" style="display:none">
+                    {% for q in suggested_questions %}
+                    <button class="intel-suggested-q" onclick="askQuestion(this.textContent)">{{ q }}</button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Answer appears inline here -->
+                <div class="intel-search-answer" id="searchAnswer" style="display:none">
+                    <div class="intel-search-answer-content" id="searchAnswerContent"></div>
+                    <div class="intel-search-answer-meta" id="searchAnswerMeta"></div>
+                </div>
+
+                <!-- Loading state -->
+                <div class="intel-search-loading" id="searchLoading" style="display:none">
+                    <div class="intel-spinner"></div>
+                    <span>Searching knowledge base...</span>
+                </div>
+            </div>
+
+            <!-- ── SYNTHESIS ── -->
+            {% if synthesis and synthesis.content %}
+            <div class="intel-brief-header">
+                <h2 class="intel-brief-title">Knowledge Brief</h2>
+                <span class="intel-brief-version">v{{ synthesis.version }} &middot; {{ synthesis.source_count }} sources &middot; {{ synthesis.insight_count }} insights</span>
+            </div>
+
+            <!-- Table of Contents (auto-generated by JS) -->
+            <div class="intel-toc" id="synthesisToC" style="display:none">
+                <div class="intel-toc-title">Contents</div>
+                <ul class="intel-toc-list" id="tocList"></ul>
+            </div>
+
+            <div class="intel-synthesis intel-animate-in" id="synthesisContent">
+                {{ synthesis_html | safe }}
+            </div>
+            {% endif %}
+        </main>
+    </div>
+
+    {% else %}
+    <!-- ══════════════════════════════════════════════════════════
+         HOME VIEW — URL Input + Domain Grid
+         ══════════════════════════════════════════════════════════ -->
+    <div class="intel-hero" id="heroSection">
+        <h1 class="intel-hero-title">Learn from any source.</h1>
+        <p class="intel-hero-subtitle">
+            Paste a link, upload a document, or add notes — we'll extract every insight and build your knowledge base automatically.
+        </p>
+
+        <!-- Multi-source input hub -->
+        <div class="intel-source-hub">
+            <!-- Tab bar -->
+            <div class="intel-hub-tabs">
+                <button class="intel-hub-tab active" data-tab="link" onclick="switchHubTab('link')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    Link
+                </button>
+                <button class="intel-hub-tab" data-tab="upload" onclick="switchHubTab('upload')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Upload
+                </button>
+                <button class="intel-hub-tab" data-tab="text" onclick="switchHubTab('text')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    Text
+                </button>
+            </div>
+
+            <!-- Link pane -->
+            <div class="intel-hub-pane active" id="hubPaneLink">
+                <div class="intel-hub-input-row">
+                    <input type="text"
+                           class="intel-input"
+                           id="urlInput"
+                           placeholder="Paste a YouTube video, playlist (max 15), or article URL..."
+                           autocomplete="off"
+                           spellcheck="false"
+                           autofocus
+                           onkeydown="if(event.key==='Enter')ingestFromHome()">
+                    <button class="intel-hub-submit" id="ingestBtn" onclick="ingestFromHome()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                            <polyline points="12 5 19 12 12 19"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Upload pane -->
+            <div class="intel-hub-pane" id="hubPaneUpload">
+                <div class="intel-hub-dropzone" id="homeDropZone"
+                     onclick="document.getElementById('homeFileInput').click()">
+                    <div class="intel-hub-dropzone-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <div class="intel-hub-dropzone-text">
+                        <strong>Drop files here</strong> or click to browse
+                    </div>
+                    <div class="intel-hub-dropzone-formats">
+                        PDF, DOCX, PPTX, PNG, JPG, WEBP
+                    </div>
+                </div>
+                <input type="file" class="intel-file-input" id="homeFileInput"
+                       accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
+                       onchange="uploadFileFromHome(this.files[0])">
+            </div>
+
+            <!-- Text pane -->
+            <div class="intel-hub-pane" id="hubPaneText">
+                <input type="text" class="intel-hub-text-title" id="homeTextTitle"
+                       placeholder="Title (optional)">
+                <textarea class="intel-hub-textarea" id="homeTextContent"
+                          placeholder="Paste your notes, article text, research findings, or any content you want to learn from..."
+                          rows="4"></textarea>
+                <button class="intel-hub-submit wide" onclick="submitTextFromHome()">
+                    Add to Knowledge Base
+                </button>
+            </div>
+        </div>
+
+        <div class="intel-status" id="statusCard"></div>
+    </div>
+
+    {% if domains %}
+    <div class="intel-domains-section">
+        <div class="intel-section-header">
+            <h2 class="intel-section-title">Your Knowledge</h2>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <span class="intel-section-count">{{ domains|length }} domain{{ 's' if domains|length != 1 else '' }}</span>
+                <a href="javascript:void(0)" onclick="openGraphView()" class="intel-reset-link">Graph</a>
+                <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link">Reset</a>
+            </div>
+        </div>
+        <div class="intel-domains-grid">
+            {% for d in domains %}
+            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in" style="animation-delay: {{ loop.index0 * 0.06 }}s">
+                <span class="intel-domain-icon">{{ d.icon }}</span>
+                {% if d.parent_name %}<div class="intel-domain-parent">{{ d.parent_name }}</div>{% endif %}
+                <div class="intel-domain-name">{{ d.name }}</div>
+                <div class="intel-domain-desc">{{ d.description or 'Knowledge base' }}</div>
+                <div class="intel-domain-stats">
+                    <span class="intel-domain-stat">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="23 7 16 12 23 17 23 7"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        {{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}
+                    </span>
+                    <span class="intel-domain-stat">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                        </svg>
+                        {{ d.insight_count }} insight{{ 's' if d.insight_count != 1 else '' }}
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="intel-empty">
+        <div class="intel-empty-icon">📚</div>
+        <div class="intel-empty-title">Your knowledge base is empty</div>
+        <div class="intel-empty-desc">
+            Paste a URL above, upload a document, or add text to start building your first knowledge domain.
+        </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+</div>
+
+<!-- Domain Context Menu -->
+<div class="intel-context-menu" id="domainContextMenu" style="display:none;">
+    <div class="intel-context-item" onclick="domainAction('rename')">Rename</div>
+    <div class="intel-context-item" onclick="domainAction('merge')">Merge into...</div>
+    <div class="intel-context-item" onclick="domainAction('move')">Move to...</div>
+    <div class="intel-context-divider"></div>
+    <div class="intel-context-item intel-context-danger" onclick="domainAction('delete')">Delete</div>
+</div>
+
+<!-- Domain Merge/Move Modal -->
+<div class="intel-modal-overlay" id="domainModal" style="display:none;" onclick="if(event.target===this)closeDomainModal()">
+    <div class="intel-modal">
+        <div class="intel-modal-header">
+            <h3 id="domainModalTitle">Merge Domain</h3>
+            <button class="intel-modal-close" onclick="closeDomainModal()">&times;</button>
+        </div>
+        <div class="intel-modal-body">
+            <p id="domainModalDesc">Select the target domain:</p>
+            <div class="intel-modal-list" id="domainModalList"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// Shared Utilities
+// ══════════════════════════════════════════════════════════
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function isUrl(str) {
+    return /^https?:\/\//i.test(str) || /^www\./i.test(str);
+}
+
+// ══════════════════════════════════════════════════════════
+// Home Page — Multi-Source Hub
+// ══════════════════════════════════════════════════════════
+
+const urlInput = document.getElementById('urlInput');
+const ingestBtn = document.getElementById('ingestBtn');
+const statusCard = document.getElementById('statusCard');
+
+// Hub tab switching
+function switchHubTab(tab) {
+    document.querySelectorAll('.intel-hub-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.intel-hub-pane').forEach(p => p.classList.remove('active'));
+    document.querySelector(`.intel-hub-tab[data-tab="${tab}"]`).classList.add('active');
+    const paneId = {link: 'hubPaneLink', upload: 'hubPaneUpload', text: 'hubPaneText'}[tab];
+    document.getElementById(paneId).classList.add('active');
+    // Auto-focus the input
+    if (tab === 'link' && urlInput) urlInput.focus();
+    if (tab === 'text') { const t = document.getElementById('homeTextContent'); if (t) t.focus(); }
+}
+
+// Home drop zone drag-and-drop
+const homeDropZone = document.getElementById('homeDropZone');
+if (homeDropZone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+        homeDropZone.addEventListener(evt, (e) => { e.preventDefault(); homeDropZone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        homeDropZone.addEventListener(evt, (e) => { e.preventDefault(); homeDropZone.classList.remove('dragover'); });
+    });
+    homeDropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) uploadFileFromHome(files[0]);
+    });
+}
+
+// Submit text from home page
+function submitTextFromHome() {
+    const titleInput = document.getElementById('homeTextTitle');
+    const contentInput = document.getElementById('homeTextContent');
+    const content = contentInput.value.trim();
+    if (!content) return;
+
+    const title = titleInput.value.trim() || content.substring(0, 60) + '...';
+
+    contentInput.disabled = true;
+    titleInput.disabled = true;
+    showHomeStatus('processing', title, 'Processing text...', 5);
+
+    fetch('/api/ingest-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, content: content }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            showHomeStatus('error', 'Error', data.error, 0);
+            contentInput.disabled = false;
+            titleInput.disabled = false;
+            return;
+        }
+        pollHomeStatus(data.video_id);
+    })
+    .catch(err => {
+        showHomeStatus('error', 'Error', err.message, 0);
+        contentInput.disabled = false;
+        titleInput.disabled = false;
+    });
+}
+
+function ingestFromHome() {
+    const url = urlInput.value.trim();
+    if (!url) return;
+    if (!isUrl(url)) {
+        // Prepend https:// and try
+        urlInput.value = 'https://' + url;
+    }
+
+    urlInput.disabled = true;
+    ingestBtn.disabled = true;
+    ingestBtn.innerHTML = '<div class="intel-spinner white"></div>';
+
+    fetch('/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput.value.trim() }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            showHomeStatus('error', 'Error', data.error, 0);
+            resetHomeInput();
+            return;
+        }
+        if (data.status === 'already_exists') {
+            showHomeStatus('complete', data.title || 'Source',
+                `Already in your knowledge base.`, 100, null, data.source_id);
+            resetHomeInput();
+            return;
+        }
+        pollHomeStatus(data.video_id);
+    })
+    .catch(err => {
+        showHomeStatus('error', 'Error', err.message, 0);
+        resetHomeInput();
+    });
+}
+
+function uploadFileFromHome(file) {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showHomeStatus('processing', file.name, 'Uploading...', 5);
+
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            showHomeStatus('error', 'Error', data.error, 0);
+            return;
+        }
+        pollHomeStatus(data.video_id);
+    })
+    .catch(err => {
+        showHomeStatus('error', 'Error', err.message, 0);
+    });
+
+    // Reset file input
+    document.getElementById('homeFileInput').value = '';
+}
+
+function pollHomeStatus(videoId) {
+    const interval = setInterval(() => {
+        fetch(`/api/status/${videoId}`)
+            .then(r => r.json())
+            .then(data => {
+                const stepText = data.status === 'error' ? (data.error || data.step) : data.step;
+                showHomeStatus(data.status, data.title || 'Processing...', stepText, data.progress, data.domain);
+
+                if (data.status === 'complete') {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        if (data.domain) {
+                            window.location.href = `/domain/${encodeURIComponent(data.domain)}`;
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1200);
+                } else if (data.status === 'error') {
+                    clearInterval(interval);
+                    resetHomeInput();
+                }
+            })
+            .catch(() => {
+                clearInterval(interval);
+                resetHomeInput();
+            });
+    }, 1000);
+}
+
+// Smooth progress state
+let _progressTarget = 0;
+let _progressCurrent = 0;
+let _progressTimer = null;
+
+function _startProgressTween() {
+    if (_progressTimer) return;
+    _progressTimer = setInterval(() => {
+        if (_progressCurrent >= _progressTarget) {
+            clearInterval(_progressTimer);
+            _progressTimer = null;
+            return;
+        }
+        _progressCurrent = Math.min(_progressCurrent + 1, _progressTarget);
+        _updateProgressDOM(_progressCurrent);
+    }, 60); // ~1% every 60ms for smooth visual
+}
+
+function _updateProgressDOM(pct) {
+    const circ = 125.66;
+    const offset = circ * (1 - pct / 100);
+    const ring = document.querySelector('.intel-ring-fill:not(.complete):not(.error)');
+    if (ring) ring.setAttribute('stroke-dashoffset', offset);
+    const pctEl = document.querySelector('.intel-ring-pct');
+    if (pctEl && !pctEl.querySelector('svg')) pctEl.textContent = pct + '%';
+    const fill = document.querySelector('.intel-progress-fill:not(.complete):not(.error)');
+    if (fill) fill.style.width = pct + '%';
+}
+
+function showHomeStatus(status, title, step, progress, domain, sourceId) {
+    if (!statusCard) return;
+
+    const circ = 125.66;  // 2 * π * 20
+
+    // For processing status: update existing DOM if card already exists (enables CSS transitions)
+    if (status === 'processing') {
+        const existingCard = statusCard.querySelector('.intel-status-card');
+        const existingRing = statusCard.querySelector('.intel-ring-fill:not(.complete):not(.error)');
+
+        if (existingCard && existingRing) {
+            // Update step text and title only
+            const titleEl = statusCard.querySelector('.intel-status-title');
+            const stepEl = statusCard.querySelector('.intel-status-step');
+            if (titleEl) titleEl.textContent = title;
+            if (stepEl) stepEl.innerHTML = escapeHtml(step || '');
+
+            // Tween progress smoothly
+            _progressTarget = progress || 0;
+            _startProgressTween();
+            return;
+        }
+    }
+
+    // First render or non-processing status — build full card
+    let fillClass = '';
+    let ringContent = '';
+    const offset = circ * (1 - (progress || 0) / 100);
+
+    if (status === 'processing') {
+        _progressCurrent = progress || 0;
+        _progressTarget = progress || 0;
+        fillClass = '';
+        ringContent = `
+            <div class="intel-progress-ring-wrapper">
+                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
+                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
+                    <circle class="intel-ring-fill" cx="24" cy="24" r="20"
+                        stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
+                </svg>
+                <span class="intel-ring-pct">${progress}%</span>
+            </div>`;
+    } else if (status === 'complete' || status === 'already_exists') {
+        // Stop any running tween
+        if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        fillClass = 'complete';
+        ringContent = `
+            <div class="intel-progress-ring-wrapper">
+                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
+                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
+                    <circle class="intel-ring-fill complete" cx="24" cy="24" r="20"
+                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
+                </svg>
+                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </div>`;
+    } else if (status === 'error') {
+        if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        fillClass = 'error';
+        ringContent = `
+            <div class="intel-progress-ring-wrapper">
+                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
+                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
+                    <circle class="intel-ring-fill error" cx="24" cy="24" r="20"
+                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
+                </svg>
+                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+            </div>`;
+    }
+
+    let stepHtml = escapeHtml(step || '');
+    if (sourceId) {
+        stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+    }
+
+    statusCard.innerHTML = `
+        <div class="intel-status-card">
+            <div class="intel-status-header">
+                ${ringContent}
+                <div class="intel-status-info">
+                    <div class="intel-status-title">${escapeHtml(title)}</div>
+                    <div class="intel-status-step">${stepHtml}</div>
+                </div>
+            </div>
+            <div class="intel-progress-track">
+                <div class="intel-progress-fill ${fillClass}" style="width: ${progress}%"></div>
+            </div>
+        </div>
+    `;
+    statusCard.classList.add('active');
+}
+
+function reprocessFromHome(sourceId) {
+    showHomeStatus('processing', 'Re-processing...', 'Starting...', 5);
+    fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                showHomeStatus('error', 'Error', data.error, 0);
+                return;
+            }
+            pollHomeStatus(data.video_id);
+        })
+        .catch(err => showHomeStatus('error', 'Error', err.message, 0));
+}
+
+function resetHomeInput() {
+    if (urlInput) urlInput.disabled = false;
+    if (ingestBtn) {
+        ingestBtn.disabled = false;
+        ingestBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Domain Detail — Sources Sidebar
+// ══════════════════════════════════════════════════════════
+
+function toggleAddPanel() {
+    const panel = document.getElementById('addPanel');
+    if (panel) {
+        panel.classList.toggle('active');
+    }
+}
+
+function switchAddTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.intel-add-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Update panes
+    document.querySelectorAll('.intel-add-pane').forEach(p => p.classList.remove('active'));
+    const paneId = {link: 'addPaneLink', upload: 'addPaneUpload', text: 'addPaneText'}[tab];
+    const pane = document.getElementById(paneId);
+    if (pane) pane.classList.add('active');
+}
+
+function submitLink() {
+    const input = document.getElementById('addLinkInput');
+    let url = input.value.trim();
+    if (!url) return;
+    if (!isUrl(url)) url = 'https://' + url;
+
+    input.disabled = true;
+    showSidebarStatus('Processing...');
+
+    fetch('/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            input.disabled = false;
+            alert(data.error);
+            return;
+        }
+        if (data.status === 'already_exists') {
+            if (data.source_id) {
+                showSidebarStatus('Re-processing...');
+                reprocessSource(data.source_id, data.video_id);
+            } else {
+                hideSidebarStatus();
+                input.disabled = false;
+            }
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(err => {
+        hideSidebarStatus();
+        input.disabled = false;
+    });
+}
+
+function uploadFile(file) {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showSidebarStatus(`Uploading ${file.name}...`);
+
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            alert(data.error);
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(err => {
+        hideSidebarStatus();
+    });
+
+    document.getElementById('sidebarFileInput').value = '';
+}
+
+function submitText() {
+    const titleInput = document.getElementById('addTextTitle');
+    const contentInput = document.getElementById('addTextContent');
+    const content = contentInput.value.trim();
+    if (!content) return;
+
+    const title = titleInput.value.trim() || content.substring(0, 60) + '...';
+
+    contentInput.disabled = true;
+    titleInput.disabled = true;
+    showSidebarStatus('Processing text...');
+
+    fetch('/api/ingest-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, content: content }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            contentInput.disabled = false;
+            titleInput.disabled = false;
+            alert(data.error);
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(err => {
+        hideSidebarStatus();
+        contentInput.disabled = false;
+        titleInput.disabled = false;
+    });
+}
+
+// Sidebar smooth progress tween
+let _sidebarProgressTarget = 0;
+let _sidebarProgressCurrent = 0;
+let _sidebarProgressTimer = null;
+
+function _sidebarProgressTween() {
+    if (_sidebarProgressTimer) return;
+    _sidebarProgressTimer = setInterval(() => {
+        if (_sidebarProgressCurrent >= _sidebarProgressTarget) {
+            clearInterval(_sidebarProgressTimer);
+            _sidebarProgressTimer = null;
+            return;
+        }
+        _sidebarProgressCurrent = Math.min(_sidebarProgressCurrent + 1, _sidebarProgressTarget);
+        _updateSidebarProgressDOM(_sidebarProgressCurrent);
+    }, 60);
+}
+
+function _updateSidebarProgressDOM(pct) {
+    const circ = 87.96; // 2 * π * 14
+    const offset = circ * (1 - pct / 100);
+    const ring = document.getElementById('sidebarRingFill');
+    if (ring) ring.setAttribute('stroke-dashoffset', offset);
+    const pctEl = document.getElementById('sidebarRingPct');
+    if (pctEl) pctEl.textContent = pct + '%';
+    const fill = document.getElementById('sidebarProgressFill');
+    if (fill) fill.style.width = pct + '%';
+}
+
+function showSidebarStatus(text, progress) {
+    const el = document.getElementById('sidebarStatus');
+    const textEl = document.getElementById('sidebarStatusText');
+    if (el && textEl) {
+        textEl.textContent = text;
+        el.classList.add('active');
+    }
+    if (progress !== undefined && progress !== null) {
+        _sidebarProgressTarget = progress;
+        _sidebarProgressTween();
+    }
+}
+
+function hideSidebarStatus() {
+    const el = document.getElementById('sidebarStatus');
+    if (el) el.classList.remove('active');
+    if (_sidebarProgressTimer) { clearInterval(_sidebarProgressTimer); _sidebarProgressTimer = null; }
+    _sidebarProgressCurrent = 0;
+    _sidebarProgressTarget = 0;
+    _updateSidebarProgressDOM(0);
+}
+
+function pollSidebarStatus(videoId) {
+    const interval = setInterval(() => {
+        fetch(`/api/status/${videoId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.step) showSidebarStatus(data.step, data.progress || 0);
+
+                if (data.status === 'complete') {
+                    clearInterval(interval);
+                    showSidebarStatus('Done! Reloading...', 100);
+                    setTimeout(() => window.location.reload(), 800);
+                } else if (data.status === 'error') {
+                    clearInterval(interval);
+                    hideSidebarStatus();
+                }
+            })
+            .catch(() => {
+                clearInterval(interval);
+                hideSidebarStatus();
+            });
+    }, 1000);
+}
+
+// ── Taxonomy Tree ──
+
+function toggleTreeChildren(rowEl) {
+    const nodeEl = rowEl.closest('.intel-tree-node');
+    const children = nodeEl.querySelector('.intel-tree-children');
+    const toggle = rowEl.querySelector('.intel-tree-toggle');
+    if (children) {
+        children.classList.toggle('collapsed');
+        if (toggle) toggle.classList.toggle('expanded');
+    }
+}
+
+// ── Domain Management (context menu, merge, rename, delete) ──
+
+let _ctxDomain = { id: null, name: '', level: 0 };
+
+function showDomainMenu(e, id, name, level) {
+    e.preventDefault();
+    e.stopPropagation();
+    _ctxDomain = { id, name, level };
+    const menu = document.getElementById('domainContextMenu');
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+}
+
+document.addEventListener('click', () => {
+    document.getElementById('domainContextMenu').style.display = 'none';
+});
+
+function domainAction(action) {
+    document.getElementById('domainContextMenu').style.display = 'none';
+    if (action === 'rename') {
+        const newName = prompt('Rename domain:', _ctxDomain.name);
+        if (newName && newName !== _ctxDomain.name) {
+            fetch('/api/domains/rename', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ domain_id: _ctxDomain.id, new_name: newName })
+            }).then(r => r.json()).then(d => {
+                if (d.status === 'ok') location.reload();
+                else alert(d.error || 'Rename failed');
+            });
+        }
+    } else if (action === 'delete') {
+        if (confirm(`Delete "${_ctxDomain.name}" and all its sources/insights? This cannot be undone.`)) {
+            fetch(`/api/domains/${_ctxDomain.id}`, { method: 'DELETE' })
+                .then(r => r.json()).then(d => {
+                    if (d.status === 'ok') location.href = '/';
+                    else alert(d.error || 'Delete failed');
+                });
+        }
+    } else if (action === 'merge' || action === 'move') {
+        openDomainModal(action);
+    }
+}
+
+function openDomainModal(action) {
+    const modal = document.getElementById('domainModal');
+    const title = document.getElementById('domainModalTitle');
+    const desc = document.getElementById('domainModalDesc');
+    const list = document.getElementById('domainModalList');
+
+    title.textContent = action === 'merge' ? `Merge "${_ctxDomain.name}" into...` : `Move "${_ctxDomain.name}" to...`;
+    desc.textContent = action === 'merge' ? 'Select the target domain (sources and insights will be moved):' : 'Select the new parent category:';
+    list.innerHTML = '<div style="padding:12px;color:var(--intel-text-tertiary)">Loading...</div>';
+    modal.style.display = 'flex';
+
+    fetch('/api/domain-tree').then(r => r.json()).then(data => {
+        list.innerHTML = '';
+        const tree = data.tree || [];
+        tree.forEach(parent => {
+            if (action === 'move') {
+                // Show parent categories to move under
+                if (parent.id !== _ctxDomain.id) {
+                    const el = document.createElement('div');
+                    el.className = 'intel-modal-option';
+                    el.textContent = `${parent.icon} ${parent.name}`;
+                    el.onclick = () => executeDomainAction(action, parent.id, parent.name);
+                    list.appendChild(el);
+                }
+            } else {
+                // Show all domains at same level for merge
+                (parent.children || []).forEach(child => {
+                    if (child.id !== _ctxDomain.id && child.level === _ctxDomain.level) {
+                        const el = document.createElement('div');
+                        el.className = 'intel-modal-option';
+                        el.textContent = `${child.icon} ${child.name} (${child.source_count || 0} sources)`;
+                        el.onclick = () => executeDomainAction(action, child.id, child.name);
+                        list.appendChild(el);
+                    }
+                });
+                // Also show parent-level for merging parent categories
+                if (_ctxDomain.level === 0 && parent.id !== _ctxDomain.id) {
+                    const el = document.createElement('div');
+                    el.className = 'intel-modal-option';
+                    el.textContent = `${parent.icon} ${parent.name}`;
+                    el.onclick = () => executeDomainAction(action, parent.id, parent.name);
+                    list.appendChild(el);
+                }
+            }
+        });
+        if (!list.children.length) {
+            list.innerHTML = '<div style="padding:12px;color:var(--intel-text-tertiary)">No other domains available</div>';
+        }
+    });
+}
+
+function executeDomainAction(action, targetId, targetName) {
+    if (action === 'merge') {
+        if (!confirm(`Merge "${_ctxDomain.name}" into "${targetName}"? This will move all sources and insights.`)) return;
+        fetch('/api/domains/merge', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ source_id: _ctxDomain.id, target_id: targetId })
+        }).then(r => r.json()).then(d => {
+            closeDomainModal();
+            if (d.status === 'ok') {
+                location.href = '/domain/' + encodeURIComponent(d.target_name || targetName);
+            } else alert(d.error || 'Merge failed');
+        });
+    } else if (action === 'move') {
+        fetch('/api/domains/move', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ domain_id: _ctxDomain.id, new_parent_id: targetId })
+        }).then(r => r.json()).then(d => {
+            closeDomainModal();
+            if (d.status === 'ok') location.reload();
+            else alert(d.error || 'Move failed');
+        });
+    }
+}
+
+function closeDomainModal() {
+    document.getElementById('domainModal').style.display = 'none';
+}
+
+// ── Admin Tools ──
+
+function backfillEmbeddings() {
+    const btn = document.getElementById('backfillBtn');
+    btn.disabled = true;
+    btn.textContent = 'Generating embeddings...';
+
+    fetch('/api/backfill-embeddings', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.textContent = data.error ? 'Error — try again' : `✓ ${data.message}`;
+            setTimeout(() => { btn.textContent = 'Backfill Embeddings'; }, 4000);
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.textContent = 'Failed — try again';
+        });
+}
+
+function resetAllData() {
+    if (!confirm('Delete ALL domains, sources, insights, and syntheses? This cannot be undone.')) return;
+    if (!confirm('Are you sure? This will permanently erase your entire knowledge base.')) return;
+    const btn = document.getElementById('resetBtn');
+    btn.disabled = true;
+    btn.textContent = 'Resetting...';
+    fetch('/api/reset-all', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'ok') window.location.href = '/';
+            else { alert(d.error || 'Reset failed'); btn.disabled = false; btn.textContent = 'Reset All Data'; }
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = 'Reset failed'; });
+}
+
+// ── Source Management ──
+
+function reprocessSource(sourceId, videoId) {
+    const item = document.getElementById(`source-${sourceId}`);
+    if (item) item.classList.add('processing');
+
+    showSidebarStatus('Re-processing...');
+
+    fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                hideSidebarStatus();
+                if (item) item.classList.remove('processing');
+                return;
+            }
+            pollSidebarStatus(data.video_id);
+        })
+        .catch(() => {
+            hideSidebarStatus();
+            if (item) item.classList.remove('processing');
+        });
+}
+
+function showDeleteConfirm(sourceId) {
+    document.querySelectorAll('.intel-source-confirm').forEach(c => c.classList.remove('active'));
+    const confirm = document.getElementById(`confirm-${sourceId}`);
+    if (confirm) confirm.classList.add('active');
+}
+
+function hideDeleteConfirm(sourceId) {
+    const confirm = document.getElementById(`confirm-${sourceId}`);
+    if (confirm) confirm.classList.remove('active');
+}
+
+function deleteSource(sourceId, videoId) {
+    const item = document.getElementById(`source-${sourceId}`);
+    const confirm = document.getElementById(`confirm-${sourceId}`);
+    if (item) item.classList.add('deleting');
+    if (confirm) confirm.classList.remove('active');
+
+    showSidebarStatus('Removing source...');
+
+    fetch(`/api/source/${sourceId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                hideSidebarStatus();
+                if (item) item.classList.remove('deleting');
+                return;
+            }
+
+            if (data.status === 'resynthesizing') {
+                showSidebarStatus('Re-synthesizing...');
+                // Poll for completion
+                const checkInterval = setInterval(() => {
+                    fetch(`/api/status/${videoId}`)
+                        .then(r => r.json())
+                        .then(status => {
+                            if (status.status === 'complete' || status.status === 'unknown') {
+                                clearInterval(checkInterval);
+                                window.location.reload();
+                            }
+                        })
+                        .catch(() => {
+                            clearInterval(checkInterval);
+                            window.location.reload();
+                        });
+                }, 1500);
+            } else {
+                // Cleared or deleted — just reload
+                setTimeout(() => window.location.reload(), 500);
+            }
+        })
+        .catch(() => {
+            hideSidebarStatus();
+            if (item) item.classList.remove('deleting');
+        });
+}
+
+// ── Drag and Drop ──
+
+const dropZone = document.getElementById('sidebarDropZone');
+if (dropZone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        });
+    });
+    dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) uploadFile(files[0]);
+    });
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Synthesis TOC + Visual + Chat Toggle
+// ══════════════════════════════════════════════════════════
+
+// Auto-generate Table of Contents from synthesis headers
+(function() {
+    const synthesis = document.getElementById('synthesisContent');
+    const tocContainer = document.getElementById('synthesisToC');
+    const tocList = document.getElementById('tocList');
+    if (!synthesis || !tocContainer || !tocList) return;
+
+    const headers = synthesis.querySelectorAll('h2, h3');
+    if (headers.length < 2) return; // Don't show TOC for very short content
+
+    headers.forEach((h, i) => {
+        const id = 'section-' + i;
+        h.id = id;
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = '#' + id;
+        a.textContent = h.textContent;
+        if (h.tagName === 'H3') li.classList.add('toc-h3');
+        li.appendChild(a);
+        tocList.appendChild(li);
+    });
+
+    tocContainer.style.display = 'block';
+})();
+
+// TLDR-first: split TLDR from full brief, collapse detailed content
+(function() {
+    const el = document.getElementById('synthesisContent');
+    if (!el) return;
+    const h2s = el.querySelectorAll('h2');
+    if (h2s.length < 2) return;
+
+    // Find the TLDR h2 (may not be the first one)
+    let tldrH2 = null;
+    let tldrH2Index = -1;
+    for (let i = 0; i < h2s.length; i++) {
+        if (h2s[i].textContent.trim().toLowerCase().includes('tldr')) {
+            tldrH2 = h2s[i];
+            tldrH2Index = i;
+            break;
+        }
+    }
+    if (!tldrH2) return;
+
+    // Find the next h2 after TLDR to know where TLDR content ends
+    const tldrEnd = h2s[tldrH2Index + 1] || null;
+
+    // Collect TLDR nodes (from the TLDR h2 to the next h2)
+    const tldrCard = document.createElement('div');
+    tldrCard.className = 'intel-tldr-card';
+    let node = tldrH2;
+    while (node && node !== tldrEnd) {
+        const next = node.nextSibling;
+        tldrCard.appendChild(node);
+        node = next;
+    }
+    // Wrap remaining in collapsible
+    const detail = document.createElement('div');
+    detail.className = 'intel-detail-content collapsed';
+    while (el.firstChild) detail.appendChild(el.firstChild);
+
+    const btn = document.createElement('button');
+    btn.className = 'intel-detail-toggle';
+    btn.textContent = 'Show full brief';
+    btn.onclick = function() {
+        detail.classList.toggle('collapsed');
+        btn.textContent = detail.classList.contains('collapsed') ? 'Show full brief' : 'Hide full brief';
+        // Show/hide TOC with detail
+        const toc = document.getElementById('synthesisToC');
+        if (toc) toc.style.display = detail.classList.contains('collapsed') ? 'none' : 'block';
+    };
+    // Hide TOC by default (only show when expanded)
+    const toc = document.getElementById('synthesisToC');
+    if (toc) toc.style.display = 'none';
+
+    el.appendChild(tldrCard);
+    el.appendChild(btn);
+    el.appendChild(detail);
+})();
+
+// Visual generation
+function generateVisual() {
+    const btn = document.getElementById('generateVisualBtn');
+    const frame = document.getElementById('visualFrame');
+    const domainId = {{ domain.id if domain else 'null' }};
+    if (!domainId) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    fetch(`/api/generate-visual/${domainId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.textContent = 'Regenerate';
+
+            if (data.error) {
+                frame.innerHTML = `<div class="intel-visual-empty">${escapeHtml(data.error)}</div>`;
+                return;
+            }
+
+            const iframe = document.createElement('iframe');
+            iframe.id = 'visualIframe';
+            iframe.sandbox = 'allow-scripts';
+            iframe.srcdoc = data.html;
+            iframe.style.width = '100%';
+            iframe.style.border = 'none';
+            iframe.style.minHeight = '400px';
+            // Auto-resize iframe to content
+            iframe.onload = function() {
+                try {
+                    iframe.style.height = iframe.contentDocument.body.scrollHeight + 'px';
+                } catch(e) {}
+            };
+
+            frame.innerHTML = '';
+            frame.appendChild(iframe);
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.textContent = 'Generate Visual';
+            frame.innerHTML = `<div class="intel-visual-empty">Generation failed. Try again.</div>`;
+        });
+}
+
+// Show suggested questions when user starts typing
+function onSearchInput() {
+    const input = document.getElementById('searchInput');
+    const suggestedEl = document.getElementById('suggestedQuestions');
+    if (!suggestedEl) return;
+
+    if (input && input.value.trim().length > 0) {
+        suggestedEl.style.display = 'flex';
+    } else {
+        suggestedEl.style.display = 'none';
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+// AI Search (SafetyWing-style inline answers)
+// ══════════════════════════════════════════════════════════
+
+function askQuestion(questionText) {
+    const input = document.getElementById('searchInput');
+    const question = questionText || (input ? input.value.trim() : '');
+    if (!question) return;
+
+    const domainId = {{ domain.id if domain else 'null' }};
+    if (!domainId) return;
+
+    // Set input value if from suggested question
+    if (input && questionText) input.value = questionText;
+
+    const answerEl = document.getElementById('searchAnswer');
+    const contentEl = document.getElementById('searchAnswerContent');
+    const metaEl = document.getElementById('searchAnswerMeta');
+    const loadingEl = document.getElementById('searchLoading');
+    const btn = document.getElementById('searchBtn');
+
+    // Show loading, hide previous answer
+    answerEl.style.display = 'none';
+    loadingEl.style.display = 'flex';
+    if (btn) btn.disabled = true;
+    if (input) input.disabled = true;
+
+    // Hide suggested questions after first use
+    const suggestedEl = document.getElementById('suggestedQuestions');
+    if (suggestedEl) suggestedEl.style.display = 'none';
+
+    fetch('/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain_id: domainId, question: question }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        loadingEl.style.display = 'none';
+        if (btn) btn.disabled = false;
+        if (input) input.disabled = false;
+
+        // Format the answer as rich HTML
+        let html = escapeHtml(data.answer || 'No answer available.');
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Convert markdown-style lists and paragraphs
+        const lines = html.split('\n');
+        let inList = false;
+        let processed = '';
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+                if (!inList) { processed += '<ul>'; inList = true; }
+                processed += `<li>${trimmed.slice(2)}</li>`;
+            } else if (/^\d+\.\s/.test(trimmed)) {
+                if (!inList) { processed += '<ol>'; inList = true; }
+                processed += `<li>${trimmed.replace(/^\d+\.\s/, '')}</li>`;
+            } else {
+                if (inList) { processed += inList === true ? '</ul>' : '</ol>'; inList = false; }
+                if (trimmed) processed += `<p>${trimmed}</p>`;
+            }
+        }
+        if (inList) processed += '</ul>';
+        html = processed || html;
+
+        contentEl.innerHTML = html;
+
+        // Meta info
+        const sources = data.sources_used || 0;
+        const insights = data.insights_found || 0;
+        metaEl.textContent = `Based on ${insights} relevant insight${insights !== 1 ? 's' : ''} from ${sources} source${sources !== 1 ? 's' : ''}`;
+
+        answerEl.style.display = 'block';
+
+        // Scroll to answer
+        answerEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        if (input) input.focus();
+    })
+    .catch(err => {
+        loadingEl.style.display = 'none';
+        if (btn) btn.disabled = false;
+        if (input) input.disabled = false;
+        contentEl.innerHTML = '<p>Something went wrong. Please try again.</p>';
+        metaEl.textContent = '';
+        answerEl.style.display = 'block';
+    });
+}
+</script>
+
+<!-- Knowledge Graph Overlay -->
+<div id="graphOverlay" style="display:none;position:fixed;inset:0;background:#080b12;z-index:1000;flex-direction:column;">
+    <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <button onclick="closeGraphView()" style="display:flex;align-items:center;gap:6px;color:#94a3b8;background:rgba(255,255,255,0.08);border:none;font-size:13px;cursor:pointer;padding:6px 14px;border-radius:20px;font-family:inherit;transition:all 0.2s;letter-spacing:0.3px;" onmouseenter="this.style.background='rgba(255,255,255,0.15)';this.style.color='#e2e8f0'" onmouseleave="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8'">&larr; Back</button>
+        <span id="graphNodeCount" style="font-size:11px;color:#334155;"></span>
+    </div>
+    <div id="graphContainer" style="flex:1;width:100%;position:relative;"></div>
+</div>
+
+<script>
+// ── Knowledge Graph (Obsidian-style with violet glow) ──
+let _graphData = null;
+let _graphInstance = null;
+let _hoveredNode = null;
+let _neighborSet = null;
+let _neighborLinkSet = null;
+
+function openGraphView() {
+    const overlay = document.getElementById('graphOverlay');
+    overlay.style.display = 'flex';
+    _graphData = null; // always refresh
+    document.addEventListener('keydown', _graphKeyHandler);
+    if (!window.ForceGraph) {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/force-graph@1/dist/force-graph.min.js';
+        s.onload = _renderGraph;
+        s.onerror = () => {
+            document.getElementById('graphContainer').innerHTML =
+                '<div style="color:#475569;text-align:center;padding-top:80px;font-size:13px;">Failed to load graph library.</div>';
+        };
+        document.head.appendChild(s);
+    } else {
+        _renderGraph();
+    }
+}
+
+function closeGraphView() {
+    document.getElementById('graphOverlay').style.display = 'none';
+    document.removeEventListener('keydown', _graphKeyHandler);
+}
+
+function _graphKeyHandler(e) { if (e.key === 'Escape') closeGraphView(); }
+
+function _buildAdjacency(links) {
+    const adj = {};
+    links.forEach(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        if (!adj[sid]) adj[sid] = new Set();
+        if (!adj[tid]) adj[tid] = new Set();
+        adj[sid].add(tid);
+        adj[tid].add(sid);
+    });
+    return adj;
+}
+
+async function _renderGraph() {
+    const container = document.getElementById('graphContainer');
+    container.innerHTML = '<div style="color:#475569;text-align:center;padding-top:80px;font-size:13px;">Loading...</div>';
+
+    try {
+        const r = await fetch('/api/knowledge-graph');
+        _graphData = await r.json();
+    } catch (err) {
+        container.innerHTML = '<div style="color:#475569;text-align:center;padding-top:80px;font-size:13px;">Failed to load graph data.</div>';
+        return;
+    }
+
+    if (!_graphData.nodes || _graphData.nodes.length === 0) {
+        container.innerHTML = '<div style="color:#334155;text-align:center;padding-top:80px;font-size:13px;">No domains yet. Add sources to see your knowledge graph.</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+
+    // Node count
+    const countEl = document.getElementById('graphNodeCount');
+    if (countEl) {
+        const domainCount = _graphData.nodes.filter(n => n.type === 'domain').length;
+        const sourceCount = _graphData.nodes.filter(n => n.type === 'source').length;
+        countEl.textContent = domainCount + ' domains · ' + sourceCount + ' sources';
+    }
+
+    // ── Color palette — violet accent (kept per user preference) ──
+    const C = {
+        // Domain nodes by level
+        domainCategory: '#a78bfa',  // violet-400
+        domain:         '#7c3aed',  // violet-600
+        domainSub:      '#5b21b6',  // violet-800
+        // Source nodes
+        source:         '#475569',  // slate-600
+        // Hover
+        hover:          '#c4b5fd',  // violet-300
+        // Lines
+        line:           'rgba(100, 116, 139, 0.12)',
+        lineRef:        'rgba(167, 139, 250, 0.2)',
+        lineSource:     'rgba(100, 116, 139, 0.08)',
+        lineActive:     'rgba(196, 181, 253, 0.6)',
+        lineActiveGrey: 'rgba(148, 163, 184, 0.35)',
+        lineDim:        'rgba(100, 116, 139, 0.03)',
+    };
+
+    // ── Node sizing — Quartz-inspired: 2 + sqrt(links) ──
+    function nodeRadius(n) {
+        if (n.type === 'source') return 1.8;
+        // Domain nodes: count connections in the graph
+        const links = _graphData.edges.filter(
+            e => e.source === n.id || e.target === n.id ||
+                 (typeof e.source === 'object' && e.source.id === n.id) ||
+                 (typeof e.target === 'object' && e.target.id === n.id)
+        ).length;
+        return 2 + Math.sqrt(links);
+    }
+
+    function nodeColor(n) {
+        if (n.type === 'source') return C.source;
+        if (n.level === 0) return C.domainCategory;
+        if (n.level === 2) return C.domainSub;
+        return C.domain;
+    }
+
+    // Truncate long source titles
+    function truncName(name, max) {
+        if (!name) return 'Untitled';
+        return name.length > max ? name.slice(0, max - 1) + '…' : name;
+    }
+
+    // Validate edges — only keep those where both endpoints exist
+    const nodeIds = new Set(_graphData.nodes.map(n => n.id));
+    const validEdges = _graphData.edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+    // Adjacency map for neighborhood highlight
+    const adj = _buildAdjacency(validEdges);
+
+    // Start all nodes at center for the expanding animation
+    const cx = container.offsetWidth / 2;
+    const cy = container.offsetHeight / 2;
+    _graphData.nodes.forEach(n => {
+        n.x = cx + (Math.random() - 0.5) * 20;
+        n.y = cy + (Math.random() - 0.5) * 20;
+    });
+
+    _graphInstance = ForceGraph()(container)
+        .autoPauseRedraw(false)
+        .width(container.offsetWidth)
+        .height(container.offsetHeight)
+        .backgroundColor('#080b12')
+        .graphData({ nodes: _graphData.nodes, links: validEdges })
+        .nodeId('id')
+        .nodeLabel('')
+        .nodeCanvasObjectMode(() => 'replace')
+        .nodeCanvasObject((node, ctx, globalScale) => {
+            const r = nodeRadius(node);
+            const isHovered = _hoveredNode && _hoveredNode.id === node.id;
+            const isNeighbor = _neighborSet && _neighborSet.has(node.id);
+            const isDimmed = _hoveredNode && !isHovered && !isNeighbor;
+
+            // Quartz dim: 0.2 opacity for non-neighbors
+            ctx.globalAlpha = isDimmed ? 0.2 : 1;
+
+            // Glow effect on hover/neighbor (violet bloom — kept per user preference)
+            if ((isHovered || isNeighbor) && !isDimmed) {
+                const glowR = r * (isHovered ? 7 : 4);
+                const grad = ctx.createRadialGradient(node.x, node.y, r * 0.3, node.x, node.y, glowR);
+                const gc = isHovered ? C.hover : nodeColor(node);
+                grad.addColorStop(0, gc + '35');
+                grad.addColorStop(0.4, gc + '12');
+                grad.addColorStop(1, gc + '00');
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, glowR, 0, 2 * Math.PI);
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+
+            // Node dot
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+            ctx.fillStyle = isHovered ? C.hover : nodeColor(node);
+            ctx.fill();
+
+            // Labels — Quartz formula: opacity = (scale - 1) / 3.75
+            // Hovered/neighbor: always visible
+            const zoomAlpha = Math.max(Math.min((globalScale - 1) / 3.75, 1), 0);
+            const isSource = node.type === 'source';
+            const showLabel = isHovered || isNeighbor || (zoomAlpha > 0.05 && !isSource) || (zoomAlpha > 0.3 && isSource);
+
+            if (showLabel && !isDimmed) {
+                const labelAlpha = (isHovered || isNeighbor) ? 1 : zoomAlpha;
+                const fontSize = Math.max(2.5, Math.min(11, 11 / globalScale));
+                const weight = isHovered ? '600' : '400';
+                ctx.font = `${weight} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+                ctx.fillStyle = isHovered ? '#f1f5f9' : `rgba(226, 232, 240, ${labelAlpha * 0.85})`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                const label = isSource ? truncName(node.name, 30) : node.name;
+                ctx.fillText(label, node.x, node.y + r + 2);
+            }
+
+            ctx.globalAlpha = 1;
+        })
+        .nodePointerAreaPaint((node, color, ctx) => {
+            const r = nodeRadius(node) + 6;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+        })
+        .linkCanvasObjectMode(() => 'replace')
+        .linkCanvasObject((link, ctx) => {
+            const sid = typeof link.source === 'object' ? link.source.id : link.source;
+            const tid = typeof link.target === 'object' ? link.target.id : link.target;
+            const sx = link.source.x, sy = link.source.y;
+            const tx = link.target.x, ty = link.target.y;
+            if (sx === undefined || tx === undefined) return;
+
+            const isHighlighted = _hoveredNode && _neighborSet &&
+                (_neighborSet.has(sid) && _neighborSet.has(tid)) &&
+                (_hoveredNode.id === sid || _hoveredNode.id === tid);
+            const isDimmed = _hoveredNode && !isHighlighted;
+            const isRef = link.type === 'reference';
+            const isSrc = link.type === 'source';
+
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(tx, ty);
+
+            if (isHighlighted) {
+                ctx.strokeStyle = isRef ? C.lineActive : C.lineActiveGrey;
+                ctx.lineWidth = 1;
+            } else if (isDimmed) {
+                ctx.strokeStyle = C.lineDim;
+                ctx.lineWidth = 0.3;
+            } else {
+                ctx.strokeStyle = isRef ? C.lineRef : isSrc ? C.lineSource : C.line;
+                ctx.lineWidth = 1;
+            }
+
+            ctx.stroke();
+        })
+        .onNodeHover(node => {
+            container.style.cursor = node ? 'pointer' : 'default';
+            _hoveredNode = node;
+            if (node) {
+                const neighbors = adj[node.id] || new Set();
+                _neighborSet = new Set([...neighbors, node.id]);
+            } else {
+                _neighborSet = null;
+            }
+        })
+        .onNodeClick(node => {
+            if (!node) return;
+            if (node.type === 'source' && node.url) {
+                // Source node → open source URL in new tab
+                window.open(node.url, '_blank');
+            } else {
+                // Domain node (any level) → navigate to domain page
+                // Use node.id directly — domain IDs are integers,
+                // source IDs start with "s-" (handled above)
+                closeGraphView();
+                window.location.href = '/domain/' + node.id;
+            }
+        })
+        // Quartz-inspired physics
+        .d3AlphaDecay(0.015)
+        .d3VelocityDecay(0.25)
+        .warmupTicks(0)
+        .cooldownTime(6000);
+
+    // Quartz force parameters: charge -50, center 0.2, link distance 30, collide
+    _graphInstance.d3Force('charge').strength(-80);
+    _graphInstance.d3Force('link').distance(30);
+    _graphInstance.d3Force('center').strength(0.3);
+    // Add collide force to prevent node overlap
+    if (window.d3) {
+        _graphInstance.d3Force('collide', d3.forceCollide(n => nodeRadius(n) + 1).iterations(3));
+    }
+
+    // Kick the simulation with high alpha for the expanding animation
+    setTimeout(() => {
+        if (_graphInstance) {
+            _graphInstance.d3ReheatSimulation();
+        }
+    }, 50);
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+        if (document.getElementById('graphOverlay').style.display !== 'none' && _graphInstance) {
+            _graphInstance.width(container.offsetWidth).height(container.offsetHeight);
+        }
+    });
+}
+
+// Invalidate graph cache on navigation
+window.addEventListener('beforeunload', () => { _graphData = null; });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.sqlite3
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.streamlit/secrets.toml
+transcripts/
+playbooks_output/
