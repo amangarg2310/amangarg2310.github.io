@@ -244,10 +244,29 @@ def extract_playlist_id(url: str) -> Optional[str]:
 
 
 def fetch_playlist_videos(playlist_id: str) -> list[dict]:
-    """Fetch video IDs and titles from a YouTube playlist via RSS feed (no API key needed).
+    """Fetch video IDs and titles from a YouTube playlist.
 
-    Returns up to ~15 most recent videos (YouTube RSS limit).
+    Strategy:
+    1. Try RSS feed (fast, no JS, works for channel upload playlists)
+    2. Fall back to scraping playlist page HTML (works for user-created playlists)
+
+    Returns up to ~15 videos.
     """
+    # Strategy 1: RSS feed
+    videos = _fetch_playlist_rss(playlist_id)
+    if videos:
+        return videos[:15]
+
+    # Strategy 2: Scrape playlist page HTML
+    videos = _fetch_playlist_html(playlist_id)
+    if videos:
+        return videos[:15]
+
+    raise ValueError("No videos found in playlist. It may be empty, private, or unavailable.")
+
+
+def _fetch_playlist_rss(playlist_id: str) -> list[dict]:
+    """Try fetching playlist via RSS/Atom feed (works for channel upload playlists)."""
     import xml.etree.ElementTree as ET
 
     rss_url = f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}"
@@ -257,12 +276,9 @@ def fetch_playlist_videos(playlist_id: str) -> list[dict]:
         })
         with urllib.request.urlopen(req, timeout=20) as resp:
             xml_data = resp.read().decode()
-    except urllib.error.HTTPError as e:
-        raise ValueError(f"Could not fetch playlist (HTTP {e.code}). Check the playlist URL or ensure it's public.")
-    except Exception as e:
-        raise ValueError(f"Failed to fetch playlist RSS: {e}")
+    except Exception:
+        return []
 
-    # Parse Atom XML feed
     ns = {
         'atom': 'http://www.w3.org/2005/Atom',
         'yt': 'http://www.youtube.com/xml/schemas/2015',
@@ -278,8 +294,62 @@ def fetch_playlist_videos(playlist_id: str) -> list[dict]:
                 'video_id': vid_el.text,
                 'title': title_el.text if title_el is not None else 'Untitled',
             })
-    if not videos:
-        raise ValueError("No videos found in playlist. It may be empty or private.")
+    return videos
+
+
+def _fetch_playlist_html(playlist_id: str) -> list[dict]:
+    """Scrape playlist page HTML for video IDs and titles (fallback for user-created playlists)."""
+    url = f"https://www.youtube.com/playlist?list={playlist_id}"
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            html = resp.read().decode('utf-8', errors='replace')
+    except Exception as e:
+        logger.warning(f"Failed to fetch playlist page: {e}")
+        return []
+
+    # YouTube embeds playlist data as JSON in ytInitialData
+    match = re.search(r'var\s+ytInitialData\s*=\s*(\{.+?\});\s*</script>', html, re.DOTALL)
+    if not match:
+        # Alternative pattern
+        match = re.search(r'ytInitialData\s*=\s*(\{.+?\});\s*', html, re.DOTALL)
+    if not match:
+        logger.warning("Could not find ytInitialData in playlist page")
+        return []
+
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse ytInitialData JSON")
+        return []
+
+    # Navigate the nested JSON structure to find playlist video renderers
+    videos = []
+    try:
+        tabs = data['contents']['twoColumnBrowseResultsRenderer']['tabs']
+        for tab in tabs:
+            tab_renderer = tab.get('tabRenderer', {})
+            section_contents = (tab_renderer.get('content', {})
+                               .get('sectionListRenderer', {})
+                               .get('contents', []))
+            for section in section_contents:
+                items = (section.get('itemSectionRenderer', {})
+                        .get('contents', [{}])[0]
+                        .get('playlistVideoListRenderer', {})
+                        .get('contents', []))
+                for item in items:
+                    renderer = item.get('playlistVideoRenderer', {})
+                    vid = renderer.get('videoId')
+                    title_runs = renderer.get('title', {}).get('runs', [])
+                    title = title_runs[0].get('text', 'Untitled') if title_runs else 'Untitled'
+                    if vid:
+                        videos.append({'video_id': vid, 'title': title})
+    except (KeyError, IndexError, TypeError) as e:
+        logger.warning(f"Failed to extract videos from ytInitialData: {e}")
+
     return videos
 
 
