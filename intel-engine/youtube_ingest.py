@@ -252,17 +252,18 @@ def fetch_playlist_videos(playlist_id: str) -> list[dict]:
 
     Returns up to ~15 videos.
     """
-    # Strategy 1: RSS feed
+    # Strategy 1: RSS feed (fast, works for channel upload playlists)
     videos = _fetch_playlist_rss(playlist_id)
     if videos:
         return videos[:15]
 
-    # Strategy 2: Scrape playlist page HTML
+    # Strategy 2: Scrape playlist page HTML (works for public/unlisted user playlists)
+    # Note: _fetch_playlist_html raises ValueError with clear message for private playlists
     videos = _fetch_playlist_html(playlist_id)
     if videos:
         return videos[:15]
 
-    raise ValueError("No videos found in playlist. It may be empty, private, or unavailable.")
+    raise ValueError("No videos found in playlist. It may be empty or unavailable.")
 
 
 def _fetch_playlist_rss(playlist_id: str) -> list[dict]:
@@ -298,7 +299,10 @@ def _fetch_playlist_rss(playlist_id: str) -> list[dict]:
 
 
 def _fetch_playlist_html(playlist_id: str) -> list[dict]:
-    """Scrape playlist page HTML for video IDs and titles (fallback for user-created playlists)."""
+    """Scrape playlist page HTML for video IDs and titles (fallback for user-created playlists).
+
+    Only works for Public or Unlisted playlists — Private playlists require authentication.
+    """
     url = f"https://www.youtube.com/playlist?list={playlist_id}"
     try:
         req = urllib.request.Request(url, headers={
@@ -311,31 +315,83 @@ def _fetch_playlist_html(playlist_id: str) -> list[dict]:
         logger.warning(f"Failed to fetch playlist page: {e}")
         return []
 
-    # YouTube embeds playlist data as JSON in ytInitialData
-    match = re.search(r'var\s+ytInitialData\s*=\s*(\{.+?\});\s*</script>', html, re.DOTALL)
-    if not match:
-        # Alternative pattern
-        match = re.search(r'ytInitialData\s*=\s*(\{.+?\});\s*', html, re.DOTALL)
-    if not match:
-        logger.warning("Could not find ytInitialData in playlist page")
-        return []
+    # Detect private playlist from page alerts
+    if '"This playlist is private"' in html or '"PLAYLIST_PRIVATE"' in html:
+        raise ValueError(
+            "This playlist is private. Please change it to Unlisted or Public in YouTube, then try again."
+        )
 
-    try:
-        data = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse ytInitialData JSON")
-        return []
+    # Extract ytInitialData JSON — find the start marker and brace-match to get full object
+    data = _extract_yt_initial_data(html)
+    if data is None:
+        # Fallback: extract video IDs directly with regex
+        return _extract_video_ids_regex(html)
 
     # Navigate the nested JSON structure to find playlist video renderers
+    videos = _extract_from_yt_data(data)
+    if not videos:
+        # Fallback: regex extraction
+        videos = _extract_video_ids_regex(html)
+
+    return videos
+
+
+def _extract_yt_initial_data(html: str) -> dict | None:
+    """Extract ytInitialData JSON from YouTube page HTML using brace matching."""
+    marker = 'var ytInitialData = '
+    start = html.find(marker)
+    if start == -1:
+        marker = 'ytInitialData = '
+        start = html.find(marker)
+    if start == -1:
+        return None
+
+    start += len(marker)
+
+    # Brace-match to find the full JSON object
+    depth = 0
+    in_string = False
+    escape = False
+    end = start
+    for i in range(start, min(start + 2_000_000, len(html))):
+        c = html[i]
+        if escape:
+            escape = False
+            continue
+        if c == '\\' and in_string:
+            escape = True
+            continue
+        if c == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    else:
+        return None
+
+    try:
+        return json.loads(html[start:end])
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse ytInitialData JSON")
+        return None
+
+
+def _extract_from_yt_data(data: dict) -> list[dict]:
+    """Extract video IDs and titles from parsed ytInitialData."""
     videos = []
     try:
-        tabs = data['contents']['twoColumnBrowseResultsRenderer']['tabs']
+        tabs = data.get('contents', {}).get('twoColumnBrowseResultsRenderer', {}).get('tabs', [])
         for tab in tabs:
-            tab_renderer = tab.get('tabRenderer', {})
-            section_contents = (tab_renderer.get('content', {})
-                               .get('sectionListRenderer', {})
-                               .get('contents', []))
-            for section in section_contents:
+            tab_content = tab.get('tabRenderer', {}).get('content', {})
+            section_list = tab_content.get('sectionListRenderer', {}).get('contents', [])
+            for section in section_list:
                 items = (section.get('itemSectionRenderer', {})
                         .get('contents', [{}])[0]
                         .get('playlistVideoListRenderer', {})
@@ -349,7 +405,25 @@ def _fetch_playlist_html(playlist_id: str) -> list[dict]:
                         videos.append({'video_id': vid, 'title': title})
     except (KeyError, IndexError, TypeError) as e:
         logger.warning(f"Failed to extract videos from ytInitialData: {e}")
+    return videos
 
+
+def _extract_video_ids_regex(html: str) -> list[dict]:
+    """Last-resort: extract video IDs from raw HTML via regex patterns."""
+    seen = set()
+    videos = []
+    # Match "videoId":"XXXXXXXXXXX" patterns
+    for match in re.finditer(r'"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"', html):
+        vid = match.group(1)
+        if vid not in seen:
+            seen.add(vid)
+            videos.append({'video_id': vid, 'title': 'Untitled'})
+    # Try to backfill titles from "title":{"runs":[{"text":"..."}]} near each videoId
+    for v in videos:
+        pattern = rf'"videoId"\s*:\s*"{re.escape(v["video_id"])}".*?"title"\s*:\s*\{{"runs"\s*:\s*\[\{{"text"\s*:\s*"([^"]+)"'
+        title_match = re.search(pattern, html[:500000])
+        if title_match:
+            v['title'] = title_match.group(1)
     return videos
 
 
