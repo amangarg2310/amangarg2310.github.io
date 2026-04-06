@@ -1660,6 +1660,7 @@ async function _renderGraph() {
     });
 
     _graphInstance = ForceGraph()(container)
+        .autoPauseRedraw(false)
         .width(container.offsetWidth)
         .height(container.offsetHeight)
         .backgroundColor('#080b12')
@@ -1757,17 +1758,12 @@ async function _renderGraph() {
         })
         .onNodeHover(node => {
             container.style.cursor = node ? 'pointer' : 'default';
-            const changed = (_hoveredNode !== node);
             _hoveredNode = node;
             if (node) {
                 const neighbors = adj[node.id] || new Set();
                 _neighborSet = new Set([...neighbors, node.id]);
             } else {
                 _neighborSet = null;
-            }
-            // Force a visual refresh when hover changes
-            if (changed && _graphInstance) {
-                _graphInstance.refresh();
             }
         })
         .onNodeClick(node => {
