@@ -1761,11 +1761,9 @@ async function _renderGraph() {
                 // Source node → open source URL in new tab
                 window.open(node.url, '_blank');
             } else {
-                // Domain node (any level) → navigate to domain page
-                // Use node.id directly — domain IDs are integers,
-                // source IDs start with "s-" (handled above)
+                // Domain node → navigate to domain page (route uses name, not id)
                 closeGraphView();
-                window.location.href = '/domain/' + node.id;
+                window.location.href = '/domain/' + encodeURIComponent(node.name);
             }
         })
         // Quartz-inspired physics
