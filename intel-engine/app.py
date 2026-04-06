@@ -415,7 +415,7 @@ def api_ingest():
 
         def _run():
             try:
-                run_playlist_pipeline(url, user_id=uid)
+                run_playlist_pipeline(url, user_id=uid, tracking_id=playlist_vid)
             except Exception as e:
                 _update_status(playlist_vid, 'error', 'Failed', 0, error=str(e))
 

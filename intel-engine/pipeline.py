@@ -231,7 +231,7 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
 # Playlist Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict:
+def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Ingest all videos from a YouTube playlist sequentially."""
     from youtube_ingest import extract_playlist_id, fetch_playlist_videos
 
@@ -240,7 +240,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict
     if not playlist_id:
         return {'status': 'error', 'error': 'Invalid playlist URL'}
 
-    playlist_vid = _generate_source_id("playlist")
+    playlist_vid = tracking_id or _generate_source_id("playlist")
 
     try:
         _update_status(playlist_vid, 'processing', 'Fetching playlist...', 5)
