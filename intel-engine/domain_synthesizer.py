@@ -44,11 +44,12 @@ RULES:
 
 FORMAT as clean markdown:
 
-Start with a ## TLDR section (3-5 bullet points) summarizing the most important takeaways:
-- What this domain is about (1 sentence)
-- The single most important thing to know
-- Key tools/commands/resources mentioned
-- Any critical warnings or gotchas
+Start with a ## TLDR section (3-5 bullet points) that are IMMEDIATELY ACTIONABLE — not generic overviews:
+- The fastest way to get started (concrete first step with exact commands/URLs)
+- The most valuable capability (what you can DO, not what it IS)
+- The critical gotcha that saves hours (specific mistake to avoid)
+- The key command/config to bookmark (exact syntax, not "use commands")
+NEVER write generic bullets like "Learn about X" or "X is a powerful tool". Instead: "Install with `pip install X`, run `X init` to scaffold your first project"
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
@@ -84,11 +85,12 @@ RULES:
 
 FORMAT as clean markdown:
 
-Start with a ## TLDR section (3-5 bullet points) summarizing the most important takeaways:
-- What this domain is about (1 sentence)
-- The single most important thing to know
-- Key tools/commands/resources mentioned
-- Any critical warnings or gotchas
+Start with a ## TLDR section (3-5 bullet points) that are IMMEDIATELY ACTIONABLE — not generic overviews:
+- The fastest way to get started (concrete first step with exact commands/URLs)
+- The most valuable capability (what you can DO, not what it IS)
+- The critical gotcha that saves hours (specific mistake to avoid)
+- The key command/config to bookmark (exact syntax, not "use commands")
+NEVER write generic bullets like "Learn about X" or "X is a powerful tool". Instead: "Install with `pip install X`, run `X init` to scaffold your first project"
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)

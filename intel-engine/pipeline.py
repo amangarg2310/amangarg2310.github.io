@@ -689,12 +689,7 @@ def _run_shared_pipeline(
     _embed_insights(conn, source_id)
     conn.close()
 
-    # Step 7: Re-synthesize
-    _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
-                   title=title, channel=channel, domain=domain_name)
-    synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
-
-    # Mark as processed
+    # Step 6.5: Mark as processed BEFORE synthesis (so source_count query includes this source)
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
@@ -702,6 +697,11 @@ def _run_shared_pipeline(
     )
     conn.commit()
     conn.close()
+
+    # Step 7: Re-synthesize (now source is 'processed' and will be counted)
+    _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
+                   title=title, channel=channel, domain=domain_name)
+    synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
 
     _update_status(video_id, 'complete', 'Done', 100,
                    title=title, channel=channel, domain=domain_name,

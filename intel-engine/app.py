@@ -610,7 +610,7 @@ def api_merge_domains():
         conn.execute("UPDATE domains SET parent_id = ? WHERE parent_id = ? AND level = 2", (target_id, source_id))
 
         # Update counts on target
-        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ?", (target_id,)).fetchone()[0]
+        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'", (target_id,)).fetchone()[0]
         ins_count = conn.execute("SELECT COUNT(*) FROM insights WHERE domain_id = ?", (target_id,)).fetchone()[0]
         now = datetime.now(timezone.utc).isoformat()
         conn.execute("UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",

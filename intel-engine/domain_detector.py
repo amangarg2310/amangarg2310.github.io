@@ -37,44 +37,35 @@ DOMAIN_ICONS = {
     "ux design": "✨", "web development": "🌐", "mobile development": "📱",
 }
 
-DETECTION_PROMPT = """You are a domain taxonomy classifier. Given content metadata and an excerpt, classify it into a SPECIFIC, HIERARCHICAL domain structure.
+DETECTION_PROMPT = """You are a domain taxonomy classifier. Classify content into a HIERARCHICAL domain structure.
 
 {existing_domains_section}
 
-CLASSIFICATION PRIORITY:
-1. **PRIMARY SIGNAL — TITLE**: The content TITLE tells you WHAT this is about. Use it as the main classification signal.
-2. **SECONDARY — EXCERPT**: The excerpt provides supporting context to confirm the domain and detect sub-topics.
-3. **MATCH FIRST**: Before creating anything new, check if this content belongs to an EXISTING domain:
-   - Same tool/product/concept? → Use the existing domain name EXACTLY.
-   - Same broader category? → Create a SIBLING domain under the SAME existing parent.
-   - Truly new topic with no related parent? → Only then create a new parent + domain.
+RULES (follow in order):
 
-SIBLING RULE:
-If the content is about a DIFFERENT tool/product within an existing parent category, create it as a SIBLING under that SAME parent. NEVER create a near-duplicate parent.
-  - Existing: "AI Tools" → "OpenClaw"
-  - New video about Claude Code → "AI Tools" → "Claude Code" (sibling under SAME parent)
-  - WRONG: Creating "AI Automation" or "AI Development" alongside existing "AI Tools"
+1. **MATCH EXISTING FIRST**: If this content is about a tool/product/concept that ALREADY EXISTS in the hierarchy above, return that EXACT domain name with is_new=false. Do NOT create variants.
+   - Existing domain "Claude Code" + new video "Claude Code Marketing Team Demo" → domain = "Claude Code" (REUSE)
+   - Existing domain "OpenClaw" + new video "5 OpenClaw Tricks" → domain = "OpenClaw" (REUSE)
 
-DOMAIN NAMING:
-- Be SPECIFIC: Use the actual tool, product, framework, or concept name — NOT a generic category.
-  - Good: "OpenClaw" / Bad: "AI Automation Tools"
-  - Good: "React Router" / Bad: "Web Development"
-  - Good: "Product-Led Growth" / Bad: "Growth"
-- Domain names should be professional and recognizable (proper noun if it's a named tool/product).
+2. **CANONICAL NAME**: Extract the core tool/product/concept name — NOT the video title.
+   - "Ollama + Claude Code = 99% CHEAPER" → domain = "Claude Code" (or "Ollama" — pick the primary)
+   - "Build Your Full AI Marketing Team (Agents + Claude Skills)" → domain = "Claude Code"
+   - "The only OpenClaw video you'll ever need" → domain = "OpenClaw"
+   - Domain names should be 1-3 words: the proper noun of the tool/product.
 
-SUB-TOPIC RULES:
-- Sub-topics should be BROAD workflow categories, not specific steps.
-- Good: "Setup & Installation", "Daily Workflows", "Troubleshooting"
-- Bad: "Installing Docker Container", "Configuring Port 3000", "Fixing SSL Errors"
-- Aim for 3-5 sub-topics that could each contain MULTIPLE sources.
-- Think of sub-topics as CHAPTERS in a book, not individual pages.
+3. **PARENT CATEGORY**: Use an existing parent if one fits. Create a new parent only for truly new categories.
+   - Parent should be a broad 2-3 word category: "AI Tools", "Marketing", "Finance"
+
+4. **SUB-TOPICS**: 2-4 broad workflow categories (NOT specific steps).
+   - Good: "Setup", "Core Workflows", "Tips & Tricks"
+   - Bad: "Installing Docker", "Port 3000 Configuration"
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
 EXCERPT: {excerpt}
 
-Return ONLY a JSON object:
-{{"domain": "Specific Name", "parent": "Broader Category", "sub_topics": ["Sub-topic 1", "Sub-topic 2"], "description": "One sentence describing this specific domain", "is_new": true/false}}"""
+Return ONLY valid JSON:
+{{"domain": "ToolName", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
 
 
 def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
@@ -247,6 +238,60 @@ def _find_matching_parent(conn, parent_name: str, user_id=None) -> tuple[int, st
     return None
 
 
+def _find_matching_domain(conn, name: str, parent_id: int, user_id=None) -> tuple[int, str] | None:
+    """Find existing level-1 domain that matches, including substring/fuzzy."""
+    # 1. Exact case-insensitive match
+    if user_id:
+        row = conn.execute(
+            "SELECT id, name FROM domains WHERE name = ? COLLATE NOCASE AND level = 1 AND parent_id = ? AND (user_id = ? OR user_id IS NULL)",
+            (name, parent_id, user_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id, name FROM domains WHERE name = ? COLLATE NOCASE AND level = 1 AND parent_id = ?",
+            (name, parent_id),
+        ).fetchone()
+    if row:
+        return (row[0], row[1])
+
+    # 2. Substring match — reuse existing domain if its name is contained in the new name (or vice versa)
+    if user_id:
+        siblings = conn.execute(
+            "SELECT id, name FROM domains WHERE level = 1 AND parent_id = ? AND (user_id = ? OR user_id IS NULL)",
+            (parent_id, user_id),
+        ).fetchall()
+    else:
+        siblings = conn.execute(
+            "SELECT id, name FROM domains WHERE level = 1 AND parent_id = ?",
+            (parent_id,),
+        ).fetchall()
+
+    name_lower = name.lower()
+    for s in siblings:
+        s_lower = s[1].lower()
+        # "Claude Code" in "Claude Code Marketing Team" → reuse "Claude Code"
+        if s_lower in name_lower or name_lower in s_lower:
+            logger.info(f"Fuzzy-matched domain '{name}' → existing '{s[1]}'")
+            return (s[0], s[1])
+
+    # 3. Also check across ALL parents (in case same domain exists under different parent)
+    if user_id:
+        all_domains = conn.execute(
+            "SELECT id, name FROM domains WHERE level = 1 AND (user_id = ? OR user_id IS NULL)",
+            (user_id,),
+        ).fetchall()
+    else:
+        all_domains = conn.execute("SELECT id, name FROM domains WHERE level = 1").fetchall()
+
+    for d in all_domains:
+        d_lower = d[1].lower()
+        if d_lower == name_lower or d_lower in name_lower or name_lower in d_lower:
+            logger.info(f"Cross-parent fuzzy-matched domain '{name}' → existing '{d[1]}'")
+            return (d[0], d[1])
+
+    return None
+
+
 def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, description: str = "",
                             db_path=None, user_id=None) -> int:
     """Create the full domain hierarchy (parent → domain → sub-topics) and return the domain_id."""
@@ -257,7 +302,7 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
     # 1. Find existing parent via fuzzy match, or create new one
     matched = _find_matching_parent(conn, parent_name, user_id)
     if matched:
-        parent_id, parent_name = matched  # Use the existing parent's actual name
+        parent_id, parent_name = matched
     else:
         parent_id = _find_or_create_domain(
             conn, parent_name, level=0, parent_id=None,
@@ -266,26 +311,29 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             user_id=user_id, now=now,
         )
 
-    # 2. Find or create main domain (level 1)
-    domain_id = _find_or_create_domain(
-        conn, name, level=1, parent_id=parent_id,
-        path=f"/{parent_name}/{name}",
-        description=description,
-        user_id=user_id, now=now,
-    )
+    # 2. Find existing domain via fuzzy match, or create new one (level 1)
+    domain_match = _find_matching_domain(conn, name, parent_id, user_id)
+    if domain_match:
+        domain_id, name = domain_match  # Reuse existing domain name
+    else:
+        domain_id = _find_or_create_domain(
+            conn, name, level=1, parent_id=parent_id,
+            path=f"/{parent_name}/{name}",
+            description=description,
+            user_id=user_id, now=now,
+        )
 
-    # 3. Find or create sub-topics (level 2) — with hard cap
+    # 3. Find or create sub-topics (level 2) — with hard cap of 5 total
     existing_subs = conn.execute(
         "SELECT name FROM domains WHERE parent_id = ? AND level = 2", (domain_id,)
     ).fetchall()
-    existing_sub_count = len(existing_subs)
+    existing_sub_names = {r[0].lower() for r in existing_subs}
 
-    for sub in (sub_topics or [])[:5]:  # Cap at 5 per ingestion
+    for sub in (sub_topics or [])[:3]:  # Cap at 3 per ingestion
         sub = sub.strip()
-        if not sub:
+        if not sub or sub.lower() in existing_sub_names:
             continue
-        if existing_sub_count >= 7:  # Hard cap at 7 sub-topics per domain
-            logger.info(f"Sub-topic cap reached for domain {name}, skipping '{sub}'")
+        if len(existing_sub_names) >= 5:  # Hard cap at 5 sub-topics per domain
             break
         _find_or_create_domain(
             conn, sub, level=2, parent_id=domain_id,
@@ -293,10 +341,7 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             description=f"{name} — {sub}",
             user_id=user_id, now=now,
         )
-        # Only increment if we actually created a new one (not found existing)
-        existing_sub_names = {r[0].lower() for r in existing_subs}
-        if sub.lower() not in existing_sub_names:
-            existing_sub_count += 1
+        existing_sub_names.add(sub.lower())
 
     conn.commit()
     conn.close()
@@ -306,6 +351,8 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
 def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
                            path: str, description: str, user_id: int | None, now: str) -> int:
     """Find existing domain by name+level+user or create a new one."""
+    if level > 2:
+        level = 2  # Hard cap: never create deeper than level 2
     if user_id:
         row = conn.execute(
             "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
