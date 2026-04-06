@@ -176,6 +176,25 @@ def index():
     return render_template("intel.html", domains=domains, domain=None, synthesis=None)
 
 
+def _extract_tldr_from_synthesis(content: str) -> str:
+    """Extract the TLDR section from a synthesis markdown string."""
+    if not content:
+        return ""
+    lines = content.split('\n')
+    in_tldr = False
+    tldr_lines = []
+    for line in lines:
+        stripped = line.strip().lower()
+        if stripped.startswith('## ') and 'tldr' in stripped:
+            in_tldr = True
+            continue
+        if in_tldr and line.strip().startswith('## '):
+            break
+        if in_tldr:
+            tldr_lines.append(line)
+    return '\n'.join(tldr_lines).strip()
+
+
 @app.route("/domain/<domain_name>")
 @login_required
 def domain_page(domain_name):
@@ -201,50 +220,82 @@ def domain_page(domain_name):
             return redirect(url_for('index'))
         domain = dict(domain)
 
-        # Level-2 sub-topics redirect to their parent domain (the actual knowledge base)
+        # Level-2 sub-topics: render using parent's data, scoped to sub-topic
+        subtopic_scope = None
+        child_ids = []
         if domain.get('level') == 2 and domain.get('parent_id'):
-            parent = conn.execute("SELECT name FROM domains WHERE id = ?", (domain['parent_id'],)).fetchone()
+            subtopic_scope = domain['name']
+            parent = conn.execute("SELECT * FROM domains WHERE id = ?", (domain['parent_id'],)).fetchone()
             if parent:
-                # Don't close conn here — finally block handles it
-                redirect_name = parent[0]
-                conn.close()
-                conn = None  # Prevent finally from double-closing
-                return redirect(url_for('domain_page', domain_name=redirect_name))
-
+                parent = dict(parent)
+                # Use parent's domain ID for content, but keep the sub-topic domain object for display
+                content_domain_ids = [parent['id']]
+            else:
+                content_domain_ids = [domain['id']]
         # Determine content source based on hierarchy level
-        content_domain_ids = [domain['id']]
-        if domain.get('level') == 0:
+        elif domain.get('level') == 0:
+            content_domain_ids = [domain['id']]
             # Parent category: aggregate all child domains
             child_ids = [r[0] for r in conn.execute(
                 "SELECT id FROM domains WHERE parent_id = ? AND level = 1", (domain['id'],)
             ).fetchall()]
             if child_ids:
                 content_domain_ids = child_ids
+        else:
+            content_domain_ids = [domain['id']]
 
-        # Latest synthesis (for level-0, find first child with synthesis)
+        # Latest synthesis
         synthesis_row = None
-        if not content_domain_ids:
-            synthesis_row = None
-        for cid in content_domain_ids:
-            synthesis_row = conn.execute(
-                "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
-                (cid,),
-            ).fetchone()
-            if synthesis_row:
-                break
-        synthesis = dict(synthesis_row) if synthesis_row else None
+        synthesis = None
         synthesis_html = ""
         suggested_questions = []
-        if synthesis and md:
-            try:
-                synthesis_html = md.markdown(
-                    synthesis['content'],
-                    extensions=['extra', 'nl2br', 'fenced_code']
-                )
-            except Exception:
+
+        if domain.get('level') == 0 and child_ids:
+            # Level-0: build aggregated TLDR from all children
+            child_tldrs = []
+            for cid in child_ids:
+                row = conn.execute(
+                    "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (cid,),
+                ).fetchone()
+                cname = conn.execute("SELECT name FROM domains WHERE id = ?", (cid,)).fetchone()
+                if row and cname:
+                    tldr = _extract_tldr_from_synthesis(row["content"])
+                    child_tldrs.append({"name": cname["name"], "tldr_md": tldr})
+
+            if child_tldrs:
+                parts = []
+                for ct in child_tldrs:
+                    section = f"## {ct['name']}\n\n{ct['tldr_md']}" if ct['tldr_md'] else f"## {ct['name']}\n\n*No summary yet.*"
+                    parts.append(section)
+                aggregated_md = '\n\n---\n\n'.join(parts)
+                if md:
+                    synthesis_html = md.markdown(aggregated_md, extensions=['extra', 'nl2br', 'fenced_code'])
+                else:
+                    synthesis_html = f"<p>{aggregated_md}</p>"
+                synthesis = {
+                    "content": aggregated_md, "version": 1, "suggested_questions": "[]",
+                    "source_count": domain.get("source_count", 0),
+                    "insight_count": domain.get("insight_count", 0),
+                }
+        else:
+            # Level 1 or level 2 (scoped): use the domain's own synthesis
+            target_id = content_domain_ids[0] if content_domain_ids else domain['id']
+            synthesis_row = conn.execute(
+                "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                (target_id,),
+            ).fetchone()
+            synthesis = dict(synthesis_row) if synthesis_row else None
+            if synthesis and md:
+                try:
+                    synthesis_html = md.markdown(
+                        synthesis['content'],
+                        extensions=['extra', 'nl2br', 'fenced_code']
+                    )
+                except Exception:
+                    synthesis_html = f"<p>{synthesis['content']}</p>"
+            elif synthesis:
                 synthesis_html = f"<p>{synthesis['content']}</p>"
-        elif synthesis:
-            synthesis_html = f"<p>{synthesis['content']}</p>"
 
         if synthesis and synthesis.get('suggested_questions'):
             import json
@@ -301,7 +352,8 @@ def domain_page(domain_name):
                            suggested_questions=suggested_questions,
                            sources=sources,
                            domains=domains,
-                           domain_tree=domain_tree)
+                           domain_tree=domain_tree,
+                           subtopic_scope=subtopic_scope)
 
 
 @app.route("/setup")
