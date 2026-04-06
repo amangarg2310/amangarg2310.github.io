@@ -118,7 +118,7 @@
                         <input type="text" class="intel-add-input" id="addLinkInput"
                                placeholder="Paste YouTube, playlist (max 15 videos), or article URL..."
                                onkeydown="if(event.key==='Enter')submitLink()">
-                        <button class="intel-add-submit" onclick="submitLink()">Add Link</button>
+                        <button class="intel-add-submit" onclick="submitLink()">Add to Knowledge Base</button>
                     </div>
                     <!-- Upload Tab -->
                     <div class="intel-add-pane" id="addPaneUpload">
@@ -140,7 +140,7 @@
                                placeholder="Title (optional)" style="margin-bottom:6px">
                         <textarea class="intel-add-textarea" id="addTextContent"
                                   placeholder="Paste your notes, text, or content..."></textarea>
-                        <button class="intel-add-submit" onclick="submitText()">Add Text</button>
+                        <button class="intel-add-submit" onclick="submitText()">Add to Knowledge Base</button>
                     </div>
                 </div>
             </div>
@@ -358,22 +358,17 @@
 
             <!-- Link pane -->
             <div class="intel-hub-pane active" id="hubPaneLink">
-                <div class="intel-hub-input-row">
-                    <input type="text"
-                           class="intel-input"
-                           id="urlInput"
-                           placeholder="Paste a YouTube video, playlist (max 15), or article URL..."
-                           autocomplete="off"
-                           spellcheck="false"
-                           autofocus
-                           onkeydown="if(event.key==='Enter')ingestFromHome()">
-                    <button class="intel-hub-submit" id="ingestBtn" onclick="ingestFromHome()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                            <polyline points="12 5 19 12 12 19"/>
-                        </svg>
-                    </button>
-                </div>
+                <input type="text"
+                       class="intel-hub-link-input"
+                       id="urlInput"
+                       placeholder="Paste a YouTube video, playlist (max 15), or article URL..."
+                       autocomplete="off"
+                       spellcheck="false"
+                       autofocus
+                       onkeydown="if(event.key==='Enter')ingestFromHome()">
+                <button class="intel-hub-submit wide" id="ingestBtn" onclick="ingestFromHome()">
+                    Add to Knowledge Base
+                </button>
             </div>
 
             <!-- Upload pane -->
