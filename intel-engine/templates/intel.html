@@ -1660,7 +1660,6 @@ async function _renderGraph() {
     });
 
     _graphInstance = ForceGraph()(container)
-        .autoPauseRedraw(false)
         .width(container.offsetWidth)
         .height(container.offsetHeight)
         .backgroundColor('#080b12')
@@ -1758,6 +1757,7 @@ async function _renderGraph() {
         })
         .onNodeHover(node => {
             container.style.cursor = node ? 'pointer' : 'default';
+            const changed = (_hoveredNode !== node);
             _hoveredNode = node;
             if (node) {
                 const neighbors = adj[node.id] || new Set();
@@ -1765,14 +1765,20 @@ async function _renderGraph() {
             } else {
                 _neighborSet = null;
             }
+            // Force a visual refresh when hover changes
+            if (changed && _graphInstance) {
+                _graphInstance.refresh();
+            }
         })
         .onNodeClick(node => {
             if (!node) return;
             if (node.type === 'source' && node.url) {
                 // Source node → open source URL in new tab
                 window.open(node.url, '_blank');
-            } else if (node.type === 'domain') {
-                // Domain node → navigate to domain page
+            } else {
+                // Domain node (any level) → navigate to domain page
+                // Use node.id directly — domain IDs are integers,
+                // source IDs start with "s-" (handled above)
                 closeGraphView();
                 window.location.href = '/domain/' + node.id;
             }
