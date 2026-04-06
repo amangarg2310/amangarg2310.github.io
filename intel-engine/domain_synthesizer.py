@@ -228,6 +228,13 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     conn.close()
 
     logger.info(f"Created synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
+
+    # Detect cross-domain references (non-blocking — failure doesn't affect synthesis)
+    try:
+        detect_cross_references(domain_id, synthesis_content, db_path)
+    except Exception as e:
+        logger.warning(f"Cross-reference detection skipped: {e}")
+
     return synthesis_content
 
 
@@ -356,7 +363,124 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     conn.close()
 
     logger.info(f"Full re-synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
+
+    # Detect cross-domain references
+    try:
+        detect_cross_references(domain_id, synthesis_content, db_path)
+    except Exception as e:
+        logger.warning(f"Cross-reference detection skipped: {e}")
+
     return synthesis_content
+
+
+CROSS_REFERENCE_PROMPT = """Given this knowledge brief about "{domain_name}":
+
+{synthesis_excerpt}
+
+Which of these other knowledge domains in the user's knowledge base are meaningfully connected to "{domain_name}"?
+
+OTHER DOMAINS:
+{other_domains}
+
+Return a JSON array of connections. Only include STRONG, meaningful relationships — tools used together, prerequisite knowledge, direct alternatives, shared workflows. NOT vague "both relate to technology" associations.
+
+Examples of GOOD connections:
+- {{"domain": "Claude Code", "relationship": "uses"}} — if the synthesis mentions using Claude Code
+- {{"domain": "Python", "relationship": "builds on"}} — if the domain requires Python knowledge
+- {{"domain": "ChatGPT", "relationship": "alternative to"}} — if they solve the same problem
+
+If none are strongly related, return [].
+
+Return ONLY the JSON array:"""
+
+
+def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None):
+    """Detect cross-domain references from synthesis content and store them."""
+    db_path = db_path or config.DB_PATH
+    api_key = config.get_api_key('anthropic')
+    if not api_key:
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    # Get this domain's name and user_id
+    domain_row = conn.execute("SELECT name, user_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    if not domain_row:
+        conn.close()
+        return
+    domain_name = domain_row['name']
+    user_id = domain_row['user_id']
+
+    # Get all OTHER level-1 domains for this user (exclude self and level-0 categories)
+    other_domains = conn.execute("""
+        SELECT id, name FROM domains
+        WHERE user_id = ? AND id != ? AND level = 1 AND source_count > 0
+        ORDER BY name
+    """, (user_id, domain_id)).fetchall()
+
+    if len(other_domains) < 1:
+        conn.close()
+        return
+
+    other_names = "\n".join(f"- {d['name']}" for d in other_domains)
+    name_to_id = {d['name'].lower(): d['id'] for d in other_domains}
+
+    # Use first ~1500 words of synthesis for context
+    excerpt = " ".join(synthesis_content.split()[:1500])
+
+    try:
+        client = Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You identify meaningful connections between knowledge domains. Return only valid JSON arrays.",
+            messages=[
+                {"role": "user", "content": CROSS_REFERENCE_PROMPT.format(
+                    domain_name=domain_name,
+                    synthesis_excerpt=excerpt,
+                    other_domains=other_names,
+                )},
+            ],
+            temperature=0.2,
+            max_tokens=500,
+        )
+
+        content = response.content[0].text.strip()
+        # Strip markdown code fences if present
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+        refs = json.loads(content)
+        if not isinstance(refs, list):
+            conn.close()
+            return
+
+        # Clear existing references from this domain (will be rebuilt)
+        conn.execute("DELETE FROM domain_references WHERE source_domain_id = ?", (domain_id,))
+
+        for ref in refs:
+            target_name = ref.get("domain", "").lower()
+            relationship = ref.get("relationship", "related to")
+            target_id = name_to_id.get(target_name)
+            if target_id:
+                try:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO domain_references (source_domain_id, target_domain_id, relationship) VALUES (?, ?, ?)",
+                        (domain_id, target_id, relationship),
+                    )
+                except sqlite3.IntegrityError:
+                    pass
+
+        conn.commit()
+        logger.info(f"Detected {len(refs)} cross-references for '{domain_name}'")
+
+    except Exception as e:
+        logger.warning(f"Cross-reference detection failed for domain {domain_id}: {e}")
+    finally:
+        conn.close()
 
 
 def _generate_suggested_questions(client: Anthropic, domain_name: str, synthesis: str) -> str:

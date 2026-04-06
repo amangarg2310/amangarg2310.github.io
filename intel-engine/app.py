@@ -1049,6 +1049,56 @@ def api_visual(domain_id):
             conn.close()
 
 
+@app.route("/api/knowledge-graph")
+@login_required
+def api_knowledge_graph():
+    """Return domain nodes + edges for the knowledge graph visualization."""
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+
+        # Nodes: all domains for this user
+        domains = conn.execute("""
+            SELECT id, name, level, parent_id, source_count, insight_count
+            FROM domains WHERE user_id = ?
+            ORDER BY level ASC, insight_count DESC
+        """, (uid,)).fetchall()
+
+        # Edges: cross-domain references
+        refs = conn.execute("""
+            SELECT source_domain_id, target_domain_id, relationship
+            FROM domain_references
+            WHERE source_domain_id IN (SELECT id FROM domains WHERE user_id = ?)
+        """, (uid,)).fetchall()
+
+        nodes = [
+            {"id": r["id"], "name": r["name"], "level": r["level"],
+             "parentId": r["parent_id"], "sources": r["source_count"],
+             "insights": r["insight_count"]}
+            for r in domains
+        ]
+
+        hierarchy_edges = [
+            {"source": r["parent_id"], "target": r["id"], "type": "hierarchy"}
+            for r in domains if r["parent_id"]
+        ]
+        ref_edges = [
+            {"source": r["source_domain_id"], "target": r["target_domain_id"],
+             "type": "reference", "label": r["relationship"]}
+            for r in refs
+        ]
+
+        return jsonify({"nodes": nodes, "edges": hierarchy_edges + ref_edges})
+
+    except Exception as e:
+        logger.error(f"Knowledge graph failed: {e}")
+        return jsonify({"nodes": [], "edges": []}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.route("/api/reset-all", methods=["POST"])
 @login_required
 def api_reset_all():
@@ -1057,8 +1107,10 @@ def api_reset_all():
     conn = None
     try:
         conn = get_db()
-        # Delete in dependency order: insights → sources → syntheses → domains
+        # Delete in dependency order: refs → insights → sources → syntheses → domains
         # Handle both user-owned and legacy (user_id IS NULL) data
+        conn.execute("""DELETE FROM domain_references WHERE source_domain_id IN (
+            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
         conn.execute("""DELETE FROM insights WHERE domain_id IN (
             SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
         conn.execute("DELETE FROM sources WHERE user_id = ? OR user_id IS NULL", (uid,))

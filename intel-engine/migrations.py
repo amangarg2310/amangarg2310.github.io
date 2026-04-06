@@ -152,6 +152,25 @@ def run_migrations(db_path=None):
     _add_column(conn, "syntheses", "visual_html", "TEXT")
     _add_column(conn, "syntheses", "suggested_questions", "TEXT")
 
+    # Schema evolution — cross-domain references for knowledge graph
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS domain_references (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+            target_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+            relationship TEXT,
+            confidence REAL DEFAULT 1.0,
+            detected_from TEXT DEFAULT 'synthesis',
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(source_domain_id, target_domain_id)
+        )
+    """)
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_domain_refs_source ON domain_references(source_domain_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_domain_refs_target ON domain_references(target_domain_id)")
+    except sqlite3.OperationalError:
+        pass
+
     # Drop any unique index on domains.name (hierarchy allows same name at different levels)
     try:
         # Find and drop unique indexes on domains.name
