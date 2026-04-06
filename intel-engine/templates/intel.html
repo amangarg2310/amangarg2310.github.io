@@ -1453,26 +1453,24 @@ function askQuestion(questionText) {
 </script>
 
 <!-- Knowledge Graph Overlay -->
-<div id="graphOverlay" style="display:none;position:fixed;inset:0;background:#0a0f1a;z-index:1000;flex-direction:column;">
-    <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e2d3d;">
-        <span style="color:#e2e8f0;font-size:14px;font-weight:500;">Knowledge Graph</span>
-        <div style="display:flex;align-items:center;gap:16px;">
-            <span style="font-size:11px;color:#64748b;">
-                <span style="color:#6366f1">&#9679;</span> Category &nbsp;
-                <span style="color:#10b981">&#9679;</span> Domain &nbsp;
-                <span style="color:#94a3b8">&#9679;</span> Sub-topic &nbsp;
-                <span style="color:#f59e0b">---</span> Cross-reference
-            </span>
-            <button onclick="closeGraphView()" style="color:#94a3b8;background:none;border:none;font-size:20px;cursor:pointer;line-height:1;font-family:sans-serif;">&times;</button>
+<div id="graphOverlay" style="display:none;position:fixed;inset:0;background:#080b12;z-index:1000;flex-direction:column;">
+    <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <span style="color:#64748b;font-size:12px;font-weight:400;letter-spacing:0.5px;text-transform:uppercase;">Knowledge Graph</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span id="graphNodeCount" style="font-size:11px;color:#334155;"></span>
+            <button onclick="closeGraphView()" style="color:#475569;background:none;border:none;font-size:18px;cursor:pointer;line-height:1;font-family:sans-serif;padding:4px 8px;border-radius:4px;transition:color 0.2s;" onmouseenter="this.style.color='#e2e8f0'" onmouseleave="this.style.color='#475569'">&times;</button>
         </div>
     </div>
-    <div id="graphContainer" style="flex:1;width:100%;"></div>
+    <div id="graphContainer" style="flex:1;width:100%;position:relative;"></div>
 </div>
 
 <script>
-// ── Knowledge Graph ──
+// ── Knowledge Graph (Obsidian-style) ──
 let _graphData = null;
 let _graphInstance = null;
+let _hoveredNode = null;
+let _neighborSet = null;
+let _neighborLinkSet = null;
 
 function openGraphView() {
     const overlay = document.getElementById('graphOverlay');
@@ -1484,7 +1482,7 @@ function openGraphView() {
         s.onload = _renderGraph;
         s.onerror = () => {
             document.getElementById('graphContainer').innerHTML =
-                '<div style="color:#f87171;text-align:center;padding-top:80px;font-size:13px;">Failed to load graph library. Check your internet connection.</div>';
+                '<div style="color:#334155;text-align:center;padding-top:80px;font-size:13px;">Failed to load graph library.</div>';
         };
         document.head.appendChild(s);
     } else {
@@ -1499,99 +1497,210 @@ function closeGraphView() {
 
 function _graphKeyHandler(e) { if (e.key === 'Escape') closeGraphView(); }
 
+function _buildAdjacency(links) {
+    const adj = {};
+    const linkIndex = {};
+    links.forEach(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        if (!adj[sid]) adj[sid] = new Set();
+        if (!adj[tid]) adj[tid] = new Set();
+        adj[sid].add(tid);
+        adj[tid].add(sid);
+        linkIndex[sid + '-' + tid] = true;
+        linkIndex[tid + '-' + sid] = true;
+    });
+    return { adj, linkIndex };
+}
+
 async function _renderGraph() {
     const container = document.getElementById('graphContainer');
-    container.innerHTML = '<div style="color:#64748b;text-align:center;padding-top:80px;font-size:13px;">Loading graph...</div>';
+    container.innerHTML = '<div style="color:#334155;text-align:center;padding-top:80px;font-size:13px;">Loading...</div>';
 
     try {
         const r = await fetch('/api/knowledge-graph');
         _graphData = await r.json();
     } catch (err) {
-        container.innerHTML = '<div style="color:#f87171;text-align:center;padding-top:80px;font-size:13px;">Failed to load graph data.</div>';
+        container.innerHTML = '<div style="color:#475569;text-align:center;padding-top:80px;font-size:13px;">Failed to load graph data.</div>';
         return;
     }
 
     if (!_graphData.nodes || _graphData.nodes.length === 0) {
-        container.innerHTML = '<div style="color:#64748b;text-align:center;padding-top:80px;font-size:13px;">No domains yet. Add sources to build your knowledge graph.</div>';
+        container.innerHTML = '<div style="color:#334155;text-align:center;padding-top:80px;font-size:13px;">No domains yet. Add sources to see your knowledge graph.</div>';
         return;
     }
 
     container.innerHTML = '';
 
-    const nodeColors = { 0: '#6366f1', 1: '#10b981', 2: '#94a3b8' };
+    // Update node count
+    const countEl = document.getElementById('graphNodeCount');
+    if (countEl) countEl.textContent = _graphData.nodes.length + ' nodes';
 
-    // Build a set of node IDs for edge validation
+    // Obsidian-style color palette — monochromatic with purple accent
+    const COLORS = {
+        node: '#7c3aed',        // violet-600 — primary node color
+        nodeCategory: '#a78bfa', // violet-400 — categories slightly brighter
+        nodeSub: '#4c1d95',     // violet-900 — subtopics dimmer
+        nodeHover: '#c4b5fd',   // violet-300 — hovered node
+        line: 'rgba(100, 116, 139, 0.15)',  // very subtle default lines
+        lineRef: 'rgba(196, 181, 253, 0.25)', // cross-ref lines slightly more visible
+        lineHighlight: 'rgba(196, 181, 253, 0.6)', // highlighted connection
+        labelDefault: 'rgba(226, 232, 240, 0)',     // hidden
+        labelVisible: 'rgba(226, 232, 240, 0.85)',  // visible on hover/zoom
+        dimmed: 0.06,  // opacity for non-highlighted nodes
+    };
+
+    // Node radius: small dots like Obsidian, slightly larger for more insights
+    function nodeRadius(n) {
+        const base = n.level === 0 ? 3.5 : n.level === 1 ? 2.8 : 2;
+        return base + Math.min(Math.sqrt((n.insights || 0) + 1) * 0.6, 3);
+    }
+
+    function nodeColor(n) {
+        if (n.level === 0) return COLORS.nodeCategory;
+        if (n.level === 2) return COLORS.nodeSub;
+        return COLORS.node;
+    }
+
+    // Validate edges
     const nodeIds = new Set(_graphData.nodes.map(n => n.id));
     const validEdges = _graphData.edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+    // Build adjacency for neighborhood highlighting
+    const { adj, linkIndex } = _buildAdjacency(validEdges);
 
     _graphInstance = ForceGraph()(container)
         .width(container.offsetWidth)
         .height(container.offsetHeight)
-        .backgroundColor('#0a0f1a')
+        .backgroundColor('#080b12')
         .graphData({ nodes: _graphData.nodes, links: validEdges })
         .nodeId('id')
-        .nodeColor(n => nodeColors[n.level] || '#94a3b8')
-        .nodeVal(n => Math.max(2, Math.sqrt((n.insights || 0) + 1) * 3))
+        .nodeLabel('')  // disable default tooltip — we draw our own
+        .nodeCanvasObjectMode(() => 'replace')
         .nodeCanvasObject((node, ctx, globalScale) => {
-            const r = Math.max(3, Math.sqrt((node.insights || 0) + 1) * 3);
+            const r = nodeRadius(node);
+            const isHovered = _hoveredNode && _hoveredNode.id === node.id;
+            const isNeighbor = _neighborSet && _neighborSet.has(node.id);
+            const isDimmed = _hoveredNode && !isHovered && !isNeighbor;
+            const alpha = isDimmed ? COLORS.dimmed : 1;
 
-            // Draw node circle
+            ctx.globalAlpha = alpha;
+
+            // Glow effect (soft radial gradient) — stronger on hover
+            if ((isHovered || isNeighbor) && !isDimmed) {
+                const glowR = r * (isHovered ? 6 : 3.5);
+                const grad = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowR);
+                const glowColor = isHovered ? COLORS.nodeHover : nodeColor(node);
+                grad.addColorStop(0, glowColor + '40');  // 25% opacity at center
+                grad.addColorStop(0.5, glowColor + '15'); // ~8% mid
+                grad.addColorStop(1, glowColor + '00');   // transparent edge
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, glowR, 0, 2 * Math.PI);
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+
+            // Node dot
             ctx.beginPath();
             ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-            ctx.fillStyle = nodeColors[node.level] || '#94a3b8';
+            ctx.fillStyle = isHovered ? COLORS.nodeHover : nodeColor(node);
             ctx.fill();
 
-            // Draw label when zoomed in or for important nodes
-            if (globalScale >= 1.2 || node.level <= 1) {
-                const fontSize = Math.max(10, 12 / globalScale);
-                ctx.font = `${node.level === 0 ? 'bold ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-                ctx.fillStyle = node.level === 2 ? '#64748b' : '#e2e8f0';
+            // Label — visible on hover, for neighbors, or when zoomed in enough
+            const showLabel = isHovered || isNeighbor || (globalScale >= 2.5) || (globalScale >= 1.5 && node.level === 0);
+            if (showLabel && !isDimmed) {
+                const fontSize = Math.max(3, Math.min(11, 11 / globalScale));
+                ctx.font = `${isHovered ? '600 ' : '400 '}${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+                ctx.fillStyle = isHovered ? '#f1f5f9' : COLORS.labelVisible;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
-                ctx.fillText(node.name, node.x, node.y + r + 3);
+                ctx.fillText(node.name, node.x, node.y + r + 2.5);
             }
+
+            ctx.globalAlpha = 1;
         })
         .nodePointerAreaPaint((node, color, ctx) => {
-            const r = Math.max(3, Math.sqrt((node.insights || 0) + 1) * 3) + 4;
+            // Larger hit area for small nodes
+            const r = nodeRadius(node) + 6;
             ctx.beginPath();
             ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
             ctx.fillStyle = color;
             ctx.fill();
         })
-        .linkColor(link => link.type === 'reference' ? '#f59e0b' : '#1e3a4a')
-        .linkWidth(link => link.type === 'reference' ? 1.5 : 0.5)
-        .linkLineDash(link => link.type === 'hierarchy' ? [4, 4] : [])
-        .linkLabel(link => link.label || '')
+        .linkCanvasObjectMode(() => 'replace')
+        .linkCanvasObject((link, ctx) => {
+            const sid = typeof link.source === 'object' ? link.source.id : link.source;
+            const tid = typeof link.target === 'object' ? link.target.id : link.target;
+            const sx = link.source.x, sy = link.source.y;
+            const tx = link.target.x, ty = link.target.y;
+            if (sx === undefined || tx === undefined) return;
+
+            const isRef = link.type === 'reference';
+            const isHighlighted = _hoveredNode && _neighborLinkSet &&
+                _neighborLinkSet.has(sid + '-' + tid);
+            const isDimmed = _hoveredNode && !isHighlighted;
+
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(tx, ty);
+
+            if (isHighlighted) {
+                ctx.strokeStyle = isRef ? 'rgba(196, 181, 253, 0.7)' : 'rgba(148, 163, 184, 0.4)';
+                ctx.lineWidth = isRef ? 1.2 : 0.8;
+            } else if (isDimmed) {
+                ctx.strokeStyle = 'rgba(100, 116, 139, 0.03)';
+                ctx.lineWidth = 0.3;
+            } else {
+                ctx.strokeStyle = isRef ? COLORS.lineRef : COLORS.line;
+                ctx.lineWidth = isRef ? 0.8 : 0.4;
+            }
+
+            ctx.stroke();
+        })
+        .onNodeHover(node => {
+            container.style.cursor = node ? 'pointer' : 'default';
+            _hoveredNode = node;
+            if (node) {
+                const neighbors = adj[node.id] || new Set();
+                _neighborSet = new Set([...neighbors, node.id]);
+                // Build set of highlighted links
+                _neighborLinkSet = new Set();
+                neighbors.forEach(nid => {
+                    _neighborLinkSet.add(node.id + '-' + nid);
+                    _neighborLinkSet.add(nid + '-' + node.id);
+                });
+            } else {
+                _neighborSet = null;
+                _neighborLinkSet = null;
+            }
+        })
         .onNodeClick(node => {
-            if (node.level >= 1) {
+            if (node && node.level >= 1) {
                 closeGraphView();
                 window.location.href = '/domain/' + node.id;
             }
         })
-        .onNodeHover(node => {
-            container.style.cursor = node && node.level >= 1 ? 'pointer' : 'default';
-        })
-        .d3AlphaDecay(0.02)
-        .d3VelocityDecay(0.3)
-        .warmupTicks(50)
-        .cooldownTime(3000);
+        // Obsidian-like physics: high repel, moderate center, spacious layout
+        .d3AlphaDecay(0.015)
+        .d3VelocityDecay(0.25)
+        .warmupTicks(80)
+        .cooldownTime(5000);
 
-    // Add custom tooltip on hover
-    _graphInstance.nodeLabel(n => {
-        const parts = [`<b>${n.name}</b>`];
-        if (n.sources > 0) parts.push(`${n.sources} source${n.sources !== 1 ? 's' : ''}`);
-        if (n.insights > 0) parts.push(`${n.insights} insight${n.insights !== 1 ? 's' : ''}`);
-        return parts.join('<br>');
-    });
+    // Configure forces after initialization
+    _graphInstance.d3Force('charge').strength(-120).distanceMax(350);
+    _graphInstance.d3Force('link').distance(80).strength(0.3);
+    _graphInstance.d3Force('center').strength(0.03);
+
+    // Handle window resize
+    const resizeHandler = () => {
+        if (document.getElementById('graphOverlay').style.display !== 'none') {
+            _graphInstance.width(container.offsetWidth).height(container.offsetHeight);
+        }
+    };
+    window.addEventListener('resize', resizeHandler);
 }
 
-// Invalidate graph cache when sources change
-const _origResetAllData = typeof resetAllData === 'function' ? resetAllData : null;
-if (_origResetAllData) {
-    // Reset graph data when knowledge base is reset
-    const _originalResetFetch = window.fetch;
-}
-// Simple cache invalidation: null out graph data whenever the page reloads
+// Invalidate graph cache on page transitions
 window.addEventListener('beforeunload', () => { _graphData = null; });
 </script>
 
