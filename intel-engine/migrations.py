@@ -152,6 +152,23 @@ def run_migrations(db_path=None):
     _add_column(conn, "syntheses", "visual_html", "TEXT")
     _add_column(conn, "syntheses", "suggested_questions", "TEXT")
 
+    # Drop any unique index on domains.name (hierarchy allows same name at different levels)
+    try:
+        # Find and drop unique indexes on domains.name
+        indexes = conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='domains'").fetchall()
+        for idx in indexes:
+            idx_name = idx[0]
+            # Check if it's a unique index on name column by trying to find it
+            idx_info = conn.execute(f"PRAGMA index_info('{idx_name}')").fetchall()
+            col_info = conn.execute(f"PRAGMA index_list('domains')").fetchall()
+            for ci in col_info:
+                if ci[1] == idx_name and ci[2] == 1:  # ci[2]=1 means unique
+                    conn.execute(f"DROP INDEX IF EXISTS {idx_name}")
+                    logger.info(f"Dropped unique index {idx_name} on domains")
+                    break
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)

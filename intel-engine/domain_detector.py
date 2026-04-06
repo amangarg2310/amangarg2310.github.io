@@ -321,9 +321,25 @@ def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
         return row[0]
 
     icon = DOMAIN_ICONS.get(name.lower(), "📚")
-    cursor = conn.execute(
-        "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, description, icon, parent_id, level, path, user_id, now, now),
-    )
-    logger.info(f"Created domain: {path} (level={level})")
-    return cursor.lastrowid
+    try:
+        cursor = conn.execute(
+            "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, description, icon, parent_id, level, path, user_id, now, now),
+        )
+        logger.info(f"Created domain: {path} (level={level})")
+        return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        # UNIQUE constraint — domain with this name already exists (possibly at different level)
+        # Find the existing one regardless of level
+        row = conn.execute(
+            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE", (name,)
+        ).fetchone()
+        if row:
+            # Update its level and parent if needed
+            conn.execute(
+                "UPDATE domains SET level = ?, parent_id = ?, path = ?, updated_at = ? WHERE id = ?",
+                (level, parent_id, path, now, row[0]),
+            )
+            logger.info(f"Reused existing domain '{name}' (updated level={level})")
+            return row[0]
+        raise
