@@ -1058,30 +1058,51 @@ def api_knowledge_graph():
     try:
         conn = get_db()
 
-        # Nodes: all domains for this user
+        # Domain nodes
         domains = conn.execute("""
             SELECT id, name, level, parent_id, source_count, insight_count
             FROM domains WHERE user_id = ?
             ORDER BY level ASC, insight_count DESC
         """, (uid,)).fetchall()
 
-        # Edges: cross-domain references
+        # Source nodes (processed only)
+        sources = conn.execute("""
+            SELECT id, title, url, domain_id, source_type
+            FROM sources WHERE user_id = ? AND status = 'processed'
+            ORDER BY created_at DESC
+        """, (uid,)).fetchall()
+
+        # Cross-domain reference edges
         refs = conn.execute("""
             SELECT source_domain_id, target_domain_id, relationship
             FROM domain_references
             WHERE source_domain_id IN (SELECT id FROM domains WHERE user_id = ?)
         """, (uid,)).fetchall()
 
-        nodes = [
+        # Build domain nodes (integer IDs)
+        domain_nodes = [
             {"id": r["id"], "name": r["name"], "level": r["level"],
              "parentId": r["parent_id"], "sources": r["source_count"],
-             "insights": r["insight_count"]}
+             "insights": r["insight_count"], "type": "domain"}
             for r in domains
         ]
 
+        # Build source nodes (string IDs to avoid collision with domain IDs)
+        source_nodes = [
+            {"id": "s-" + str(r["id"]), "name": r["title"] or "Untitled",
+             "type": "source", "sourceType": r["source_type"],
+             "url": r["url"], "domainId": r["domain_id"]}
+            for r in sources
+        ]
+
+        # Edges: hierarchy + source-to-domain + cross-references
         hierarchy_edges = [
             {"source": r["parent_id"], "target": r["id"], "type": "hierarchy"}
             for r in domains if r["parent_id"]
+        ]
+        source_edges = [
+            {"source": "s-" + str(r["id"]), "target": r["domain_id"], "type": "source"}
+            for r in sources if r["domain_id"]
         ]
         ref_edges = [
             {"source": r["source_domain_id"], "target": r["target_domain_id"],
@@ -1089,7 +1110,10 @@ def api_knowledge_graph():
             for r in refs
         ]
 
-        return jsonify({"nodes": nodes, "edges": hierarchy_edges + ref_edges})
+        return jsonify({
+            "nodes": domain_nodes + source_nodes,
+            "edges": hierarchy_edges + source_edges + ref_edges,
+        })
 
     except Exception as e:
         logger.error(f"Knowledge graph failed: {e}")
