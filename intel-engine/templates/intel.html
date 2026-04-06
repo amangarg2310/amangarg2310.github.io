@@ -147,8 +147,24 @@
 
             <!-- Sidebar Processing Status -->
             <div class="intel-sidebar-status" id="sidebarStatus">
-                <div class="intel-spinner small"></div>
-                <span id="sidebarStatusText">Processing...</span>
+                <div class="intel-sidebar-progress-card">
+                    <div class="intel-sidebar-progress-header">
+                        <div class="intel-progress-ring-wrapper small">
+                            <svg class="intel-progress-ring" width="36" height="36" viewBox="0 0 36 36">
+                                <circle class="intel-ring-bg" cx="18" cy="18" r="14"/>
+                                <circle class="intel-ring-fill" id="sidebarRingFill" cx="18" cy="18" r="14"
+                                    stroke-dasharray="87.96" stroke-dashoffset="87.96"/>
+                            </svg>
+                            <span class="intel-ring-pct small" id="sidebarRingPct">0%</span>
+                        </div>
+                        <div class="intel-sidebar-progress-info">
+                            <span id="sidebarStatusText">Processing...</span>
+                        </div>
+                    </div>
+                    <div class="intel-progress-track">
+                        <div class="intel-progress-fill" id="sidebarProgressFill" style="width:0%"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Source List -->
@@ -919,18 +935,55 @@ function submitText() {
     });
 }
 
-function showSidebarStatus(text) {
+// Sidebar smooth progress tween
+let _sidebarProgressTarget = 0;
+let _sidebarProgressCurrent = 0;
+let _sidebarProgressTimer = null;
+
+function _sidebarProgressTween() {
+    if (_sidebarProgressTimer) return;
+    _sidebarProgressTimer = setInterval(() => {
+        if (_sidebarProgressCurrent >= _sidebarProgressTarget) {
+            clearInterval(_sidebarProgressTimer);
+            _sidebarProgressTimer = null;
+            return;
+        }
+        _sidebarProgressCurrent = Math.min(_sidebarProgressCurrent + 1, _sidebarProgressTarget);
+        _updateSidebarProgressDOM(_sidebarProgressCurrent);
+    }, 60);
+}
+
+function _updateSidebarProgressDOM(pct) {
+    const circ = 87.96; // 2 * π * 14
+    const offset = circ * (1 - pct / 100);
+    const ring = document.getElementById('sidebarRingFill');
+    if (ring) ring.setAttribute('stroke-dashoffset', offset);
+    const pctEl = document.getElementById('sidebarRingPct');
+    if (pctEl) pctEl.textContent = pct + '%';
+    const fill = document.getElementById('sidebarProgressFill');
+    if (fill) fill.style.width = pct + '%';
+}
+
+function showSidebarStatus(text, progress) {
     const el = document.getElementById('sidebarStatus');
     const textEl = document.getElementById('sidebarStatusText');
     if (el && textEl) {
         textEl.textContent = text;
         el.classList.add('active');
     }
+    if (progress !== undefined && progress !== null) {
+        _sidebarProgressTarget = progress;
+        _sidebarProgressTween();
+    }
 }
 
 function hideSidebarStatus() {
     const el = document.getElementById('sidebarStatus');
     if (el) el.classList.remove('active');
+    if (_sidebarProgressTimer) { clearInterval(_sidebarProgressTimer); _sidebarProgressTimer = null; }
+    _sidebarProgressCurrent = 0;
+    _sidebarProgressTarget = 0;
+    _updateSidebarProgressDOM(0);
 }
 
 function pollSidebarStatus(videoId) {
@@ -938,11 +991,11 @@ function pollSidebarStatus(videoId) {
         fetch(`/api/status/${videoId}`)
             .then(r => r.json())
             .then(data => {
-                if (data.step) showSidebarStatus(data.step);
+                if (data.step) showSidebarStatus(data.step, data.progress || 0);
 
                 if (data.status === 'complete') {
                     clearInterval(interval);
-                    showSidebarStatus('Done! Reloading...');
+                    showSidebarStatus('Done! Reloading...', 100);
                     setTimeout(() => window.location.reload(), 800);
                 } else if (data.status === 'error') {
                     clearInterval(interval);

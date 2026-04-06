@@ -1527,18 +1527,41 @@
 /* ── Processing Status (sidebar inline) ── */
 .intel-sidebar-status {
     margin: 0 12px 8px;
-    padding: 10px 12px;
-    background: var(--intel-accent-light);
-    border-radius: var(--intel-radius-xs);
-    font-size: 12px;
-    color: var(--intel-accent);
+    padding: 0;
     display: none;
 }
 
 .intel-sidebar-status.active {
+    display: block;
+}
+
+.intel-sidebar-progress-card {
+    background: var(--intel-accent-light);
+    border-radius: var(--intel-radius-xs);
+    padding: 10px 12px;
+}
+
+.intel-sidebar-progress-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.intel-sidebar-progress-info {
+    flex: 1;
+    font-size: 12px;
+    color: var(--intel-accent);
+    min-width: 0;
+}
+
+.intel-progress-ring-wrapper.small {
+    width: 36px;
+    height: 36px;
+}
+
+.intel-ring-pct.small {
+    font-size: 9px;
 }
 
 /* ── Animations ── */
