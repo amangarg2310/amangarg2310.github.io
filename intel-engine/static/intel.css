@@ -389,7 +389,7 @@
     height: 100%;
     background: var(--intel-accent);
     border-radius: 2px;
-    transition: width 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition: width 80ms linear;
     width: 0%;
 }
 
@@ -416,7 +416,7 @@
     stroke: var(--intel-accent);
     stroke-width: 3;
     stroke-linecap: round;
-    transition: stroke-dashoffset 0.5s ease;
+    transition: stroke-dashoffset 80ms linear;
 }
 .intel-ring-fill.complete { stroke: var(--intel-green); }
 .intel-ring-fill.error { stroke: var(--intel-red); }

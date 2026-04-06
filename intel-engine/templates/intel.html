@@ -116,7 +116,7 @@
                     <!-- Link Tab -->
                     <div class="intel-add-pane active" id="addPaneLink">
                         <input type="text" class="intel-add-input" id="addLinkInput"
-                               placeholder="Paste YouTube or article URL..."
+                               placeholder="Paste YouTube, playlist (max 15 videos), or article URL..."
                                onkeydown="if(event.key==='Enter')submitLink()">
                         <button class="intel-add-submit" onclick="submitLink()">Add Link</button>
                     </div>
@@ -342,7 +342,7 @@
                     <input type="text"
                            class="intel-input"
                            id="urlInput"
-                           placeholder="Paste a YouTube, article, or any URL..."
+                           placeholder="Paste a YouTube video, playlist (max 15), or article URL..."
                            autocomplete="off"
                            spellcheck="false"
                            autofocus
@@ -650,15 +650,67 @@ function pollHomeStatus(videoId) {
     }, 1000);
 }
 
+// Smooth progress state
+let _progressTarget = 0;
+let _progressCurrent = 0;
+let _progressTimer = null;
+
+function _startProgressTween() {
+    if (_progressTimer) return;
+    _progressTimer = setInterval(() => {
+        if (_progressCurrent >= _progressTarget) {
+            clearInterval(_progressTimer);
+            _progressTimer = null;
+            return;
+        }
+        _progressCurrent = Math.min(_progressCurrent + 1, _progressTarget);
+        _updateProgressDOM(_progressCurrent);
+    }, 60); // ~1% every 60ms for smooth visual
+}
+
+function _updateProgressDOM(pct) {
+    const circ = 125.66;
+    const offset = circ * (1 - pct / 100);
+    const ring = document.querySelector('.intel-ring-fill:not(.complete):not(.error)');
+    if (ring) ring.setAttribute('stroke-dashoffset', offset);
+    const pctEl = document.querySelector('.intel-ring-pct');
+    if (pctEl && !pctEl.querySelector('svg')) pctEl.textContent = pct + '%';
+    const fill = document.querySelector('.intel-progress-fill:not(.complete):not(.error)');
+    if (fill) fill.style.width = pct + '%';
+}
+
 function showHomeStatus(status, title, step, progress, domain, sourceId) {
     if (!statusCard) return;
 
+    const circ = 125.66;  // 2 * π * 20
+
+    // For processing status: update existing DOM if card already exists (enables CSS transitions)
+    if (status === 'processing') {
+        const existingCard = statusCard.querySelector('.intel-status-card');
+        const existingRing = statusCard.querySelector('.intel-ring-fill:not(.complete):not(.error)');
+
+        if (existingCard && existingRing) {
+            // Update step text and title only
+            const titleEl = statusCard.querySelector('.intel-status-title');
+            const stepEl = statusCard.querySelector('.intel-status-step');
+            if (titleEl) titleEl.textContent = title;
+            if (stepEl) stepEl.innerHTML = escapeHtml(step || '');
+
+            // Tween progress smoothly
+            _progressTarget = progress || 0;
+            _startProgressTween();
+            return;
+        }
+    }
+
+    // First render or non-processing status — build full card
     let fillClass = '';
     let ringContent = '';
-    const circ = 125.66;  // 2 * π * 20
     const offset = circ * (1 - (progress || 0) / 100);
 
     if (status === 'processing') {
+        _progressCurrent = progress || 0;
+        _progressTarget = progress || 0;
         fillClass = '';
         ringContent = `
             <div class="intel-progress-ring-wrapper">
@@ -670,6 +722,8 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
                 <span class="intel-ring-pct">${progress}%</span>
             </div>`;
     } else if (status === 'complete' || status === 'already_exists') {
+        // Stop any running tween
+        if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
         fillClass = 'complete';
         ringContent = `
             <div class="intel-progress-ring-wrapper">
@@ -681,6 +735,7 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
                 <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>`;
     } else if (status === 'error') {
+        if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
         fillClass = 'error';
         ringContent = `
             <div class="intel-progress-ring-wrapper">
