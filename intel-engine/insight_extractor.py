@@ -1,11 +1,14 @@
 """
-Insight extraction — GPT extracts structured insights from transcript chunks.
+Insight extraction — Anthropic Haiku extracts structured insights from transcript chunks.
+
+Uses Claude Haiku 4.5 for superior comprehension and detail extraction.
 """
 
 import json
 import logging
 import re
-from openai import OpenAI
+
+from anthropic import Anthropic
 
 import config
 
@@ -41,26 +44,26 @@ Return ONLY a JSON array, no markdown:
 
 
 def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
-    """Extract structured insights from a transcript chunk using GPT."""
-    api_key = config.get_api_key('openai')
+    """Extract structured insights from a transcript chunk using Anthropic Haiku."""
+    api_key = config.get_api_key('anthropic')
     if not api_key:
-        logger.error("OpenAI API key not configured")
+        logger.error("Anthropic API key not configured")
         return []
 
-    client = OpenAI(api_key=api_key)
+    client = Anthropic(api_key=api_key)
 
     try:
-        response = client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays.",
             messages=[
-                {"role": "system", "content": "You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays."},
                 {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
             ],
             temperature=0.3,
             max_tokens=4000,
         )
 
-        raw_content = response.choices[0].message.content.strip()
+        raw_content = response.content[0].text.strip()
         insights = _parse_insights_json(raw_content, chunk_index)
 
         # Validate and filter insights

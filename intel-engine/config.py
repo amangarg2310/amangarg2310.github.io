@@ -34,8 +34,9 @@ OPENAI_TEMPERATURE = 0.3
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 EMBEDDING_DIMENSION = 1536
 
-# ── Anthropic (for visual generation) ──
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+# ── Anthropic ──
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")  # For visuals
+ANTHROPIC_HAIKU_MODEL = os.getenv("ANTHROPIC_HAIKU_MODEL", "claude-haiku-4-5-20251001")  # For text gen
 
 
 def get_api_key(service: str) -> str:

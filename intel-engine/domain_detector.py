@@ -1,7 +1,12 @@
 """
 Domain detection — auto-classifies content into a hierarchical taxonomy.
 
-Creates specific domains (e.g., "OpenClaw" not "AI Automation Tools") with:
+Uses a 3-layer matching strategy:
+1. RapidFuzz string similarity (instant, free) — catches obvious matches
+2. OpenAI embeddings cosine similarity (fast, $0.0001) — catches semantic matches
+3. GPT classification (slower, $0.01) — only for genuinely new domains
+
+Creates specific domains with:
 - Parent category (broader grouping, level 0)
 - Main domain (specific topic, level 1) — sources attach here
 - Sub-topics (detected from content, level 2) — navigational grouping
@@ -15,7 +20,13 @@ from datetime import datetime, timezone
 
 from openai import OpenAI
 
+try:
+    from rapidfuzz import fuzz
+except ImportError:
+    fuzz = None
+
 import config
+from embeddings import generate_embedding, cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -91,14 +102,107 @@ def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
         return []
 
 
+def _try_semantic_match(title: str, existing: list[dict], db_path=None) -> dict | None:
+    """Try to match content to an existing domain using fuzzy string + embedding similarity.
+
+    Returns a domain result dict if a confident match is found, None otherwise.
+    This avoids calling GPT for obvious matches like "Claude Code Tips" → "Claude Code".
+    """
+    if not existing:
+        return None
+
+    level1_domains = [d for d in existing if d.get('level') == 1]
+    if not level1_domains:
+        return None
+
+    title_lower = title.lower()
+    best_match = None
+    best_score = 0
+
+    # Layer 1: RapidFuzz token_set_ratio (handles word reordering, substrings)
+    if fuzz:
+        for d in level1_domains:
+            score = fuzz.token_set_ratio(title_lower, d['name'].lower())
+            if score > best_score:
+                best_score = score
+                best_match = d
+
+        if best_score >= 85:  # High confidence fuzzy match
+            logger.info(f"RapidFuzz matched title '{title}' → domain '{best_match['name']}' (score={best_score})")
+            path = best_match.get('path', '')
+            parent_name = path.split('/')[1] if path and len(path.split('/')) > 1 else 'General'
+            return {
+                'domain': best_match['name'],
+                'parent': parent_name,
+                'sub_topics': [],
+                'description': best_match.get('description', ''),
+                'is_new': False,
+            }
+
+    # Layer 2: Embedding cosine similarity (semantic understanding)
+    title_embedding = generate_embedding(title)
+    if title_embedding:
+        best_match = None
+        best_sim = 0
+        for d in level1_domains:
+            # Embed domain name + description for richer comparison
+            domain_text = f"{d['name']}: {d.get('description', '')}"
+            domain_embedding = generate_embedding(domain_text)
+            if domain_embedding:
+                sim = cosine_similarity(title_embedding, domain_embedding)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_match = d
+
+        if best_sim >= 0.78 and best_match:  # High semantic similarity
+            logger.info(f"Embedding matched title '{title}' → domain '{best_match['name']}' (similarity={best_sim:.3f})")
+            path = best_match.get('path', '')
+            parent_name = path.split('/')[1] if path and len(path.split('/')) > 1 else 'General'
+            return {
+                'domain': best_match['name'],
+                'parent': parent_name,
+                'sub_topics': [],
+                'description': best_match.get('description', ''),
+                'is_new': False,
+            }
+
+    return None  # No confident match — fall back to GPT
+
+
 def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str, db_path=None, user_id=None) -> dict:
-    """Detect or create a hierarchical domain structure for the content."""
+    """Detect or create a hierarchical domain structure for the content.
+
+    Uses 3-layer matching: rapidfuzz → embeddings → GPT (only for new domains).
+    """
     api_key = config.get_api_key('openai')
     if not api_key:
         raise ValueError("OpenAI API key not configured")
 
     existing = get_existing_domains(db_path, user_id)
 
+    # Layer 1+2: Try semantic matching before calling GPT
+    if existing:
+        semantic_match = _try_semantic_match(title, existing, db_path)
+        if semantic_match:
+            # Found a confident match — create/reuse hierarchy without GPT
+            domain_id = ensure_domain_hierarchy(
+                name=semantic_match['domain'],
+                parent_name=semantic_match.get('parent', 'General'),
+                sub_topics=semantic_match.get('sub_topics', []),
+                description=semantic_match.get('description', ''),
+                db_path=db_path,
+                user_id=user_id,
+            )
+            return {
+                'domain_name': semantic_match['domain'],
+                'description': semantic_match.get('description', ''),
+                'is_new': False,
+                'domain_id': domain_id,
+                'parent_name': semantic_match.get('parent', 'General'),
+                'sub_topics': semantic_match.get('sub_topics', []),
+            }
+
+    # Layer 3: GPT classification (only for genuinely new or ambiguous content)
     if existing:
         # Show hierarchy to GPT grouped by parent
         parents = {}

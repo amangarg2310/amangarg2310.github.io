@@ -1,14 +1,14 @@
 """
 Query engine — answer questions against a domain's accumulated knowledge.
 
-Uses hybrid retrieval (vector similarity + FTS5 keyword search) + GPT answer synthesis.
+Uses hybrid retrieval (vector similarity + FTS5 keyword search) + Anthropic Haiku answer synthesis.
 Falls back to keyword-only search if embeddings are not available.
 """
 
 import logging
 import sqlite3
 
-from openai import OpenAI
+from anthropic import Anthropic
 
 import config
 from embeddings import generate_embedding, cosine_similarity, deserialize_embedding
@@ -154,9 +154,9 @@ def _keyword_fallback(conn, domain_id: int, query: str) -> dict[int, float]:
 def query_domain(domain_id: int, question: str, db_path=None) -> dict:
     """Answer a question using domain knowledge with hybrid RAG retrieval."""
     db_path = db_path or config.DB_PATH
-    api_key = config.get_api_key('openai')
+    api_key = config.get_api_key('anthropic')
     if not api_key:
-        return {"answer": "OpenAI API key not configured. Please add it in Settings.", "sources_used": 0}
+        return {"answer": "Anthropic API key not configured. Please add it in Settings.", "sources_used": 0}
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -180,13 +180,13 @@ def query_domain(domain_id: int, question: str, db_path=None) -> dict:
         for i in insights
     ) if insights else "No specific insights found matching this query."
 
-    client = OpenAI(api_key=api_key)
+    client = Anthropic(api_key=api_key)
 
     try:
-        response = client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You are a helpful domain expert. Answer questions using only provided knowledge. Be specific and cite your sources.",
             messages=[
-                {"role": "system", "content": "You are a helpful domain expert. Answer questions using only provided knowledge. Be specific and cite your sources."},
                 {"role": "user", "content": ANSWER_PROMPT.format(
                     domain_name=domain_name, synthesis=synthesis,
                     insights=insights_text, question=question,
@@ -196,7 +196,7 @@ def query_domain(domain_id: int, question: str, db_path=None) -> dict:
             max_tokens=2000,
         )
 
-        answer = response.choices[0].message.content.strip()
+        answer = response.content[0].text.strip()
     except Exception as e:
         logger.error(f"Query failed: {e}")
         answer = "Sorry, I encountered an error processing your question. Please try again."

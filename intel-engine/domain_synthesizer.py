@@ -1,10 +1,12 @@
 """
 Domain synthesis — compounds knowledge as new sources are ingested.
 
+Uses Anthropic Haiku 4.5 for superior long-form synthesis quality.
+
 After each new source is processed, the synthesizer:
 1. Loads the existing synthesis for the domain
 2. Loads all new insights from the just-processed source
-3. Sends both to GPT to create an updated, comprehensive synthesis
+3. Sends both to Claude to create an updated, comprehensive synthesis
 4. Stores the new synthesis with an incremented version number
 """
 
@@ -13,7 +15,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 
-from openai import OpenAI
+from anthropic import Anthropic
 
 import config
 
@@ -148,9 +150,9 @@ def get_domain_insights_for_source(source_id: int, db_path=None) -> list[dict]:
 def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel: str, db_path=None, source_date: str = None) -> str:
     """Create or update the domain synthesis after a new source is processed."""
     db_path = db_path or config.DB_PATH
-    api_key = config.get_api_key('openai')
+    api_key = config.get_api_key('anthropic')
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
+        raise ValueError("Anthropic API key not configured")
 
     current = get_current_synthesis(domain_id, db_path)
 
@@ -186,12 +188,12 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     if not source_date:
         source_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    client = OpenAI(api_key=api_key)
+    client = Anthropic(api_key=api_key)
 
-    response = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
+    response = client.messages.create(
+        model=config.ANTHROPIC_HAIKU_MODEL,
+        system="You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown. This is a how-to reference, not an executive summary.",
         messages=[
-            {"role": "system", "content": "You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown. This is a how-to reference, not an executive summary."},
             {"role": "user", "content": SYNTHESIS_PROMPT.format(
                 domain_name=domain_name,
                 existing_section=existing_section,
@@ -205,7 +207,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         max_tokens=8000,
     )
 
-    synthesis_content = response.choices[0].message.content.strip()
+    synthesis_content = response.content[0].text.strip()
 
     # Generate suggested questions
     suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
@@ -237,9 +239,9 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     rather than doing incremental synthesis.
     """
     db_path = db_path or config.DB_PATH
-    api_key = config.get_api_key('openai')
+    api_key = config.get_api_key('anthropic')
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
+        raise ValueError("Anthropic API key not configured")
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -320,12 +322,12 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     all_insights_text = "\n".join(all_insights_parts)
 
-    client = OpenAI(api_key=api_key)
+    client = Anthropic(api_key=api_key)
 
-    response = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
+    response = client.messages.create(
+        model=config.ANTHROPIC_HAIKU_MODEL,
+        system="You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown.",
         messages=[
-            {"role": "system", "content": "You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown."},
             {"role": "user", "content": FULL_RESYNTHESIS_PROMPT.format(
                 domain_name=domain_name,
                 all_insights=all_insights_text,
@@ -335,7 +337,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
         max_tokens=8000,
     )
 
-    synthesis_content = response.choices[0].message.content.strip()
+    synthesis_content = response.content[0].text.strip()
 
     suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
 
@@ -357,21 +359,21 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     return synthesis_content
 
 
-def _generate_suggested_questions(client: OpenAI, domain_name: str, synthesis: str) -> str:
+def _generate_suggested_questions(client: Anthropic, domain_name: str, synthesis: str) -> str:
     """Generate 3 suggested starter questions based on the synthesis content."""
     try:
         # Use first ~1000 words of synthesis for context
         excerpt = " ".join(synthesis.split()[:1000])
-        response = client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="Generate exactly 3 questions a learner would ask about this knowledge base. Return a JSON array of 3 strings. Questions should be specific and actionable, not generic.",
             messages=[
-                {"role": "system", "content": "Generate exactly 3 questions a learner would ask about this knowledge base. Return a JSON array of 3 strings. Questions should be specific and actionable, not generic."},
                 {"role": "user", "content": f"Domain: {domain_name}\n\nKnowledge:\n{excerpt}\n\nReturn ONLY a JSON array of 3 question strings:"},
             ],
             temperature=0.5,
             max_tokens=300,
         )
-        content = response.choices[0].message.content.strip()
+        content = response.content[0].text.strip()
         # Strip markdown
         if content.startswith("```"):
             content = content.split("\n", 1)[1] if "\n" in content else content[3:]
