@@ -318,7 +318,7 @@ def _fetch_playlist_html(playlist_id: str) -> list[dict]:
     # Detect private playlist from page alerts
     if '"This playlist is private"' in html or '"PLAYLIST_PRIVATE"' in html:
         raise ValueError(
-            "This playlist is private. Please change it to Unlisted or Public in YouTube, then try again."
+            "This playlist is private. Change it to Unlisted in YouTube (only people with the link can see it — it won't appear in search) and try again."
         )
 
     # Extract ytInitialData JSON — find the start marker and brace-match to get full object
