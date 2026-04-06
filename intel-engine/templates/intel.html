@@ -25,7 +25,6 @@
         {% if current_user and current_user.is_authenticated %}
         <div class="intel-nav-user">
             <span class="intel-nav-user-name">{{ current_user.display_name }}</span>
-            <a href="javascript:void(0)" onclick="resetAllData()" class="intel-nav-reset">Reset</a>
             <a href="{{ url_for('logout') }}" class="intel-nav-logout">Sign out</a>
         </div>
         {% endif %}
@@ -45,6 +44,7 @@
             <div class="intel-taxonomy-section">
                 <div class="intel-taxonomy-header">
                     <span class="intel-sources-title">Domains</span>
+                    <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link" title="Reset all data">Reset</a>
                 </div>
                 <div class="intel-taxonomy-tree">
                     {% for node in domain_tree %}
@@ -396,7 +396,10 @@
     <div class="intel-domains-section">
         <div class="intel-section-header">
             <h2 class="intel-section-title">Your Knowledge</h2>
-            <span class="intel-section-count">{{ domains|length }} domain{{ 's' if domains|length != 1 else '' }}</span>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <span class="intel-section-count">{{ domains|length }} domain{{ 's' if domains|length != 1 else '' }}</span>
+                <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link">Reset</a>
+            </div>
         </div>
         <div class="intel-domains-grid">
             {% for d in domains %}

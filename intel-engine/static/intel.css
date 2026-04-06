@@ -125,16 +125,17 @@
     background: var(--intel-surface-hover);
 }
 
-.intel-nav-reset {
-    font-size: 12px;
-    color: var(--intel-red);
+.intel-reset-link {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
     text-decoration: none;
-    padding: 4px 10px;
-    border-radius: 6px;
-    transition: all var(--intel-transition);
     cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: all var(--intel-transition);
 }
-.intel-nav-reset:hover {
+.intel-reset-link:hover {
+    color: var(--intel-red);
     background: rgba(255, 59, 48, 0.08);
 }
 
