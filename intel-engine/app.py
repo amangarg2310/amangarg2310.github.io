@@ -1049,6 +1049,41 @@ def api_visual(domain_id):
             conn.close()
 
 
+@app.route("/api/reset-all", methods=["POST"])
+@login_required
+def api_reset_all():
+    """Delete ALL domains, sources, insights, syntheses for the current user."""
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        # Delete in dependency order: insights → sources → syntheses → domains
+        # Handle both user-owned and legacy (user_id IS NULL) data
+        conn.execute("""DELETE FROM insights WHERE domain_id IN (
+            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
+        conn.execute("DELETE FROM sources WHERE user_id = ? OR user_id IS NULL", (uid,))
+        conn.execute("""DELETE FROM syntheses WHERE domain_id IN (
+            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
+        conn.execute("DELETE FROM domains WHERE user_id = ? OR user_id IS NULL", (uid,))
+        conn.commit()
+
+        # Clean up uploaded files
+        import glob
+        for f in glob.glob(str(config.UPLOADS_DIR / "*")):
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+        return jsonify({"status": "ok", "message": "All data cleared"})
+    except Exception as e:
+        logger.error(f"Reset all failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 # ── Entry Point ──
 
 if __name__ == "__main__":

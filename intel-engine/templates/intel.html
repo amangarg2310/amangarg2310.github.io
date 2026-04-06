@@ -208,6 +208,10 @@
                     style="width:100%;padding:8px;font-size:12px;color:var(--intel-text-tertiary);background:none;border:1px solid var(--intel-border-light);border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);">
                     Backfill Embeddings
                 </button>
+                <button onclick="resetAllData()" id="resetBtn"
+                    style="width:100%;padding:8px;font-size:12px;color:#ff3b30;background:none;border:1px solid #ffcdd2;border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);margin-top:6px;">
+                    Reset All Data
+                </button>
             </div>
         </aside>
 
@@ -1042,6 +1046,21 @@ function backfillEmbeddings() {
             btn.disabled = false;
             btn.textContent = 'Failed — try again';
         });
+}
+
+function resetAllData() {
+    if (!confirm('Delete ALL domains, sources, insights, and syntheses? This cannot be undone.')) return;
+    if (!confirm('Are you sure? This will permanently erase your entire knowledge base.')) return;
+    const btn = document.getElementById('resetBtn');
+    btn.disabled = true;
+    btn.textContent = 'Resetting...';
+    fetch('/api/reset-all', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'ok') window.location.href = '/';
+            else { alert(d.error || 'Reset failed'); btn.disabled = false; btn.textContent = 'Reset All Data'; }
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = 'Reset failed'; });
 }
 
 // ── Source Management ──
