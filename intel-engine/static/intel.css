@@ -108,7 +108,33 @@
 .intel-nav-user {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+}
+
+.intel-nav-graph-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--intel-font);
+    color: var(--intel-text-secondary);
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all var(--intel-transition);
+}
+
+.intel-nav-graph-btn:hover {
+    color: var(--intel-accent);
+    border-color: var(--intel-accent);
+    background: var(--intel-accent-light);
+}
+
+.intel-nav-graph-btn svg {
+    flex-shrink: 0;
 }
 
 .intel-nav-user-name {

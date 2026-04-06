@@ -24,6 +24,16 @@
         </a>
         {% if current_user and current_user.is_authenticated %}
         <div class="intel-nav-user">
+            <button class="intel-nav-graph-btn" onclick="openGraphView()" title="Knowledge Graph">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="6" r="3"/>
+                    <circle cx="18" cy="18" r="3"/>
+                    <circle cx="18" cy="6" r="3"/>
+                    <line x1="8.5" y1="7.5" x2="15.5" y2="16.5"/>
+                    <line x1="8.5" y1="6" x2="15.5" y2="6"/>
+                </svg>
+                Graph
+            </button>
             <span class="intel-nav-user-name">{{ current_user.display_name }}</span>
             <a href="{{ url_for('logout') }}" class="intel-nav-logout">Sign out</a>
         </div>
@@ -44,10 +54,7 @@
             <div class="intel-taxonomy-section">
                 <div class="intel-taxonomy-header">
                     <span class="intel-sources-title">Domains</span>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <a href="javascript:void(0)" onclick="openGraphView()" class="intel-reset-link" title="Knowledge graph view">Graph</a>
-                        <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link" title="Reset all data">Reset</a>
-                    </div>
+                    <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link" title="Reset all data">Reset</a>
                 </div>
                 <div class="intel-taxonomy-tree">
                     {% for node in domain_tree %}
@@ -133,6 +140,7 @@
                         <input type="file" class="intel-file-input" id="sidebarFileInput"
                                accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
                                onchange="uploadFile(this.files[0])">
+                        <button class="intel-add-submit" onclick="document.getElementById('sidebarFileInput').click()">Add to Knowledge Base</button>
                     </div>
                     <!-- Text Tab -->
                     <div class="intel-add-pane" id="addPaneText">
@@ -392,6 +400,9 @@
                 <input type="file" class="intel-file-input" id="homeFileInput"
                        accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
                        onchange="uploadFileFromHome(this.files[0])">
+                <button class="intel-hub-submit wide" id="homeUploadBtn" onclick="document.getElementById('homeFileInput').click()">
+                    Add to Knowledge Base
+                </button>
             </div>
 
             <!-- Text pane -->
@@ -416,7 +427,6 @@
             <h2 class="intel-section-title">Your Knowledge</h2>
             <div style="display:flex;align-items:center;gap:12px;">
                 <span class="intel-section-count">{{ domains|length }} domain{{ 's' if domains|length != 1 else '' }}</span>
-                <a href="javascript:void(0)" onclick="openGraphView()" class="intel-reset-link">Graph</a>
                 <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link">Reset</a>
             </div>
         </div>
