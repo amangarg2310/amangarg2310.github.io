@@ -46,12 +46,12 @@ RULES:
 
 FORMAT as clean markdown:
 
-Start with a ## TLDR section (3-5 bullet points) that are IMMEDIATELY ACTIONABLE — not generic overviews:
-- The fastest way to get started (concrete first step with exact commands/URLs)
-- The most valuable capability (what you can DO, not what it IS)
-- The critical gotcha that saves hours (specific mistake to avoid)
-- The key command/config to bookmark (exact syntax, not "use commands")
-NEVER write generic bullets like "Learn about X" or "X is a powerful tool". Instead: "Install with `pip install X`, run `X init` to scaffold your first project"
+Start with a ## TLDR section — 3-5 bullet points that capture the MOST IMPORTANT takeaways from this specific domain's content. Each bullet should be concrete and actionable (include exact commands, URLs, specific names, or precise steps — never vague).
+
+CRITICAL: Do NOT use a fixed template or fixed bullet labels. The TLDR should organically reflect whatever matters most for THIS specific topic. A cooking domain's TLDR looks nothing like a programming domain's TLDR. Let the content dictate the structure. Never use labels like "Fastest start:" or "Most valuable capability:" — just write natural, specific bullets.
+
+Bad example: "- **Fastest start:** Install X" (templated label)
+Good example: "- Install with `pip install openinterpreter`, run `interpreter` — you'll have a working AI coding assistant in 30 seconds" (natural, specific)
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
@@ -87,12 +87,9 @@ RULES:
 
 FORMAT as clean markdown:
 
-Start with a ## TLDR section (3-5 bullet points) that are IMMEDIATELY ACTIONABLE — not generic overviews:
-- The fastest way to get started (concrete first step with exact commands/URLs)
-- The most valuable capability (what you can DO, not what it IS)
-- The critical gotcha that saves hours (specific mistake to avoid)
-- The key command/config to bookmark (exact syntax, not "use commands")
-NEVER write generic bullets like "Learn about X" or "X is a powerful tool". Instead: "Install with `pip install X`, run `X init` to scaffold your first project"
+Start with a ## TLDR section — 3-5 bullet points that capture the MOST IMPORTANT takeaways from this specific domain's content. Each bullet should be concrete and actionable (include exact commands, URLs, specific names, or precise steps — never vague).
+
+CRITICAL: Do NOT use a fixed template or fixed bullet labels. The TLDR should organically reflect whatever matters most for THIS specific topic. A cooking domain's TLDR looks nothing like a programming domain's TLDR. Let the content dictate the structure. Never use labels like "Fastest start:" or "Most valuable capability:" — just write natural, specific bullets.
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
