@@ -498,7 +498,7 @@ def api_ingest():
 def api_upload():
     """Accept a file upload and start background processing."""
     from pipeline import (
-        run_file_pipeline, run_image_pipeline, _update_status, _generate_source_id,
+        run_file_pipeline, run_image_pipeline, _update_status, _hash_file_id,
     )
 
     if 'file' not in request.files:
@@ -520,8 +520,9 @@ def api_upload():
     file_path = str(config.UPLOADS_DIR / unique_name)
     file.save(file_path)
 
-    # Generate a tracking ID
-    source_vid = _generate_source_id("file" if source_type != 'image' else "img")
+    # Content-based tracking ID (deterministic — same file = same ID for dedup)
+    prefix = "img" if source_type == 'image' else "file"
+    source_vid = _hash_file_id(file_path, prefix)
     _update_status(source_vid, 'processing', f'Uploading {original_filename}...', 5,
                    title=original_filename)
 
@@ -529,7 +530,7 @@ def api_upload():
     if source_type == 'image':
         def _run():
             try:
-                run_image_pipeline(file_path, original_filename, user_id=uid)
+                run_image_pipeline(file_path, original_filename, user_id=uid, tracking_id=source_vid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
         thread = threading.Thread(target=_run, daemon=True)
@@ -537,7 +538,7 @@ def api_upload():
     else:
         def _run():
             try:
-                run_file_pipeline(file_path, original_filename, source_type, user_id=uid)
+                run_file_pipeline(file_path, original_filename, source_type, user_id=uid, tracking_id=source_vid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
         thread = threading.Thread(target=_run, daemon=True)
@@ -550,7 +551,7 @@ def api_upload():
 @login_required
 def api_ingest_text():
     """Accept pasted text and start background processing."""
-    from pipeline import run_text_pipeline, _update_status, _generate_source_id
+    from pipeline import run_text_pipeline, _update_status, _hash_text_id
 
     data = request.get_json()
     title = (data or {}).get('title', '').strip()
@@ -563,12 +564,12 @@ def api_ingest_text():
         title = content[:60] + ("..." if len(content) > 60 else "")
 
     uid = current_user.id
-    source_vid = _generate_source_id("text")
+    source_vid = _hash_text_id(content)
     _update_status(source_vid, 'processing', 'Processing text...', 5, title=title)
 
     def _run():
         try:
-            run_text_pipeline(title, content, user_id=uid)
+            run_text_pipeline(title, content, user_id=uid, tracking_id=source_vid)
         except Exception as e:
             _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
 

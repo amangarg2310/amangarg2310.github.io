@@ -12,6 +12,7 @@ Each source type produces text that flows through the same pipeline:
 ingest → chunk → extract insights → detect domain → synthesize
 """
 
+import hashlib
 import logging
 import os
 import re
@@ -156,6 +157,20 @@ def detect_source_type(url: str) -> str:
 def _generate_source_id(prefix: str) -> str:
     """Generate a unique source identifier."""
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+def _hash_file_id(file_path: str, prefix: str = "file") -> str:
+    """Generate a deterministic source ID from file content hash."""
+    h = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return f"{prefix}_{h.hexdigest()[:12]}"
+
+
+def _hash_text_id(text: str) -> str:
+    """Generate a deterministic source ID from text content hash."""
+    return f"text_{hashlib.sha256(text.encode()).hexdigest()[:12]}"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -344,12 +359,20 @@ def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
 # File Pipeline (PDF, DOCX, PPTX)
 # ══════════════════════════════════════════════════════════════
 
-def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None, user_id=None) -> dict:
+def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for an uploaded document."""
     from file_ingest import ingest_file
 
     db_path = db_path or config.DB_PATH
-    source_vid = _generate_source_id("file")
+    source_vid = tracking_id or _hash_file_id(file_path, "file")
+
+    # Dedup check
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''), source_id=existing.get('id'))
+        return {'status': 'already_exists', 'video_id': source_vid,
+                'title': existing.get('title', ''), 'source_id': existing.get('id')}
 
     try:
         _update_status(source_vid, 'processing', f'Extracting text from {original_filename}...', 10,
@@ -363,7 +386,7 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
         now = datetime.now(timezone.utc).isoformat()
         conn = _get_conn(db_path)
         conn.execute("""
-            INSERT INTO sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)
         """, (source_vid, "", original_filename, source_type.upper(),
@@ -396,12 +419,20 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
 # Image Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_image_pipeline(file_path: str, original_filename: str, db_path=None, user_id=None) -> dict:
+def run_image_pipeline(file_path: str, original_filename: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for an uploaded image/screenshot."""
     from image_ingest import ingest_image
 
     db_path = db_path or config.DB_PATH
-    source_vid = _generate_source_id("img")
+    source_vid = tracking_id or _hash_file_id(file_path, "img")
+
+    # Dedup check
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''), source_id=existing.get('id'))
+        return {'status': 'already_exists', 'video_id': source_vid,
+                'title': existing.get('title', ''), 'source_id': existing.get('id')}
 
     try:
         _update_status(source_vid, 'processing', 'Analyzing image with AI...', 10,
@@ -415,7 +446,7 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None, use
         now = datetime.now(timezone.utc).isoformat()
         conn = _get_conn(db_path)
         conn.execute("""
-            INSERT INTO sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
             VALUES (?, ?, ?, 'Image', ?, 'image', ?, ?, 'processing', ?, ?)
         """, (source_vid, "", original_filename, text_content, file_path, original_filename, now, user_id))
@@ -447,10 +478,18 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None, use
 # Text Pipeline (pasted text)
 # ══════════════════════════════════════════════════════════════
 
-def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None) -> dict:
+def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for pasted text."""
     db_path = db_path or config.DB_PATH
-    source_vid = _generate_source_id("text")
+    source_vid = tracking_id or _hash_text_id(text_content)
+
+    # Dedup check
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''), source_id=existing.get('id'))
+        return {'status': 'already_exists', 'video_id': source_vid,
+                'title': existing.get('title', ''), 'source_id': existing.get('id')}
 
     try:
         _update_status(source_vid, 'processing', 'Processing text...', 15,
@@ -459,7 +498,7 @@ def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None)
         now = datetime.now(timezone.utc).isoformat()
         conn = _get_conn(db_path)
         conn.execute("""
-            INSERT INTO sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
             VALUES (?, '', ?, 'Text Note', ?, 'text', 'processing', ?, ?)
         """, (source_vid, title, text_content, now, user_id))
