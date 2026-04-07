@@ -59,9 +59,9 @@ See `outlier-content-engine/CLAUDE.md` for detailed documentation.
 
 ## Distylme (intel-engine/)
 
-**What it is:** A domain intelligence engine that ingests expert content from multiple sources (YouTube, articles, PDFs, images, text), processes it through an LLM pipeline, and builds a compounding knowledge base with hierarchical domain taxonomy. Deployed at [distylme.com](https://distylme.com).
+**What it is:** A domain intelligence engine that ingests expert content from multiple sources (YouTube videos, YouTube playlists, articles, PDFs, images, text), processes it through an LLM pipeline, and builds a compounding knowledge base with hierarchical domain taxonomy. Deployed at [distylme.com](https://distylme.com).
 
-**Tech Stack:** Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings), OpenAI GPT-4o-mini, Anthropic Claude (visuals), Supadata (transcript fallback)
+**Tech Stack:** Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings + WAL mode), OpenAI GPT-4o-mini, Anthropic Claude (visuals), Supadata (transcript fallback)
 
 ### Key Commands
 
@@ -74,18 +74,49 @@ python app.py           # Run at http://localhost:5002
 
 ### Architecture
 
-- **Pipeline** (`pipeline.py`): Source → ingest → chunk → extract insights → detect domain hierarchy → embed → synthesize
-- **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata), `article_ingest.py` (trafilatura), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
-- **Domain taxonomy** (`domain_detector.py`): Hierarchical — parent category → specific domain → sub-topics (like biology taxonomy)
+- **Pipeline** (`pipeline.py`): Source → ingest → chunk → extract insights → detect domain hierarchy → embed → synthesize. All DB connections use `_get_conn()` helper with WAL mode + `busy_timeout=5000` for concurrent access.
+- **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata, playlist support via RSS + HTML scraping fallback), `article_ingest.py` (trafilatura), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
+- **Domain taxonomy** (`domain_detector.py`): Hierarchical 3-level — parent category → specific domain → sub-topics
 - **RAG query** (`intel_query.py`): Hybrid search (vector embeddings + FTS5 keyword) → GPT answer synthesis
 - **Auth** (`auth.py`): Flask-Login session-based, multi-user with per-user data isolation
-- **Backend** (`app.py`): Flask web server with REST API
-- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired two-panel layout with taxonomy sidebar
+- **Backend** (`app.py`): Flask web server with REST API. Background processing via threading with in-memory status tracking for UI polling.
+- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired scholarly design with warm color palette, Inter font, two-panel layout with taxonomy sidebar, force-graph knowledge visualization
 - **Database:** SQLite with tables: users, domains (hierarchical), sources, insights (with embeddings), syntheses, usage_logs
+
+### Deduplication
+
+All source types use content-based deterministic IDs to prevent duplicate processing:
+- **YouTube**: Video ID from URL (deterministic)
+- **Article**: `SHA256(url)[:12]` (deterministic)
+- **File/Image**: `SHA256(file_bytes)[:12]` (deterministic)
+- **Text**: `SHA256(text_content)[:12]` (deterministic)
+
+Each pipeline calls `check_already_ingested()` before processing. Duplicates return `already_exists` status shown as "Already in your knowledge base" in the UI.
+
+### Progress Tracking
+
+Background processing uses in-memory status dict (`_pipeline_status`) with thread-safe locking. Frontend polls `/api/status/<video_id>` every 1s. Status entries have 10-minute TTL. The tracking ID must be consistent between `app.py` (which returns it to the frontend) and the pipeline function (which updates it) — both use the same content-based ID passed via `tracking_id` parameter.
+
+### Playlist Support
+
+YouTube playlists are fetched using two strategies:
+1. RSS feed (fast, works for channel upload playlists)
+2. HTML scraping with `ytInitialData` JSON parsing (fallback for user-created playlists)
+
+Private playlists are detected and the user is told to change to Unlisted. Max 15 videos per playlist.
+
+### Design System
+
+The UI follows a scholarly, NotebookLM-inspired aesthetic:
+- **Color palette**: Warm neutrals (`#fafaf8` bg, `#e4e0da` borders), muted indigo accent (`#4f6ef7`)
+- **Typography**: Inter font, weight 600 max on headings, 1.75 line-height for body
+- **Surfaces**: Warm amber left borders on synthesis/TLDR/blockquote cards, soft diffuse shadows
+- **Interactions**: No scale transforms on hover (too bouncy), background-shift only, consistent focus rings on all inputs
+- **Knowledge graph**: Force-graph with breathing pulse, flowing particles, perpetual drift, canvas-based rendering
 
 ### How It Works
 
-1. User registers/logs in, then adds a source (YouTube URL, article URL, file upload, or paste text)
+1. User registers/logs in, then adds a source (YouTube URL/playlist, article URL, file upload, or paste text)
 2. Source ingested → text extracted (type-specific ingestor)
 3. `insight_extractor.py` chunks text → GPT extracts granular, actionable insights
 4. `domain_detector.py` classifies into specific hierarchical domain (e.g., AI Tools → OpenClaw → Setup)
