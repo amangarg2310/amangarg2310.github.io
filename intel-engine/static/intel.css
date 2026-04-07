@@ -757,7 +757,7 @@
 
 /* ── Coverage Depth Indicators (Tier 4C) ── */
 .intel-domain-card.depth-thin {
-    border-left: 3px dashed var(--intel-border);
+    border-left: 3px solid var(--intel-border);
 }
 .intel-domain-card.depth-thin .intel-domain-name {
     color: var(--intel-text-secondary);
