@@ -924,7 +924,6 @@
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
-    cursor: pointer;
     border-radius: var(--intel-radius-xs);
     transition: background var(--intel-transition);
     user-select: none;
@@ -936,6 +935,8 @@
     font-size: 11px;
     color: var(--intel-text-tertiary);
     transition: transform var(--intel-transition);
+    cursor: pointer;
+    padding: 4px;
 }
 .intel-kb-cat-icon {
     font-size: 18px;
@@ -944,6 +945,11 @@
     font-size: 15px;
     font-weight: 600;
     color: var(--intel-text);
+    text-decoration: none;
+    transition: color var(--intel-transition);
+}
+a.intel-kb-cat-name:hover {
+    color: var(--intel-accent);
 }
 .intel-kb-cat-meta {
     margin-left: auto;
@@ -2169,6 +2175,43 @@
     transform: none;
 }
 
+/* Clear button inside search bar */
+.intel-search-clear {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--intel-text-tertiary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--intel-transition), color var(--intel-transition);
+}
+.intel-search-clear.visible {
+    display: flex;
+}
+.intel-search-clear:hover {
+    background: var(--intel-surface-hover);
+    color: var(--intel-text-secondary);
+}
+
+/* Keyboard shortcut hint */
+.intel-search-shortcut {
+    font-size: 11px;
+    font-family: var(--intel-font);
+    color: var(--intel-text-tertiary);
+    background: var(--intel-surface-hover);
+    border: 1px solid var(--intel-border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    flex-shrink: 0;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
 /* Inline answer */
 .intel-search-answer {
     margin-top: 20px;
@@ -2178,12 +2221,33 @@
     border-radius: var(--intel-radius);
     box-shadow: var(--intel-shadow);
     animation: intel-fadeIn 0.3s ease;
+    transition: opacity 0.3s ease;
+}
+
+.intel-search-answer.fading {
+    opacity: 0;
 }
 
 .intel-search-answer-content {
     font-size: 15px;
     line-height: 1.75;
     color: var(--intel-text-secondary);
+}
+
+.intel-search-answer-content h2,
+.intel-search-answer-content h3,
+.intel-search-answer-content h4 {
+    color: var(--intel-text);
+    margin: 20px 0 8px;
+    line-height: 1.4;
+}
+.intel-search-answer-content h2 { font-size: 18px; font-weight: 600; }
+.intel-search-answer-content h3 { font-size: 16px; font-weight: 600; }
+.intel-search-answer-content h4 { font-size: 15px; font-weight: 600; }
+.intel-search-answer-content h2:first-child,
+.intel-search-answer-content h3:first-child,
+.intel-search-answer-content h4:first-child {
+    margin-top: 0;
 }
 
 .intel-search-answer-content p {
