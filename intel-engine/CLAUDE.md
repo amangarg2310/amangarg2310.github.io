@@ -12,6 +12,7 @@ Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings + WAL mode), O
 pip install -r requirements.txt
 python migrations.py    # Create database tables
 python app.py           # Run at http://localhost:5002
+python backfill.py --all  # Optional: upgrade existing data to enriched pipeline
 ```
 
 ## Architecture

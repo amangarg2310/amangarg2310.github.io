@@ -13,6 +13,7 @@ ingest → chunk → extract insights → detect domain → synthesize
 """
 
 import hashlib
+import json
 import logging
 import os
 import re
@@ -99,7 +100,12 @@ def _get_conn(db_path):
 
 
 def _embed_insights(conn, source_id: int):
-    """Generate and store embeddings for all insights from a source."""
+    """Generate and store embeddings for all insights from a source.
+
+    Prepends source metadata (title, channel, domain path) to each insight
+    for domain-aware embeddings — the same phrase from different contexts
+    embeds differently.
+    """
     try:
         rows = conn.execute(
             "SELECT id, title, content FROM insights WHERE source_id = ? AND embedding IS NULL",
@@ -108,7 +114,19 @@ def _embed_insights(conn, source_id: int):
         if not rows:
             return
 
-        texts = [f"{r[1]} {r[2]}" for r in rows]
+        # Fetch source metadata for contextual embedding enrichment
+        source_meta = conn.execute(
+            """SELECT s.title, s.channel, d.path
+               FROM sources s LEFT JOIN domains d ON s.domain_id = d.id
+               WHERE s.id = ?""",
+            (source_id,),
+        ).fetchone()
+        prefix = ""
+        if source_meta:
+            parts = [p for p in [source_meta[0], source_meta[1], source_meta[2]] if p]
+            prefix = " | ".join(parts) + " | " if parts else ""
+
+        texts = [f"{prefix}{r[1]} {r[2]}" for r in rows]
         embeddings = batch_generate_embeddings(texts)
 
         for row, emb in zip(rows, embeddings):
@@ -591,8 +609,8 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         for insight in all_insights:
             conn.execute("""
                 INSERT INTO insights
-                (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, evidence, source_context, confidence, topics, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 source_id, domain_id,
                 insight.get('title', 'Untitled'),
@@ -601,6 +619,10 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
                 insight.get('actionability', 'medium'),
                 insight.get('key_quote', ''),
                 insight.get('chunk_index', 0),
+                insight.get('evidence', ''),
+                insight.get('source_context', ''),
+                insight.get('confidence', 'stated'),
+                json.dumps(insight.get('topics', [])),
                 now,
             ))
         conn.execute(

@@ -103,6 +103,147 @@ Then continue with detailed sections:
 Be THOROUGH. This is a reference document, not an executive summary."""
 
 
+DOMAIN_SYNTHESIS_PROMPT = """You are a knowledge architect. Your job is to create a MID-LEVEL THEMATIC OVERVIEW for the domain area: "{domain_name}".
+
+You are given syntheses from the sub-topics within this domain. Write an overview that:
+1. Captures the key themes and major tools/concepts across all sub-topics
+2. Shows how sub-topics relate to each other (dependencies, alternatives, complementary tools)
+3. Highlights the most important takeaways across the whole domain
+4. Is scannable in under 3 minutes of reading
+
+SUB-TOPIC SYNTHESES:
+{child_syntheses}
+
+FORMAT as clean markdown:
+
+Start with a ## TLDR — 3-5 bullets capturing the most important things about this domain area. Be concrete and specific, not abstract.
+
+Then ## Key Themes and ## How Sub-Topics Connect sections. Keep it thematic — don't just concatenate the sub-topic summaries. Synthesize across them.
+
+Source counts: {source_count} sources, {insight_count} insights across {child_count} sub-topics."""
+
+
+CATEGORY_SYNTHESIS_PROMPT = """You are a senior analyst. Your job is to create an EXECUTIVE BRIEFING for the knowledge category: "{domain_name}".
+
+You are given overview syntheses from domains within this category. Write a high-level briefing that:
+1. Summarizes the major domains and what each covers
+2. Identifies the most important things to know across the whole category
+3. Notes which domains are most developed (deep coverage) vs. thin
+4. Is readable in under 1 minute
+
+DOMAIN SYNTHESES:
+{child_syntheses}
+
+FORMAT as clean markdown:
+
+## TLDR — 2-3 bullets, the absolute most important things about this category.
+
+## Domains at a Glance — brief description of each domain area and its coverage depth.
+
+Keep this SHORT and strategic. This is a bird's-eye view, not a detailed reference."""
+
+
+def _cascade_synthesis(domain_id: int, db_path, user_id=None):
+    """After synthesizing a sub-topic, cascade upward: re-synthesize parent domain, then grandparent category."""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    domain = conn.execute("SELECT parent_id, level FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    conn.close()
+
+    if not domain or not domain['parent_id']:
+        return
+
+    parent_id = domain['parent_id']
+    _synthesize_parent(parent_id, db_path)
+
+    # Check if grandparent exists
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    parent = conn.execute("SELECT parent_id FROM domains WHERE id = ?", (parent_id,)).fetchone()
+    conn.close()
+
+    if parent and parent['parent_id']:
+        _synthesize_parent(parent['parent_id'], db_path)
+
+
+def _synthesize_parent(parent_id: int, db_path):
+    """Synthesize a parent domain (level 0 or 1) from its children's syntheses."""
+    api_key = config.get_api_key('anthropic')
+    if not api_key:
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    parent = conn.execute("SELECT id, name, level, source_count, insight_count FROM domains WHERE id = ?", (parent_id,)).fetchone()
+    if not parent:
+        conn.close()
+        return
+
+    # Get child domain syntheses
+    children = conn.execute("""
+        SELECT d.name, d.source_count, d.insight_count,
+               (SELECT s.content FROM syntheses s WHERE s.domain_id = d.id ORDER BY s.version DESC LIMIT 1) as synthesis
+        FROM domains d WHERE d.parent_id = ? AND d.source_count > 0
+        ORDER BY d.source_count DESC
+    """, (parent_id,)).fetchall()
+
+    current = conn.execute(
+        "SELECT version FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1", (parent_id,)
+    ).fetchone()
+    next_version = (current['version'] + 1) if current else 1
+    conn.close()
+
+    if not children:
+        return
+
+    child_syntheses_text = "\n\n---\n\n".join(
+        f"### {c['name']} ({c['source_count']} sources, {c['insight_count']} insights)\n{c['synthesis'] or 'No synthesis yet.'}"
+        for c in children
+    )
+
+    # Choose prompt based on level
+    level = parent['level']
+    if level == 0:
+        prompt = CATEGORY_SYNTHESIS_PROMPT.format(
+            domain_name=parent['name'],
+            child_syntheses=child_syntheses_text,
+        )
+    else:
+        prompt = DOMAIN_SYNTHESIS_PROMPT.format(
+            domain_name=parent['name'],
+            child_syntheses=child_syntheses_text,
+            source_count=parent['source_count'],
+            insight_count=parent['insight_count'],
+            child_count=len(children),
+        )
+
+    client = Anthropic(api_key=api_key)
+    try:
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You synthesize knowledge across sub-domains into clear, structured overviews. Write in clean markdown.",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=4000,
+        )
+        content = response.content[0].text.strip()
+    except Exception as e:
+        logger.warning(f"Parent synthesis failed for domain {parent_id}: {e}")
+        return
+
+    synthesis_level = 'category' if level == 0 else 'domain'
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (parent_id, content, parent['source_count'], parent['insight_count'], next_version, synthesis_level, now),
+    )
+    conn.commit()
+    conn.close()
+    logger.info(f"Cascaded {synthesis_level} synthesis v{next_version} for '{parent['name']}'")
+
+
 def _update_parent_counts(conn, domain_id: int, now: str):
     """Roll up source/insight counts to the parent category."""
     parent_row = conn.execute("SELECT parent_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
@@ -212,7 +353,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?)",
         (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
     )
     conn.execute(
@@ -231,6 +372,12 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         detect_cross_references(domain_id, synthesis_content, db_path)
     except Exception as e:
         logger.warning(f"Cross-reference detection skipped: {e}")
+
+    # Cascade synthesis upward: re-synthesize parent domain and grandparent category
+    try:
+        _cascade_synthesis(domain_id, db_path)
+    except Exception as e:
+        logger.warning(f"Cascade synthesis skipped: {e}")
 
     return synthesis_content
 
@@ -348,7 +495,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?)",
         (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
     )
     conn.execute(

@@ -28,13 +28,15 @@ RELEVANT INSIGHTS:
 USER QUESTION: {question}
 
 RULES:
-1. Answer based ONLY on the provided knowledge — don't make things up
-2. Cite sources in parentheses: (Source: Channel Name)
-3. If the knowledge doesn't cover the question, say so clearly
-4. Be specific and detailed — include exact commands, config values, tool names when relevant
-5. Use bullet points for multi-part answers
-6. Highlight actionable takeaways in bold
-7. If multiple sources agree, note the consensus. If they disagree, note both perspectives."""
+1. Answer based ONLY on the provided knowledge — do NOT supplement with your own training knowledge
+2. For EVERY claim in your answer, cite the source: [Source: Title by Channel]
+3. If multiple sources agree on a point, note this: "Multiple sources confirm..." and list them
+4. If sources disagree, present both views: "[Source A] argues X, while [Source B] argues Y"
+5. If the knowledge base doesn't contain enough information to fully answer, say so explicitly rather than guessing
+6. Be specific and detailed — include exact commands, config values, tool names when relevant
+7. Use bullet points for multi-part answers
+8. Highlight actionable takeaways in **bold**
+9. When evidence is provided for a claim, briefly note the basis (e.g., "demonstrated in practice", "based on their experience scaling to 10K users")"""
 
 
 def search_insights_hybrid(domain_id: int, query: str, limit: int = 15, db_path=None) -> list[dict]:
@@ -51,7 +53,7 @@ def search_insights_hybrid(domain_id: int, query: str, limit: int = 15, db_path=
     # Load all insights for domain with their embeddings
     rows = conn.execute("""
         SELECT i.id, i.title, i.content, i.insight_type, i.actionability,
-               i.key_quotes, i.embedding,
+               i.key_quotes, i.embedding, i.evidence, i.source_context, i.confidence,
                s.title as source_title, s.channel
         FROM insights i JOIN sources s ON i.source_id = s.id
         WHERE i.domain_id = ? AND s.status = 'processed'
@@ -175,9 +177,21 @@ def query_domain(domain_id: int, question: str, db_path=None) -> dict:
     # Hybrid retrieval
     insights = search_insights_hybrid(domain_id, question, limit=15, db_path=db_path)
 
-    insights_text = "\n".join(
-        f"- [{i.get('insight_type', 'general')}] {i['title']}: {i['content']} (Source: {i.get('channel', 'Unknown')})"
-        for i in insights
+    def _format_insight(i):
+        parts = [f"- [{i.get('insight_type', 'general')}] {i['title']}: {i['content']}"]
+        if i.get('evidence'):
+            parts.append(f"  Evidence: {i['evidence']}")
+        if i.get('source_context'):
+            parts.append(f"  Context: {i['source_context']}")
+        source_label = i.get('source_title') or i.get('channel', 'Unknown')
+        channel = i.get('channel', '')
+        if channel and channel != source_label:
+            source_label = f"{source_label} by {channel}"
+        parts.append(f"  [Source: {source_label}] (confidence: {i.get('confidence', 'stated')})")
+        return "\n".join(parts)
+
+    insights_text = "\n\n".join(
+        _format_insight(i) for i in insights
     ) if insights else "No specific insights found matching this query."
 
     client = Anthropic(api_key=api_key)

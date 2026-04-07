@@ -188,6 +188,15 @@ def run_migrations(db_path=None):
     except sqlite3.OperationalError:
         pass
 
+    # Schema evolution — structured claim extraction (Tier 1A)
+    _add_column(conn, "insights", "evidence", "TEXT")
+    _add_column(conn, "insights", "source_context", "TEXT")
+    _add_column(conn, "insights", "confidence", "TEXT DEFAULT 'stated'")
+    _add_column(conn, "insights", "topics", "TEXT")  # JSON array
+
+    # Schema evolution — hierarchical synthesis levels (Tier 2A)
+    _add_column(conn, "syntheses", "synthesis_level", "TEXT DEFAULT 'sub_topic'")
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)

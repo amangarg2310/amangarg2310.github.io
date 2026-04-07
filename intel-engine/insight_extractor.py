@@ -31,6 +31,10 @@ For each distinct insight, provide:
 - insight_type: One of: how_to, setup, config, workflow, tool, warning, comparison, tip, concept, troubleshooting
 - actionability: One of: high (specific steps to follow), medium (needs adaptation), low (background knowledge)
 - key_quote: The most useful direct quote from this section (if any)
+- evidence: The supporting reasoning, data, or experience the source provided for this claim (1-2 sentences). What makes this credible?
+- source_context: Brief context of who is speaking and why — e.g. "SaaS founder discussing scaling experience" or "Google engineer demoing new API"
+- confidence: One of: stated (explicitly claimed), demonstrated (shown working), speculative (opinion/prediction), anecdotal (personal story)
+- topics: Array of 1-3 specific topic tags for this insight — e.g. ["docker", "installation", "mac"]
 
 CRITICAL: Prefer MORE insights with SPECIFIC detail over fewer insights with vague summaries.
 Bad: "Users can set up daily briefs for topics of interest"
@@ -40,7 +44,7 @@ CONTENT CHUNK:
 {chunk}
 
 Return ONLY a JSON array, no markdown:
-[{{"title": "...", "content": "...", "insight_type": "...", "actionability": "...", "key_quote": "..."}}]"""
+[{{"title": "...", "content": "...", "insight_type": "...", "actionability": "...", "key_quote": "...", "evidence": "...", "source_context": "...", "confidence": "...", "topics": ["...", "..."]}}]"""
 
 
 def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
