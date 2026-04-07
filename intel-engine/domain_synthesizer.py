@@ -13,6 +13,7 @@ After each new source is processed, the synthesizer:
 import json
 import logging
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from anthropic import Anthropic
@@ -473,15 +474,62 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     synthesis_content = response.content[0].text.strip()
 
-    # Generate suggested questions
-    suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
-
-    # Analyze cross-source convergence (Tier 3C) — non-blocking
+    # Run follow-up LLM calls in parallel (all independent of each other)
+    suggested = ""
     convergence = ""
-    try:
-        convergence = _analyze_convergence(domain_id, db_path)
-    except Exception as e:
-        logger.warning(f"Convergence analysis skipped: {e}")
+    prev_content = current['content'] if current else ""
+
+    def _do_suggested():
+        return _generate_suggested_questions(client, domain_name, synthesis_content)
+
+    def _do_convergence():
+        return _analyze_convergence(domain_id, db_path)
+
+    def _do_cross_refs():
+        detect_cross_references(domain_id, synthesis_content, db_path)
+
+    def _do_cascade():
+        _cascade_synthesis(domain_id, db_path)
+
+    def _do_impact():
+        if prev_content and source_id:
+            impact = _generate_ingestion_impact(
+                client, domain_name, prev_content, synthesis_content, source_title
+            )
+            if impact:
+                c = sqlite3.connect(str(db_path))
+                c.execute("UPDATE sources SET ingestion_impact = ? WHERE id = ?", (impact, source_id))
+                c.commit()
+                c.close()
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        f_suggested = executor.submit(_do_suggested)
+        f_convergence = executor.submit(_do_convergence)
+        f_cross = executor.submit(_do_cross_refs)
+        f_cascade = executor.submit(_do_cascade)
+        f_impact = executor.submit(_do_impact)
+
+        try:
+            suggested = f_suggested.result() or ""
+        except Exception as e:
+            logger.warning(f"Suggested questions skipped: {e}")
+        try:
+            convergence = f_convergence.result() or ""
+        except Exception as e:
+            logger.warning(f"Convergence analysis skipped: {e}")
+        # Fire-and-forget: just log errors
+        try:
+            f_cross.result()
+        except Exception as e:
+            logger.warning(f"Cross-reference detection skipped: {e}")
+        try:
+            f_cascade.result()
+        except Exception as e:
+            logger.warning(f"Cascade synthesis skipped: {e}")
+        try:
+            f_impact.result()
+        except Exception as e:
+            logger.warning(f"Ingestion impact skipped: {e}")
 
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
@@ -499,36 +547,6 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     conn.close()
 
     logger.info(f"Created synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
-
-    # Detect cross-domain references (non-blocking — failure doesn't affect synthesis)
-    try:
-        detect_cross_references(domain_id, synthesis_content, db_path)
-    except Exception as e:
-        logger.warning(f"Cross-reference detection skipped: {e}")
-
-    # Cascade synthesis upward: re-synthesize parent domain and grandparent category
-    try:
-        _cascade_synthesis(domain_id, db_path)
-    except Exception as e:
-        logger.warning(f"Cascade synthesis skipped: {e}")
-
-    # Generate ingestion impact summary (Tier 4B) — non-blocking
-    try:
-        prev_content = current['content'] if current else ""
-        if prev_content and source_id:
-            impact = _generate_ingestion_impact(
-                client, domain_name, prev_content, synthesis_content, source_title
-            )
-            if impact:
-                conn2 = sqlite3.connect(str(db_path))
-                conn2.execute(
-                    "UPDATE sources SET ingestion_impact = ? WHERE id = ?",
-                    (impact, source_id),
-                )
-                conn2.commit()
-                conn2.close()
-    except Exception as e:
-        logger.warning(f"Ingestion impact skipped: {e}")
 
     return synthesis_content
 

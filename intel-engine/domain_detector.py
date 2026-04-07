@@ -26,7 +26,7 @@ except ImportError:
     fuzz = None
 
 import config
-from embeddings import generate_embedding, cosine_similarity
+from embeddings import generate_embedding, batch_generate_embeddings, cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -140,16 +140,19 @@ def _try_semantic_match(title: str, existing: list[dict], db_path=None) -> dict 
             }
 
     # Layer 2: Embedding cosine similarity (semantic understanding)
-    title_embedding = generate_embedding(title)
+    # Batch all texts in a single API call instead of N+1 sequential calls
+    domain_texts = [f"{d['name']}: {d.get('description', '')}" for d in level1_domains]
+    all_texts = [title] + domain_texts
+    all_embeddings = batch_generate_embeddings(all_texts)
+    title_embedding = all_embeddings[0] if all_embeddings else None
+    domain_embeddings = all_embeddings[1:] if all_embeddings else []
+
     if title_embedding:
         best_match = None
         best_sim = 0
-        for d in level1_domains:
-            # Embed domain name + description for richer comparison
-            domain_text = f"{d['name']}: {d.get('description', '')}"
-            domain_embedding = generate_embedding(domain_text)
-            if domain_embedding:
-                sim = cosine_similarity(title_embedding, domain_embedding)
+        for d, d_emb in zip(level1_domains, domain_embeddings):
+            if d_emb:
+                sim = cosine_similarity(title_embedding, d_emb)
                 if sim > best_sim:
                     best_sim = sim
                     best_match = d

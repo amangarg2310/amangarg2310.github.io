@@ -21,6 +21,7 @@ import sqlite3
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -310,20 +311,29 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
         videos = fetch_playlist_videos(playlist_id)
         _update_status(playlist_vid, 'processing', f'Found {len(videos)} videos', 10)
 
-        results = []
-        for i, video in enumerate(videos):
+        results = [None] * len(videos)
+
+        def _process_video(i, video):
             url = f'https://www.youtube.com/watch?v={video["video_id"]}'
             ctx = (playlist_vid, i, len(videos))
             _map_to_playlist(ctx, 0, video['title'])
             try:
-                result = run_pipeline(url, db_path=db_path, user_id=user_id,
-                                      playlist_ctx=ctx)
-                results.append(result)
+                return run_pipeline(url, db_path=db_path, user_id=user_id,
+                                    playlist_ctx=ctx)
             except Exception as e:
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
-                results.append({'status': 'error', 'video_id': video['video_id'], 'error': str(e)})
+                return {'status': 'error', 'video_id': video['video_id'], 'error': str(e)}
 
-        succeeded = sum(1 for r in results if r.get('status') in ('complete', 'already_exists'))
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                executor.submit(_process_video, i, video): i
+                for i, video in enumerate(videos)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                results[idx] = future.result()
+
+        succeeded = sum(1 for r in results if r and r.get('status') in ('complete', 'already_exists'))
         _update_status(playlist_vid, 'complete',
                        f'Done — {succeeded}/{len(videos)} videos processed', 100)
         return {'status': 'complete', 'video_id': playlist_vid, 'total': len(videos), 'succeeded': succeeded, 'results': results}
@@ -747,14 +757,33 @@ def _run_shared_pipeline(
     _update(f'Domain: {domain_name}', start_progress + 15,
             title=title, channel=channel, domain=domain_name)
 
-    # Step 5: Extract insights
+    # Step 5: Extract insights (parallel across chunks)
     all_insights = []
-    for i, chunk in enumerate(chunks):
-        progress = (start_progress + 15) + int((i / max(len(chunks), 1)) * 25)
-        _update(f'Extracting insights ({i+1}/{len(chunks)})...',
-                progress, title=title, channel=channel, domain=domain_name)
-        insights = extract_insights(chunk, chunk_index=i)
-        all_insights.extend(insights)
+    _update(f'Extracting insights from {len(chunks)} chunks...',
+            start_progress + 15, title=title, channel=channel, domain=domain_name)
+
+    if len(chunks) <= 1:
+        for i, chunk in enumerate(chunks):
+            insights = extract_insights(chunk, chunk_index=i)
+            all_insights.extend(insights)
+    else:
+        completed = 0
+        with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as executor:
+            futures = {
+                executor.submit(extract_insights, chunk, chunk_index=i): i
+                for i, chunk in enumerate(chunks)
+            }
+            chunk_results = [None] * len(chunks)
+            for future in as_completed(futures):
+                idx = futures[future]
+                chunk_results[idx] = future.result()
+                completed += 1
+                progress = (start_progress + 15) + int((completed / len(chunks)) * 25)
+                _update(f'Extracting insights ({completed}/{len(chunks)})...',
+                        progress, title=title, channel=channel, domain=domain_name)
+            for result in chunk_results:
+                if result:
+                    all_insights.extend(result)
 
     # Step 6: Store insights
     _update('Storing insights...', 80,
