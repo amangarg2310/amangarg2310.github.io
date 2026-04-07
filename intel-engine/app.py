@@ -150,14 +150,13 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    """Main page — synthesis-first view with URL input + domain grid."""
+    """Main page — ingestion hub + domain grid. Homepage is for adding content."""
     if needs_setup():
         return redirect(url_for('setup_page'))
 
     uid = current_user.id
     conn = None
     domains = []
-    synthesis_tree = []
     try:
         conn = get_db()
         domains = [dict(r) for r in conn.execute(
@@ -168,58 +167,13 @@ def index():
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
-
-        # Build synthesis tree: categories → domains with TLDR excerpts (Tier 2B)
-        categories = [dict(r) for r in conn.execute(
-            """SELECT d.id, d.name, d.icon, d.source_count, d.insight_count
-               FROM domains d
-               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 0
-               ORDER BY d.source_count DESC""",
-            (uid,),
-        ).fetchall()]
-
-        for cat in categories:
-            cat_synth = conn.execute(
-                "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
-                (cat['id'],),
-            ).fetchone()
-            cat['tldr'] = _extract_tldr_from_synthesis(cat_synth['content'] if cat_synth else '')
-            cat['children'] = []
-
-            children = conn.execute(
-                """SELECT d.id, d.name, d.icon, d.source_count, d.insight_count
-                   FROM domains d
-                   WHERE d.parent_id = ? AND d.level = 1
-                   ORDER BY d.source_count DESC""",
-                (cat['id'],),
-            ).fetchall()
-            for child in children:
-                child = dict(child)
-                child_synth = conn.execute(
-                    "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
-                    (child['id'],),
-                ).fetchone()
-                child['tldr'] = _extract_tldr_from_synthesis(child_synth['content'] if child_synth else '')
-
-                # Source attribution per domain (Tier 2C)
-                child['source_titles'] = [r['title'] for r in conn.execute(
-                    "SELECT title FROM sources WHERE domain_id = ? AND status = 'processed' ORDER BY created_at DESC LIMIT 5",
-                    (child['id'],),
-                ).fetchall()]
-
-                cat['children'].append(child)
-
-            if cat['children']:
-                synthesis_tree.append(cat)
-
     except sqlite3.OperationalError:
         pass
     finally:
         if conn:
             conn.close()
 
-    return render_template("intel.html", domains=domains, domain=None, synthesis=None,
-                           synthesis_tree=synthesis_tree)
+    return render_template("intel.html", domains=domains, domain=None, synthesis=None)
 
 
 def _extract_tldr_from_synthesis(content: str) -> str:

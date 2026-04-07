@@ -421,47 +421,6 @@
         <div class="intel-status" id="statusCard"></div>
     </div>
 
-    {% if synthesis_tree %}
-    <!-- Synthesis-First View (Tier 2B) -->
-    <div class="intel-domains-section">
-        <div class="intel-section-header">
-            <h2 class="intel-section-title">Knowledge Overview</h2>
-        </div>
-        {% for cat in synthesis_tree %}
-        <div class="intel-synth-tree-category">
-            <div class="intel-synth-tree-cat-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                <span class="intel-synth-tree-toggle">▾</span>
-                <span>{{ cat.icon }} {{ cat.name }}</span>
-                <span class="intel-synth-tree-meta">{{ cat.source_count }} sources · {{ cat.insight_count }} insights</span>
-            </div>
-            {% if cat.tldr %}
-            <div class="intel-synth-tree-tldr">{{ cat.tldr }}</div>
-            {% endif %}
-            <div class="intel-synth-tree-children">
-                {% for child in cat.children %}
-                <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-synth-tree-domain">
-                    <div class="intel-synth-tree-domain-header">
-                        <span>{{ child.icon }} {{ child.name }}</span>
-                        <span class="intel-synth-tree-meta">{{ child.source_count }} sources</span>
-                    </div>
-                    {% if child.tldr %}
-                    <div class="intel-synth-tree-domain-tldr">{{ child.tldr }}</div>
-                    {% endif %}
-                    {% if child.source_titles %}
-                    <div class="intel-synth-tree-sources">
-                        {% for st in child.source_titles %}
-                        <span class="intel-synth-tree-source-tag">{{ st[:40 ] }}{% if st|length > 40 %}...{% endif %}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </a>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
     {% if domains %}
     <div class="intel-domains-section">
         <div class="intel-section-header">
