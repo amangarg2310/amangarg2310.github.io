@@ -223,6 +223,20 @@ def run_migrations(db_path=None):
     except sqlite3.OperationalError:
         pass
 
+    # Schema evolution — taxonomy change tracking (Tier 3A/3B)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS taxonomy_changes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain_id INTEGER NOT NULL,
+            change_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            user_id INTEGER,
+            dismissed INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    """)
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)

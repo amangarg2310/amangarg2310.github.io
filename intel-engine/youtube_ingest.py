@@ -428,7 +428,133 @@ def _extract_video_ids_regex(html: str) -> list[dict]:
 
 
 def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
-    """Split transcript into overlapping chunks for processing."""
+    """Split transcript into topic-coherent chunks using sentence boundaries.
+
+    Uses a two-pass approach:
+    1. Split into sentences
+    2. Group sentences into chunks that respect topic boundaries by detecting
+       vocabulary shifts between sentence groups
+    3. Fall back to word-based chunking if sentence splitting fails
+    """
+    # Split into sentences (handles ., !, ?, and common abbreviations)
+    sentences = _split_sentences(transcript)
+    if len(sentences) < 3:
+        # Too few sentences — use simple word-based chunking
+        return _chunk_by_words(transcript, max_tokens, overlap)
+
+    max_words = int(max_tokens * 1.3)
+    overlap_words = int(overlap * 1.3)
+
+    # Calculate cumulative word counts per sentence
+    sentence_words = [len(s.split()) for s in sentences]
+    total_words = sum(sentence_words)
+
+    if total_words <= max_words:
+        return [transcript]
+
+    # Score each sentence boundary for topic shift using vocabulary overlap
+    shift_scores = _compute_topic_shifts(sentences, window=3)
+
+    # Build chunks respecting topic boundaries
+    chunks = []
+    current_start = 0
+    current_words = 0
+
+    for i, s in enumerate(sentences):
+        current_words += sentence_words[i]
+
+        # Check if we should break here
+        if current_words >= max_words * 0.7:  # Start looking for break at 70% capacity
+            # Find the best break point between here and max
+            if current_words >= max_words or (i < len(shift_scores) and shift_scores[i] > 0.5):
+                chunk_text = " ".join(sentences[current_start:i + 1])
+                chunks.append(chunk_text)
+
+                # Overlap: go back a few sentences
+                overlap_sents = 0
+                overlap_word_count = 0
+                backtrack = i
+                while backtrack > current_start and overlap_word_count < overlap_words:
+                    overlap_word_count += sentence_words[backtrack]
+                    overlap_sents += 1
+                    backtrack -= 1
+
+                current_start = max(current_start + 1, i + 1 - overlap_sents)
+                current_words = sum(sentence_words[current_start:i + 1])
+
+    # Don't forget the last chunk
+    if current_start < len(sentences):
+        remaining = " ".join(sentences[current_start:])
+        if remaining.strip():
+            chunks.append(remaining)
+
+    return chunks if chunks else [transcript]
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences, handling common edge cases."""
+    # Split on sentence-ending punctuation followed by space/newline
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    # Filter empty strings and merge very short fragments
+    sentences = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        if sentences and len(sentences[-1].split()) < 4:
+            sentences[-1] += " " + p
+        else:
+            sentences.append(p)
+    return sentences
+
+
+def _compute_topic_shifts(sentences: list[str], window: int = 3) -> list[float]:
+    """Score each sentence boundary for topic shift using vocabulary overlap.
+
+    Returns a list of scores (0-1) where higher = bigger topic shift.
+    Uses Jaccard distance between word sets of adjacent windows.
+    """
+    scores = []
+    stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+                  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+                  'should', 'may', 'might', 'shall', 'can', 'to', 'of', 'in', 'for',
+                  'on', 'with', 'at', 'by', 'from', 'it', 'its', 'this', 'that', 'and',
+                  'or', 'but', 'not', 'so', 'if', 'then', 'than', 'when', 'what', 'which',
+                  'who', 'how', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
+                  'other', 'some', 'such', 'no', 'nor', 'only', 'own', 'same', 'too',
+                  'very', 'just', 'because', 'as', 'until', 'while', 'about', 'between',
+                  'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down',
+                  'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there',
+                  'where', 'why', 'i', 'you', 'he', 'she', 'we', 'they', 'me', 'him', 'her',
+                  'us', 'them', 'my', 'your', 'his', 'our', 'their'}
+
+    def get_words(text):
+        return {w.lower() for w in re.findall(r'\b[a-zA-Z]{3,}\b', text)} - stop_words
+
+    for i in range(len(sentences) - 1):
+        # Words in the window before this boundary
+        before_start = max(0, i - window + 1)
+        before_text = " ".join(sentences[before_start:i + 1])
+        before_words = get_words(before_text)
+
+        # Words in the window after this boundary
+        after_end = min(len(sentences), i + 1 + window)
+        after_text = " ".join(sentences[i + 1:after_end])
+        after_words = get_words(after_text)
+
+        # Jaccard distance: 1 - (intersection / union)
+        if not before_words and not after_words:
+            scores.append(0.0)
+        else:
+            intersection = len(before_words & after_words)
+            union = len(before_words | after_words)
+            scores.append(1.0 - (intersection / union) if union > 0 else 0.0)
+
+    return scores
+
+
+def _chunk_by_words(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
+    """Fallback: simple word-based chunking with overlap."""
     words = transcript.split()
     max_words = int(max_tokens * 1.3)
     overlap_words = int(overlap * 1.3)

@@ -776,6 +776,13 @@ def _run_shared_pipeline(
                    title=title, channel=channel, domain=domain_name)
     synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
 
+    # Step 8: Taxonomy evolution check (Tier 3A) — non-blocking
+    try:
+        from domain_detector import propose_taxonomy_evolution
+        propose_taxonomy_evolution(domain_id, all_insights, db_path, user_id=user_id)
+    except Exception as e:
+        logger.warning(f"Taxonomy evolution check skipped: {e}")
+
     _update_status(video_id, 'complete', 'Done', 100,
                    title=title, channel=channel, domain=domain_name,
                    insights_count=len(all_insights))

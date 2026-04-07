@@ -150,13 +150,14 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    """Main page — URL input + domain grid."""
+    """Main page — synthesis-first view with URL input + domain grid."""
     if needs_setup():
         return redirect(url_for('setup_page'))
 
     uid = current_user.id
     conn = None
     domains = []
+    synthesis_tree = []
     try:
         conn = get_db()
         domains = [dict(r) for r in conn.execute(
@@ -167,13 +168,58 @@ def index():
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
+
+        # Build synthesis tree: categories → domains with TLDR excerpts (Tier 2B)
+        categories = [dict(r) for r in conn.execute(
+            """SELECT d.id, d.name, d.icon, d.source_count, d.insight_count
+               FROM domains d
+               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 0
+               ORDER BY d.source_count DESC""",
+            (uid,),
+        ).fetchall()]
+
+        for cat in categories:
+            cat_synth = conn.execute(
+                "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                (cat['id'],),
+            ).fetchone()
+            cat['tldr'] = _extract_tldr_from_synthesis(cat_synth['content'] if cat_synth else '')
+            cat['children'] = []
+
+            children = conn.execute(
+                """SELECT d.id, d.name, d.icon, d.source_count, d.insight_count
+                   FROM domains d
+                   WHERE d.parent_id = ? AND d.level = 1
+                   ORDER BY d.source_count DESC""",
+                (cat['id'],),
+            ).fetchall()
+            for child in children:
+                child = dict(child)
+                child_synth = conn.execute(
+                    "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (child['id'],),
+                ).fetchone()
+                child['tldr'] = _extract_tldr_from_synthesis(child_synth['content'] if child_synth else '')
+
+                # Source attribution per domain (Tier 2C)
+                child['source_titles'] = [r['title'] for r in conn.execute(
+                    "SELECT title FROM sources WHERE domain_id = ? AND status = 'processed' ORDER BY created_at DESC LIMIT 5",
+                    (child['id'],),
+                ).fetchall()]
+
+                cat['children'].append(child)
+
+            if cat['children']:
+                synthesis_tree.append(cat)
+
     except sqlite3.OperationalError:
         pass
     finally:
         if conn:
             conn.close()
 
-    return render_template("intel.html", domains=domains, domain=None, synthesis=None)
+    return render_template("intel.html", domains=domains, domain=None, synthesis=None,
+                           synthesis_tree=synthesis_tree)
 
 
 def _extract_tldr_from_synthesis(content: str) -> str:
@@ -1097,6 +1143,47 @@ def api_visual(domain_id):
 
     except Exception as e:
         return jsonify({"html": None})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/taxonomy-changes")
+@login_required
+def api_taxonomy_changes():
+    """Return recent taxonomy changes for notification display (Tier 3B)."""
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        changes = conn.execute("""
+            SELECT tc.id, tc.domain_id, tc.change_type, tc.description, tc.created_at,
+                   d.name as domain_name
+            FROM taxonomy_changes tc
+            JOIN domains d ON tc.domain_id = d.id
+            WHERE (tc.user_id = ? OR tc.user_id IS NULL) AND tc.dismissed = 0
+            ORDER BY tc.created_at DESC LIMIT 10
+        """, (uid,)).fetchall()
+        return jsonify([dict(c) for c in changes])
+    except Exception:
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/taxonomy-changes/<int:change_id>/dismiss", methods=["POST"])
+@login_required
+def api_dismiss_taxonomy_change(change_id):
+    """Dismiss a taxonomy change notification."""
+    conn = None
+    try:
+        conn = get_db()
+        conn.execute("UPDATE taxonomy_changes SET dismissed = 1 WHERE id = ?", (change_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception:
+        return jsonify({"ok": False}), 500
     finally:
         if conn:
             conn.close()

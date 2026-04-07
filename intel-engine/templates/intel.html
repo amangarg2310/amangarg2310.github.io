@@ -421,6 +421,47 @@
         <div class="intel-status" id="statusCard"></div>
     </div>
 
+    {% if synthesis_tree %}
+    <!-- Synthesis-First View (Tier 2B) -->
+    <div class="intel-domains-section">
+        <div class="intel-section-header">
+            <h2 class="intel-section-title">Knowledge Overview</h2>
+        </div>
+        {% for cat in synthesis_tree %}
+        <div class="intel-synth-tree-category">
+            <div class="intel-synth-tree-cat-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span class="intel-synth-tree-toggle">▾</span>
+                <span>{{ cat.icon }} {{ cat.name }}</span>
+                <span class="intel-synth-tree-meta">{{ cat.source_count }} sources · {{ cat.insight_count }} insights</span>
+            </div>
+            {% if cat.tldr %}
+            <div class="intel-synth-tree-tldr">{{ cat.tldr }}</div>
+            {% endif %}
+            <div class="intel-synth-tree-children">
+                {% for child in cat.children %}
+                <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-synth-tree-domain">
+                    <div class="intel-synth-tree-domain-header">
+                        <span>{{ child.icon }} {{ child.name }}</span>
+                        <span class="intel-synth-tree-meta">{{ child.source_count }} sources</span>
+                    </div>
+                    {% if child.tldr %}
+                    <div class="intel-synth-tree-domain-tldr">{{ child.tldr }}</div>
+                    {% endif %}
+                    {% if child.source_titles %}
+                    <div class="intel-synth-tree-sources">
+                        {% for st in child.source_titles %}
+                        <span class="intel-synth-tree-source-tag">{{ st[:40 ] }}{% if st|length > 40 %}...{% endif %}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     {% if domains %}
     <div class="intel-domains-section">
         <div class="intel-section-header">
@@ -1547,7 +1588,36 @@ function openGraphView() {
     }
 }
 
+function _showGraphNodeDetail(node) {
+    let detail = document.getElementById('graphNodeDetail');
+    if (!detail) {
+        detail = document.createElement('div');
+        detail.id = 'graphNodeDetail';
+        detail.style.cssText = 'position:absolute;bottom:20px;left:20px;width:320px;max-height:240px;background:rgba(15,20,30,0.95);border:1px solid rgba(148,163,184,0.2);border-radius:12px;padding:16px 18px;color:#e2e8f0;font-family:Inter,-apple-system,sans-serif;font-size:13px;overflow-y:auto;z-index:10;backdrop-filter:blur(8px);';
+        document.getElementById('graphOverlay').appendChild(detail);
+    }
+    const levelLabel = node.level === 0 ? 'Category' : node.level === 1 ? 'Domain' : 'Sub-topic';
+    const depth = (node.sources || 0) >= 6 ? 'Deep' : (node.sources || 0) >= 3 ? 'Moderate' : 'Thin';
+    const depthColor = depth === 'Deep' ? '#c4a46c' : depth === 'Moderate' ? '#94a3b8' : '#64748b';
+    detail.innerHTML = `
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:4px;">${levelLabel}</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px;">${node.name}</div>
+        <div style="display:flex;gap:12px;font-size:11px;color:#94a3b8;margin-bottom:10px;">
+            <span>${node.sources || 0} sources</span>
+            <span>${node.insights || 0} insights</span>
+            <span style="color:${depthColor}">● ${depth} coverage</span>
+        </div>
+        <button onclick="closeGraphView();window.location.href='/domain/'+encodeURIComponent('${node.name.replace(/'/g, "\\'")}')"
+                style="width:100%;padding:8px;font-size:12px;font-weight:500;color:#c4b5fd;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);border-radius:8px;cursor:pointer;font-family:inherit;">
+            Open Knowledge Base →
+        </button>
+    `;
+    detail.style.display = 'block';
+}
+
 function closeGraphView() {
+    const detail = document.getElementById('graphNodeDetail');
+    if (detail) detail.style.display = 'none';
     document.getElementById('graphOverlay').style.display = 'none';
     document.removeEventListener('keydown', _graphKeyHandler);
 }
@@ -1755,8 +1825,11 @@ async function _renderGraph() {
             const isHighlighted = _hoveredNode && _neighborSet &&
                 (_neighborSet.has(sid) && _neighborSet.has(tid)) &&
                 (_hoveredNode.id === sid || _hoveredNode.id === tid);
-            return isHighlighted ? 1.5 : 0.8;
+            // Edge weight by type: references thicker, hierarchy medium, source thin
+            const baseWidth = link.type === 'reference' ? 1.2 : link.type === 'hierarchy' ? 1.0 : 0.6;
+            return isHighlighted ? baseWidth * 2 : baseWidth;
         })
+        .linkLineDash(link => link.type === 'reference' ? [4, 2] : null)
         // Flowing particles along edges — signature Quid/NetBase effect
         .linkDirectionalParticles(link => link.type === 'reference' ? 3 : link.type === 'source' ? 1 : 2)
         .linkDirectionalParticleSpeed(0.003)
@@ -1777,13 +1850,15 @@ async function _renderGraph() {
         .onNodeClick(node => {
             if (!node) return;
             if (node.type === 'source' && node.url) {
-                // Source node → open source URL in new tab
                 window.open(node.url, '_blank');
             } else {
-                // Domain node → navigate to domain page (route uses name, not id)
-                closeGraphView();
-                window.location.href = '/domain/' + encodeURIComponent(node.name);
+                // Domain node → show info panel, double-click navigates
+                _showGraphNodeDetail(node);
             }
+        })
+        .onBackgroundClick(() => {
+            const detail = document.getElementById('graphNodeDetail');
+            if (detail) detail.style.display = 'none';
         })
         // Physics: perpetual gentle drift (never fully stop)
         .d3AlphaDecay(0.008)

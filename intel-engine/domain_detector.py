@@ -505,3 +505,176 @@ def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
             logger.info(f"Reused existing domain '{name}' (updated level={level})")
             return row[0]
         raise
+
+
+# ══════════════════════════════════════════════════════════════
+# Taxonomy Evolution (Tier 3A)
+# ══════════════════════════════════════════════════════════════
+
+def propose_taxonomy_evolution(domain_id: int, new_insights: list[dict], db_path=None, user_id=None) -> dict | None:
+    """After classifying a source, check if the taxonomy should evolve.
+
+    Proposes:
+    - New sub-topics when insights don't fit existing ones
+    - Sub-topic splits when one sub-topic covers too many distinct concepts
+
+    Returns a dict describing the proposed change, or None if no change needed.
+    """
+    db_path = db_path or config.DB_PATH
+    api_key = config.get_api_key('openai')
+    if not api_key:
+        return None
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    domain = conn.execute("SELECT id, name, level, parent_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    if not domain or domain['level'] != 1:
+        conn.close()
+        return None  # Only evolve level-1 domains
+
+    # Get existing sub-topics for this domain
+    sub_topics = conn.execute(
+        "SELECT id, name, source_count FROM domains WHERE parent_id = ? AND level = 2",
+        (domain_id,),
+    ).fetchall()
+    conn.close()
+
+    existing_subs = [dict(s) for s in sub_topics]
+    if not new_insights:
+        return None
+
+    # Extract topic keywords from new insights
+    insight_topics = set()
+    for ins in new_insights:
+        if isinstance(ins, dict):
+            for t in ins.get('topics', []):
+                if isinstance(t, str):
+                    insight_topics.add(t.lower())
+            insight_topics.add(ins.get('title', '').lower()[:50])
+
+    existing_sub_names = [s['name'] for s in existing_subs]
+
+    # Only call LLM if we have enough insights and existing sub-topics to evaluate
+    if len(existing_subs) < 1 and len(new_insights) < 5:
+        return None  # Too early to evolve
+
+    client = OpenAI(api_key=api_key)
+    try:
+        response = client.chat.completions.create(
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a taxonomy specialist. Analyze whether new content warrants structural changes to a domain hierarchy. Return only valid JSON."},
+                {"role": "user", "content": f"""Domain: {domain['name']}
+Existing sub-topics: {', '.join(existing_sub_names) if existing_sub_names else 'None yet'}
+
+New insights from the latest source (topics covered):
+{chr(10).join(f'- {ins.get("title", "")}: topics={ins.get("topics", [])}' for ins in new_insights[:15])}
+
+Should any of the following happen?
+1. CREATE: A new sub-topic should be added (content covers concepts not in existing sub-topics)
+2. SPLIT: An existing sub-topic should be split into two (it's becoming too broad)
+3. NONE: The current structure is fine
+
+Return ONLY valid JSON:
+{{"action": "none", "details": {{}}}}
+or
+{{"action": "create", "details": {{"name": "New Sub-Topic Name", "reason": "why"}}}}
+or
+{{"action": "split", "details": {{"original": "Existing Sub-Topic", "new_names": ["Part A", "Part B"], "reason": "why"}}}}"""},
+            ],
+            temperature=0.2,
+            max_tokens=300,
+        )
+
+        text = response.choices[0].message.content.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        result = json.loads(text)
+        action = result.get('action', 'none')
+
+        if action == 'none':
+            return None
+
+        # Execute the taxonomy change
+        if action == 'create':
+            details = result.get('details', {})
+            new_name = details.get('name', '').strip()
+            if new_name and new_name not in existing_sub_names:
+                _execute_taxonomy_create(domain_id, domain['name'], new_name, db_path, user_id)
+                return {'action': 'create', 'domain': domain['name'], 'new_sub_topic': new_name,
+                        'reason': details.get('reason', '')}
+
+        elif action == 'split':
+            details = result.get('details', {})
+            original = details.get('original', '')
+            new_names = details.get('new_names', [])
+            if original and len(new_names) == 2:
+                _execute_taxonomy_split(domain_id, domain['name'], original, new_names, db_path, user_id)
+                return {'action': 'split', 'domain': domain['name'], 'original': original,
+                        'new_sub_topics': new_names, 'reason': details.get('reason', '')}
+
+        return None
+
+    except Exception as e:
+        logger.warning(f"Taxonomy evolution check failed for domain {domain_id}: {e}")
+        return None
+
+
+def _execute_taxonomy_create(domain_id: int, domain_name: str, sub_topic_name: str, db_path, user_id=None):
+    """Create a new sub-topic under a domain."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(db_path))
+
+    # Get parent path
+    domain = conn.execute("SELECT path FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    parent_path = domain[0] if domain else f"/{domain_name}"
+
+    conn.execute("""
+        INSERT OR IGNORE INTO domains (name, level, parent_id, path, user_id, icon, source_count, insight_count, created_at, updated_at)
+        VALUES (?, 2, ?, ?, ?, '📌', 0, 0, ?, ?)
+    """, (sub_topic_name, domain_id, f"{parent_path}/{sub_topic_name}", user_id, now, now))
+    conn.commit()
+    conn.close()
+
+    # Record the change
+    _record_taxonomy_change(domain_id, 'create', f"New sub-topic '{sub_topic_name}' created under '{domain_name}'", db_path, user_id)
+    logger.info(f"Taxonomy evolution: Created sub-topic '{sub_topic_name}' under '{domain_name}'")
+
+
+def _execute_taxonomy_split(domain_id: int, domain_name: str, original: str, new_names: list, db_path, user_id=None):
+    """Split an existing sub-topic into two new ones."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(db_path))
+
+    domain = conn.execute("SELECT path FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    parent_path = domain[0] if domain else f"/{domain_name}"
+
+    for name in new_names:
+        conn.execute("""
+            INSERT OR IGNORE INTO domains (name, level, parent_id, path, user_id, icon, source_count, insight_count, created_at, updated_at)
+            VALUES (?, 2, ?, ?, ?, '📌', 0, 0, ?, ?)
+        """, (name, domain_id, f"{parent_path}/{name}", user_id, now, now))
+    conn.commit()
+    conn.close()
+
+    _record_taxonomy_change(domain_id, 'split',
+                            f"Sub-topic '{original}' split into '{new_names[0]}' and '{new_names[1]}' under '{domain_name}'",
+                            db_path, user_id)
+    logger.info(f"Taxonomy evolution: Split '{original}' into {new_names} under '{domain_name}'")
+
+
+def _record_taxonomy_change(domain_id: int, change_type: str, description: str, db_path, user_id=None):
+    """Record a taxonomy change event."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("""
+            INSERT INTO taxonomy_changes (domain_id, change_type, description, user_id, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (domain_id, change_type, description, user_id, now))
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Table may not exist yet
+    conn.close()

@@ -124,7 +124,7 @@ def search_insights_hybrid(domain_id: int, query: str, limit: int = 15, db_path=
     insight_map = {i['id']: i for i in insights}
 
     return [
-        {k: v for k, v in insight_map[iid].items() if k != 'embedding'}
+        {**{k: v for k, v in insight_map[iid].items() if k != 'embedding'}, 'combined_score': combined.get(iid, 0)}
         for iid in ranked_ids if iid in insight_map
     ]
 
@@ -154,7 +154,11 @@ def _keyword_fallback(conn, domain_id: int, query: str) -> dict[int, float]:
 
 
 def query_domain(domain_id: int, question: str, db_path=None) -> dict:
-    """Answer a question using domain knowledge with hybrid RAG retrieval."""
+    """Answer a question using domain knowledge with hybrid RAG retrieval.
+
+    Supports cross-domain query decomposition (Tier 4D): if the query spans
+    multiple child domains, retrieves from each and synthesizes a cross-domain answer.
+    """
     db_path = db_path or config.DB_PATH
     api_key = config.get_api_key('anthropic')
     if not api_key:
@@ -162,11 +166,20 @@ def query_domain(domain_id: int, question: str, db_path=None) -> dict:
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    domain = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    domain = conn.execute("SELECT id, name, level FROM domains WHERE id = ?", (domain_id,)).fetchone()
     if not domain:
         conn.close()
         return {"answer": "Domain not found.", "sources_used": 0}
     domain_name = domain['name']
+
+    # Cross-domain retrieval: if this is a parent domain (level 0 or 1 with children),
+    # also retrieve from child domains for broader coverage
+    child_domain_ids = []
+    if domain['level'] <= 1:
+        children = conn.execute(
+            "SELECT id FROM domains WHERE parent_id = ? AND source_count > 0", (domain_id,)
+        ).fetchall()
+        child_domain_ids = [c['id'] for c in children]
 
     synthesis_row = conn.execute(
         "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1", (domain_id,)
@@ -174,8 +187,21 @@ def query_domain(domain_id: int, question: str, db_path=None) -> dict:
     synthesis = synthesis_row['content'] if synthesis_row else "No synthesis available yet."
     conn.close()
 
-    # Hybrid retrieval
-    insights = search_insights_hybrid(domain_id, question, limit=15, db_path=db_path)
+    # Hybrid retrieval — from primary domain + children for cross-domain coverage
+    all_domain_ids = [domain_id] + child_domain_ids
+    insights = []
+    for did in all_domain_ids:
+        results = search_insights_hybrid(did, question, limit=10 if child_domain_ids else 15, db_path=db_path)
+        insights.extend(results)
+
+    # Deduplicate by insight ID and sort by combined score
+    seen = set()
+    unique_insights = []
+    for i in insights:
+        if i['id'] not in seen:
+            seen.add(i['id'])
+            unique_insights.append(i)
+    insights = sorted(unique_insights, key=lambda x: x.get('combined_score', 0), reverse=True)[:15]
 
     def _format_insight(i):
         parts = [f"- [{i.get('insight_type', 'general')}] {i['title']}: {i['content']}"]

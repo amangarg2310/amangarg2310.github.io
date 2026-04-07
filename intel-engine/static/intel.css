@@ -768,6 +768,99 @@
 .intel-domain-card.depth-deep {
     border-left: 3px solid #c4a46c;
 }
+/* ── Synthesis Tree (Tier 2B — Synthesis-First Homepage) ── */
+.intel-synth-tree-category {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+.intel-synth-tree-category.collapsed .intel-synth-tree-children,
+.intel-synth-tree-category.collapsed .intel-synth-tree-tldr {
+    display: none;
+}
+.intel-synth-tree-category.collapsed .intel-synth-tree-toggle {
+    transform: rotate(-90deg);
+}
+.intel-synth-tree-cat-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--intel-transition);
+    user-select: none;
+}
+.intel-synth-tree-cat-header:hover {
+    background: var(--intel-surface-hover);
+}
+.intel-synth-tree-toggle {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
+    transition: transform var(--intel-transition);
+}
+.intel-synth-tree-meta {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--intel-text-tertiary);
+}
+.intel-synth-tree-tldr {
+    padding: 0 20px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--intel-text-secondary);
+    border-bottom: 1px solid var(--intel-border-light);
+}
+.intel-synth-tree-children {
+    padding: 8px 12px 12px;
+}
+.intel-synth-tree-domain {
+    display: block;
+    padding: 12px 14px;
+    border-radius: var(--intel-radius-xs);
+    text-decoration: none;
+    color: inherit;
+    transition: background var(--intel-transition);
+    margin-bottom: 2px;
+}
+.intel-synth-tree-domain:hover {
+    background: var(--intel-surface-hover);
+}
+.intel-synth-tree-domain-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+.intel-synth-tree-domain-tldr {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--intel-text-secondary);
+    margin-bottom: 6px;
+}
+.intel-synth-tree-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.intel-synth-tree-source-tag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--intel-surface-hover);
+    color: var(--intel-text-tertiary);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .intel-domain-card.depth-deep .intel-domain-name::after {
     content: ' ●';
     font-size: 8px;
