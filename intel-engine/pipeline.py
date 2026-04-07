@@ -334,8 +334,15 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                 results[idx] = future.result()
 
         succeeded = sum(1 for r in results if r and r.get('status') in ('complete', 'already_exists'))
+        # Pick the most common domain from results for redirect
+        domain_counts = {}
+        for r in results:
+            if r and r.get('domain_name'):
+                domain_counts[r['domain_name']] = domain_counts.get(r['domain_name'], 0) + 1
+        primary_domain = max(domain_counts, key=domain_counts.get) if domain_counts else None
         _update_status(playlist_vid, 'complete',
-                       f'Done — {succeeded}/{len(videos)} videos processed', 100)
+                       f'Done — {succeeded}/{len(videos)} videos processed', 100,
+                       domain=primary_domain)
         return {'status': 'complete', 'video_id': playlist_vid, 'total': len(videos), 'succeeded': succeeded, 'results': results}
 
     except Exception as e:

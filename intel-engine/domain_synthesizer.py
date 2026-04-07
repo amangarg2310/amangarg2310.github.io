@@ -22,6 +22,14 @@ import config
 
 logger = logging.getLogger(__name__)
 
+
+def _get_conn(db_path):
+    """Get a DB connection with WAL mode and busy_timeout for concurrent access."""
+    conn = _get_conn(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
 SYNTHESIS_PROMPT = """You are a world-class technical knowledge synthesizer. Your job is to maintain a DETAILED, PRACTICAL knowledge base for the domain: "{domain_name}".
 
 {existing_section}
@@ -156,8 +164,7 @@ Keep this SHORT and strategic. This is a bird's-eye view, not a detailed referen
 
 def _cascade_synthesis(domain_id: int, db_path, user_id=None):
     """After synthesizing a sub-topic, cascade upward: re-synthesize parent domain, then grandparent category."""
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
     domain = conn.execute("SELECT parent_id, level FROM domains WHERE id = ?", (domain_id,)).fetchone()
     conn.close()
 
@@ -168,8 +175,7 @@ def _cascade_synthesis(domain_id: int, db_path, user_id=None):
     _synthesize_parent(parent_id, db_path)
 
     # Check if grandparent exists
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
     parent = conn.execute("SELECT parent_id FROM domains WHERE id = ?", (parent_id,)).fetchone()
     conn.close()
 
@@ -183,8 +189,7 @@ def _synthesize_parent(parent_id: int, db_path):
     if not api_key:
         return
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
 
     parent = conn.execute("SELECT id, name, level, source_count, insight_count FROM domains WHERE id = ?", (parent_id,)).fetchone()
     if not parent:
@@ -245,7 +250,7 @@ def _synthesize_parent(parent_id: int, db_path):
 
     synthesis_level = 'category' if level == 0 else 'domain'
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     conn.execute(
         "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (parent_id, content, parent['source_count'], parent['insight_count'], next_version, synthesis_level, now),
@@ -273,8 +278,7 @@ def _update_parent_counts(conn, domain_id: int, now: str):
 def get_current_synthesis(domain_id: int, db_path=None) -> dict | None:
     """Get the latest synthesis for a domain."""
     db_path = db_path or config.DB_PATH
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
     row = conn.execute(
         "SELECT id, content, source_count, insight_count, version, convergence_data FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
         (domain_id,),
@@ -286,8 +290,7 @@ def get_current_synthesis(domain_id: int, db_path=None) -> dict | None:
 def get_domain_insights_for_source(source_id: int, db_path=None) -> list[dict]:
     """Get all insights extracted from a specific source."""
     db_path = db_path or config.DB_PATH
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
     rows = conn.execute(
         "SELECT title, content, insight_type, actionability, key_quotes FROM insights WHERE source_id = ? ORDER BY chunk_index",
         (source_id,),
@@ -301,8 +304,7 @@ def _analyze_convergence(domain_id: int, db_path) -> str:
 
     Returns JSON string with convergence data or empty string if insufficient data.
     """
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
 
     # Get insights grouped by source
     rows = conn.execute("""
@@ -393,7 +395,7 @@ def _snapshot_synthesis(current: dict, domain_id: int, db_path):
         return
     try:
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT INTO synthesis_versions
             (synthesis_id, domain_id, version_number, content, convergence_data, source_count, created_at)
@@ -438,7 +440,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         for i in new_insights_data
     )
 
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     domain_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
     domain_name = domain_row[0] if domain_row else "Unknown"
 
@@ -492,7 +494,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
             logger.warning(f"Convergence analysis skipped: {e}")
 
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     conn.execute(
         "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, convergence_data, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?, ?)",
         (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, convergence, now),
@@ -527,7 +529,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
                     client, domain_name, prev_content, synthesis_content, source_title
                 )
                 if impact:
-                    c = sqlite3.connect(str(db_path))
+                    c = _get_conn(db_path)
                     c.execute("UPDATE sources SET ingestion_impact = ? WHERE id = ?", (impact, source_id))
                     c.commit()
                     c.close()
@@ -552,8 +554,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     if not api_key:
         raise ValueError("Anthropic API key not configured")
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
 
     domain_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
     domain_name = domain_row[0] if domain_row else "Unknown"
@@ -581,7 +582,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     if not rows:
         # No insights remain — clear synthesis
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute(
             "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, created_at) VALUES (?, ?, 0, 0, ?, ?)",
             (domain_id, "", next_version, now),
@@ -651,7 +652,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
 
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     conn.execute(
         "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?)",
         (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
@@ -703,8 +704,7 @@ def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None
     if not api_key:
         return
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
 
     # Get this domain's name and user_id
     domain_row = conn.execute("SELECT name, user_id FROM domains WHERE id = ?", (domain_id,)).fetchone()

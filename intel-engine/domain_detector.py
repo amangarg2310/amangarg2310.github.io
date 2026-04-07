@@ -20,6 +20,14 @@ from datetime import datetime, timezone
 
 from openai import OpenAI
 
+
+def _get_conn(db_path):
+    """Get a DB connection with WAL mode and busy_timeout for concurrent access."""
+    conn = _get_conn(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
 try:
     from rapidfuzz import fuzz
 except ImportError:
@@ -85,7 +93,7 @@ def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
     if not db_path.exists():
         return []
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.row_factory = sqlite3.Row
         if user_id:
             rows = conn.execute(
@@ -409,7 +417,7 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
                             db_path=None, user_id=None) -> int:
     """Create the full domain hierarchy (parent → domain → sub-topics) and return the domain_id."""
     db_path = db_path or config.DB_PATH
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     now = datetime.now(timezone.utc).isoformat()
 
     # 1. Find existing parent via fuzzy match, or create new one
@@ -528,8 +536,7 @@ def propose_taxonomy_evolution(domain_id: int, new_insights: list[dict], db_path
     if not api_key:
         return None
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn(db_path)
 
     domain = conn.execute("SELECT id, name, level, parent_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
     if not domain or domain['level'] != 1:
@@ -629,7 +636,7 @@ or
 def _execute_taxonomy_create(domain_id: int, domain_name: str, sub_topic_name: str, db_path, user_id=None):
     """Create a new sub-topic under a domain."""
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
 
     # Get parent path
     domain = conn.execute("SELECT path FROM domains WHERE id = ?", (domain_id,)).fetchone()
@@ -650,7 +657,7 @@ def _execute_taxonomy_create(domain_id: int, domain_name: str, sub_topic_name: s
 def _execute_taxonomy_split(domain_id: int, domain_name: str, original: str, new_names: list, db_path, user_id=None):
     """Split an existing sub-topic into two new ones."""
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
 
     domain = conn.execute("SELECT path FROM domains WHERE id = ?", (domain_id,)).fetchone()
     parent_path = domain[0] if domain else f"/{domain_name}"
@@ -672,7 +679,7 @@ def _execute_taxonomy_split(domain_id: int, domain_name: str, original: str, new
 def _record_taxonomy_change(domain_id: int, change_type: str, description: str, db_path, user_id=None):
     """Record a taxonomy change event."""
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     try:
         conn.execute("""
             INSERT INTO taxonomy_changes (domain_id, change_type, description, user_id, created_at)
