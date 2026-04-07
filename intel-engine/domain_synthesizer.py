@@ -474,40 +474,13 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     synthesis_content = response.content[0].text.strip()
 
-    # Run follow-up LLM calls in parallel (all independent of each other)
+    # Run the two follow-ups we need for the DB insert in parallel
     suggested = ""
     convergence = ""
-    prev_content = current['content'] if current else ""
 
-    def _do_suggested():
-        return _generate_suggested_questions(client, domain_name, synthesis_content)
-
-    def _do_convergence():
-        return _analyze_convergence(domain_id, db_path)
-
-    def _do_cross_refs():
-        detect_cross_references(domain_id, synthesis_content, db_path)
-
-    def _do_cascade():
-        _cascade_synthesis(domain_id, db_path)
-
-    def _do_impact():
-        if prev_content and source_id:
-            impact = _generate_ingestion_impact(
-                client, domain_name, prev_content, synthesis_content, source_title
-            )
-            if impact:
-                c = sqlite3.connect(str(db_path))
-                c.execute("UPDATE sources SET ingestion_impact = ? WHERE id = ?", (impact, source_id))
-                c.commit()
-                c.close()
-
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        f_suggested = executor.submit(_do_suggested)
-        f_convergence = executor.submit(_do_convergence)
-        f_cross = executor.submit(_do_cross_refs)
-        f_cascade = executor.submit(_do_cascade)
-        f_impact = executor.submit(_do_impact)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        f_suggested = executor.submit(_generate_suggested_questions, client, domain_name, synthesis_content)
+        f_convergence = executor.submit(_analyze_convergence, domain_id, db_path)
 
         try:
             suggested = f_suggested.result() or ""
@@ -517,19 +490,6 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
             convergence = f_convergence.result() or ""
         except Exception as e:
             logger.warning(f"Convergence analysis skipped: {e}")
-        # Fire-and-forget: just log errors
-        try:
-            f_cross.result()
-        except Exception as e:
-            logger.warning(f"Cross-reference detection skipped: {e}")
-        try:
-            f_cascade.result()
-        except Exception as e:
-            logger.warning(f"Cascade synthesis skipped: {e}")
-        try:
-            f_impact.result()
-        except Exception as e:
-            logger.warning(f"Ingestion impact skipped: {e}")
 
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
@@ -547,6 +507,35 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     conn.close()
 
     logger.info(f"Created synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
+
+    # Fire-and-forget: cascade, cross-refs, and impact run in background threads
+    # These are non-critical and shouldn't block the pipeline from completing
+    prev_content = current['content'] if current else ""
+
+    def _background_followups():
+        try:
+            detect_cross_references(domain_id, synthesis_content, db_path)
+        except Exception as e:
+            logger.warning(f"Cross-reference detection skipped: {e}")
+        try:
+            _cascade_synthesis(domain_id, db_path)
+        except Exception as e:
+            logger.warning(f"Cascade synthesis skipped: {e}")
+        try:
+            if prev_content and source_id:
+                impact = _generate_ingestion_impact(
+                    client, domain_name, prev_content, synthesis_content, source_title
+                )
+                if impact:
+                    c = sqlite3.connect(str(db_path))
+                    c.execute("UPDATE sources SET ingestion_impact = ? WHERE id = ?", (impact, source_id))
+                    c.commit()
+                    c.close()
+        except Exception as e:
+            logger.warning(f"Ingestion impact skipped: {e}")
+
+    import threading as _threading
+    _threading.Thread(target=_background_followups, daemon=True).start()
 
     return synthesis_content
 

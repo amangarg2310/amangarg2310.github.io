@@ -828,16 +828,20 @@ def _run_shared_pipeline(
     conn.close()
 
     # Step 7: Re-synthesize (now source is 'processed' and will be counted)
-    _update('Synthesizing knowledge...', 90,
+    _update('Synthesizing knowledge...', 88,
             title=title, channel=channel, domain=domain_name)
     synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+    _update('Finalizing...', 96,
+            title=title, channel=channel, domain=domain_name)
 
-    # Step 8: Taxonomy evolution check (Tier 3A) — non-blocking
-    try:
-        from domain_detector import propose_taxonomy_evolution
-        propose_taxonomy_evolution(domain_id, all_insights, db_path, user_id=user_id)
-    except Exception as e:
-        logger.warning(f"Taxonomy evolution check skipped: {e}")
+    # Step 8: Taxonomy evolution check — fire-and-forget in background
+    def _bg_taxonomy():
+        try:
+            from domain_detector import propose_taxonomy_evolution
+            propose_taxonomy_evolution(domain_id, all_insights, db_path, user_id=user_id)
+        except Exception as e:
+            logger.warning(f"Taxonomy evolution check skipped: {e}")
+    threading.Thread(target=_bg_taxonomy, daemon=True).start()
 
     _update_status(video_id, 'complete', 'Done', 100,
                    title=title, channel=channel, domain=domain_name,
