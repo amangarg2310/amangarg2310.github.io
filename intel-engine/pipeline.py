@@ -92,7 +92,7 @@ def is_processing(video_id: str) -> bool:
 
 def _get_conn(db_path):
     """Get a database connection with WAL mode and busy timeout for concurrent access."""
-    conn = _get_conn(db_path)
+    conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
