@@ -40,17 +40,21 @@ static/intel.css        # NotebookLM-inspired scholarly design system
 
 SQLite with WAL mode and `busy_timeout=5000` for concurrent access. All connections go through `_get_conn()` in `pipeline.py` (never raw `sqlite3.connect`).
 
-**Tables:** users, domains (hierarchical with parent_id), sources (all source types), insights (with vector embeddings), syntheses, usage_logs
+**Tables:** users, domains (hierarchical with parent_id), sources (all source types + ingestion_impact), insights (with vector embeddings + evidence/confidence/topics), syntheses (with convergence_data + synthesis_level), synthesis_versions, taxonomy_changes, domain_references, usage_logs
 
 ## Pipeline Flow
 
 1. Source submitted via API → `app.py` computes content-based tracking ID → spawns background thread
 2. Type-specific ingestor extracts text
-3. `insight_extractor.py` chunks text → GPT extracts granular insights
-4. `domain_detector.py` classifies into 3-level hierarchy (category → domain → sub-topics)
-5. `embeddings.py` generates vector embeddings
-6. `domain_synthesizer.py` merges new insights with existing synthesis
-7. Frontend polls `/api/status/<video_id>` every 1s for progress updates
+3. Topic-aware chunking: sentence-boundary detection with vocabulary shift scoring (Jaccard distance)
+4. `insight_extractor.py` → structured claim extraction: title, content, evidence, source_context, confidence, topics
+5. `domain_detector.py` classifies into 3-level hierarchy (category → domain → sub-topics)
+6. `embeddings.py` generates contextual vector embeddings (prepends source title + channel + domain path)
+7. `domain_synthesizer.py` merges insights into synthesis with convergence analysis + version snapshots
+8. Cascade synthesis: sub-topic → parent domain overview → grandparent category briefing
+9. Taxonomy evolution: proposes new sub-topics or splits based on new insights
+10. Ingestion impact: generates brief summary of what the source added to the knowledge base
+11. Frontend polls `/api/status/<video_id>` every 1s for progress updates
 
 ## Deduplication
 
