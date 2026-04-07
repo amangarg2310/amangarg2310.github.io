@@ -1189,6 +1189,109 @@ def api_dismiss_taxonomy_change(change_id):
             conn.close()
 
 
+@app.route("/api/threshold-concepts")
+@login_required
+def api_threshold_concepts():
+    """Identify foundational concepts that appear across 3+ domains (Threshold Concepts).
+
+    Queries the topics JSON field across all insights, finds topics with high
+    cross-domain spread — these are the foundational concepts that connect
+    different areas of understanding.
+    """
+    import json as _json
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT i.domain_id, i.topics, d.name as domain_name
+            FROM insights i
+            JOIN domains d ON i.domain_id = d.id
+            WHERE d.user_id = ? AND i.topics IS NOT NULL AND i.topics != '' AND i.topics != '[]'
+        """, (uid,)).fetchall()
+
+        # topic → set of domain names
+        topic_domains = {}
+        for r in rows:
+            try:
+                topics = _json.loads(r['topics']) if isinstance(r['topics'], str) else r['topics']
+                if isinstance(topics, list):
+                    for t in topics:
+                        if isinstance(t, str):
+                            t = t.lower().strip()
+                            if t and len(t) > 2:
+                                if t not in topic_domains:
+                                    topic_domains[t] = set()
+                                topic_domains[t].add(r['domain_name'])
+            except (ValueError, TypeError):
+                continue
+
+        # Filter to topics appearing in 3+ domains
+        threshold = [
+            {"topic": topic, "domains": sorted(domains), "spread": len(domains)}
+            for topic, domains in topic_domains.items()
+            if len(domains) >= 3
+        ]
+        threshold.sort(key=lambda x: x['spread'], reverse=True)
+
+        return jsonify(threshold[:15])
+    except Exception:
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+
+def _build_conceptual_edges(conn, user_id):
+    """Build topic-based conceptual edges between domains (Connectivism).
+
+    Finds domains that share 2+ topics in their insights, creating organic
+    cross-domain connections based on actual content overlap.
+    """
+    import json as _json
+    try:
+        rows = conn.execute("""
+            SELECT i.domain_id, i.topics
+            FROM insights i
+            JOIN domains d ON i.domain_id = d.id
+            WHERE d.user_id = ? AND i.topics IS NOT NULL AND i.topics != '' AND i.topics != '[]'
+        """, (user_id,)).fetchall()
+    except Exception:
+        return []
+
+    # Build domain → topic set mapping
+    domain_topics = {}
+    for r in rows:
+        did = r['domain_id']
+        try:
+            topics = _json.loads(r['topics']) if isinstance(r['topics'], str) else r['topics']
+            if isinstance(topics, list):
+                if did not in domain_topics:
+                    domain_topics[did] = set()
+                domain_topics[did].update(t.lower().strip() for t in topics if isinstance(t, str))
+        except (ValueError, TypeError):
+            continue
+
+    # Find domain pairs sharing 2+ topics
+    edges = []
+    seen = set()
+    domain_ids = list(domain_topics.keys())
+    for i, d1 in enumerate(domain_ids):
+        for d2 in domain_ids[i + 1:]:
+            shared = domain_topics[d1] & domain_topics[d2]
+            if len(shared) >= 2:
+                pair = (min(d1, d2), max(d1, d2))
+                if pair not in seen:
+                    seen.add(pair)
+                    edges.append({
+                        "source": d1, "target": d2,
+                        "type": "conceptual",
+                        "label": ", ".join(sorted(shared)[:3]),
+                        "weight": len(shared),
+                    })
+    return edges
+
+
 @app.route("/api/knowledge-graph")
 @login_required
 def api_knowledge_graph():
@@ -1250,9 +1353,12 @@ def api_knowledge_graph():
             for r in refs
         ]
 
+        # Conceptual edges: domains sharing topics (Connectivism)
+        conceptual_edges = _build_conceptual_edges(conn, uid)
+
         return jsonify({
             "nodes": domain_nodes + source_nodes,
-            "edges": hierarchy_edges + source_edges + ref_edges,
+            "edges": hierarchy_edges + source_edges + ref_edges + conceptual_edges,
         })
 
     except Exception as e:

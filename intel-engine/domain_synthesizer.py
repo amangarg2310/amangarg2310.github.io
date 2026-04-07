@@ -31,6 +31,8 @@ NEW INSIGHTS (from: "{source_title}" by {channel}, added {source_date}):
 YOUR TASK:
 Create an updated, comprehensive synthesis that someone can USE as a reference to actually DO things — not just understand them at a high level.
 
+COGNITIVE LEVEL: Write at the KNOWLEDGE and COMPREHENSION level — focus on facts, procedures, and descriptions. What are the specific tools, steps, and configurations? Be concrete and procedural. This is where the user comes to remember how things work and follow along step by step.
+
 RULES:
 1. PRESERVE GRANULAR DETAIL — specific tool names, commands, config values, step-by-step procedures, exact settings. Never flatten "install via Docker using docker run -p 3000:3000 openinterpreter/openinterpreter" into "can be installed using Docker."
 2. INTEGRATE new insights with existing knowledge — merge, don't just append. But NEVER lose specific details during merging.
@@ -111,6 +113,10 @@ You are given syntheses from the sub-topics within this domain. Write an overvie
 3. Highlights the most important takeaways across the whole domain
 4. Is scannable in under 3 minutes of reading
 
+COGNITIVE LEVEL: Write at the ANALYSIS and APPLICATION level — compare approaches across sub-topics, identify patterns, explain when to use what, and note trade-offs. Don't just list facts — explain relationships, implications, and practical decision points. Help the reader understand WHY, not just WHAT.
+
+PROGRESSIVE DEPTH: Reference specific sub-topics by name when discussing their content, so the reader knows where to drill deeper. Use phrases like "For detailed setup steps, see the [Sub-Topic Name] section" or "The [Sub-Topic Name] area covers this in depth."
+
 SUB-TOPIC SYNTHESES:
 {child_syntheses}
 
@@ -130,6 +136,10 @@ You are given overview syntheses from domains within this category. Write a high
 2. Identifies the most important things to know across the whole category
 3. Notes which domains are most developed (deep coverage) vs. thin
 4. Is readable in under 1 minute
+
+COGNITIVE LEVEL: Write at the EVALUATION and SYNTHESIS level — assess the overall landscape, identify strategic decisions, evaluate which approaches have the most evidence behind them, and highlight where the field is heading. Think like a senior advisor giving a briefing, not a researcher listing findings.
+
+PROGRESSIVE DEPTH: Reference specific domains by name when discussing their content. Use phrases like "The [Domain Name] area covers this in depth" or "See [Domain Name] for a detailed comparison." The reader should know exactly where to go for more detail.
 
 DOMAIN SYNTHESES:
 {child_syntheses}

@@ -564,24 +564,25 @@ def propose_taxonomy_evolution(domain_id: int, new_insights: list[dict], db_path
         response = client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You are a taxonomy specialist. Analyze whether new content warrants structural changes to a domain hierarchy. Return only valid JSON."},
+                {"role": "system", "content": "You analyze how a learner's understanding of a domain evolves as they consume new content. Return only valid JSON."},
                 {"role": "user", "content": f"""Domain: {domain['name']}
-Existing sub-topics: {', '.join(existing_sub_names) if existing_sub_names else 'None yet'}
+Current understanding structure (sub-topics): {', '.join(existing_sub_names) if existing_sub_names else 'None yet — this is a new area of learning'}
 
 New insights from the latest source (topics covered):
 {chr(10).join(f'- {ins.get("title", "")}: topics={ins.get("topics", [])}' for ins in new_insights[:15])}
 
-Should any of the following happen?
-1. CREATE: A new sub-topic should be added (content covers concepts not in existing sub-topics)
-2. SPLIT: An existing sub-topic should be split into two (it's becoming too broad)
-3. NONE: The current structure is fine
+As the user's understanding of "{domain['name']}" deepens with this new source, should their mental model evolve?
+
+1. EXPAND: Their understanding now covers a new area that doesn't fit existing sub-topics — a new dimension of the domain has emerged
+2. REFINE: One area of understanding has become nuanced enough to distinguish into more specific concepts — what felt like one thing is actually two
+3. NONE: The current structure adequately captures this new knowledge
 
 Return ONLY valid JSON:
 {{"action": "none", "details": {{}}}}
 or
-{{"action": "create", "details": {{"name": "New Sub-Topic Name", "reason": "why"}}}}
+{{"action": "create", "details": {{"name": "New Area Name", "reason": "what new dimension of understanding this represents"}}}}
 or
-{{"action": "split", "details": {{"original": "Existing Sub-Topic", "new_names": ["Part A", "Part B"], "reason": "why"}}}}"""},
+{{"action": "split", "details": {{"original": "Existing Area", "new_names": ["More Specific A", "More Specific B"], "reason": "what distinction has become clear"}}}}"""},
             ],
             temperature=0.2,
             max_tokens=300,
@@ -639,8 +640,8 @@ def _execute_taxonomy_create(domain_id: int, domain_name: str, sub_topic_name: s
     conn.close()
 
     # Record the change
-    _record_taxonomy_change(domain_id, 'create', f"New sub-topic '{sub_topic_name}' created under '{domain_name}'", db_path, user_id)
-    logger.info(f"Taxonomy evolution: Created sub-topic '{sub_topic_name}' under '{domain_name}'")
+    _record_taxonomy_change(domain_id, 'create', f"Your understanding of {domain_name} expanded to include {sub_topic_name}", db_path, user_id)
+    logger.info(f"Schema evolution: Understanding of '{domain_name}' expanded to include '{sub_topic_name}'")
 
 
 def _execute_taxonomy_split(domain_id: int, domain_name: str, original: str, new_names: list, db_path, user_id=None):
@@ -660,9 +661,9 @@ def _execute_taxonomy_split(domain_id: int, domain_name: str, original: str, new
     conn.close()
 
     _record_taxonomy_change(domain_id, 'split',
-                            f"Sub-topic '{original}' split into '{new_names[0]}' and '{new_names[1]}' under '{domain_name}'",
+                            f"Your understanding of {domain_name} refined — '{original}' is now distinguished as '{new_names[0]}' and '{new_names[1]}'",
                             db_path, user_id)
-    logger.info(f"Taxonomy evolution: Split '{original}' into {new_names} under '{domain_name}'")
+    logger.info(f"Schema evolution: Understanding of '{domain_name}' refined — '{original}' → {new_names}")
 
 
 def _record_taxonomy_change(domain_id: int, change_type: str, description: str, db_path, user_id=None):

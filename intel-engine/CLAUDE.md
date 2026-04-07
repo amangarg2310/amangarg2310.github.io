@@ -100,6 +100,15 @@ NotebookLM-inspired scholarly aesthetic (not flashy SaaS):
 - **INSERT OR REPLACE:** Used for YouTube, Article, File, Image, Text sources to handle re-processing of failed entries.
 - **Error boundaries:** Each video in a playlist has its own `try/except` so one failure doesn't stop the rest.
 
+## Learning Science Principles
+
+- **Bloom's Taxonomy:** Synthesis prompts target different cognitive levels per domain level. Sub-topic = factual/procedural (knowledge & comprehension). Domain = analytical/comparative (analysis & application). Category = evaluative/strategic (evaluation & synthesis).
+- **Schema Theory:** Taxonomy evolution is framed as the user's understanding evolving, not mechanical reorganization. "Your understanding expanded" not "New sub-topic created."
+- **Connectivism:** Knowledge graph shows topic-based conceptual edges between domains that share concepts, not just structural hierarchy.
+- **Progressive Summarization:** Each synthesis level references the level below by name, so the user knows where to drill deeper.
+- **Cognitive Load Theory:** Every UI element must reduce the steps between the user and the knowledge, not add navigation overhead. No features that increase clicks without increasing understanding.
+- **Threshold Concepts:** Cross-domain foundational topics are identified via topic frequency analysis and surfaced as annotations — concepts that appear across 3+ domains are likely foundational.
+
 ## Environment Variables
 
 ```

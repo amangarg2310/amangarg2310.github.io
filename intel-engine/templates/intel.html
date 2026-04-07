@@ -1677,6 +1677,8 @@ async function _renderGraph() {
         // Lines
         line:           'rgba(100, 116, 139, 0.12)',
         lineRef:        'rgba(167, 139, 250, 0.2)',
+        lineConceptual: 'rgba(196, 164, 108, 0.18)',  // amber — topic-based connections
+        lineConceptualActive: 'rgba(196, 164, 108, 0.5)',
         lineSource:     'rgba(100, 116, 139, 0.08)',
         lineActive:     'rgba(196, 181, 253, 0.6)',
         lineActiveGrey: 'rgba(148, 163, 184, 0.35)',
@@ -1815,9 +1817,10 @@ async function _renderGraph() {
             const isDimmed = _hoveredNode && !isHighlighted;
             const isRef = link.type === 'reference';
             const isSrc = link.type === 'source';
-            if (isHighlighted) return isRef ? C.lineActive : C.lineActiveGrey;
+            const isConcept = link.type === 'conceptual';
+            if (isHighlighted) return isConcept ? C.lineConceptualActive : isRef ? C.lineActive : C.lineActiveGrey;
             if (isDimmed) return C.lineDim;
-            return isRef ? C.lineRef : isSrc ? C.lineSource : C.line;
+            return isConcept ? C.lineConceptual : isRef ? C.lineRef : isSrc ? C.lineSource : C.line;
         })
         .linkWidth(link => {
             const sid = typeof link.source === 'object' ? link.source.id : link.source;
@@ -1829,7 +1832,7 @@ async function _renderGraph() {
             const baseWidth = link.type === 'reference' ? 1.2 : link.type === 'hierarchy' ? 1.0 : 0.6;
             return isHighlighted ? baseWidth * 2 : baseWidth;
         })
-        .linkLineDash(link => link.type === 'reference' ? [4, 2] : null)
+        .linkLineDash(link => link.type === 'reference' ? [4, 2] : link.type === 'conceptual' ? [2, 3] : null)
         // Flowing particles along edges — signature Quid/NetBase effect
         .linkDirectionalParticles(link => link.type === 'reference' ? 3 : link.type === 'source' ? 1 : 2)
         .linkDirectionalParticleSpeed(0.003)
