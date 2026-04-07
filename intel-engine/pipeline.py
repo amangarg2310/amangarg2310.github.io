@@ -89,6 +89,14 @@ def is_processing(video_id: str) -> bool:
         return entry is not None and entry.get('status') == 'processing'
 
 
+def _get_conn(db_path):
+    """Get a database connection with WAL mode and busy timeout for concurrent access."""
+    conn = _get_conn(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
 def _embed_insights(conn, source_id: int):
     """Generate and store embeddings for all insights from a source."""
     try:
@@ -120,7 +128,7 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
     if not db_path.exists():
         return None
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT id, video_id, title, status, domain_id FROM sources WHERE video_id = ?",
@@ -185,7 +193,7 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
 
         # Step 2: Store source
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, thumbnail, duration_seconds, transcript, source_type, status, created_at, user_id)
@@ -215,7 +223,7 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
         logger.error(f"Pipeline failed for {url}: {e}", exc_info=True)
         _update_status(video_id, 'error', 'Failed', 0, error=str(e))
         try:
-            conn = sqlite3.connect(str(db_path))
+            conn = _get_conn(db_path)
             conn.execute(
                 "UPDATE sources SET status = 'error', error_message = ? WHERE video_id = ?",
                 (str(e), video_id),
@@ -302,7 +310,7 @@ def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
                        title=article.title, channel=article.site_name)
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
@@ -353,7 +361,7 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
                        title=original_filename, channel=source_type.upper())
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT INTO sources
             (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
@@ -405,7 +413,7 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None, use
                        title=original_filename, channel='Image')
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT INTO sources
             (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
@@ -449,7 +457,7 @@ def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None)
                        title=title)
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT INTO sources
             (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
@@ -492,7 +500,7 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
     """
     db_path = db_path or config.DB_PATH
 
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     conn.row_factory = sqlite3.Row
     source = conn.execute(
         "SELECT id, video_id, title, channel, transcript, domain_id FROM sources WHERE id = ?",
@@ -518,7 +526,7 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         _update_status(video_id, 'processing', 'Re-analyzing content...', 10,
                        title=source['title'], channel=source['channel'])
 
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("DELETE FROM insights WHERE source_id = ?", (source_id,))
         conn.commit()
         conn.close()
@@ -540,7 +548,7 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
                        title=source['title'], channel=source['channel'])
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         for insight in all_insights:
             conn.execute("""
                 INSERT INTO insights
@@ -575,7 +583,7 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         resynthesize_domain_full(domain_id, db_path)
 
         # Get domain name for status
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         domain_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
         domain_name = domain_row[0] if domain_row else None
         conn.close()
@@ -639,7 +647,7 @@ def _run_shared_pipeline(
         raise
 
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
         conn.commit()
         conn.close()
@@ -665,7 +673,7 @@ def _run_shared_pipeline(
                    title=title, channel=channel, domain=domain_name)
 
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     for insight in all_insights:
         conn.execute("""
             INSERT INTO insights
@@ -690,7 +698,7 @@ def _run_shared_pipeline(
     conn.close()
 
     # Step 6.5: Mark as processed BEFORE synthesis (so source_count query includes this source)
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     conn.execute(
         "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
         (datetime.now(timezone.utc).isoformat(), source_id),
