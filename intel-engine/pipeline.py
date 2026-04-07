@@ -195,10 +195,24 @@ def _hash_text_id(text: str) -> str:
 # YouTube Pipeline (existing, refactored)
 # ══════════════════════════════════════════════════════════════
 
-def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
+def _map_to_playlist(playlist_ctx, video_progress, title=None):
+    """Map a video's internal progress (0-100) to the parent playlist's progress range."""
+    pid, idx, total = playlist_ctx
+    v_start = 10 + int((idx / total) * 85)
+    v_end = 10 + int(((idx + 1) / total) * 85)
+    mapped = v_start + int((video_progress / 100) * (v_end - v_start))
+    step_title = (title or '')[:50]
+    _update_status(pid, 'processing',
+                   f'Processing {idx + 1}/{total}: {step_title}...', mapped)
+
+
+def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dict:
     """
     Run the full intelligence pipeline for a YouTube URL.
     Called from Flask route in a background thread.
+
+    playlist_ctx: optional (playlist_vid, video_index, total_videos) tuple
+                  for propagating sub-step progress to a parent playlist status.
     """
     db_path = db_path or config.DB_PATH
     video_id = extract_video_id(url)
@@ -210,6 +224,9 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
         _update_status(video_id, 'already_exists', 'Already processed', 100,
                        title=existing.get('title', ''),
                        source_id=existing.get('id'))
+        # Fast-forward playlist progress through this video's range
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, 100, existing.get('title', ''))
         return {
             'status': 'already_exists', 'video_id': video_id,
             'title': existing.get('title', ''),
@@ -220,9 +237,13 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
     try:
         # Step 1: Ingest video
         _update_status(video_id, 'processing', 'Fetching video...', 10)
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, 10)
         video = ingest_video(url)
         _update_status(video_id, 'processing', 'Got transcript', 25,
                        title=video.title, channel=video.channel)
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, 25, video.title)
 
         # Step 2: Store source
         now = datetime.now(timezone.utc).isoformat()
@@ -250,6 +271,7 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
             db_path=db_path,
             start_progress=35,
             user_id=user_id,
+            playlist_ctx=playlist_ctx,
         )
 
     except Exception as e:
@@ -290,13 +312,12 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
 
         results = []
         for i, video in enumerate(videos):
-            progress = 10 + int((i / max(len(videos), 1)) * 85)
-            _update_status(playlist_vid, 'processing',
-                           f'Processing {i+1}/{len(videos)}: {video["title"][:50]}...', progress)
-
             url = f'https://www.youtube.com/watch?v={video["video_id"]}'
+            ctx = (playlist_vid, i, len(videos))
+            _map_to_playlist(ctx, 0, video['title'])
             try:
-                result = run_pipeline(url, db_path=db_path, user_id=user_id)
+                result = run_pipeline(url, db_path=db_path, user_id=user_id,
+                                      playlist_ctx=ctx)
                 results.append(result)
             except Exception as e:
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
@@ -680,6 +701,7 @@ def _run_shared_pipeline(
     db_path=None,
     start_progress: int = 35,
     user_id: int = None,
+    playlist_ctx=None,
 ) -> dict:
     """
     Shared pipeline steps: chunk → detect domain → extract insights → store → synthesize.
@@ -688,14 +710,20 @@ def _run_shared_pipeline(
     """
     db_path = db_path or config.DB_PATH
 
+    def _update(step, progress, **kw):
+        """Update video status and propagate to playlist if in playlist context."""
+        _update_status(video_id, 'processing', step, progress, **kw)
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, progress, title)
+
     # Step 3: Chunk transcript
-    _update_status(video_id, 'processing', 'Analyzing content...', start_progress,
-                   title=title, channel=channel)
+    _update('Analyzing content...', start_progress,
+            title=title, channel=channel)
     chunks = chunk_transcript(transcript)
 
     # Step 4: Auto-detect domain (hierarchical)
-    _update_status(video_id, 'processing', 'Detecting domain...', start_progress + 10,
-                   title=title, channel=channel)
+    _update('Detecting domain...', start_progress + 10,
+            title=title, channel=channel)
     try:
         domain_result = detect_domain_hierarchical(
             title, channel, chunks[0] if chunks else transcript, db_path, user_id=user_id
@@ -716,22 +744,21 @@ def _run_shared_pipeline(
         logger.error(f"Failed to update source domain: {e}", exc_info=True)
         raise
 
-    _update_status(video_id, 'processing', f'Domain: {domain_name}', start_progress + 15,
-                   title=title, channel=channel, domain=domain_name)
+    _update(f'Domain: {domain_name}', start_progress + 15,
+            title=title, channel=channel, domain=domain_name)
 
     # Step 5: Extract insights
     all_insights = []
     for i, chunk in enumerate(chunks):
         progress = (start_progress + 15) + int((i / max(len(chunks), 1)) * 25)
-        _update_status(video_id, 'processing',
-                       f'Extracting insights ({i+1}/{len(chunks)})...', progress,
-                       title=title, channel=channel, domain=domain_name)
+        _update(f'Extracting insights ({i+1}/{len(chunks)})...',
+                progress, title=title, channel=channel, domain=domain_name)
         insights = extract_insights(chunk, chunk_index=i)
         all_insights.extend(insights)
 
     # Step 6: Store insights
-    _update_status(video_id, 'processing', 'Storing insights...', 80,
-                   title=title, channel=channel, domain=domain_name)
+    _update('Storing insights...', 80,
+            title=title, channel=channel, domain=domain_name)
 
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
@@ -757,8 +784,8 @@ def _run_shared_pipeline(
     conn.commit()
 
     # Step 6.5: Generate embeddings for insights
-    _update_status(video_id, 'processing', 'Generating embeddings...', 82,
-                   title=title, channel=channel, domain=domain_name)
+    _update('Generating embeddings...', 82,
+            title=title, channel=channel, domain=domain_name)
     _embed_insights(conn, source_id)
     conn.close()
 
@@ -772,8 +799,8 @@ def _run_shared_pipeline(
     conn.close()
 
     # Step 7: Re-synthesize (now source is 'processed' and will be counted)
-    _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
-                   title=title, channel=channel, domain=domain_name)
+    _update('Synthesizing knowledge...', 90,
+            title=title, channel=channel, domain=domain_name)
     synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
 
     # Step 8: Taxonomy evolution check (Tier 3A) — non-blocking
