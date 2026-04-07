@@ -196,6 +196,9 @@
                     <div class="intel-source-item-info">
                         <div class="intel-source-item-title">{{ source.title }}</div>
                         <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights</div>
+                        {% if source.ingestion_impact %}
+                        <div class="intel-source-impact">{{ source.ingestion_impact }}</div>
+                        {% endif %}
                     </div>
                     <div class="intel-source-actions">
                         <button class="intel-source-action-btn reprocess" title="Re-process"
@@ -303,6 +306,35 @@
                     <span>Searching knowledge base...</span>
                 </div>
             </div>
+
+            <!-- ── CONVERGENCE SUMMARY ── -->
+            {% if convergence %}
+            <div class="intel-convergence-section intel-animate-in">
+                {% if convergence.agreements %}
+                <div class="intel-convergence-card intel-convergence-agree">
+                    <div class="intel-convergence-label">Sources Agree</div>
+                    {% for a in convergence.agreements[:3] %}
+                    <div class="intel-convergence-item">
+                        <span class="intel-convergence-dot agree"></span>
+                        {{ a.claim }}
+                        <span class="intel-convergence-sources">({{ a.sources|join(', ') }})</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if convergence.disagreements %}
+                <div class="intel-convergence-card intel-convergence-disagree">
+                    <div class="intel-convergence-label">Sources Differ</div>
+                    {% for d in convergence.disagreements[:2] %}
+                    <div class="intel-convergence-item">
+                        <span class="intel-convergence-dot disagree"></span>
+                        {{ d.topic }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
 
             <!-- ── SYNTHESIS ── -->
             {% if synthesis and synthesis.content %}

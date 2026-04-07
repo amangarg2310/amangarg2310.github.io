@@ -1899,6 +1899,67 @@
 }
 
 /* ── AI Search (SafetyWing-style inline answers) ── */
+/* ── Convergence Summary (Tier 3C display) ── */
+.intel-convergence-section {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.intel-convergence-card {
+    flex: 1;
+    padding: 14px 16px;
+    border-radius: var(--intel-radius-xs);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+.intel-convergence-agree {
+    background: rgba(46, 168, 78, 0.06);
+    border: 1px solid rgba(46, 168, 78, 0.15);
+}
+.intel-convergence-disagree {
+    background: rgba(224, 122, 0, 0.06);
+    border: 1px solid rgba(224, 122, 0, 0.15);
+}
+.intel-convergence-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--intel-text-tertiary);
+    margin-bottom: 8px;
+}
+.intel-convergence-item {
+    color: var(--intel-text-secondary);
+    margin-bottom: 4px;
+}
+.intel-convergence-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.intel-convergence-dot.agree { background: var(--intel-green); }
+.intel-convergence-dot.disagree { background: var(--intel-orange); }
+.intel-convergence-sources {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
+}
+
+/* ── Source Ingestion Impact (Tier 4B display) ── */
+.intel-source-impact {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--intel-text-tertiary);
+    margin-top: 3px;
+    font-style: italic;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 .intel-search-section {
     margin-bottom: 40px;
 }

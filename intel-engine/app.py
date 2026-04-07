@@ -345,6 +345,15 @@ def domain_page(domain_name):
         if conn:
             conn.close()
 
+    # Parse convergence data if available
+    convergence = None
+    if synthesis and synthesis.get('convergence_data'):
+        import json as _json
+        try:
+            convergence = _json.loads(synthesis['convergence_data'])
+        except (ValueError, TypeError):
+            pass
+
     return render_template("intel.html",
                            domain=domain,
                            synthesis=synthesis,
@@ -353,7 +362,8 @@ def domain_page(domain_name):
                            sources=sources,
                            domains=domains,
                            domain_tree=domain_tree,
-                           subtopic_scope=subtopic_scope)
+                           subtopic_scope=subtopic_scope,
+                           convergence=convergence)
 
 
 @app.route("/setup")
