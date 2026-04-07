@@ -432,7 +432,7 @@
         </div>
         <div class="intel-domains-grid">
             {% for d in domains %}
-            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in" style="animation-delay: {{ loop.index0 * 0.06 }}s">
+            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in {% if d.source_count >= 6 %}depth-deep{% elif d.source_count >= 3 %}depth-moderate{% else %}depth-thin{% endif %}" style="animation-delay: {{ loop.index0 * 0.06 }}s">
                 <span class="intel-domain-icon">{{ d.icon }}</span>
                 {% if d.parent_name %}<div class="intel-domain-parent">{{ d.parent_name }}</div>{% endif %}
                 <div class="intel-domain-name">{{ d.name }}</div>

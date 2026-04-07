@@ -738,8 +738,8 @@ def _run_shared_pipeline(
     for insight in all_insights:
         conn.execute("""
             INSERT INTO insights
-            (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, evidence, source_context, confidence, topics, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             source_id, domain_id,
             insight.get('title', 'Untitled'),
@@ -748,6 +748,10 @@ def _run_shared_pipeline(
             insight.get('actionability', 'medium'),
             insight.get('key_quote', ''),
             insight.get('chunk_index', 0),
+            insight.get('evidence', ''),
+            insight.get('source_context', ''),
+            insight.get('confidence', 'stated'),
+            json.dumps(insight.get('topics', [])),
             now,
         ))
     conn.commit()

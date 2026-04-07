@@ -265,7 +265,7 @@ def get_current_synthesis(domain_id: int, db_path=None) -> dict | None:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     row = conn.execute(
-        "SELECT id, content, source_count, insight_count, version FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+        "SELECT id, content, source_count, insight_count, version, convergence_data FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
         (domain_id,),
     ).fetchone()
     conn.close()
@@ -285,6 +285,119 @@ def get_domain_insights_for_source(source_id: int, db_path=None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _analyze_convergence(domain_id: int, db_path) -> str:
+    """Analyze cross-source convergence — agreements, disagreements, unique contributions (Tier 3C).
+
+    Returns JSON string with convergence data or empty string if insufficient data.
+    """
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    # Get insights grouped by source
+    rows = conn.execute("""
+        SELECT i.title, i.content, i.confidence, s.title as source_title, s.channel
+        FROM insights i JOIN sources s ON i.source_id = s.id
+        WHERE i.domain_id = ? AND s.status = 'processed'
+        ORDER BY s.title, i.chunk_index
+    """, (domain_id,)).fetchall()
+    conn.close()
+
+    if len(rows) < 3:
+        return ""  # Need at least a few insights to find convergence
+
+    # Group insights by source
+    sources = {}
+    for r in rows:
+        key = r['source_title'] or r['channel'] or 'Unknown'
+        if key not in sources:
+            sources[key] = []
+        sources[key].append(f"- {r['title']}: {r['content'][:200]}")
+
+    if len(sources) < 2:
+        return ""  # Need multiple sources for convergence
+
+    grouped_text = "\n\n".join(
+        f"### {source} ({len(insights)} insights)\n" + "\n".join(insights[:8])
+        for source, insights in sources.items()
+    )
+
+    api_key = config.get_api_key('anthropic')
+    if not api_key:
+        return ""
+
+    client = Anthropic(api_key=api_key)
+    try:
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You analyze cross-source agreement patterns. Return ONLY valid JSON.",
+            messages=[{"role": "user", "content": f"""Analyze these insights from {len(sources)} sources about the same domain.
+
+{grouped_text}
+
+Identify:
+1. Points of AGREEMENT (claimed or demonstrated by 2+ sources independently)
+2. Points of DISAGREEMENT (sources contradict each other)
+3. UNIQUE contributions (notable claims from only one source)
+
+Return ONLY valid JSON:
+{{"agreements": [{{"claim": "...", "sources": ["source1", "source2"]}}], "disagreements": [{{"topic": "...", "views": [{{"source": "...", "position": "..."}}]}}], "unique": [{{"claim": "...", "source": "..."}}]}}
+
+Keep each array to max 5 entries. Be specific about what the agreement/disagreement is."""}],
+            temperature=0.2,
+            max_tokens=2000,
+        )
+        return response.content[0].text.strip()
+    except Exception as e:
+        logger.warning(f"Convergence analysis failed for domain {domain_id}: {e}")
+        return ""
+
+
+def _generate_ingestion_impact(client, domain_name: str, prev_synthesis: str, new_synthesis: str, source_title: str) -> str:
+    """Generate a brief summary of what a source added to the knowledge base (Tier 4B)."""
+    try:
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You summarize knowledge changes concisely. Return 2-3 plain sentences only.",
+            messages=[{"role": "user", "content": f"""The knowledge base for "{domain_name}" was updated after ingesting "{source_title}".
+
+PREVIOUS SYNTHESIS (excerpt):
+{prev_synthesis[:1500]}
+
+UPDATED SYNTHESIS (excerpt):
+{new_synthesis[:1500]}
+
+In 2-3 sentences, describe what new information this source added. Focus on: new claims or concepts introduced, existing points that were reinforced with new evidence, and any perspectives that changed. Be specific about WHAT was added, not just "new information was added"."""}],
+            temperature=0.3,
+            max_tokens=300,
+        )
+        return response.content[0].text.strip()
+    except Exception as e:
+        logger.warning(f"Ingestion impact generation failed: {e}")
+        return ""
+
+
+def _snapshot_synthesis(current: dict, domain_id: int, db_path):
+    """Archive the current synthesis version before creating a new one (Tier 4A)."""
+    if not current or not current.get('content'):
+        return
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            INSERT INTO synthesis_versions
+            (synthesis_id, domain_id, version_number, content, convergence_data, source_count, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            current.get('id', 0), domain_id, current.get('version', 0),
+            current['content'], current.get('convergence_data', ''),
+            current.get('source_count', 0), now,
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Synthesis snapshot failed for domain {domain_id}: {e}")
+
+
 def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel: str, db_path=None, source_date: str = None) -> str:
     """Create or update the domain synthesis after a new source is processed."""
     db_path = db_path or config.DB_PATH
@@ -293,6 +406,9 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         raise ValueError("Anthropic API key not configured")
 
     current = get_current_synthesis(domain_id, db_path)
+
+    # Snapshot current version before overwriting (Tier 4A)
+    _snapshot_synthesis(current, domain_id, db_path)
 
     if current:
         existing_section = f"EXISTING SYNTHESIS (v{current['version']}, from {current['source_count']} sources, {current['insight_count']} insights):\n{current['content']}"
@@ -350,11 +466,18 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     # Generate suggested questions
     suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
 
+    # Analyze cross-source convergence (Tier 3C) — non-blocking
+    convergence = ""
+    try:
+        convergence = _analyze_convergence(domain_id, db_path)
+    except Exception as e:
+        logger.warning(f"Convergence analysis skipped: {e}")
+
     now = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?)",
-        (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, convergence_data, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?, ?)",
+        (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, convergence, now),
     )
     conn.execute(
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
@@ -378,6 +501,24 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         _cascade_synthesis(domain_id, db_path)
     except Exception as e:
         logger.warning(f"Cascade synthesis skipped: {e}")
+
+    # Generate ingestion impact summary (Tier 4B) — non-blocking
+    try:
+        prev_content = current['content'] if current else ""
+        if prev_content and source_id:
+            impact = _generate_ingestion_impact(
+                client, domain_name, prev_content, synthesis_content, source_title
+            )
+            if impact:
+                conn2 = sqlite3.connect(str(db_path))
+                conn2.execute(
+                    "UPDATE sources SET ingestion_impact = ? WHERE id = ?",
+                    (impact, source_id),
+                )
+                conn2.commit()
+                conn2.close()
+    except Exception as e:
+        logger.warning(f"Ingestion impact skipped: {e}")
 
     return synthesis_content
 

@@ -197,6 +197,32 @@ def run_migrations(db_path=None):
     # Schema evolution — hierarchical synthesis levels (Tier 2A)
     _add_column(conn, "syntheses", "synthesis_level", "TEXT DEFAULT 'sub_topic'")
 
+    # Schema evolution — cross-source convergence analysis (Tier 3C)
+    _add_column(conn, "syntheses", "convergence_data", "TEXT")
+
+    # Schema evolution — ingestion impact tracking (Tier 4B)
+    _add_column(conn, "sources", "ingestion_impact", "TEXT")
+
+    # Schema evolution — synthesis version history (Tier 4A)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS synthesis_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            synthesis_id INTEGER NOT NULL,
+            domain_id INTEGER NOT NULL,
+            version_number INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            convergence_data TEXT,
+            source_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (synthesis_id) REFERENCES syntheses(id) ON DELETE CASCADE,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    """)
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_synth_versions_domain ON synthesis_versions(domain_id, version_number DESC)")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)
