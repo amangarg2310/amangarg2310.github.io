@@ -74,14 +74,14 @@ python app.py           # Run at http://localhost:5002
 
 ### Architecture
 
-- **Pipeline** (`pipeline.py`): Source → ingest → chunk → extract insights → detect domain hierarchy → embed → synthesize. All DB connections use `_get_conn()` helper with WAL mode + `busy_timeout=5000` for concurrent access.
+- **Pipeline** (`pipeline.py`): Source → topic-aware chunk → structured claim extraction → domain classification → contextual embedding → synthesis with convergence analysis → cascade to parent levels → taxonomy evolution check → ingestion impact summary. All DB connections use `_get_conn()` helper with WAL mode + `busy_timeout=5000`.
 - **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata, playlist support via RSS + HTML scraping fallback), `article_ingest.py` (trafilatura), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
-- **Domain taxonomy** (`domain_detector.py`): Hierarchical 3-level — parent category → specific domain → sub-topics
-- **RAG query** (`intel_query.py`): Hybrid search (vector embeddings + FTS5 keyword) → GPT answer synthesis
+- **Domain taxonomy** (`domain_detector.py`): Hierarchical 3-level — parent category → specific domain → sub-topics. Taxonomy evolution proposes new sub-topics or splits as understanding deepens.
+- **RAG query** (`intel_query.py`): Hybrid search (vector + FTS5) → source-grounded answers with `[Source: title]` citations. Cross-domain retrieval for parent-level queries.
 - **Auth** (`auth.py`): Flask-Login session-based, multi-user with per-user data isolation
-- **Backend** (`app.py`): Flask web server with REST API. Background processing via threading with in-memory status tracking for UI polling.
-- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired scholarly design with warm color palette, Inter font, two-panel layout with taxonomy sidebar, force-graph knowledge visualization
-- **Database:** SQLite with tables: users, domains (hierarchical), sources, insights (with embeddings), syntheses, usage_logs
+- **Backend** (`app.py`): Flask web server with REST API. Background processing via threading. Endpoints for ingestion, status polling, knowledge graph, taxonomy changes, threshold concepts.
+- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired scholarly design. Homepage = ingestion hub + domain cards. Domain detail = AI search + convergence indicators + synthesis brief. Knowledge graph overlay with conceptual edges.
+- **Database:** SQLite with tables: users, domains (hierarchical), sources (+ ingestion_impact), insights (+ evidence/confidence/topics), syntheses (+ convergence_data/synthesis_level), synthesis_versions, taxonomy_changes, domain_references, usage_logs
 
 ### Deduplication
 
@@ -118,12 +118,14 @@ The UI follows a scholarly, NotebookLM-inspired aesthetic:
 
 1. User registers/logs in, then adds a source (YouTube URL/playlist, article URL, file upload, or paste text)
 2. Source ingested → text extracted (type-specific ingestor)
-3. `insight_extractor.py` chunks text → GPT extracts granular, actionable insights
-4. `domain_detector.py` classifies into specific hierarchical domain (e.g., AI Tools → OpenClaw → Setup)
-5. `embeddings.py` generates vector embeddings for semantic search
-6. `domain_synthesizer.py` merges new insights with existing synthesis (temporal awareness — newer info supersedes old)
-7. User can search within any domain via the AI search bar (hybrid RAG) or browse the synthesized knowledge brief
-8. Each new source compounds the domain's knowledge
+3. Topic-aware chunking splits text at natural boundaries (sentence + vocabulary shift detection)
+4. `insight_extractor.py` extracts structured claims: title, content, evidence, source_context, confidence, topics
+5. `domain_detector.py` classifies into hierarchical domain; proposes taxonomy evolution if understanding is deepening
+6. `embeddings.py` generates contextual embeddings (prepends source metadata for domain-aware vectors)
+7. `domain_synthesizer.py` merges insights with convergence analysis (agreements/disagreements across sources), snapshots previous version, cascades synthesis to parent levels (Bloom's cognitive targeting per level)
+8. Ingestion impact summary generated: what this source added to the knowledge base
+9. User queries via AI search → source-grounded answers with `[Source: title]` citations, cross-domain retrieval for parent-level queries
+10. Knowledge graph shows structural hierarchy + conceptual topic edges + cross-domain references
 
 ---
 

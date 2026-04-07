@@ -24,14 +24,15 @@ youtube_ingest.py       # YouTube transcripts (Supadata) + playlist support (RSS
 article_ingest.py       # Web article extraction (trafilatura)
 file_ingest.py          # PDF, DOCX, PPTX text extraction
 image_ingest.py         # Image/screenshot analysis (OpenAI Vision)
-domain_detector.py      # 3-level hierarchical domain classification
-domain_synthesizer.py   # LLM-powered knowledge synthesis with temporal awareness
-insight_extractor.py    # Chunked insight extraction from transcripts
-intel_query.py          # Hybrid RAG search (vector + FTS5) → GPT answer synthesis
-embeddings.py           # Vector embedding generation and storage
+domain_detector.py      # 3-level hierarchical domain classification + taxonomy evolution
+domain_synthesizer.py   # LLM-powered knowledge synthesis with temporal awareness + convergence
+insight_extractor.py    # Structured claim extraction (evidence, confidence, topics)
+intel_query.py          # Hybrid RAG search (vector + FTS5) → source-grounded answer synthesis
+embeddings.py           # Contextual vector embedding generation and storage
 auth.py                 # Flask-Login session auth, multi-user data isolation
 migrations.py           # Database schema creation and migrations
 config.py               # Environment config, API keys, paths
+backfill.py             # One-time upgrade script for existing data (--insights/--embeddings/--synthesis/--all)
 templates/intel.html    # Single-page frontend (Jinja2 template)
 static/intel.css        # NotebookLM-inspired scholarly design system
 ```
@@ -82,15 +83,40 @@ YouTube playlists use two strategies (in order):
 
 Private playlists are detected and the user is told to change to Unlisted. Max 15 videos per playlist. Each video runs through `run_pipeline()` individually with per-video error handling.
 
+## Page Structure
+
+**Homepage** (`/`): Ingestion hub — URL input, file upload, text paste tabs + domain card grid for navigation. No synthesis content on homepage; it's purely for adding content and browsing domains.
+
+**Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content (AI search → convergence indicators → synthesis brief). This is where the user reads and queries their knowledge.
+
+**Knowledge Graph** (overlay via nav button): Force-graph visualization with breathing nodes, flowing particles, conceptual edges (amber dotted) between domains sharing topics, click-to-detail panels.
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/ingest` | POST | Submit URL (YouTube/playlist/article) for processing |
+| `/api/upload` | POST | Upload file (PDF/DOCX/PPTX/image) |
+| `/api/ingest-text` | POST | Submit pasted text |
+| `/api/status/<video_id>` | GET | Poll processing progress |
+| `/api/query` | POST | Ask a question against a domain's knowledge |
+| `/api/knowledge-graph` | GET | Get nodes + edges for graph visualization |
+| `/api/taxonomy-changes` | GET | Recent taxonomy evolution notifications |
+| `/api/taxonomy-changes/<id>/dismiss` | POST | Dismiss a notification |
+| `/api/threshold-concepts` | GET | Cross-domain foundational topics (3+ domain spread) |
+
 ## Design System
 
 NotebookLM-inspired scholarly aesthetic (not flashy SaaS):
 
-- **Palette:** Warm neutrals (`#fafaf8` bg, `#e4e0da` borders), muted indigo accent (`#4f6ef7`), amber for TLDR/synthesis borders (`#c4a757`/`#d4a757`)
+- **Palette:** Warm neutrals (`#fafaf8` bg, `#e4e0da` borders), muted indigo accent (`#4f6ef7`), amber for TLDR/synthesis/convergence borders (`#c4a757`/`#d4a757`)
 - **Typography:** Inter font, max weight 600 on headings, 1.75 line-height for synthesis body text
 - **Surfaces:** Warm shadow tints (`rgba(30,25,15,...)`), no harsh black shadows
 - **Interactions:** No scale transforms on hover, background-shift only, consistent focus rings (`box-shadow`) on all inputs
-- **Graph:** Force-graph (force-graph library) with breathing pulse, flowing particles on edges, perpetual drift, canvas-based rendering
+- **Graph:** Force-graph with breathing pulse, flowing particles, conceptual edges (amber dotted for shared topics), reference edges (violet dashed), hierarchy edges (solid), click-to-detail panels
+- **Coverage Depth:** Domain cards show thin (dashed border, 1-2 sources), moderate (solid, 3-5), deep (amber border + dot, 6+)
+- **Convergence:** Compact side-by-side cards — green for agreements, amber for disagreements — shown on domain detail page above synthesis
+- **Ingestion Impact:** Italic 2-line summary per source in sidebar, clamped with CSS
 
 ## Key Patterns
 
