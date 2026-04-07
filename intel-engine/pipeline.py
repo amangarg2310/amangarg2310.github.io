@@ -100,6 +100,44 @@ def _get_conn(db_path):
     return conn
 
 
+def _repair_domain_counts(domain_id, db_path):
+    """Recompute domain source_count and insight_count from actual data.
+
+    Prevents stale counts when concurrent workers overwrite each other.
+    Also rolls up to parent category.
+    """
+    try:
+        conn = _get_conn(db_path)
+        actual = conn.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed') as sc,
+                (SELECT COUNT(*) FROM insights WHERE domain_id = ?) as ic
+        """, (domain_id, domain_id)).fetchone()
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+            (actual[0], actual[1], now, domain_id),
+        )
+        # Roll up to parent
+        parent_row = conn.execute(
+            "SELECT parent_id FROM domains WHERE id = ?", (domain_id,)
+        ).fetchone()
+        if parent_row and parent_row[0]:
+            parent_id = parent_row[0]
+            agg = conn.execute("""
+                SELECT COALESCE(SUM(source_count), 0), COALESCE(SUM(insight_count), 0)
+                FROM domains WHERE parent_id = ? AND level = 1
+            """, (parent_id,)).fetchone()
+            conn.execute(
+                "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+                (agg[0], agg[1], now, parent_id),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Domain count repair failed for {domain_id}: {e}")
+
+
 def _embed_insights(conn, source_id: int):
     """Generate and store embeddings for all insights from a source.
 
@@ -334,6 +372,14 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                 results[idx] = future.result()
 
         succeeded = sum(1 for r in results if r and r.get('status') in ('complete', 'already_exists'))
+
+        # Final count repair: recompute all affected domains after concurrent processing
+        repaired_domains = set()
+        for r in results:
+            if r and r.get('domain_id') and r['domain_id'] not in repaired_domains:
+                _repair_domain_counts(r['domain_id'], db_path)
+                repaired_domains.add(r['domain_id'])
+
         # Pick the most common domain from results for redirect
         domain_counts = {}
         for r in results:
@@ -838,6 +884,11 @@ def _run_shared_pipeline(
     _update('Synthesizing knowledge...', 88,
             title=title, channel=channel, domain=domain_name)
     synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+
+    # Recompute domain counts from actual data (prevents stale-count overwrites
+    # when concurrent workers synthesize the same domain)
+    _repair_domain_counts(domain_id, db_path)
+
     _update('Finalizing...', 96,
             title=title, channel=channel, domain=domain_name)
 
