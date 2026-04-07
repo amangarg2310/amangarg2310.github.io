@@ -24,6 +24,13 @@
         </a>
         {% if current_user and current_user.is_authenticated %}
         <div class="intel-nav-user">
+            <a href="{{ url_for('knowledge_page') }}" class="intel-nav-graph-btn" title="Browse your knowledge base">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                Knowledge
+            </a>
             <button class="intel-nav-graph-btn" onclick="openGraphView()" title="Knowledge Graph">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="6" cy="6" r="3"/>
@@ -356,6 +363,65 @@
         </main>
     </div>
 
+    {% elif knowledge_view is defined and knowledge_view %}
+    <!-- ══════════════════════════════════════════════════════════
+         KNOWLEDGE BASE BROWSER
+         ══════════════════════════════════════════════════════════ -->
+    <div class="intel-kb-page">
+        <div class="intel-kb-header">
+            <div>
+                <h1 class="intel-kb-title">Knowledge Base</h1>
+                <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ knowledge_categories|length }} categories</p>
+            </div>
+            <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Source
+            </a>
+        </div>
+
+        {% for cat in knowledge_categories %}
+        <div class="intel-kb-category">
+            <div class="intel-kb-cat-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span class="intel-kb-toggle">▾</span>
+                <span class="intel-kb-cat-icon">{{ cat.icon }}</span>
+                <span class="intel-kb-cat-name">{{ cat.name }}</span>
+                <span class="intel-kb-cat-meta">{{ cat.children|length }} domain{{ 's' if cat.children|length != 1 else '' }}</span>
+            </div>
+            <div class="intel-kb-domains">
+                {% for d in cat.children %}
+                <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-kb-domain-row intel-animate-in" style="animation-delay: {{ loop.index0 * 0.04 }}s">
+                    <span class="intel-kb-domain-icon">{{ d.icon }}</span>
+                    <div class="intel-kb-domain-info">
+                        <div class="intel-kb-domain-name">{{ d.name }}</div>
+                        <div class="intel-kb-domain-desc">{{ d.description or 'Knowledge base' }}</div>
+                    </div>
+                    <div class="intel-kb-domain-stats">
+                        <span>{{ d.source_count }} sources</span>
+                        <span>{{ d.insight_count }} insights</span>
+                    </div>
+                    <svg class="intel-kb-domain-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not knowledge_categories %}
+        <div class="intel-empty">
+            <div class="intel-empty-icon">📚</div>
+            <div class="intel-empty-title">No knowledge yet</div>
+            <div class="intel-empty-desc">
+                <a href="{{ url_for('index') }}">Add your first source</a> to start building your knowledge base.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
     {% else %}
     <!-- ══════════════════════════════════════════════════════════
          HOME VIEW — URL Input + Domain Grid
@@ -456,7 +522,7 @@
     {% if domains %}
     <div class="intel-domains-section">
         <div class="intel-section-header">
-            <h2 class="intel-section-title">Your Knowledge</h2>
+            <a href="{{ url_for('knowledge_page') }}" class="intel-section-title intel-section-title-link">Your Knowledge <span class="intel-section-arrow">&rsaquo;</span></a>
             <div style="display:flex;align-items:center;gap:12px;">
                 <span class="intel-section-count">{{ domains|length }} domain{{ 's' if domains|length != 1 else '' }}</span>
                 <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link">Reset</a>

@@ -176,6 +176,68 @@ def index():
     return render_template("intel.html", domains=domains, domain=None, synthesis=None)
 
 
+@app.route("/knowledge")
+@login_required
+def knowledge_page():
+    """Knowledge Base browser — all categories with their domains in a scannable overview."""
+    if needs_setup():
+        return redirect(url_for('setup_page'))
+
+    uid = current_user.id
+    conn = None
+    categories = []
+    total_sources = 0
+    total_insights = 0
+    try:
+        conn = get_db()
+
+        # Get all level-0 categories
+        cats = conn.execute("""
+            SELECT id, name, icon, source_count, insight_count, description
+            FROM domains
+            WHERE (user_id = ? OR user_id IS NULL) AND level = 0
+            ORDER BY source_count DESC
+        """, (uid,)).fetchall()
+
+        for cat in cats:
+            cat = dict(cat)
+            # Get child domains (level 1) under this category
+            children = [dict(r) for r in conn.execute("""
+                SELECT id, name, icon, source_count, insight_count, description
+                FROM domains
+                WHERE parent_id = ? AND level = 1
+                ORDER BY source_count DESC
+            """, (cat['id'],)).fetchall()]
+            cat['children'] = children
+            total_sources += cat['source_count'] or 0
+            total_insights += cat['insight_count'] or 0
+            if children:
+                categories.append(cat)
+
+        # Also get level-1 domains without a parent (orphans)
+        orphans = [dict(r) for r in conn.execute("""
+            SELECT id, name, icon, source_count, insight_count, description
+            FROM domains
+            WHERE (user_id = ? OR user_id IS NULL) AND level = 1 AND parent_id IS NULL
+            ORDER BY source_count DESC
+        """, (uid,)).fetchall()]
+        if orphans:
+            categories.append({
+                'name': 'Other', 'icon': '📂', 'source_count': 0, 'insight_count': 0,
+                'children': orphans,
+            })
+
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        if conn:
+            conn.close()
+
+    return render_template("intel.html", domain=None, synthesis=None, domains=[],
+                           knowledge_view=True, knowledge_categories=categories,
+                           total_sources=total_sources, total_insights=total_insights)
+
+
 def _extract_tldr_from_synthesis(content: str) -> str:
     """Extract the TLDR section from a synthesis markdown string."""
     if not content:

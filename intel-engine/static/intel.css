@@ -713,6 +713,23 @@
     letter-spacing: -0.018em;
     color: var(--intel-text);
 }
+.intel-section-title-link {
+    text-decoration: none;
+    color: var(--intel-text);
+    transition: color var(--intel-transition);
+}
+.intel-section-title-link:hover {
+    color: var(--intel-accent);
+}
+.intel-section-arrow {
+    font-size: 18px;
+    color: var(--intel-text-tertiary);
+    margin-left: 4px;
+    transition: color var(--intel-transition);
+}
+.intel-section-title-link:hover .intel-section-arrow {
+    color: var(--intel-accent);
+}
 
 .intel-section-count {
     font-size: 13px;
@@ -867,6 +884,124 @@
     color: #c4a46c;
     vertical-align: middle;
     margin-left: 4px;
+}
+
+/* ── Knowledge Base Browser ── */
+.intel-kb-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+}
+.intel-kb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+.intel-kb-title {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--intel-text);
+    margin: 0 0 4px;
+}
+.intel-kb-meta {
+    font-size: 13px;
+    color: var(--intel-text-tertiary);
+    margin: 0;
+}
+.intel-kb-category {
+    margin-bottom: 8px;
+}
+.intel-kb-category.collapsed .intel-kb-domains {
+    display: none;
+}
+.intel-kb-category.collapsed .intel-kb-toggle {
+    transform: rotate(-90deg);
+}
+.intel-kb-cat-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    border-radius: var(--intel-radius-xs);
+    transition: background var(--intel-transition);
+    user-select: none;
+}
+.intel-kb-cat-header:hover {
+    background: var(--intel-surface-hover);
+}
+.intel-kb-toggle {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
+    transition: transform var(--intel-transition);
+}
+.intel-kb-cat-icon {
+    font-size: 18px;
+}
+.intel-kb-cat-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--intel-text);
+}
+.intel-kb-cat-meta {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+}
+.intel-kb-domains {
+    padding: 0 0 8px 0;
+}
+.intel-kb-domain-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px 14px 40px;
+    text-decoration: none;
+    color: inherit;
+    border-radius: var(--intel-radius-xs);
+    transition: background var(--intel-transition);
+}
+.intel-kb-domain-row:hover {
+    background: var(--intel-surface-hover);
+}
+.intel-kb-domain-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+}
+.intel-kb-domain-info {
+    flex: 1;
+    min-width: 0;
+}
+.intel-kb-domain-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--intel-text);
+    margin-bottom: 2px;
+}
+.intel-kb-domain-desc {
+    font-size: 12.5px;
+    color: var(--intel-text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.intel-kb-domain-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+    flex-shrink: 0;
+}
+.intel-kb-domain-arrow {
+    color: var(--intel-text-tertiary);
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity var(--intel-transition);
+}
+.intel-kb-domain-row:hover .intel-kb-domain-arrow {
+    opacity: 1;
 }
 
 /* ══════════════════════════════════════════════════════════════
