@@ -1066,6 +1066,20 @@
     font-size: 11px;
     color: var(--intel-text-tertiary);
 }
+.bio-node-open {
+    font-size: 11px;
+    color: var(--intel-accent);
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-top: 2px;
+}
+.bio-node:hover .bio-node-open {
+    opacity: 1;
+}
+.bio-node-open:hover {
+    text-decoration: underline;
+}
 .bio-node-expand {
     font-size: 10px;
     color: var(--intel-accent);

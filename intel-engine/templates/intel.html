@@ -413,17 +413,29 @@
                 {% for cat in knowledge_categories %}
                 <div class="bio-tree-level bio-tree-level-1 bio-hidden" data-parent="cat-{{ loop.index0 }}">
                     {% for d in cat.children %}
+                    {% if d.children %}
                     <div class="bio-node bio-node-domain" data-id="dom-{{ d.id }}"
-                         data-expanded="false" data-has-children="{{ 'true' if d.children else 'false' }}"
-                         onclick="{% if d.children %}bioToggle(this, 'dom-{{ d.id }}'){% endif %}">
+                         data-expanded="false" data-has-children="true"
+                         onclick="bioToggle(this, 'dom-{{ d.id }}')">
                         <div class="bio-node-pulse"></div>
-                        <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node-core" onclick="event.stopPropagation()">
+                        <div class="bio-node-core">
                             <span class="bio-node-icon">{{ d.icon }}</span>
                             <span class="bio-node-name">{{ d.name }}</span>
-                        </a>
+                        </div>
                         {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
-                        {% if d.children %}<div class="bio-node-expand">{{ d.children|length }} sub-topic{{ 's' if d.children|length != 1 else '' }}</div>{% endif %}
+                        <div class="bio-node-expand">{{ d.children|length }} sub-topic{{ 's' if d.children|length != 1 else '' }}</div>
+                        <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node-open" onclick="event.stopPropagation()">Open →</a>
                     </div>
+                    {% else %}
+                    <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node bio-node-domain" data-id="dom-{{ d.id }}" data-has-children="false">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ d.icon }}</span>
+                            <span class="bio-node-name">{{ d.name }}</span>
+                        </div>
+                        {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
+                    </a>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endfor %}
