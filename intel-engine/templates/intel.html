@@ -220,7 +220,7 @@
                     </div>
                     <div class="intel-source-item-info">
                         <div class="intel-source-item-title">{{ source.title }}</div>
-                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights{% if source.insight_count == 0 %} <span class="intel-source-warn" title="No insights extracted — try re-processing">⚠</span>{% endif %}</div>
+                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insight{{ 's' if source.insight_count != 1 else '' }}{% if source.insight_count == 0 %} <span class="intel-source-warn" title="{{ source.error_message or 'No insights extracted — try re-processing' }}">⚠</span>{% endif %}</div>
                         {% if source.ingestion_impact %}
                         <div class="intel-source-impact">{{ source.ingestion_impact }}</div>
                         {% endif %}

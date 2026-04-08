@@ -411,7 +411,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
                 return {'status': 'error', 'video_id': video['video_id'], 'error': str(e)}
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {
                 executor.submit(_process_video, i, video): i
                 for i, video in enumerate(new_videos)
@@ -419,8 +419,10 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             for future in as_completed(futures):
                 idx = futures[future]
                 results[idx] = future.result()
+                time.sleep(2)  # Brief pause between videos to avoid API rate limits
 
         succeeded = sum(1 for r in results if r and r.get('status') in ('complete', 'already_exists'))
+        extraction_failures = sum(1 for r in results if r and r.get('insights_count', -1) == 0 and r.get('status') == 'complete')
 
         # Final count repair: recompute all affected domains after concurrent processing
         repaired_domains = set()
@@ -438,8 +440,11 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
 
         # Build descriptive completion message
         done_parts = []
-        if succeeded > 0:
-            done_parts.append(f'{succeeded} processed')
+        real_success = succeeded - extraction_failures
+        if real_success > 0:
+            done_parts.append(f'{real_success} processed')
+        if extraction_failures > 0:
+            done_parts.append(f'{extraction_failures} had extraction issues')
         if skipped_count > 0:
             done_parts.append(f'{skipped_count} already in knowledge base')
         failed = len(new_videos) - succeeded
@@ -910,6 +915,15 @@ def _run_shared_pipeline(
         if not all_insights and chunks:
             logger.warning(f"0 insights extracted from {len(chunks)} chunks ({word_count} words) for '{title}' — "
                            f"likely API error during extraction. Check insight_extractor logs for details.")
+            # Store error message on source for user visibility
+            try:
+                _conn = _get_conn(db_path)
+                _conn.execute("UPDATE sources SET error_message = ? WHERE id = ?",
+                              ("Insight extraction returned empty — possible API error. Try re-processing later.", source_id))
+                _conn.commit()
+                _conn.close()
+            except Exception:
+                pass
 
     # Step 6: Store insights
     _update('Storing insights...', 80,
@@ -955,12 +969,12 @@ def _run_shared_pipeline(
     conn.close()
 
     # Step 7: Re-synthesize (now source is 'processed' and will be counted)
-    _update('Synthesizing knowledge...', 88,
+    _update('Synthesizing knowledge...', 85,
             title=title, channel=channel, domain=domain_name)
     synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
 
-    # Recompute domain counts from actual data (prevents stale-count overwrites
-    # when concurrent workers synthesize the same domain)
+    _update('Updating domain counts...', 92,
+            title=title, channel=channel, domain=domain_name)
     _repair_domain_counts(domain_id, db_path)
 
     _update('Finalizing...', 96,
