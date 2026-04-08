@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # In-memory status tracking for UI polling (thread-safe)
 _pipeline_status = {}
 _status_lock = threading.Lock()
-_STATUS_TTL_SECONDS = 600  # Prune entries older than 10 minutes
+_STATUS_TTL_SECONDS = 3600  # Prune completed entries older than 1 hour (large playlists can take 30+ min)
 
 SOURCE_TYPE_ICONS = {
     'youtube': '🎥',
@@ -242,7 +242,7 @@ def _map_to_playlist(playlist_ctx, video_progress, title=None):
     mapped = v_start + int((video_progress / 100) * (v_end - v_start))
     step_title = (title or '')[:50]
     _update_status(pid, 'processing',
-                   f'Processing {idx + 1}/{total}: {step_title}...', mapped)
+                   f'Processing {idx + 1}/{total} new: {step_title}...', mapped)
 
 
 def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dict:
