@@ -39,6 +39,64 @@
     --intel-sidebar-width: 280px;
 }
 
+/* ── Dark Mode ── */
+[data-theme="dark"] {
+    --intel-bg: #111318;
+    --intel-surface: #1a1d26;
+    --intel-surface-hover: #22252f;
+    --intel-surface-active: #2a2d38;
+    --intel-border: #2e3140;
+    --intel-border-light: #252838;
+    --intel-text: #e2e5ed;
+    --intel-text-secondary: #9498a6;
+    --intel-text-tertiary: #5e6272;
+    --intel-accent: #6b8aff;
+    --intel-accent-hover: #8da2ff;
+    --intel-accent-light: rgba(107, 138, 255, 0.1);
+    --intel-green: #4ade80;
+    --intel-green-light: rgba(74, 222, 128, 0.1);
+    --intel-red: #f87171;
+    --intel-red-light: rgba(248, 113, 113, 0.1);
+    --intel-orange: #fb923c;
+    --intel-purple: #a78bfa;
+    --intel-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+    --intel-shadow-lg: 0 6px 28px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2);
+    --intel-shadow-focus: 0 0 0 3px rgba(107, 138, 255, 0.25);
+}
+[data-theme="dark"] .intel-nav {
+    background: rgba(17, 19, 24, 0.92);
+    border-bottom-color: var(--intel-border);
+}
+[data-theme="dark"] .intel-hero {
+    background: radial-gradient(ellipse at 50% 0%, rgba(107, 138, 255, 0.08) 0%, transparent 70%);
+}
+[data-theme="dark"] .intel-domains-band {
+    background: #161922;
+}
+[data-theme="dark"] .intel-footer {
+    background: #0a0c10;
+}
+[data-theme="dark"] .intel-domain-card.depth-deep {
+    background: linear-gradient(135deg, var(--intel-surface) 0%, #1f1d2a 100%);
+}
+[data-theme="dark"] .intel-hub-submit.wide {
+    background: linear-gradient(135deg, var(--intel-accent), #4a6ae0);
+}
+[data-theme="dark"] .intel-synthesis {
+    border-left-color: #7a6530;
+}
+[data-theme="dark"] .intel-source-hub {
+    background: var(--intel-surface);
+}
+[data-theme="dark"] .intel-playlist-hint {
+    background: #2a2518;
+    border-color: #4a3d20;
+    color: #c9b06a;
+}
+[data-theme="dark"] .intel-playlist-hint svg { color: #c9b06a; }
+[data-theme="dark"] .intel-playlist-hint strong { color: #e0cc8a; }
+[data-theme="dark"] body { background: #111318; }
+
 * { box-sizing: border-box; }
 
 .intel-page {

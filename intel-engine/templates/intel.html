@@ -1,5 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply saved theme immediately to prevent flash
+(function() {
+    var t = localStorage.getItem('intel-theme');
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+})();
+</script>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,6 +47,11 @@
                     <line x1="8.5" y1="6" x2="15.5" y2="6"/>
                 </svg>
                 Graph
+            </button>
+            <button class="intel-nav-graph-btn" onclick="toggleDarkMode()" id="darkModeToggle" title="Toggle dark mode">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="darkModeIcon">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
             </button>
             <a href="{{ url_for('setup_page') }}" class="intel-nav-settings-btn" title="API Keys &amp; Settings">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -819,6 +831,38 @@
 
 <script>
 // ══════════════════════════════════════════════════════════
+// Dark Mode Toggle
+// ══════════════════════════════════════════════════════════
+
+function toggleDarkMode() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('intel-theme', 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('intel-theme', 'dark');
+    }
+    _updateDarkModeIcon();
+}
+
+function _updateDarkModeIcon() {
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+        // Sun icon for "switch to light"
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+    } else {
+        // Moon icon for "switch to dark"
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    }
+}
+
+// Set correct icon on page load
+document.addEventListener('DOMContentLoaded', _updateDarkModeIcon);
+
+
 // Shared Utilities
 // ══════════════════════════════════════════════════════════
 
