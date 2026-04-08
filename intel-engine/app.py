@@ -274,8 +274,6 @@ def knowledge_page():
             for child in children:
                 child['children'] = subtopics_by_parent.get(child['id'], [])
             cat['children'] = children
-            total_sources += cat['source_count'] or 0
-            total_insights += cat['insight_count'] or 0
             if children:
                 categories.append(cat)
 
@@ -1354,13 +1352,10 @@ def api_threshold_concepts():
             conn.close()
 
 
-def _build_conceptual_edges(conn, user_id):
-    """Build topic-based conceptual edges between domains (Connectivism).
-
-    Finds domains that share 2+ topics in their insights, creating organic
-    cross-domain connections based on actual content overlap.
-    """
+def _build_domain_topic_map(conn, user_id):
+    """Build a mapping of domain_id → set of topic strings from insights."""
     import json as _json
+    domain_topics = {}
     try:
         rows = conn.execute("""
             SELECT i.domain_id, i.topics
@@ -1369,10 +1364,8 @@ def _build_conceptual_edges(conn, user_id):
             WHERE d.user_id = ? AND i.topics IS NOT NULL AND i.topics != '' AND i.topics != '[]'
         """, (user_id,)).fetchall()
     except Exception:
-        return []
+        return domain_topics
 
-    # Build domain → topic set mapping
-    domain_topics = {}
     for r in rows:
         did = r['domain_id']
         try:
@@ -1383,8 +1376,14 @@ def _build_conceptual_edges(conn, user_id):
                 domain_topics[did].update(t.lower().strip() for t in topics if isinstance(t, str))
         except (ValueError, TypeError):
             continue
+    return domain_topics
 
-    # Find domain pairs sharing 1+ topics (lowered from 2 to connect related domains)
+
+def _build_conceptual_edges(conn, user_id, domain_topics=None):
+    """Build topic-based conceptual edges between domains (Connectivism)."""
+    if domain_topics is None:
+        domain_topics = _build_domain_topic_map(conn, user_id)
+
     edges = []
     seen = set()
     domain_ids = list(domain_topics.keys())
@@ -1468,50 +1467,25 @@ def api_knowledge_graph():
             for r in refs
         ]
 
-        # Conceptual edges: domains sharing topics (Connectivism)
-        conceptual_edges = _build_conceptual_edges(conn, uid)
+        # Build topic map once, reuse for both conceptual and category bridge edges
+        domain_topics = _build_domain_topic_map(conn, uid)
+        conceptual_edges = _build_conceptual_edges(conn, uid, domain_topics=domain_topics)
 
-        # Category bridge edges: connect level-0 categories that have related children
-        # This prevents isolated clusters (e.g., "Business" floating alone)
+        # Category bridge edges: connect level-0 categories sharing child topics
         category_bridges = []
         cat_ids = {r["id"] for r in domains if r["level"] == 0}
         if len(cat_ids) > 1:
-            # Map each category to the set of topics from ALL its descendants
-            cat_topics = {}
-            child_to_cat = {}
-            for r in domains:
-                if r["parent_id"] in cat_ids:
-                    child_to_cat[r["id"]] = r["parent_id"]
-            # Aggregate topics from conceptual edges to category level
-            for r in domains:
-                if r["id"] in cat_ids:
-                    cat_topics[r["id"]] = set()
-            # Use the domain_topics from conceptual edge builder
-            import json as _json2
-            try:
-                topic_rows = conn.execute("""
-                    SELECT i.domain_id, i.topics
-                    FROM insights i JOIN domains d ON i.domain_id = d.id
-                    WHERE d.user_id = ? AND i.topics IS NOT NULL AND i.topics != '[]'
-                """, (uid,)).fetchall()
-                for tr in topic_rows:
-                    did = tr['domain_id']
-                    cat_id = child_to_cat.get(did)
-                    if cat_id and cat_id in cat_topics:
-                        try:
-                            ts = _json2.loads(tr['topics']) if isinstance(tr['topics'], str) else tr['topics']
-                            if isinstance(ts, list):
-                                cat_topics[cat_id].update(t.lower().strip() for t in ts if isinstance(t, str))
-                        except (ValueError, TypeError):
-                            pass
-            except Exception:
-                pass
-            # Connect categories sharing any topics
+            child_to_cat = {r["id"]: r["parent_id"] for r in domains if r["parent_id"] in cat_ids}
+            cat_topics = {cid: set() for cid in cat_ids}
+            for did, topics in domain_topics.items():
+                cat_id = child_to_cat.get(did)
+                if cat_id and cat_id in cat_topics:
+                    cat_topics[cat_id].update(topics)
             cat_list = list(cat_topics.keys())
             seen_cats = set()
             for i, c1 in enumerate(cat_list):
                 for c2 in cat_list[i + 1:]:
-                    shared = cat_topics.get(c1, set()) & cat_topics.get(c2, set())
+                    shared = cat_topics[c1] & cat_topics[c2]
                     if shared:
                         pair = (min(c1, c2), max(c1, c2))
                         if pair not in seen_cats:

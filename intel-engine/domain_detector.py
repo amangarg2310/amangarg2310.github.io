@@ -23,7 +23,8 @@ from openai import OpenAI
 
 def _get_conn(db_path):
     """Get a DB connection with WAL mode and busy_timeout for concurrent access."""
-    conn = _get_conn(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn

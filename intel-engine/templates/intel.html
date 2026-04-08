@@ -1921,14 +1921,15 @@ async function _renderGraph() {
         catColorMap[n.id] = clusterPalette[_catIdx % clusterPalette.length];
         _catIdx++;
     });
+    // Build O(1) lookup map for parent resolution
+    const nodeById = Object.fromEntries(_graphData.nodes.map(n => [n.id, n]));
     // Map each domain to its category color
     function getClusterColor(n) {
         if (n.type === 'source') return '#475569';
         if (n.level === 0) return catColorMap[n.id] || '#a78bfa';
-        // Find ancestor category
         if (n.parentId && catColorMap[n.parentId]) return catColorMap[n.parentId];
         // Check grandparent for level-2 nodes
-        const parent = _graphData.nodes.find(p => p.id === n.parentId);
+        const parent = nodeById[n.parentId];
         if (parent && parent.parentId && catColorMap[parent.parentId]) return catColorMap[parent.parentId];
         return '#7c3aed';
     }
