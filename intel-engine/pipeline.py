@@ -812,35 +812,43 @@ def _run_shared_pipeline(
 
     # Step 5: Extract insights (parallel across chunks)
     all_insights = []
-    _update(f'Extracting insights from {len(chunks)} chunks...',
-            start_progress + 15, title=title, channel=channel, domain=domain_name)
 
-    if len(chunks) <= 1:
-        for i, chunk in enumerate(chunks):
-            insights = extract_insights(chunk, chunk_index=i)
-            all_insights.extend(insights)
+    # Guard: skip extraction if transcript is too short to produce insights
+    word_count = len(transcript.split())
+    if word_count < 30:
+        logger.warning(f"Transcript too short ({word_count} words) for '{title}' — skipping extraction")
+        _update('Transcript too short for extraction',
+                start_progress + 40, title=title, channel=channel, domain=domain_name)
     else:
-        completed = 0
-        with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as executor:
-            futures = {
-                executor.submit(extract_insights, chunk, chunk_index=i): i
-                for i, chunk in enumerate(chunks)
-            }
-            chunk_results = [None] * len(chunks)
-            for future in as_completed(futures):
-                idx = futures[future]
-                chunk_results[idx] = future.result()
-                completed += 1
-                progress = (start_progress + 15) + int((completed / len(chunks)) * 25)
-                _update(f'Extracting insights ({completed}/{len(chunks)})...',
-                        progress, title=title, channel=channel, domain=domain_name)
-            for result in chunk_results:
-                if result:
-                    all_insights.extend(result)
+        _update(f'Extracting insights from {len(chunks)} chunks...',
+                start_progress + 15, title=title, channel=channel, domain=domain_name)
 
-    # Track if extraction produced no results (possible silent failure)
-    if not all_insights and chunks:
-        logger.warning(f"0 insights extracted from {len(chunks)} chunks for '{title}' — possible extraction failure")
+        if len(chunks) <= 1:
+            for i, chunk in enumerate(chunks):
+                insights = extract_insights(chunk, chunk_index=i)
+                all_insights.extend(insights)
+        else:
+            completed = 0
+            with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as executor:
+                futures = {
+                    executor.submit(extract_insights, chunk, chunk_index=i): i
+                    for i, chunk in enumerate(chunks)
+                }
+                chunk_results = [None] * len(chunks)
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    chunk_results[idx] = future.result()
+                    completed += 1
+                    progress = (start_progress + 15) + int((completed / len(chunks)) * 25)
+                    _update(f'Extracting insights ({completed}/{len(chunks)})...',
+                            progress, title=title, channel=channel, domain=domain_name)
+                for result in chunk_results:
+                    if result:
+                        all_insights.extend(result)
+
+        # Track if extraction produced no results (possible silent failure)
+        if not all_insights and chunks:
+            logger.warning(f"0 insights extracted from {len(chunks)} chunks for '{title}' — possible extraction failure")
 
     # Step 6: Store insights
     _update('Storing insights...', 80,
@@ -906,9 +914,15 @@ def _run_shared_pipeline(
             logger.warning(f"Taxonomy evolution check skipped: {e}")
     threading.Thread(target=_bg_taxonomy, daemon=True).start()
 
-    _update_status(video_id, 'complete', 'Done', 100,
-                   title=title, channel=channel, domain=domain_name,
-                   insights_count=len(all_insights))
+    if all_insights:
+        _update_status(video_id, 'complete', 'Done', 100,
+                       title=title, channel=channel, domain=domain_name,
+                       insights_count=len(all_insights))
+    else:
+        _update_status(video_id, 'complete',
+                       'Done — no insights extracted (transcript may be unavailable)', 100,
+                       title=title, channel=channel, domain=domain_name,
+                       insights_count=0)
 
     logger.info(f"Pipeline complete: {title} → {domain_name} ({len(all_insights)} insights)")
 

@@ -5,6 +5,7 @@ Paste a YouTube URL, web article, upload a file, or paste text → everything is
 Knowledge compounds over time per domain.
 """
 
+import json
 import logging
 import os
 import sqlite3
@@ -486,6 +487,13 @@ def domain_page(domain_name):
             convergence = _json.loads(synthesis['convergence_data'])
         except (ValueError, TypeError):
             pass
+
+    # Parse suggested questions for template
+    if synthesis:
+        try:
+            synthesis['suggested_questions_list'] = json.loads(synthesis.get('suggested_questions') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            synthesis['suggested_questions_list'] = []
 
     return render_template("intel.html",
                            domain=domain,

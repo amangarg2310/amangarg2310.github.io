@@ -413,6 +413,29 @@ def _snapshot_synthesis(current: dict, domain_id: int, db_path):
         logger.warning(f"Synthesis snapshot failed for domain {domain_id}: {e}")
 
 
+def _generate_suggested_question(domain_name: str, synthesis_content: str, api_key: str) -> list:
+    """Generate 1 suggested question from synthesis content (NotebookLM-style)."""
+    try:
+        client = Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=config.ANTHROPIC_HAIKU_MODEL,
+            system="You help users explore knowledge bases.",
+            messages=[{"role": "user", "content": f"""Based on this knowledge synthesis about "{domain_name}", generate exactly 1 thought-provoking question that would help someone deepen their understanding. The question should be specific to the content (not generic), practical, and something the knowledge base can answer well.
+
+SYNTHESIS:
+{synthesis_content[:3000]}
+
+Return ONLY the question text, nothing else. No quotes, no numbering, no prefix."""}],
+            temperature=0.7,
+            max_tokens=100,
+        )
+        q = response.content[0].text.strip().strip('"').strip("'")
+        return [q] if q else []
+    except Exception as e:
+        logger.warning(f"Suggested question generation failed: {e}")
+        return []
+
+
 def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel: str, db_path=None, source_date: str = None) -> str:
     """Create or update the domain synthesis after a new source is processed."""
     db_path = db_path or config.DB_PATH
@@ -478,7 +501,8 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     synthesis_content = response.content[0].text.strip()
 
-    suggested = "[]"
+    suggested_list = _generate_suggested_question(domain_name, synthesis_content, api_key)
+    suggested = json.dumps(suggested_list)
     try:
         convergence = _analyze_convergence(domain_id, db_path) or ""
     except Exception as e:
@@ -640,7 +664,8 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     synthesis_content = response.content[0].text.strip()
 
-    suggested = "[]"
+    suggested_list = _generate_suggested_question(domain_name, synthesis_content, api_key)
+    suggested = json.dumps(suggested_list)
 
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
