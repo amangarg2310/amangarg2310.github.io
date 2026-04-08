@@ -76,6 +76,45 @@ def get_source_type_from_ext(filename: str) -> str:
     return 'unknown'
 
 
+def _compute_live_domain_counts(conn, user_id):
+    """Compute actual source_count and insight_count per domain from live data.
+
+    Returns {domain_id: {'source_count': N, 'insight_count': N}}.
+    """
+    rows = conn.execute("""
+        SELECT s.domain_id,
+               COUNT(DISTINCT s.id) as source_count,
+               COUNT(i.id) as insight_count
+        FROM sources s
+        LEFT JOIN insights i ON i.source_id = s.id
+        WHERE s.status = 'processed' AND (s.user_id = ? OR s.user_id IS NULL)
+        GROUP BY s.domain_id
+    """, (user_id,)).fetchall()
+    counts = {}
+    for r in rows:
+        counts[r['domain_id']] = {
+            'source_count': r['source_count'],
+            'insight_count': r['insight_count'],
+        }
+    return counts
+
+
+def _overlay_live_counts(nodes, live_counts):
+    """Overlay live counts onto domain nodes. For level-0 parents, sum children."""
+    for node in nodes:
+        children = node.get('children', [])
+        if children:
+            # Recurse into children first
+            _overlay_live_counts(children, live_counts)
+            # Parent = sum of children
+            node['source_count'] = sum(c.get('source_count', 0) for c in children)
+            node['insight_count'] = sum(c.get('insight_count', 0) for c in children)
+        else:
+            c = live_counts.get(node.get('id'), {'source_count': 0, 'insight_count': 0})
+            node['source_count'] = c['source_count']
+            node['insight_count'] = c['insight_count']
+
+
 # ── Security Headers ──
 
 @app.after_request
@@ -167,6 +206,12 @@ def index():
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
+        # Overlay live counts
+        live_counts = _compute_live_domain_counts(conn, uid)
+        for d in domains:
+            c = live_counts.get(d.get('id'), {'source_count': 0, 'insight_count': 0})
+            d['source_count'] = c['source_count']
+            d['insight_count'] = c['insight_count']
     except sqlite3.OperationalError:
         pass
     finally:
@@ -226,6 +271,12 @@ def knowledge_page():
                 'name': 'Other', 'icon': '📂', 'source_count': 0, 'insight_count': 0,
                 'children': orphans,
             })
+
+        # Overlay live counts (prevents stale column values)
+        live_counts = _compute_live_domain_counts(conn, uid)
+        _overlay_live_counts(categories, live_counts)
+        total_sources = sum(cat.get('source_count', 0) for cat in categories)
+        total_insights = sum(cat.get('insight_count', 0) for cat in categories)
 
     except sqlite3.OperationalError:
         pass
@@ -400,6 +451,15 @@ def domain_page(domain_name):
                 by_id[pid]['children'].append(node)
             elif r.get('level', 0) == 0 or not pid:
                 domain_tree.append(node)
+
+        # Overlay live counts (prevents stale column values)
+        live_counts = _compute_live_domain_counts(conn, uid)
+        _overlay_live_counts(domain_tree, live_counts)
+        # Also fix the current domain's counts for the header
+        if domain:
+            c = live_counts.get(domain['id'], {'source_count': 0, 'insight_count': 0})
+            domain['source_count'] = c['source_count']
+            domain['insight_count'] = c['insight_count']
 
     except sqlite3.OperationalError:
         return redirect(url_for('index'))
@@ -701,6 +761,10 @@ def api_domain_tree():
                 by_id[parent_id]['children'].append(node)
             elif r.get('level', 0) == 0 or not parent_id:
                 roots.append(node)
+
+        # Overlay live counts
+        live_counts = _compute_live_domain_counts(conn, uid)
+        _overlay_live_counts(roots, live_counts)
 
         return jsonify({"tree": roots})
     except sqlite3.OperationalError:
