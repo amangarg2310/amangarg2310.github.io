@@ -78,10 +78,13 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
                     {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
                 ],
                 temperature=0.3,
-                max_tokens=4000,
+                max_tokens=8192,
             )
 
             raw_content = response.content[0].text.strip()
+            stop_reason = response.stop_reason  # 'end_turn' or 'max_tokens'
+            if stop_reason == 'max_tokens':
+                logger.warning(f"Chunk {chunk_index}: response truncated by max_tokens — attempting recovery")
             insights = _parse_insights_json(raw_content, chunk_index)
 
             # Validate and filter insights
@@ -97,7 +100,9 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
             # Track when API succeeded but produced no valid insights
             if not valid and errors is not None:
                 if not insights:
-                    errors.append({'chunk': chunk_index, 'error': 'JSON parse failed or empty response',
+                    truncation_note = ' (response was TRUNCATED by max_tokens)' if stop_reason == 'max_tokens' else ''
+                    errors.append({'chunk': chunk_index,
+                                   'error': f'JSON parse failed or empty response{truncation_note}',
                                    'response_preview': raw_content[:300]})
                 else:
                     errors.append({'chunk': chunk_index, 'error': f'All {len(insights)} parsed items failed validation'})
@@ -118,12 +123,17 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
 
 
 def _parse_insights_json(content: str, chunk_index: int) -> list:
-    """Parse GPT response as JSON array with multiple fallback strategies."""
-    # Strip markdown code fences
+    """Parse GPT response as JSON array with multiple fallback strategies.
+
+    Handles: clean JSON, markdown-fenced JSON, truncated responses (max_tokens exceeded).
+    """
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
     if content.startswith("```"):
+        # Remove opening fence line (```json or ```)
         content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
+        # Remove closing fence if present (may be absent if truncated)
+        if content.rstrip().endswith("```"):
+            content = content.rstrip()[:-3]
         content = content.strip()
 
     # Strategy 1: direct JSON parse
@@ -155,6 +165,24 @@ def _parse_insights_json(content: str, chunk_index: int) -> list:
                 return [result]
         except (json.JSONDecodeError, TypeError):
             pass
+
+    # Strategy 4: Truncation recovery — response was cut off by max_tokens.
+    # Find the last complete JSON object and close the array.
+    # Look for pattern: }, followed by optional whitespace, then incomplete object or EOF
+    last_complete = content.rfind("}")
+    if last_complete > 0 and "[" in content:
+        candidate = content[:last_complete + 1].rstrip().rstrip(",") + "]"
+        # Make sure it starts with [
+        bracket_pos = candidate.find("[")
+        if bracket_pos >= 0:
+            candidate = candidate[bracket_pos:]
+            try:
+                result = json.loads(candidate)
+                if isinstance(result, list) and len(result) > 0:
+                    logger.info(f"Truncation recovery: salvaged {len(result)} insights from chunk {chunk_index}")
+                    return result
+            except (json.JSONDecodeError, TypeError):
+                pass
 
     logger.warning(f"All JSON parse strategies failed for chunk {chunk_index}. Response: {content[:200]}...")
     return []
