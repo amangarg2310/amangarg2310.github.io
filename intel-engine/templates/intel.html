@@ -72,7 +72,12 @@
     <div class="intel-detail-layout">
 
         <!-- ── Sidebar (Left) ── -->
-        <aside class="intel-sources-panel">
+        <aside class="intel-sources-panel mobile-collapsed" id="sourcesPanel">
+            <!-- Mobile sidebar toggle -->
+            <button class="intel-sidebar-toggle" onclick="this.parentElement.classList.toggle('mobile-collapsed')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                <span>Sources &amp; Domains</span>
+            </button>
 
             <!-- Taxonomy Tree -->
             {% if domain_tree %}
