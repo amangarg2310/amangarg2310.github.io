@@ -35,7 +35,7 @@ def backfill_insights():
     conn = _get_conn()
     sources = conn.execute("""
         SELECT id, video_id, title, transcript FROM sources
-        WHERE status = 'processed' AND transcript IS NOT NULL AND transcript != ''
+        WHERE status IN ('processed', 'processed_empty') AND transcript IS NOT NULL AND transcript != ''
     """).fetchall()
     conn.close()
 
@@ -107,7 +107,7 @@ def backfill_embeddings():
         FROM insights i
         JOIN sources s ON i.source_id = s.id
         LEFT JOIN domains d ON i.domain_id = d.id
-        WHERE s.status = 'processed'
+        WHERE s.status IN ('processed', 'processed_empty')
         ORDER BY i.id
     """).fetchall()
     conn.close()

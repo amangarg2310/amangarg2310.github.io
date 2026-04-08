@@ -56,7 +56,7 @@ def search_insights_hybrid(domain_id: int, query: str, limit: int = 15, db_path=
                i.key_quotes, i.embedding, i.evidence, i.source_context, i.confidence,
                s.title as source_title, s.channel
         FROM insights i JOIN sources s ON i.source_id = s.id
-        WHERE i.domain_id = ? AND s.status = 'processed'
+        WHERE i.domain_id = ? AND s.status IN ('processed', 'processed_empty')
     """, (domain_id,)).fetchall()
 
     if not rows:

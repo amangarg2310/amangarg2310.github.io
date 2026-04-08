@@ -202,7 +202,7 @@
                     </div>
                     <div class="intel-source-item-info">
                         <div class="intel-source-item-title">{{ source.title }}</div>
-                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights</div>
+                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights{% if source.insight_count == 0 %} <span class="intel-source-warn" title="No insights extracted — try re-processing">⚠</span>{% endif %}</div>
                         {% if source.ingestion_impact %}
                         <div class="intel-source-impact">{{ source.ingestion_impact }}</div>
                         {% endif %}
@@ -356,6 +356,22 @@
 
             <div class="intel-synthesis intel-animate-in" id="synthesisContent" data-level="{{ domain.level or 0 }}">
                 {{ synthesis_html | safe }}
+            </div>
+            {% elif domain.insight_count == 0 %}
+            <!-- Empty state: sources exist but no insights extracted -->
+            <div class="intel-empty-domain">
+                <div class="intel-empty-domain-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4M12 16h.01"/>
+                    </svg>
+                </div>
+                <h3 class="intel-empty-domain-title">No insights extracted yet</h3>
+                <p class="intel-empty-domain-desc">
+                    The {{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} in this domain didn't produce extractable insights.
+                    This can happen when transcripts are unavailable or content couldn't be parsed.
+                </p>
+                <p class="intel-empty-domain-hint">Try adding a different source, or re-process existing ones from the sidebar.</p>
             </div>
             {% endif %}
         </main>
@@ -613,10 +629,20 @@
                        class="intel-hub-link-input"
                        id="urlInput"
                        placeholder="Paste a YouTube video, playlist (max 15), or article URL..."
+                       oninput="checkPlaylistHint(this.value)"
                        autocomplete="off"
                        spellcheck="false"
                        autofocus
                        onkeydown="if(event.key==='Enter')ingestFromHome()">
+                <!-- Playlist visibility hint (appears when playlist URL detected) -->
+                <div class="intel-playlist-hint" id="playlistHint" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <span>Playlist detected &mdash; must be <strong>Unlisted</strong> (not Private). In YouTube: Playlist settings &rarr; Visibility &rarr; Unlisted. Max 15 videos.</span>
+                </div>
                 <button class="intel-hub-submit wide" id="ingestBtn" onclick="ingestFromHome()">
                     Add to Knowledge Base
                 </button>
@@ -659,9 +685,10 @@
                     Add to Knowledge Base
                 </button>
             </div>
-        </div>
 
-        <div class="intel-status" id="statusCard"></div>
+            <!-- Inline processing status (inside source hub) -->
+            <div class="intel-inline-status" id="statusCard" style="display:none"></div>
+        </div>
 
         {% if not domains %}
         <div class="intel-how-it-works">
@@ -847,6 +874,7 @@ function submitTextFromHome() {
             showHomeStatus('error', 'Error', data.error, 0);
             contentInput.disabled = false;
             titleInput.disabled = false;
+            setTimeout(() => resetHomeInput(), 3000);
             return;
         }
         pollHomeStatus(data.video_id);
@@ -855,7 +883,15 @@ function submitTextFromHome() {
         showHomeStatus('error', 'Error', err.message, 0);
         contentInput.disabled = false;
         titleInput.disabled = false;
+        setTimeout(() => resetHomeInput(), 3000);
     });
+}
+
+function checkPlaylistHint(val) {
+    const hint = document.getElementById('playlistHint');
+    if (!hint) return;
+    const isPlaylist = /youtube\.com\/playlist\b.*[?&]list=/.test(val) && !/[?&]v=/.test(val);
+    hint.style.display = isPlaylist ? '' : 'none';
 }
 
 function ingestFromHome() {
@@ -867,8 +903,8 @@ function ingestFromHome() {
     }
 
     urlInput.disabled = true;
-    ingestBtn.disabled = true;
-    ingestBtn.innerHTML = '<div class="intel-spinner white"></div>';
+    _hideAllSubmitBtns();
+    showHomeStatus('processing', 'Starting...', 'Connecting...', 2);
 
     fetch('/api/ingest', {
         method: 'POST',
@@ -879,20 +915,20 @@ function ingestFromHome() {
     .then(data => {
         if (data.error) {
             showHomeStatus('error', 'Error', data.error, 0);
-            resetHomeInput();
+            setTimeout(() => resetHomeInput(), 3000);
             return;
         }
         if (data.status === 'already_exists') {
             showHomeStatus('complete', data.title || 'Source',
                 `Already in your knowledge base.`, 100, null, data.source_id);
-            resetHomeInput();
+            setTimeout(() => resetHomeInput(), 2000);
             return;
         }
         pollHomeStatus(data.video_id);
     })
     .catch(err => {
         showHomeStatus('error', 'Error', err.message, 0);
-        resetHomeInput();
+        setTimeout(() => resetHomeInput(), 3000);
     });
 }
 
@@ -912,12 +948,14 @@ function uploadFileFromHome(file) {
     .then(data => {
         if (data.error) {
             showHomeStatus('error', 'Error', data.error, 0);
+            setTimeout(() => resetHomeInput(), 3000);
             return;
         }
         pollHomeStatus(data.video_id);
     })
     .catch(err => {
         showHomeStatus('error', 'Error', err.message, 0);
+        setTimeout(() => resetHomeInput(), 3000);
     });
 
     // Reset file input
@@ -943,7 +981,7 @@ function pollHomeStatus(videoId) {
                     }, 1200);
                 } else if (data.status === 'error') {
                     clearInterval(interval);
-                    resetHomeInput();
+                    setTimeout(() => resetHomeInput(), 3000);
                 }
             })
             .catch(() => {
@@ -972,105 +1010,87 @@ function _startProgressTween() {
 }
 
 function _updateProgressDOM(pct) {
-    const circ = 125.66;
-    const offset = circ * (1 - pct / 100);
-    const ring = document.querySelector('.intel-ring-fill:not(.complete):not(.error)');
-    if (ring) ring.setAttribute('stroke-dashoffset', offset);
-    const pctEl = document.querySelector('.intel-ring-pct');
-    if (pctEl && !pctEl.querySelector('svg')) pctEl.textContent = pct + '%';
-    const fill = document.querySelector('.intel-progress-fill:not(.complete):not(.error)');
+    const pctEl = statusCard && statusCard.querySelector('.intel-inline-status-pct');
+    if (pctEl) pctEl.textContent = pct + '%';
+    const fill = statusCard && statusCard.querySelector('.intel-inline-status-fill:not(.complete):not(.error)');
     if (fill) fill.style.width = pct + '%';
+}
+
+function _hideAllSubmitBtns() {
+    if (ingestBtn) ingestBtn.style.display = 'none';
+    const upBtn = document.getElementById('homeUploadBtn');
+    if (upBtn) upBtn.style.display = 'none';
+    // Text pane button has no id — hide via pane query
+    const textPane = document.getElementById('hubPaneText');
+    if (textPane) {
+        const btn = textPane.querySelector('.intel-hub-submit');
+        if (btn) btn.style.display = 'none';
+    }
+}
+
+function _restoreAllSubmitBtns() {
+    if (ingestBtn) { ingestBtn.style.display = ''; ingestBtn.disabled = false; ingestBtn.textContent = 'Add to Knowledge Base'; }
+    const upBtn = document.getElementById('homeUploadBtn');
+    if (upBtn) { upBtn.style.display = ''; upBtn.disabled = false; }
+    const textPane = document.getElementById('hubPaneText');
+    if (textPane) {
+        const btn = textPane.querySelector('.intel-hub-submit');
+        if (btn) { btn.style.display = ''; btn.disabled = false; }
+    }
 }
 
 function showHomeStatus(status, title, step, progress, domain, sourceId) {
     if (!statusCard) return;
 
-    const circ = 125.66;  // 2 * π * 20
-
-    // For processing status: update existing DOM if card already exists (enables CSS transitions)
+    // For processing status: update existing DOM if already rendered (enables smooth transitions)
     if (status === 'processing') {
-        const existingCard = statusCard.querySelector('.intel-status-card');
-        const existingRing = statusCard.querySelector('.intel-ring-fill:not(.complete):not(.error)');
-
-        if (existingCard && existingRing) {
-            // Update step text and title only
-            const titleEl = statusCard.querySelector('.intel-status-title');
-            const stepEl = statusCard.querySelector('.intel-status-step');
-            if (titleEl) titleEl.textContent = title;
-            if (stepEl) stepEl.innerHTML = escapeHtml(step || '');
-
-            // Tween progress smoothly
+        const existing = statusCard.querySelector('.intel-inline-status-pct');
+        if (existing) {
+            const titleEl = statusCard.querySelector('.intel-inline-status-title');
+            const stepEl = statusCard.querySelector('.intel-inline-status-step');
+            if (titleEl) titleEl.textContent = title || 'Processing...';
+            if (stepEl) stepEl.textContent = step || '';
             _progressTarget = progress || 0;
             _startProgressTween();
             return;
         }
     }
 
-    // First render or non-processing status — build full card
     let fillClass = '';
-    let ringContent = '';
-    const offset = circ * (1 - (progress || 0) / 100);
+    let icon = '';
+    let pctText = (progress || 0) + '%';
+    let stepHtml = escapeHtml(step || '');
 
     if (status === 'processing') {
         _progressCurrent = progress || 0;
         _progressTarget = progress || 0;
-        fillClass = '';
-        ringContent = `
-            <div class="intel-progress-ring-wrapper">
-                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
-                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
-                    <circle class="intel-ring-fill" cx="24" cy="24" r="20"
-                        stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
-                </svg>
-                <span class="intel-ring-pct">${progress}%</span>
-            </div>`;
+        _hideAllSubmitBtns();
     } else if (status === 'complete' || status === 'already_exists') {
-        // Stop any running tween
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
         fillClass = 'complete';
-        ringContent = `
-            <div class="intel-progress-ring-wrapper">
-                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
-                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
-                    <circle class="intel-ring-fill complete" cx="24" cy="24" r="20"
-                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
-                </svg>
-                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
-            </div>`;
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#34c759"><polyline points="20 6 9 17 4 12"/></svg>';
+        pctText = '';
+        if (sourceId) {
+            stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+        }
     } else if (status === 'error') {
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
         fillClass = 'error';
-        ringContent = `
-            <div class="intel-progress-ring-wrapper">
-                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
-                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
-                    <circle class="intel-ring-fill error" cx="24" cy="24" r="20"
-                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
-                </svg>
-                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
-            </div>`;
-    }
-
-    let stepHtml = escapeHtml(step || '');
-    if (sourceId) {
-        stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#ff3b30"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        pctText = '';
     }
 
     statusCard.innerHTML = `
-        <div class="intel-status-card">
-            <div class="intel-status-header">
-                ${ringContent}
-                <div class="intel-status-info">
-                    <div class="intel-status-title">${escapeHtml(title)}</div>
-                    <div class="intel-status-step">${stepHtml}</div>
-                </div>
-            </div>
-            <div class="intel-progress-track">
-                <div class="intel-progress-fill ${fillClass}" style="width: ${progress}%"></div>
-            </div>
+        <div class="intel-inline-status-header">
+            <span class="intel-inline-status-title">${icon} ${escapeHtml(title || 'Processing...')}</span>
+            <span class="intel-inline-status-pct">${pctText}</span>
+        </div>
+        <div class="intel-inline-status-step">${stepHtml}</div>
+        <div class="intel-inline-status-track">
+            <div class="intel-inline-status-fill ${fillClass}" style="width: ${progress || 0}%"></div>
         </div>
     `;
-    statusCard.classList.add('active');
+    statusCard.style.display = '';
 }
 
 function reprocessFromHome(sourceId) {
@@ -1088,11 +1108,12 @@ function reprocessFromHome(sourceId) {
 }
 
 function resetHomeInput() {
-    if (urlInput) urlInput.disabled = false;
-    if (ingestBtn) {
-        ingestBtn.disabled = false;
-        ingestBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
-    }
+    if (urlInput) { urlInput.disabled = false; urlInput.value = ''; }
+    _restoreAllSubmitBtns();
+    // Hide status card after a brief delay so user sees final state
+    setTimeout(() => {
+        if (statusCard) statusCard.style.display = 'none';
+    }, 300);
 }
 
 

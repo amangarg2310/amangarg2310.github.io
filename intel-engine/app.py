@@ -87,7 +87,7 @@ def _compute_live_domain_counts(conn, user_id):
                COUNT(i.id) as insight_count
         FROM sources s
         LEFT JOIN insights i ON i.source_id = s.id
-        WHERE s.status = 'processed' AND (s.user_id = ? OR s.user_id IS NULL)
+        WHERE s.status IN ('processed', 'processed_empty') AND (s.user_id = ? OR s.user_id IS NULL)
         GROUP BY s.domain_id
     """, (user_id,)).fetchall()
     counts = {}
@@ -434,7 +434,7 @@ def domain_page(domain_name):
             SELECT s.*, COUNT(i.id) as insight_count
             FROM sources s
             LEFT JOIN insights i ON i.source_id = s.id
-            WHERE s.domain_id IN ({placeholders}) AND s.status = 'processed'
+            WHERE s.domain_id IN ({placeholders}) AND s.status IN ('processed', 'processed_empty')
             GROUP BY s.id
             ORDER BY s.created_at DESC
         """, content_domain_ids).fetchall()]
@@ -814,7 +814,7 @@ def api_merge_domains():
         conn.execute("UPDATE domains SET parent_id = ? WHERE parent_id = ? AND level = 2", (target_id, source_id))
 
         # Update counts on target
-        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'", (target_id,)).fetchone()[0]
+        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')", (target_id,)).fetchone()[0]
         ins_count = conn.execute("SELECT COUNT(*) FROM insights WHERE domain_id = ?", (target_id,)).fetchone()[0]
         now = datetime.now(timezone.utc).isoformat()
         conn.execute("UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
@@ -995,7 +995,7 @@ def api_delete_source(source_id):
 
         # Check if domain has remaining sources
         remaining = conn.execute(
-            "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'",
+            "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')",
             (domain_id,),
         ).fetchone()[0]
 
@@ -1412,7 +1412,7 @@ def api_knowledge_graph():
         # Source nodes (processed only)
         sources = conn.execute("""
             SELECT id, title, url, domain_id, source_type
-            FROM sources WHERE user_id = ? AND status = 'processed'
+            FROM sources WHERE user_id = ? AND status IN ('processed', 'processed_empty')
             ORDER BY created_at DESC
         """, (uid,)).fetchall()
 

@@ -423,17 +423,6 @@
 }
 
 /* ── Processing Status Pill ── */
-.intel-status {
-    display: none;
-    margin-top: 20px;
-    width: 100%;
-    max-width: 640px;
-}
-
-.intel-status.active {
-    display: block;
-}
-
 /* ── How It Works (empty state onboarding) ── */
 .intel-how-it-works {
     display: flex;
@@ -2656,6 +2645,124 @@
     font-size: 14px;
     color: var(--intel-text-secondary);
     box-shadow: var(--intel-shadow);
+}
+
+/* ── Playlist Visibility Hint ── */
+.intel-playlist-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    background: #fef9eb;
+    border: 1px solid #f0dfa0;
+    border-radius: var(--intel-radius-xs);
+    font-size: 12px;
+    line-height: 1.5;
+    color: #7a6520;
+    animation: intel-fadeUp 0.25s ease-out both;
+}
+.intel-playlist-hint svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #b8950a;
+}
+.intel-playlist-hint strong {
+    font-weight: 700;
+    color: #5c4d15;
+}
+
+/* ── Inline Processing Status (inside source hub) ── */
+.intel-inline-status {
+    padding: 16px;
+    border-top: 1px solid var(--intel-border-light);
+    animation: intel-fadeUp 0.3s ease-out both;
+}
+.intel-inline-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+.intel-inline-status-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--intel-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.intel-inline-status-pct {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--intel-accent);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+.intel-inline-status-step {
+    font-size: 12px;
+    color: var(--intel-text-secondary);
+    margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.intel-inline-status-track {
+    height: 4px;
+    background: var(--intel-border-light);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.intel-inline-status-fill {
+    height: 100%;
+    background: var(--intel-accent);
+    border-radius: 2px;
+    transition: width 80ms linear;
+}
+.intel-inline-status-fill.complete { background: var(--intel-green, #34c759); }
+.intel-inline-status-fill.error { background: var(--intel-red, #ff3b30); }
+
+/* ── Empty Domain State ── */
+.intel-empty-domain {
+    text-align: center;
+    padding: 64px 24px;
+    max-width: 480px;
+    margin: 0 auto;
+}
+.intel-empty-domain-icon {
+    color: var(--intel-text-tertiary);
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+.intel-empty-domain-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--intel-text);
+    margin-bottom: 8px;
+}
+.intel-empty-domain-desc {
+    font-size: 14px;
+    color: var(--intel-text-secondary);
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+.intel-empty-domain-hint {
+    font-size: 13px;
+    color: var(--intel-accent);
+    font-weight: 500;
+}
+
+/* ── Source Warning Indicator ── */
+.intel-source-warn {
+    font-size: 12px;
+    margin-left: 4px;
+    cursor: help;
+    opacity: 0.7;
 }
 
 /* ── Footer ── */

@@ -110,7 +110,7 @@ def _repair_domain_counts(domain_id, db_path):
         conn = _get_conn(db_path)
         actual = conn.execute("""
             SELECT
-                (SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed') as sc,
+                (SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')) as sc,
                 (SELECT COUNT(*) FROM insights WHERE domain_id = ?) as ic
         """, (domain_id, domain_id)).fetchone()
         now = datetime.now(timezone.utc).isoformat()
@@ -838,6 +838,10 @@ def _run_shared_pipeline(
                 if result:
                     all_insights.extend(result)
 
+    # Track if extraction produced no results (possible silent failure)
+    if not all_insights and chunks:
+        logger.warning(f"0 insights extracted from {len(chunks)} chunks for '{title}' — possible extraction failure")
+
     # Step 6: Store insights
     _update('Storing insights...', 80,
             title=title, channel=channel, domain=domain_name)
@@ -872,10 +876,11 @@ def _run_shared_pipeline(
     conn.close()
 
     # Step 6.5: Mark as processed BEFORE synthesis (so source_count query includes this source)
+    source_status = 'processed' if all_insights else 'processed_empty'
     conn = _get_conn(db_path)
     conn.execute(
-        "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
-        (datetime.now(timezone.utc).isoformat(), source_id),
+        "UPDATE sources SET status = ?, processed_at = ? WHERE id = ?",
+        (source_status, datetime.now(timezone.utc).isoformat(), source_id),
     )
     conn.commit()
     conn.close()

@@ -312,7 +312,7 @@ def _analyze_convergence(domain_id: int, db_path) -> str:
     rows = conn.execute("""
         SELECT i.title, i.content, i.confidence, s.title as source_title, s.channel
         FROM insights i JOIN sources s ON i.source_id = s.id
-        WHERE i.domain_id = ? AND s.status = 'processed'
+        WHERE i.domain_id = ? AND s.status IN ('processed', 'processed_empty')
         ORDER BY s.title, i.chunk_index
     """, (domain_id,)).fetchall()
     conn.close()
@@ -447,7 +447,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     domain_name = domain_row[0] if domain_row else "Unknown"
 
     source_count = conn.execute(
-        "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'", (domain_id,)
+        "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')", (domain_id,)
     ).fetchone()[0]
     insight_count = conn.execute(
         "SELECT COUNT(*) FROM insights WHERE domain_id = ?", (domain_id,)
@@ -556,12 +556,12 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
                s.title as source_title, s.channel, s.created_at as source_date, s.source_type
         FROM insights i
         JOIN sources s ON i.source_id = s.id
-        WHERE i.domain_id = ? AND s.status = 'processed'
+        WHERE i.domain_id = ? AND s.status IN ('processed', 'processed_empty')
         ORDER BY s.created_at ASC, i.chunk_index ASC
     """, (domain_id,)).fetchall()
 
     source_count = conn.execute(
-        "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'", (domain_id,)
+        "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')", (domain_id,)
     ).fetchone()[0]
     insight_count = len(rows)
 
