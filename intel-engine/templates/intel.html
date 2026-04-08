@@ -381,6 +381,12 @@
         </div>
 
         {% if knowledge_categories %}
+        <div class="intel-stats-bar">
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ total_sources }}</span> sources</div>
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ total_insights }}</span> insights</div>
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ knowledge_categories|length }}</span> domains</div>
+        </div>
+
         <div class="bio-tree" id="bioTree">
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
@@ -559,6 +565,13 @@
          HOME VIEW — URL Input + Domain Grid
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-hero" id="heroSection">
+        <!-- Decorative floating SVGs -->
+        <svg class="intel-hero-decor decor-book" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <svg class="intel-hero-decor decor-bulb" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+        <svg class="intel-hero-decor decor-dots" width="60" height="40" viewBox="0 0 60 40"><circle cx="8" cy="20" r="6" fill="currentColor" opacity="0.4"/><circle cx="28" cy="10" r="4" fill="currentColor" opacity="0.3"/><circle cx="24" cy="30" r="3" fill="currentColor" opacity="0.25"/><circle cx="46" cy="18" r="5" fill="currentColor" opacity="0.35"/><circle cx="52" cy="34" r="2.5" fill="currentColor" opacity="0.2"/></svg>
+        <svg class="intel-hero-decor decor-cap" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
+
+        <div class="intel-hero-tag">Your knowledge, distilled</div>
         <h1 class="intel-hero-title">Learn from any source.</h1>
         <p class="intel-hero-subtitle">
             Paste a link, upload a document, or add notes — we'll extract every insight and build your knowledge base automatically.
@@ -649,9 +662,30 @@
         </div>
 
         <div class="intel-status" id="statusCard"></div>
+
+        {% if not domains %}
+        <div class="intel-how-it-works">
+            <div class="intel-step">
+                <div class="intel-step-num">1</div>
+                <div class="intel-step-title">Add a source</div>
+                <div class="intel-step-desc">Paste a YouTube link, article URL, or upload any document</div>
+            </div>
+            <div class="intel-step">
+                <div class="intel-step-num">2</div>
+                <div class="intel-step-title">AI extracts insights</div>
+                <div class="intel-step-desc">Every claim, technique, and concept gets structured automatically</div>
+            </div>
+            <div class="intel-step">
+                <div class="intel-step-num">3</div>
+                <div class="intel-step-title">Knowledge compounds</div>
+                <div class="intel-step-desc">Sources converge into a synthesized, queryable knowledge base</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     {% if domains %}
+    <div class="intel-domains-band">
     <div class="intel-domains-section">
         <div class="intel-section-header">
             <a href="{{ url_for('knowledge_page') }}" class="intel-section-title intel-section-title-link">Your Knowledge <span class="intel-section-arrow">&rsaquo;</span></a>
@@ -687,6 +721,7 @@
             {% endfor %}
         </div>
     </div>
+    </div>
     {% else %}
     <div class="intel-empty">
         <div class="intel-empty-icon">📚</div>
@@ -700,6 +735,19 @@
     {% endif %}
 
 </div>
+
+<!-- Footer -->
+<footer class="intel-footer">
+    <div class="intel-footer-inner">
+        <div class="intel-footer-brand">
+            <span class="intel-footer-logo">distylme</span>
+            <span class="intel-footer-tagline">Your knowledge, distilled.</span>
+        </div>
+        <div class="intel-footer-links">
+            <span class="intel-footer-copy">&copy; 2026 distylme</span>
+        </div>
+    </div>
+</footer>
 
 <!-- Domain Context Menu -->
 <div class="intel-context-menu" id="domainContextMenu" style="display:none;">

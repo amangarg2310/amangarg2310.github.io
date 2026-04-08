@@ -85,11 +85,13 @@ Private playlists are detected and the user is told to change to Unlisted. Max 1
 
 ## Page Structure
 
-**Homepage** (`/`): Ingestion hub — URL input, file upload, text paste tabs + domain card grid for navigation. No synthesis content on homepage; it's purely for adding content and browsing domains.
+**Homepage** (`/`): Platform landing — hero section with floating decorative SVGs and aspirational tagline, multi-source input hub (Link/Upload/Text tabs), "How it Works" 3-step onboarding for empty state, domain card grid on warm tinted background band. Footer with brand.
 
 **Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content (AI search → convergence indicators → synthesis brief). This is where the user reads and queries their knowledge.
 
-**Knowledge Graph** (overlay via nav button): Force-graph visualization with breathing nodes, flowing particles, conceptual edges (amber dotted) between domains sharing topics, click-to-detail panels.
+**Knowledge Base** (`/knowledge`): Hierarchical bio-tree of all domains with stats bar (sources/insights/domains counts) and SVG connectors. Double-click any node to navigate.
+
+**Knowledge Graph** (overlay via nav button): Force-graph visualization with breathing nodes, flowing particles, conceptual edges (amber dotted) between domains sharing topics, glassmorphism back button.
 
 ## API Endpoints
 
@@ -107,16 +109,18 @@ Private playlists are detected and the user is told to change to Unlisted. Max 1
 
 ## Design System
 
-NotebookLM-inspired scholarly aesthetic (not flashy SaaS):
+Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD), Akadian, and Duck.school. Scholarly but visually rich:
 
-- **Palette:** Warm neutrals (`#fafaf8` bg, `#e4e0da` borders), muted indigo accent (`#4f6ef7`), amber for TLDR/synthesis/convergence borders (`#c4a757`/`#d4a757`)
-- **Typography:** Inter font, max weight 600 on headings, 1.75 line-height for synthesis body text
-- **Surfaces:** Warm shadow tints (`rgba(30,25,15,...)`), no harsh black shadows
-- **Interactions:** No scale transforms on hover, background-shift only, consistent focus rings (`box-shadow`) on all inputs
-- **Graph:** Force-graph with breathing pulse, flowing particles, conceptual edges (amber dotted for shared topics), reference edges (violet dashed), hierarchy edges (solid), click-to-detail panels
-- **Coverage Depth:** Domain cards show thin (dashed border, 1-2 sources), moderate (solid, 3-5), deep (amber border + dot, 6+)
-- **Convergence:** Compact side-by-side cards — green for agreements, amber for disagreements — shown on domain detail page above synthesis
-- **Ingestion Impact:** Italic 2-line summary per source in sidebar, clamped with CSS
+- **Palette:** Warm neutrals (`#fafaf8` bg, `#e4e0da` borders), muted indigo accent (`#4f6ef7`), amber for TLDR/synthesis/convergence borders (`#d4a757`). Domain grid section uses warmer tinted background (`#f5f3ee`). Footer is dark warm (`#1a1916`).
+- **Typography:** Inter font, weight 400-800. Hero heading: 48px weight 800. Section titles: 24px weight 700. Domain card names: 18px weight 700. Synthesis body: 15px, 1.8 line-height. Domain detail title: 28px weight 700.
+- **Hero Section:** Radial gradient glow (`rgba(79,110,247,0.06)`), floating decorative SVGs (book, lightbulb, dots, graduation cap) with breathing animations, "YOUR KNOWLEDGE, DISTILLED" tagline above heading.
+- **Micro-animations:** Hero elements fade up on page load (staggered 0.1-0.4s). Domain cards stagger in (intel-cardIn). Floating SVGs breathe with offset timing (5-8s cycles). Stats bar numbers pop in (intel-countPop). Processing icon pulses. Context menus slide down. Modals scale in with spring easing.
+- **Surfaces:** Gradient buttons (accent → #3d5ce6), warm shadow tints (`rgba(30,25,15,...)`), focus glow rings (`0 0 0 4px rgba(79,110,247,0.08)`). Cards lift on hover with accent border.
+- **Visual Richness:** Decorative geometric circles (CSS ::before/::after) on domain grid section. "How it Works" 3-step onboarding for empty state. Stats bar (sources/insights/domains) on knowledge page. Dark footer with brand.
+- **Graph:** Force-graph with breathing pulse, flowing particles, conceptual edges (amber dotted for shared topics), glassmorphism back button.
+- **Coverage Depth:** Domain cards show thin (dashed border, 1-2 sources), moderate (solid, 3-5), deep (amber border + warm gradient bg, 6+)
+- **Convergence:** Side-by-side cards — green left border for agreements, orange for disagreements — with hover lift and shadow.
+- **Knowledge Tree:** Bio-tree with SVG connectors, pulse animations, staggered node entrance. Single-click expands, double-click navigates to domain page.
 
 ## Key Patterns
 
