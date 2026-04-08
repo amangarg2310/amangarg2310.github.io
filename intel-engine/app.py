@@ -34,11 +34,26 @@ app.config['MAX_CONTENT_LENGTH'] = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 login_manager = LoginManager(app)
 login_manager.login_view = 'login_page'
 
+@login_manager.unauthorized_handler
+def unauthorized_api():
+    """Return JSON for API requests, redirect for page requests."""
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Session expired. Please refresh the page and sign in again."}), 401
+    return redirect(url_for('login_page'))
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.get(int(user_id))
 
 logger = logging.getLogger(__name__)
+
+@app.errorhandler(500)
+def handle_500(e):
+    """Return JSON for API routes, HTML for page routes."""
+    logger.error(f"500 error: {e}", exc_info=True)
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
+    return f"<h1>Internal Server Error</h1><p>{e}</p>", 500
 
 
 # ── Helpers ──
