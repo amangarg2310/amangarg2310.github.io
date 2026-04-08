@@ -509,13 +509,21 @@ def domain_page(domain_name):
 @app.route("/setup")
 def setup_page():
     """API key setup page."""
-    return render_template("setup.html")
+    # Show which keys are already configured
+    configured = {}
+    for service in ('openai', 'anthropic', 'supadata'):
+        key = config.get_api_key(service)
+        configured[service] = bool(key)
+    return render_template("setup.html", configured=configured)
 
 
 @app.route("/setup/save", methods=["POST"])
 def save_setup():
-    """Save API key."""
+    """Save API keys."""
     openai_key = request.form.get('openai_key', '').strip()
+    anthropic_key = request.form.get('anthropic_key', '').strip()
+    supadata_key = request.form.get('supadata_key', '').strip()
+
     if not openai_key:
         return render_template("setup.html", error="OpenAI API key is required.")
 
@@ -527,6 +535,16 @@ def save_setup():
             INSERT OR REPLACE INTO api_credentials (service, api_key, created_at, updated_at)
             VALUES ('openai', ?, ?, ?)
         """, (openai_key, now, now))
+        if anthropic_key:
+            conn.execute("""
+                INSERT OR REPLACE INTO api_credentials (service, api_key, created_at, updated_at)
+                VALUES ('anthropic', ?, ?, ?)
+            """, (anthropic_key, now, now))
+        if supadata_key:
+            conn.execute("""
+                INSERT OR REPLACE INTO api_credentials (service, api_key, created_at, updated_at)
+                VALUES ('supadata', ?, ?, ?)
+            """, (supadata_key, now, now))
         conn.commit()
     finally:
         if conn:

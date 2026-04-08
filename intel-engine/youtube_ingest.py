@@ -106,7 +106,14 @@ def _extract_text(transcript) -> str:
 
 def _fetch_transcript_supadata(video_id: str) -> str:
     """Fetch transcript via Supadata.ai free API (100 req/month free, no proxy needed)."""
-    api_key = os.environ.get('SUPADATA_API_KEY', '').strip()
+    # Try DB-stored key first (from setup page), then env var
+    try:
+        import config as _cfg
+        api_key = _cfg.get_api_key('supadata')
+    except Exception:
+        api_key = ''
+    if not api_key:
+        api_key = os.environ.get('SUPADATA_API_KEY', '').strip()
     if not api_key:
         return ""
 
@@ -216,13 +223,17 @@ def ingest_video(url: str) -> VideoMeta:
     transcript = fetch_transcript(video_id)
 
     if not transcript:
-        has_supadata = bool(os.environ.get('SUPADATA_API_KEY', '').strip())
+        # Check if Supadata key is configured (DB or env var)
+        try:
+            import config as _cfg
+            has_supadata = bool(_cfg.get_api_key('supadata'))
+        except Exception:
+            has_supadata = bool(os.environ.get('SUPADATA_API_KEY', '').strip())
         has_proxy = bool(os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip())
         if not has_supadata and not has_proxy:
             raise ValueError(
                 "YouTube is blocking transcript requests from this server. "
-                "Set SUPADATA_API_KEY env var (free at supadata.ai, 100 videos/month) "
-                "to fix this."
+                "Add a Supadata API key in Settings (free at supadata.ai, 100 videos/month)."
             )
         raise ValueError(f"No transcript available for video: {video_id}")
 

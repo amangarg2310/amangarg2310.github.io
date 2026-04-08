@@ -57,6 +57,7 @@ def get_api_key(service: str) -> str:
     env_map = {
         'openai': 'OPENAI_API_KEY',
         'anthropic': 'ANTHROPIC_API_KEY',
+        'supadata': 'SUPADATA_API_KEY',
     }
     env_var = env_map.get(service)
     if env_var:
