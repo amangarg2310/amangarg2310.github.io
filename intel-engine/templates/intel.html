@@ -1384,15 +1384,14 @@ function resetAllData() {
     if (!confirm('Delete ALL domains, sources, insights, and syntheses? This cannot be undone.')) return;
     if (!confirm('Are you sure? This will permanently erase your entire knowledge base.')) return;
     const btn = document.getElementById('resetBtn');
-    btn.disabled = true;
-    btn.textContent = 'Resetting...';
+    if (btn) { btn.disabled = true; btn.textContent = 'Resetting...'; }
     fetch('/api/reset-all', { method: 'POST' })
         .then(r => r.json())
         .then(d => {
             if (d.status === 'ok') window.location.href = '/';
-            else { alert(d.error || 'Reset failed'); btn.disabled = false; btn.textContent = 'Reset All Data'; }
+            else { alert(d.error || 'Reset failed'); if (btn) { btn.disabled = false; btn.textContent = 'Reset All Data'; } }
         })
-        .catch(() => { btn.disabled = false; btn.textContent = 'Reset failed'; });
+        .catch(() => { if (btn) { btn.disabled = false; btn.textContent = 'Reset failed'; } });
 }
 
 // ── Source Management ──

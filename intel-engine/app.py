@@ -1508,15 +1508,15 @@ def api_reset_all():
     conn = None
     try:
         conn = get_db()
-        # Delete in dependency order: refs → insights → sources → syntheses → domains
-        # Handle both user-owned and legacy (user_id IS NULL) data
-        conn.execute("""DELETE FROM domain_references WHERE source_domain_id IN (
-            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
-        conn.execute("""DELETE FROM insights WHERE domain_id IN (
-            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
+        # Delete in dependency order — cover ALL tables referencing domains
+        domain_filter = "SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL"
+        conn.execute(f"DELETE FROM taxonomy_changes WHERE domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM synthesis_versions WHERE domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM domain_references WHERE source_domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM domain_references WHERE target_domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM insights WHERE domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM syntheses WHERE domain_id IN ({domain_filter})", (uid,))
         conn.execute("DELETE FROM sources WHERE user_id = ? OR user_id IS NULL", (uid,))
-        conn.execute("""DELETE FROM syntheses WHERE domain_id IN (
-            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
         conn.execute("DELETE FROM domains WHERE user_id = ? OR user_id IS NULL", (uid,))
         conn.commit()
 
