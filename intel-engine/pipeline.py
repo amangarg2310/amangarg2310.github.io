@@ -898,6 +898,192 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
+# Batch Reprocess Pipeline
+# ══════════════════════════════════════════════════════════════
+
+def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, tracking_id=None) -> dict:
+    """Two-phase batch reprocessing: parallel extraction then batch synthesis.
+
+    Phase 1: Re-extract insights for all sources in parallel (3 workers).
+    Phase 2: Synthesize once per affected domain.
+    """
+    from domain_synthesizer import resynthesize_domain_full, _cascade_synthesis
+
+    db_path = db_path or config.DB_PATH
+    batch_vid = tracking_id or _generate_source_id("batch")
+    total = len(source_ids)
+
+    try:
+        _update_status(batch_vid, 'processing', f'Preparing {total} sources...', 5)
+
+        # Load all sources
+        conn = _get_conn(db_path)
+        conn.row_factory = sqlite3.Row
+        sources = []
+        for sid in source_ids:
+            row = conn.execute(
+                "SELECT id, video_id, title, channel, transcript, domain_id FROM sources WHERE id = ?",
+                (sid,),
+            ).fetchone()
+            if row:
+                sources.append(dict(row))
+        conn.close()
+
+        if not sources:
+            _update_status(batch_vid, 'error', 'No valid sources found', 0)
+            return {'status': 'error', 'video_id': batch_vid, 'error': 'No valid sources'}
+
+        # ── Phase 1: Parallel re-extraction (skip synthesis) ──────
+        results = [None] * len(sources)
+
+        def _reprocess_one(idx, source):
+            """Re-extract insights for one source (no synthesis)."""
+            source_id = source['id']
+            video_id = source['video_id']
+            transcript = source['transcript']
+            domain_id = source['domain_id']
+
+            if not transcript or not transcript.strip():
+                return {'status': 'error', 'source_id': source_id, 'error': 'No transcript'}
+
+            try:
+                # Delete old insights
+                c = _get_conn(db_path)
+                c.execute("DELETE FROM insights WHERE source_id = ?", (source_id,))
+                c.commit()
+                c.close()
+
+                # Re-chunk and re-extract
+                chunks = chunk_transcript(transcript)
+                word_count = len(transcript.split())
+                extraction_errors = []
+                all_insights = []
+
+                for i, chunk in enumerate(chunks):
+                    insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
+                    all_insights.extend(insights)
+
+                # Store diagnostics if extraction failed
+                if not all_insights and chunks and word_count >= 30:
+                    diag_parts = [f"0/{len(chunks)} chunks produced insights. Transcript: {word_count} words."]
+                    for err in extraction_errors[:5]:
+                        diag_parts.append(f"Chunk {err.get('chunk', '?')}: {err.get('error', 'unknown')}")
+                    try:
+                        c = _get_conn(db_path)
+                        c.execute("UPDATE sources SET error_message = ? WHERE id = ?",
+                                  ("\n".join(diag_parts), source_id))
+                        c.commit()
+                        c.close()
+                    except Exception:
+                        pass
+
+                # Store new insights
+                now = datetime.now(timezone.utc).isoformat()
+                c = _get_conn(db_path)
+                for insight in all_insights:
+                    c.execute("""
+                        INSERT INTO insights
+                        (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, evidence, source_context, confidence, topics, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        source_id, domain_id,
+                        insight.get('title', 'Untitled'),
+                        insight.get('content', ''),
+                        insight.get('insight_type', 'general'),
+                        insight.get('actionability', 'medium'),
+                        insight.get('key_quote', ''),
+                        insight.get('chunk_index', 0),
+                        insight.get('evidence', ''),
+                        insight.get('source_context', ''),
+                        insight.get('confidence', 'stated'),
+                        json.dumps(insight.get('topics', [])),
+                        now,
+                    ))
+                source_status = 'processed' if all_insights else 'processed_empty'
+                c.execute(
+                    "UPDATE sources SET status = ?, processed_at = ?, error_message = NULL WHERE id = ?",
+                    (source_status, now, source_id),
+                )
+                c.commit()
+
+                # Generate embeddings
+                _embed_insights(c, source_id)
+                c.close()
+
+                # Update batch progress
+                progress = 10 + int(((idx + 1) / len(sources)) * 70)  # 10-80%
+                _update_status(batch_vid, 'processing',
+                               f'Re-extracted {idx+1}/{len(sources)}: {source["title"][:40]}...',
+                               progress)
+
+                return {
+                    'status': 'complete', 'source_id': source_id,
+                    'domain_id': domain_id, 'insights_count': len(all_insights),
+                    'title': source['title'],
+                }
+            except Exception as e:
+                logger.error(f"Batch reprocess failed for source {source_id}: {e}", exc_info=True)
+                return {'status': 'error', 'source_id': source_id, 'error': str(e)}
+
+        _update_status(batch_vid, 'processing', f'Re-extracting {len(sources)} sources...', 10)
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(_reprocess_one, i, src): i
+                for i, src in enumerate(sources)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                results[idx] = future.result()
+
+        succeeded = sum(1 for r in results if r and r.get('status') == 'complete' and r.get('insights_count', 0) > 0)
+
+        # ── Phase 2: Batch synthesis (once per domain) ────────────
+        affected_domains = {}
+        for r in results:
+            if r and r.get('domain_id') and r.get('status') == 'complete' and r.get('insights_count', 0) > 0:
+                did = r['domain_id']
+                if did not in affected_domains:
+                    affected_domains[did] = []
+                affected_domains[did].append(r)
+
+        if affected_domains:
+            num_domains = len(affected_domains)
+            _update_status(batch_vid, 'processing',
+                           f'Synthesizing {num_domains} domain{"s" if num_domains != 1 else ""}...', 82)
+
+            for i, (domain_id, domain_results) in enumerate(affected_domains.items()):
+                progress = 82 + int(((i + 1) / num_domains) * 13)  # 82-95%
+                try:
+                    conn = _get_conn(db_path)
+                    d_name = (conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone() or [None])[0]
+                    conn.close()
+                except Exception:
+                    d_name = 'Unknown'
+
+                _update_status(batch_vid, 'processing',
+                               f'Synthesizing {i+1}/{num_domains}: {d_name}...', progress)
+                try:
+                    resynthesize_domain_full(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Batch synthesis failed for domain {domain_id}: {e}")
+                try:
+                    _cascade_synthesis(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Cascade failed for domain {domain_id}: {e}")
+                _repair_domain_counts(domain_id, db_path)
+
+        _update_status(batch_vid, 'complete',
+                       f'Done — {succeeded}/{len(sources)} re-processed', 100)
+        return {'status': 'complete', 'video_id': batch_vid, 'succeeded': succeeded, 'total': len(sources)}
+
+    except Exception as e:
+        logger.error(f"Batch reprocess failed: {e}", exc_info=True)
+        _update_status(batch_vid, 'error', 'Batch reprocess failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': batch_vid, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
 # Shared Pipeline (steps 3-7, common to all source types)
 # ══════════════════════════════════════════════════════════════
 

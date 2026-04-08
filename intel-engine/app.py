@@ -1131,6 +1131,48 @@ def api_delete_source(source_id):
             conn.close()
 
 
+@app.route("/api/reprocess-batch", methods=["POST"])
+@login_required
+def api_reprocess_batch():
+    """Batch re-process multiple sources in parallel."""
+    from pipeline import reprocess_batch_pipeline, _update_status, _generate_source_id
+
+    data = request.get_json() or {}
+    source_ids = data.get('source_ids', [])
+    if not source_ids or not isinstance(source_ids, list):
+        return jsonify({"error": "source_ids required"}), 400
+    if len(source_ids) > 20:
+        return jsonify({"error": "Max 20 sources per batch"}), 400
+
+    uid = current_user.id
+    conn = get_db()
+    valid_ids = []
+    for sid in source_ids:
+        row = conn.execute(
+            "SELECT id FROM sources WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+            (sid, uid),
+        ).fetchone()
+        if row:
+            valid_ids.append(row[0])
+    conn.close()
+
+    if not valid_ids:
+        return jsonify({"error": "No valid sources found"}), 404
+
+    batch_vid = _generate_source_id("batch")
+    _update_status(batch_vid, 'processing', f'Starting batch re-process ({len(valid_ids)} sources)...', 2)
+
+    def _run():
+        try:
+            reprocess_batch_pipeline(valid_ids, user_id=uid, tracking_id=batch_vid)
+        except Exception as e:
+            _update_status(batch_vid, 'error', 'Batch failed', 0, error=str(e))
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({"status": "started", "video_id": batch_vid, "count": len(valid_ids)})
+
+
 @app.route("/api/reprocess/<int:source_id>", methods=["POST"])
 @login_required
 def api_reprocess(source_id):

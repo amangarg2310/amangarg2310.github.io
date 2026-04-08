@@ -1625,26 +1625,75 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ── Reprocess queue: collects rapid clicks, dispatches as batch ──
+let _reprocessQueue = [];
+let _reprocessDebounce = null;
+
 function reprocessSource(sourceId, videoId) {
     const item = document.getElementById(`source-${sourceId}`);
     if (item) item.classList.add('processing');
+    _reprocessQueue.push({ sourceId, videoId });
 
-    showSidebarStatus('Re-processing...');
+    // Debounce 600ms to collect multiple rapid clicks
+    if (_reprocessDebounce) clearTimeout(_reprocessDebounce);
+    _reprocessDebounce = setTimeout(_flushReprocessQueue, 600);
+}
 
-    fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
+function _flushReprocessQueue() {
+    const queue = [..._reprocessQueue];
+    _reprocessQueue = [];
+    _reprocessDebounce = null;
+    if (queue.length === 0) return;
+
+    if (queue.length === 1) {
+        // Single source — use existing endpoint (no overhead)
+        const { sourceId, videoId } = queue[0];
+        showSidebarStatus('Re-processing...');
+        fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    hideSidebarStatus();
+                    const item = document.getElementById(`source-${sourceId}`);
+                    if (item) item.classList.remove('processing');
+                    return;
+                }
+                pollSidebarStatus(data.video_id);
+            })
+            .catch(() => {
                 hideSidebarStatus();
+                const item = document.getElementById(`source-${sourceId}`);
                 if (item) item.classList.remove('processing');
-                return;
-            }
-            pollSidebarStatus(data.video_id);
-        })
-        .catch(() => {
+            });
+        return;
+    }
+
+    // Multiple sources — use batch endpoint
+    showSidebarStatus(`Re-processing ${queue.length} sources...`, 5);
+    fetch('/api/reprocess-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_ids: queue.map(q => q.sourceId) })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
             hideSidebarStatus();
+            queue.forEach(q => {
+                const item = document.getElementById(`source-${q.sourceId}`);
+                if (item) item.classList.remove('processing');
+            });
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(() => {
+        hideSidebarStatus();
+        queue.forEach(q => {
+            const item = document.getElementById(`source-${q.sourceId}`);
             if (item) item.classList.remove('processing');
         });
+    });
 }
 
 function showDeleteConfirm(sourceId) {
