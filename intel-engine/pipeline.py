@@ -848,7 +848,8 @@ def _run_shared_pipeline(
 
         # Track if extraction produced no results (possible silent failure)
         if not all_insights and chunks:
-            logger.warning(f"0 insights extracted from {len(chunks)} chunks for '{title}' — possible extraction failure")
+            logger.warning(f"0 insights extracted from {len(chunks)} chunks ({word_count} words) for '{title}' — "
+                           f"likely API error during extraction. Check insight_extractor logs for details.")
 
     # Step 6: Store insights
     _update('Storing insights...', 80,
@@ -918,10 +919,15 @@ def _run_shared_pipeline(
         _update_status(video_id, 'complete', 'Done', 100,
                        title=title, channel=channel, domain=domain_name,
                        insights_count=len(all_insights))
+    elif word_count < 30:
+        _update_status(video_id, 'complete',
+                       'Done — transcript too short for extraction', 100,
+                       title=title, channel=channel, domain=domain_name,
+                       insights_count=0)
     else:
         _update_status(video_id, 'complete',
-                       'Done — no insights extracted (transcript may be unavailable)', 100,
-                       title=title, channel=channel, domain=domain_name,
+                       f'Done — 0 insights from {word_count}-word transcript (extraction may have failed, try re-processing)',
+                       100, title=title, channel=channel, domain=domain_name,
                        insights_count=0)
 
     logger.info(f"Pipeline complete: {title} → {domain_name} ({len(all_insights)} insights)")
