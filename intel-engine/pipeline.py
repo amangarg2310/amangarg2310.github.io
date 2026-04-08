@@ -848,9 +848,10 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
                 json.dumps(insight.get('topics', [])),
                 now,
             ))
+        source_status = 'processed' if all_insights else 'processed_empty'
         conn.execute(
-            "UPDATE sources SET processed_at = ? WHERE id = ?",
-            (now, source_id),
+            "UPDATE sources SET status = ?, processed_at = ?, error_message = NULL WHERE id = ?",
+            (source_status, now, source_id),
         )
         conn.commit()
 
