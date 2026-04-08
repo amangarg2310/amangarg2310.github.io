@@ -25,6 +25,9 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 MAX_UPLOAD_SIZE_MB = 50
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'pptx', 'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+# ── Playlist limits ──
+MAX_PLAYLIST_VIDEOS = 50  # Soft cap on new (non-deduped) videos per playlist submission
+
 # ── OpenAI ──
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_MAX_TOKENS = 4096

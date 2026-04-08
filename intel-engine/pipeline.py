@@ -334,7 +334,7 @@ def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dic
 # ══════════════════════════════════════════════════════════════
 
 def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, tracking_id=None) -> dict:
-    """Ingest all videos from a YouTube playlist sequentially."""
+    """Ingest videos from a YouTube playlist with dedup pre-filtering."""
     from youtube_ingest import extract_playlist_id, fetch_playlist_videos
 
     db_path = db_path or config.DB_PATH
@@ -346,14 +346,47 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
 
     try:
         _update_status(playlist_vid, 'processing', 'Fetching playlist...', 5)
-        videos = fetch_playlist_videos(playlist_id)
-        _update_status(playlist_vid, 'processing', f'Found {len(videos)} videos', 10)
+        all_videos = fetch_playlist_videos(playlist_id)
+        total_found = len(all_videos)
 
-        results = [None] * len(videos)
+        # Pre-filter: separate already-ingested from new videos
+        new_videos = []
+        skipped_count = 0
+        for v in all_videos:
+            existing = check_already_ingested(v['video_id'], db_path)
+            if existing and existing['status'] in ('processed', 'processed_empty'):
+                skipped_count += 1
+            else:
+                new_videos.append(v)
+
+        # Soft cap on new videos per submission
+        capped = False
+        if len(new_videos) > config.MAX_PLAYLIST_VIDEOS:
+            new_videos = new_videos[:config.MAX_PLAYLIST_VIDEOS]
+            capped = True
+
+        # Edge case: all videos already ingested
+        if not new_videos:
+            _update_status(playlist_vid, 'complete',
+                           f'All {total_found} videos are already in your knowledge base', 100)
+            return {'status': 'complete', 'video_id': playlist_vid, 'total': total_found,
+                    'succeeded': 0, 'skipped': skipped_count, 'results': []}
+
+        # Status: show what we're about to do
+        parts = [f'Found {total_found} videos']
+        if skipped_count:
+            parts.append(f'{skipped_count} already in knowledge base')
+        if capped:
+            parts.append(f'processing first {len(new_videos)} new')
+        else:
+            parts.append(f'processing {len(new_videos)} new')
+        _update_status(playlist_vid, 'processing', '. '.join(parts) + '...', 10)
+
+        results = [None] * len(new_videos)
 
         def _process_video(i, video):
             url = f'https://www.youtube.com/watch?v={video["video_id"]}'
-            ctx = (playlist_vid, i, len(videos))
+            ctx = (playlist_vid, i, len(new_videos))
             _map_to_playlist(ctx, 0, video['title'])
             try:
                 return run_pipeline(url, db_path=db_path, user_id=user_id,
@@ -365,7 +398,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {
                 executor.submit(_process_video, i, video): i
-                for i, video in enumerate(videos)
+                for i, video in enumerate(new_videos)
             }
             for future in as_completed(futures):
                 idx = futures[future]
@@ -386,10 +419,21 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             if r and r.get('domain_name'):
                 domain_frequency[r['domain_name']] = domain_frequency.get(r['domain_name'], 0) + 1
         primary_domain = max(domain_frequency, key=domain_frequency.get) if domain_frequency else None
+
+        # Build descriptive completion message
+        done_parts = []
+        if succeeded > 0:
+            done_parts.append(f'{succeeded} processed')
+        if skipped_count > 0:
+            done_parts.append(f'{skipped_count} already in knowledge base')
+        failed = len(new_videos) - succeeded
+        if failed > 0:
+            done_parts.append(f'{failed} failed')
         _update_status(playlist_vid, 'complete',
-                       f'Done — {succeeded}/{len(videos)} videos processed', 100,
+                       f'Done — {" · ".join(done_parts)}', 100,
                        domain=primary_domain)
-        return {'status': 'complete', 'video_id': playlist_vid, 'total': len(videos), 'succeeded': succeeded, 'results': results}
+        return {'status': 'complete', 'video_id': playlist_vid, 'total': total_found,
+                'succeeded': succeeded, 'skipped': skipped_count, 'results': results}
 
     except Exception as e:
         logger.error(f"Playlist pipeline failed: {e}", exc_info=True)

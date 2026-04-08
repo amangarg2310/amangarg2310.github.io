@@ -258,21 +258,21 @@ def fetch_playlist_videos(playlist_id: str) -> list[dict]:
     """Fetch video IDs and titles from a YouTube playlist.
 
     Strategy:
-    1. Try RSS feed (fast, no JS, works for channel upload playlists)
-    2. Fall back to scraping playlist page HTML (works for user-created playlists)
+    1. Try RSS feed (fast, no JS, works for channel upload playlists — returns ~15 max)
+    2. Fall back to scraping playlist page HTML (gets all videos in playlist)
 
-    Returns up to ~15 videos.
+    Returns all videos found. Caller is responsible for applying caps and dedup filtering.
     """
     # Strategy 1: RSS feed (fast, works for channel upload playlists)
     videos = _fetch_playlist_rss(playlist_id)
     if videos:
-        return videos[:15]
+        return videos
 
     # Strategy 2: Scrape playlist page HTML (works for public/unlisted user playlists)
     # Note: _fetch_playlist_html raises ValueError with clear message for private playlists
     videos = _fetch_playlist_html(playlist_id)
     if videos:
-        return videos[:15]
+        return videos
 
     raise ValueError("No videos found in playlist. It may be empty or unavailable.")
 
