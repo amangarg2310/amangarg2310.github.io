@@ -889,7 +889,7 @@ def _run_shared_pipeline(
                 all_insights.extend(insights)
         else:
             completed = 0
-            with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as executor:
+            with ThreadPoolExecutor(max_workers=min(len(chunks), 2)) as executor:
                 futures = {
                     executor.submit(extract_insights, chunk, chunk_index=i): i
                     for i, chunk in enumerate(chunks)

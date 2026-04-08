@@ -48,44 +48,57 @@ Return ONLY a JSON array, no markdown:
 
 
 def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
-    """Extract structured insights from a transcript chunk using Anthropic Haiku."""
+    """Extract structured insights from a transcript chunk using Anthropic Haiku.
+
+    Retries up to 2 times with exponential backoff on failure (handles rate limits
+    when multiple playlist videos are processing concurrently).
+    """
+    import time as _time
+
     api_key = config.get_api_key('anthropic')
     if not api_key:
         logger.error("Anthropic API key not configured")
         return []
 
     client = Anthropic(api_key=api_key)
+    max_retries = 2
 
-    try:
-        response = client.messages.create(
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays.",
-            messages=[
-                {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
-            ],
-            temperature=0.3,
-            max_tokens=4000,
-        )
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.messages.create(
+                model=config.ANTHROPIC_HAIKU_MODEL,
+                system="You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays.",
+                messages=[
+                    {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
+                ],
+                temperature=0.3,
+                max_tokens=4000,
+            )
 
-        raw_content = response.content[0].text.strip()
-        insights = _parse_insights_json(raw_content, chunk_index)
+            raw_content = response.content[0].text.strip()
+            insights = _parse_insights_json(raw_content, chunk_index)
 
-        # Validate and filter insights
-        valid = []
-        for insight in insights:
-            if not isinstance(insight, dict):
-                continue
-            if not insight.get('title') or not insight.get('content'):
-                continue
-            insight['chunk_index'] = chunk_index
-            valid.append(insight)
+            # Validate and filter insights
+            valid = []
+            for insight in insights:
+                if not isinstance(insight, dict):
+                    continue
+                if not insight.get('title') or not insight.get('content'):
+                    continue
+                insight['chunk_index'] = chunk_index
+                valid.append(insight)
 
-        logger.info(f"Extracted {len(valid)} insights from chunk {chunk_index}")
-        return valid
+            logger.info(f"Extracted {len(valid)} insights from chunk {chunk_index}")
+            return valid
 
-    except Exception as e:
-        logger.error(f"Insight extraction failed for chunk {chunk_index}: {e}")
-        return []
+        except Exception as e:
+            if attempt < max_retries:
+                wait = 2 ** (attempt + 1)  # 2s, 4s
+                logger.warning(f"Insight extraction attempt {attempt + 1} failed for chunk {chunk_index}: {e}. Retrying in {wait}s...")
+                _time.sleep(wait)
+            else:
+                logger.error(f"Insight extraction failed for chunk {chunk_index} after {max_retries + 1} attempts: {e}")
+                return []
 
 
 def _parse_insights_json(content: str, chunk_index: int) -> list:
