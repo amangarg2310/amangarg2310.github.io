@@ -1794,7 +1794,7 @@ function askQuestion(questionText) {
 <!-- Knowledge Graph Overlay -->
 <div id="graphOverlay" style="display:none;position:fixed;inset:0;background:#080b12;z-index:1000;flex-direction:column;">
     <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
-        <button onclick="closeGraphView()" style="display:flex;align-items:center;gap:6px;color:#94a3b8;background:rgba(255,255,255,0.08);border:none;font-size:13px;cursor:pointer;padding:6px 14px;border-radius:20px;font-family:inherit;transition:all 0.2s;letter-spacing:0.3px;" onmouseenter="this.style.background='rgba(255,255,255,0.15)';this.style.color='#e2e8f0'" onmouseleave="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8'">&larr; Back</button>
+        <button onclick="closeGraphView()" class="intel-graph-back-btn">&larr; Back</button>
         <span id="graphNodeCount" style="font-size:11px;color:#334155;"></span>
     </div>
     <div id="graphContainer" style="flex:1;width:100%;position:relative;"></div>
