@@ -769,6 +769,45 @@ def api_status(video_id):
     return jsonify(get_pipeline_status(video_id))
 
 
+@app.route("/api/source/<int:source_id>/debug")
+@login_required
+def api_source_debug(source_id):
+    """Diagnostic endpoint for debugging extraction failures."""
+    from youtube_ingest import chunk_transcript
+    conn = get_db()
+    source = conn.execute(
+        "SELECT id, video_id, title, channel, source_type, status, error_message, transcript, domain_id "
+        "FROM sources WHERE id = ? AND user_id = ?",
+        (source_id, current_user.id),
+    ).fetchone()
+    if not source:
+        return jsonify({"error": "Source not found"}), 404
+    source = dict(source)
+    transcript = source.get('transcript') or ''
+    word_count = len(transcript.split()) if transcript else 0
+    chunks = chunk_transcript(transcript) if word_count >= 30 else []
+    insight_count = conn.execute(
+        "SELECT COUNT(*) FROM insights WHERE source_id = ?", (source_id,)
+    ).fetchone()[0]
+    domain_row = conn.execute(
+        "SELECT name FROM domains WHERE id = ?", (source['domain_id'],)
+    ).fetchone() if source.get('domain_id') else None
+    return jsonify({
+        "source_id": source_id,
+        "title": source.get('title'),
+        "channel": source.get('channel'),
+        "source_type": source.get('source_type'),
+        "status": source.get('status'),
+        "error_message": source.get('error_message'),
+        "domain": domain_row[0] if domain_row else None,
+        "transcript_word_count": word_count,
+        "transcript_preview": transcript[:500] if transcript else None,
+        "chunk_count": len(chunks),
+        "chunk_sizes": [len(c.split()) for c in chunks],
+        "insight_count": insight_count,
+    })
+
+
 @app.route("/api/domains")
 @login_required
 def api_domains():

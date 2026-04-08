@@ -790,15 +790,38 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
 
         # Re-chunk and re-extract
         chunks = chunk_transcript(transcript)
+        word_count = len(transcript.split())
 
         all_insights = []
+        extraction_errors = []
         for i, chunk in enumerate(chunks):
             progress = 20 + int((i / max(len(chunks), 1)) * 40)
             _update_status(video_id, 'processing',
                            f'Re-extracting insights ({i+1}/{len(chunks)})...', progress,
                            title=source['title'], channel=source['channel'])
-            insights = extract_insights(chunk, chunk_index=i)
+            insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
             all_insights.extend(insights)
+
+        # Store detailed diagnostics if extraction failed
+        if not all_insights and chunks and word_count >= 30:
+            diag_parts = [f"0/{len(chunks)} chunks produced insights. "
+                          f"Transcript: {word_count} words."]
+            for err in extraction_errors[:5]:
+                diag_parts.append(f"Chunk {err.get('chunk', '?')}: {err.get('error', 'unknown')}")
+                preview = err.get('response_preview', '')
+                if preview:
+                    diag_parts.append(f"  Response: {preview[:100]}...")
+            if not extraction_errors:
+                diag_parts.append("No specific errors — chunks returned empty arrays.")
+            diagnostic = "\n".join(diag_parts)
+            try:
+                _conn = _get_conn(db_path)
+                _conn.execute("UPDATE sources SET error_message = ? WHERE id = ?",
+                              (diagnostic, source_id))
+                _conn.commit()
+                _conn.close()
+            except Exception:
+                pass
 
         # Store new insights
         _update_status(video_id, 'processing', 'Storing insights...', 70,
@@ -838,10 +861,17 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         conn.close()
 
         # Re-synthesize the full domain
-        _update_status(video_id, 'processing', 'Re-synthesizing knowledge...', 85,
+        _update_status(video_id, 'processing', 'Re-synthesizing knowledge...', 82,
                        title=source['title'], channel=source['channel'])
 
         resynthesize_domain_full(domain_id, db_path)
+
+        _update_status(video_id, 'processing', 'Updating domain counts...', 92,
+                       title=source['title'], channel=source['channel'])
+        _repair_domain_counts(domain_id, db_path)
+
+        _update_status(video_id, 'processing', 'Finalizing...', 97,
+                       title=source['title'], channel=source['channel'])
 
         # Get domain name for status
         conn = _get_conn(db_path)
@@ -929,6 +959,7 @@ def _run_shared_pipeline(
 
     # Step 5: Extract insights (parallel across chunks)
     all_insights = []
+    extraction_errors = []  # Per-chunk error tracking
 
     # Guard: skip extraction if transcript is too short to produce insights
     word_count = len(transcript.split())
@@ -942,13 +973,15 @@ def _run_shared_pipeline(
 
         if len(chunks) <= 1:
             for i, chunk in enumerate(chunks):
-                insights = extract_insights(chunk, chunk_index=i)
+                insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
                 all_insights.extend(insights)
         else:
             completed = 0
+            # Each chunk gets its own error list (thread-safe — no shared mutations)
+            chunk_error_lists = [[] for _ in chunks]
             with ThreadPoolExecutor(max_workers=min(len(chunks), 2)) as executor:
                 futures = {
-                    executor.submit(extract_insights, chunk, chunk_index=i): i
+                    executor.submit(extract_insights, chunk, chunk_index=i, errors=chunk_error_lists[i]): i
                     for i, chunk in enumerate(chunks)
                 }
                 chunk_results = [None] * len(chunks)
@@ -962,16 +995,32 @@ def _run_shared_pipeline(
                 for result in chunk_results:
                     if result:
                         all_insights.extend(result)
+                # Merge per-chunk errors
+                for el in chunk_error_lists:
+                    extraction_errors.extend(el)
 
-        # Track if extraction produced no results (possible silent failure)
+        # Track if extraction produced no results — store detailed diagnostics
         if not all_insights and chunks:
-            logger.warning(f"0 insights extracted from {len(chunks)} chunks ({word_count} words) for '{title}' — "
-                           f"likely API error during extraction. Check insight_extractor logs for details.")
-            # Store error message on source for user visibility
+            # Build diagnostic string from per-chunk errors
+            diag_parts = [f"0/{len(chunks)} chunks produced insights. "
+                          f"Transcript: {word_count} words, {len(chunks)} chunks."]
+            if extraction_errors:
+                for err in extraction_errors[:5]:  # Cap at 5 to fit tooltip
+                    chunk_num = err.get('chunk', '?')
+                    error_msg = err.get('error', 'unknown')
+                    preview = err.get('response_preview', '')
+                    diag_parts.append(f"Chunk {chunk_num}: {error_msg}")
+                    if preview:
+                        diag_parts.append(f"  Response: {preview[:100]}...")
+            else:
+                diag_parts.append("No specific errors captured — chunks may have returned empty arrays.")
+            diagnostic = "\n".join(diag_parts)
+
+            logger.warning(f"0 insights for '{title}': {diagnostic}")
             try:
                 _conn = _get_conn(db_path)
                 _conn.execute("UPDATE sources SET error_message = ? WHERE id = ?",
-                              ("Insight extraction returned empty — possible API error. Try re-processing later.", source_id))
+                              (diagnostic, source_id))
                 _conn.commit()
                 _conn.close()
             except Exception:

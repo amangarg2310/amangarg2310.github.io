@@ -47,17 +47,23 @@ Return ONLY a JSON array, no markdown:
 [{{"title": "...", "content": "...", "insight_type": "...", "actionability": "...", "key_quote": "...", "evidence": "...", "source_context": "...", "confidence": "...", "topics": ["...", "..."]}}]"""
 
 
-def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
+def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> list[dict]:
     """Extract structured insights from a transcript chunk using Anthropic Haiku.
 
     Retries up to 2 times with exponential backoff on failure (handles rate limits
     when multiple playlist videos are processing concurrently).
+
+    Args:
+        errors: Optional list that receives per-chunk error dicts on failure.
+                Each dict has 'chunk', 'error', and optionally 'response_preview'.
     """
     import time as _time
 
     api_key = config.get_api_key('anthropic')
     if not api_key:
         logger.error("Anthropic API key not configured")
+        if errors is not None:
+            errors.append({'chunk': chunk_index, 'error': 'Anthropic API key not configured'})
         return []
 
     client = Anthropic(api_key=api_key)
@@ -88,6 +94,14 @@ def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
                 insight['chunk_index'] = chunk_index
                 valid.append(insight)
 
+            # Track when API succeeded but produced no valid insights
+            if not valid and errors is not None:
+                if not insights:
+                    errors.append({'chunk': chunk_index, 'error': 'JSON parse failed or empty response',
+                                   'response_preview': raw_content[:300]})
+                else:
+                    errors.append({'chunk': chunk_index, 'error': f'All {len(insights)} parsed items failed validation'})
+
             logger.info(f"Extracted {len(valid)} insights from chunk {chunk_index}")
             return valid
 
@@ -98,6 +112,8 @@ def extract_insights(chunk: str, chunk_index: int = 0) -> list[dict]:
                 _time.sleep(wait)
             else:
                 logger.error(f"Insight extraction failed for chunk {chunk_index} after {max_retries + 1} attempts: {e}")
+                if errors is not None:
+                    errors.append({'chunk': chunk_index, 'error': f'API error after {max_retries + 1} attempts: {e}'})
                 return []
 
 
