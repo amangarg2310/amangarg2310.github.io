@@ -1773,44 +1773,63 @@ async function _renderGraph() {
         countEl.textContent = domainCount + ' domains · ' + sourceCount + ' sources';
     }
 
-    // ── Color palette — violet accent (kept per user preference) ──
+    // ── Color palette — cluster colors per category ──
+    const clusterPalette = [
+        '#a78bfa', // violet
+        '#60a5fa', // blue
+        '#34d399', // emerald
+        '#fbbf24', // amber
+        '#f87171', // red
+        '#a78bfa', // violet (repeat)
+        '#38bdf8', // sky
+        '#fb923c', // orange
+    ];
+    // Map each category (level-0) to a cluster color
+    const catColorMap = {};
+    let _catIdx = 0;
+    _graphData.nodes.filter(n => n.type === 'domain' && n.level === 0).forEach(n => {
+        catColorMap[n.id] = clusterPalette[_catIdx % clusterPalette.length];
+        _catIdx++;
+    });
+    // Map each domain to its category color
+    function getClusterColor(n) {
+        if (n.type === 'source') return '#475569';
+        if (n.level === 0) return catColorMap[n.id] || '#a78bfa';
+        // Find ancestor category
+        if (n.parentId && catColorMap[n.parentId]) return catColorMap[n.parentId];
+        // Check grandparent for level-2 nodes
+        const parent = _graphData.nodes.find(p => p.id === n.parentId);
+        if (parent && parent.parentId && catColorMap[parent.parentId]) return catColorMap[parent.parentId];
+        return '#7c3aed';
+    }
+
     const C = {
-        // Domain nodes by level
-        domainCategory: '#a78bfa',  // violet-400
-        domain:         '#7c3aed',  // violet-600
-        domainSub:      '#5b21b6',  // violet-800
         // Source nodes
         source:         '#475569',  // slate-600
         // Hover
         hover:          '#c4b5fd',  // violet-300
         // Lines
-        line:           'rgba(100, 116, 139, 0.12)',
-        lineRef:        'rgba(167, 139, 250, 0.2)',
-        lineConceptual: 'rgba(196, 164, 108, 0.18)',  // amber — topic-based connections
-        lineConceptualActive: 'rgba(196, 164, 108, 0.5)',
+        line:           'rgba(100, 116, 139, 0.15)',
+        lineRef:        'rgba(167, 139, 250, 0.25)',
+        lineConceptual: 'rgba(196, 164, 108, 0.25)',
+        lineConceptualActive: 'rgba(196, 164, 108, 0.6)',
         lineSource:     'rgba(100, 116, 139, 0.08)',
         lineActive:     'rgba(196, 181, 253, 0.6)',
         lineActiveGrey: 'rgba(148, 163, 184, 0.35)',
         lineDim:        'rgba(100, 116, 139, 0.03)',
     };
 
-    // ── Node sizing — Quartz-inspired: 2 + sqrt(links) ──
+    // ── Node sizing — level-based with source count influence ──
     function nodeRadius(n) {
-        if (n.type === 'source') return 1.8;
-        // Domain nodes: count connections in the graph
-        const links = _graphData.edges.filter(
-            e => e.source === n.id || e.target === n.id ||
-                 (typeof e.source === 'object' && e.source.id === n.id) ||
-                 (typeof e.target === 'object' && e.target.id === n.id)
-        ).length;
-        return 2 + Math.sqrt(links);
+        if (n.type === 'source') return 2;
+        const sources = n.sources || 0;
+        if (n.level === 0) return 6 + Math.sqrt(sources) * 0.8;  // Categories: large
+        if (n.level === 2) return 3 + Math.sqrt(sources) * 0.3;  // Sub-topics: small
+        return 4 + Math.sqrt(sources) * 0.5;                     // Domains: medium
     }
 
     function nodeColor(n) {
-        if (n.type === 'source') return C.source;
-        if (n.level === 0) return C.domainCategory;
-        if (n.level === 2) return C.domainSub;
-        return C.domain;
+        return getClusterColor(n);
     }
 
     // Truncate long source titles
@@ -1937,8 +1956,7 @@ async function _renderGraph() {
             const isHighlighted = _hoveredNode && _neighborSet &&
                 (_neighborSet.has(sid) && _neighborSet.has(tid)) &&
                 (_hoveredNode.id === sid || _hoveredNode.id === tid);
-            // Edge weight by type: references thicker, hierarchy medium, source thin
-            const baseWidth = link.type === 'reference' ? 1.2 : link.type === 'hierarchy' ? 1.0 : 0.6;
+            const baseWidth = link.type === 'reference' ? 1.5 : link.type === 'hierarchy' ? 1.2 : link.type === 'conceptual' ? 1.0 : 0.5;
             return isHighlighted ? baseWidth * 2 : baseWidth;
         })
         .linkLineDash(link => link.type === 'reference' ? [4, 2] : link.type === 'conceptual' ? [2, 3] : null)
@@ -1972,29 +1990,38 @@ async function _renderGraph() {
             const detail = document.getElementById('graphNodeDetail');
             if (detail) detail.style.display = 'none';
         })
-        // Physics: perpetual gentle drift (never fully stop)
-        .d3AlphaDecay(0.008)
-        .d3AlphaMin(0.001)
-        .d3VelocityDecay(0.35)
-        .warmupTicks(0)
-        .cooldownTicks(Infinity)
-        .cooldownTime(Infinity);
+        // Physics: converge then settle with gentle drift
+        .d3AlphaDecay(0.02)
+        .d3AlphaMin(0.005)
+        .d3VelocityDecay(0.45)
+        .warmupTicks(60)
+        .cooldownTicks(300)
+        .cooldownTime(5000);
 
-    // Quartz force parameters: charge -50, center 0.2, link distance 30, collide
-    _graphInstance.d3Force('charge').strength(-80);
-    _graphInstance.d3Force('link').distance(30);
-    _graphInstance.d3Force('center').strength(0.3);
+    // Force parameters: tighter layout with strong centering
+    _graphInstance.d3Force('charge').strength(-40);
+    _graphInstance.d3Force('link').distance(link => {
+        if (link.type === 'hierarchy') return 25;
+        if (link.type === 'conceptual') return 50;
+        if (link.type === 'source') return 15;
+        return 35;
+    });
+    _graphInstance.d3Force('center').strength(0.8);
     // Add collide force to prevent node overlap
     if (window.d3) {
-        _graphInstance.d3Force('collide', d3.forceCollide(n => nodeRadius(n) + 1).iterations(3));
+        _graphInstance.d3Force('collide', d3.forceCollide(n => nodeRadius(n) + 2).iterations(3));
+        // Cluster force: group nodes by parent category
+        _graphInstance.d3Force('cluster', d3.forceManyBody().strength(n => {
+            return n.type === 'source' ? -2 : -15;
+        }));
     }
 
-    // Kick the simulation with high alpha for the expanding animation
+    // Zoom to fit all nodes after simulation settles
     setTimeout(() => {
         if (_graphInstance) {
-            _graphInstance.d3ReheatSimulation();
+            _graphInstance.zoomToFit(600, 60);
         }
-    }, 50);
+    }, 1500);
 
     // Handle resize
     window.addEventListener('resize', () => {
