@@ -478,22 +478,12 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     synthesis_content = response.content[0].text.strip()
 
-    # Run the two follow-ups we need for the DB insert in parallel
-    suggested = ""
-    convergence = ""
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        f_suggested = executor.submit(_generate_suggested_questions, client, domain_name, synthesis_content)
-        f_convergence = executor.submit(_analyze_convergence, domain_id, db_path)
-
-        try:
-            suggested = f_suggested.result() or ""
-        except Exception as e:
-            logger.warning(f"Suggested questions skipped: {e}")
-        try:
-            convergence = f_convergence.result() or ""
-        except Exception as e:
-            logger.warning(f"Convergence analysis skipped: {e}")
+    suggested = "[]"
+    try:
+        convergence = _analyze_convergence(domain_id, db_path) or ""
+    except Exception as e:
+        convergence = ""
+        logger.warning(f"Convergence analysis skipped: {e}")
 
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
@@ -650,7 +640,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     synthesis_content = response.content[0].text.strip()
 
-    suggested = _generate_suggested_questions(client, domain_name, synthesis_content)
+    suggested = "[]"
 
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
@@ -784,32 +774,3 @@ def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None
         logger.warning(f"Cross-reference detection failed for domain {domain_id}: {e}")
     finally:
         conn.close()
-
-
-def _generate_suggested_questions(client: Anthropic, domain_name: str, synthesis: str) -> str:
-    """Generate 3 suggested starter questions based on the synthesis content."""
-    try:
-        # Use first ~1000 words of synthesis for context
-        excerpt = " ".join(synthesis.split()[:1000])
-        response = client.messages.create(
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="Generate exactly 3 questions a learner would ask about this knowledge base. Return a JSON array of 3 strings. Questions should be specific and actionable, not generic.",
-            messages=[
-                {"role": "user", "content": f"Domain: {domain_name}\n\nKnowledge:\n{excerpt}\n\nReturn ONLY a JSON array of 3 question strings:"},
-            ],
-            temperature=0.5,
-            max_tokens=300,
-        )
-        content = response.content[0].text.strip()
-        # Strip markdown
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-        questions = json.loads(content)
-        if isinstance(questions, list) and len(questions) >= 1:
-            return json.dumps(questions[:3])
-    except Exception as e:
-        logger.warning(f"Failed to generate suggested questions: {e}")
-    return "[]"

@@ -299,15 +299,6 @@
                     </button>
                 </div>
 
-                <!-- Suggested questions (shown by default, hidden after first answer) -->
-                {% if suggested_questions %}
-                <div class="intel-suggested-questions" id="suggestedQuestions">
-                    {% for q in suggested_questions %}
-                    <button class="intel-suggested-q" onclick="askQuestion(this.textContent)">{{ q }}</button>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
                 <!-- Answer appears inline here -->
                 <div class="intel-search-answer" id="searchAnswer" style="display:none">
                     <div class="intel-search-answer-content" id="searchAnswerContent"></div>
@@ -1661,9 +1652,6 @@ function onSearchInput() {
                 answerEl.classList.remove('fading');
             }, 300);
         }
-        // Re-show suggested questions
-        const suggestedEl = document.getElementById('suggestedQuestions');
-        if (suggestedEl) suggestedEl.style.display = '';
     }
 }
 
@@ -1709,10 +1697,6 @@ function askQuestion(questionText) {
     loadingEl.style.display = 'flex';
     if (btn) btn.disabled = true;
     if (input) input.disabled = true;
-
-    // Hide suggested questions after first use
-    const suggestedEl = document.getElementById('suggestedQuestions');
-    if (suggestedEl) suggestedEl.style.display = 'none';
 
     fetch('/api/query', {
         method: 'POST',

@@ -381,8 +381,6 @@ def domain_page(domain_name):
         synthesis_row = None
         synthesis = None
         synthesis_html = ""
-        suggested_questions = []
-
         if domain.get('level') == 0 and child_ids:
             # Level-0: build aggregated TLDR from all children
             child_tldrs = []
@@ -429,13 +427,6 @@ def domain_page(domain_name):
                     synthesis_html = f"<p>{synthesis['content']}</p>"
             elif synthesis:
                 synthesis_html = f"<p>{synthesis['content']}</p>"
-
-        if synthesis and synthesis.get('suggested_questions'):
-            import json
-            try:
-                suggested_questions = json.loads(synthesis['suggested_questions'])
-            except (json.JSONDecodeError, TypeError):
-                suggested_questions = []
 
         # Sources with insight counts — aggregate from all content domains
         placeholders = ','.join('?' * len(content_domain_ids))
@@ -500,7 +491,6 @@ def domain_page(domain_name):
                            domain=domain,
                            synthesis=synthesis,
                            synthesis_html=synthesis_html,
-                           suggested_questions=suggested_questions,
                            sources=sources,
                            domains=domains,
                            domain_tree=domain_tree,
