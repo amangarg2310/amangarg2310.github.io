@@ -1412,11 +1412,14 @@ def api_knowledge_graph():
             WHERE source_domain_id IN (SELECT id FROM domains WHERE user_id = ?)
         """, (uid,)).fetchall()
 
-        # Build domain nodes (integer IDs)
+        # Build domain nodes with live counts (integer IDs)
+        live_counts = _compute_live_domain_counts(conn, uid)
         domain_nodes = [
             {"id": r["id"], "name": r["name"], "level": r["level"],
-             "parentId": r["parent_id"], "sources": r["source_count"],
-             "insights": r["insight_count"], "type": "domain"}
+             "parentId": r["parent_id"],
+             "sources": live_counts.get(r["id"], {}).get('source_count', 0),
+             "insights": live_counts.get(r["id"], {}).get('insight_count', 0),
+             "type": "domain"}
             for r in domains
         ]
 
