@@ -261,7 +261,7 @@ def _map_to_playlist(playlist_ctx, video_progress, title=None):
             }
 
 
-def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dict:
+def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None, skip_synthesis: bool = False) -> dict:
     """
     Run the full intelligence pipeline for a YouTube URL.
     Called from Flask route in a background thread.
@@ -327,6 +327,7 @@ def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dic
             start_progress=35,
             user_id=user_id,
             playlist_ctx=playlist_ctx,
+            skip_synthesis=skip_synthesis,
         )
 
     except Exception as e:
@@ -350,8 +351,14 @@ def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dic
 # ══════════════════════════════════════════════════════════════
 
 def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, tracking_id=None) -> dict:
-    """Ingest videos from a YouTube playlist with dedup pre-filtering."""
+    """Two-phase playlist processing: parallel ingestion then batch synthesis.
+
+    Phase 1: Ingest videos in parallel (3 workers) — transcript, chunk, extract
+             insights, embed. Synthesis is SKIPPED to avoid redundant API calls.
+    Phase 2: Synthesize once per affected domain using resynthesize_domain_full().
+    """
     from youtube_ingest import extract_playlist_id, fetch_playlist_videos
+    from domain_synthesizer import resynthesize_domain_full, _cascade_synthesis
 
     db_path = db_path or config.DB_PATH
     playlist_id = extract_playlist_id(playlist_url)
@@ -398,6 +405,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             parts.append(f'processing {len(new_videos)} new')
         _update_status(playlist_vid, 'processing', '. '.join(parts) + '...', 10)
 
+        # ── Phase 1: Parallel ingestion (skip synthesis) ──────────
         results = [None] * len(new_videos)
 
         def _process_video(i, video):
@@ -406,12 +414,12 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             _map_to_playlist(ctx, 0, video['title'])
             try:
                 return run_pipeline(url, db_path=db_path, user_id=user_id,
-                                    playlist_ctx=ctx)
+                                    playlist_ctx=ctx, skip_synthesis=True)
             except Exception as e:
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
                 return {'status': 'error', 'video_id': video['video_id'], 'error': str(e)}
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 executor.submit(_process_video, i, video): i
                 for i, video in enumerate(new_videos)
@@ -419,17 +427,58 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             for future in as_completed(futures):
                 idx = futures[future]
                 results[idx] = future.result()
-                time.sleep(2)  # Brief pause between videos to avoid API rate limits
 
         succeeded = sum(1 for r in results if r and r.get('status') in ('complete', 'already_exists'))
         extraction_failures = sum(1 for r in results if r and r.get('insights_count', -1) == 0 and r.get('status') == 'complete')
 
-        # Final count repair: recompute all affected domains after concurrent processing
-        repaired_domains = set()
+        # ── Phase 2: Batch synthesis (once per domain) ────────────
+        # Collect unique domains that need synthesis
+        affected_domains = {}  # {domain_id: {'name': ..., 'source_ids': [...]}}
         for r in results:
-            if r and r.get('domain_id') and r['domain_id'] not in repaired_domains:
-                _repair_domain_counts(r['domain_id'], db_path)
-                repaired_domains.add(r['domain_id'])
+            if r and r.get('domain_id') and r.get('status') == 'complete' and r.get('insights_count', 0) > 0:
+                did = r['domain_id']
+                if did not in affected_domains:
+                    affected_domains[did] = {'name': r.get('domain_name', 'Unknown'), 'source_ids': []}
+                affected_domains[did]['source_ids'].append(r.get('video_id'))
+
+        if affected_domains:
+            num_domains = len(affected_domains)
+            _update_status(playlist_vid, 'processing',
+                           f'Synthesizing knowledge across {num_domains} domain{"s" if num_domains != 1 else ""}...', 82)
+
+            for i, (domain_id, info) in enumerate(affected_domains.items()):
+                domain_name = info['name']
+                progress = 82 + int(((i + 1) / num_domains) * 13)  # 82 → 95
+                _update_status(playlist_vid, 'processing',
+                               f'Synthesizing {i+1}/{num_domains}: {domain_name}...', progress)
+                try:
+                    resynthesize_domain_full(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Batch synthesis failed for domain {domain_id} ({domain_name}): {e}")
+
+                try:
+                    _cascade_synthesis(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Cascade synthesis skipped for domain {domain_id}: {e}")
+
+                _repair_domain_counts(domain_id, db_path)
+
+            # Fire taxonomy evolution checks in background (non-blocking)
+            def _bg_taxonomy_batch():
+                from domain_detector import propose_taxonomy_evolution
+                for domain_id, info in affected_domains.items():
+                    try:
+                        conn = _get_conn(db_path)
+                        insights = [dict(r) for r in conn.execute(
+                            "SELECT * FROM insights WHERE domain_id = ? ORDER BY created_at DESC LIMIT 50",
+                            (domain_id,)
+                        ).fetchall()]
+                        conn.close()
+                        if insights:
+                            propose_taxonomy_evolution(domain_id, insights, db_path, user_id=user_id)
+                    except Exception as e:
+                        logger.warning(f"Taxonomy evolution skipped for domain {domain_id}: {e}")
+            threading.Thread(target=_bg_taxonomy_batch, daemon=True).start()
 
         # Pick the most common domain from results for redirect
         domain_frequency = {}
@@ -450,6 +499,8 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
         failed = len(new_videos) - succeeded
         if failed > 0:
             done_parts.append(f'{failed} failed')
+        if affected_domains:
+            done_parts.append(f'{len(affected_domains)} domain{"s" if len(affected_domains) != 1 else ""} enriched')
         _update_status(playlist_vid, 'complete',
                        f'Done — {" · ".join(done_parts)}', 100,
                        domain=primary_domain)
@@ -830,6 +881,7 @@ def _run_shared_pipeline(
     start_progress: int = 35,
     user_id: int = None,
     playlist_ctx=None,
+    skip_synthesis: bool = False,
 ) -> dict:
     """
     Shared pipeline steps: chunk → detect domain → extract insights → store → synthesize.
@@ -968,29 +1020,31 @@ def _run_shared_pipeline(
     conn.commit()
     conn.close()
 
-    # Step 7: Re-synthesize (now source is 'processed' and will be counted)
-    _update('Synthesizing knowledge...', 85,
-            title=title, channel=channel, domain=domain_name)
-    synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+    if not skip_synthesis:
+        # Step 7: Re-synthesize (now source is 'processed' and will be counted)
+        _update('Synthesizing knowledge...', 85,
+                title=title, channel=channel, domain=domain_name)
+        synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
 
-    _update('Updating domain counts...', 92,
-            title=title, channel=channel, domain=domain_name)
-    _repair_domain_counts(domain_id, db_path)
+        _update('Updating domain counts...', 92,
+                title=title, channel=channel, domain=domain_name)
+        _repair_domain_counts(domain_id, db_path)
 
-    _update('Finalizing...', 96,
-            title=title, channel=channel, domain=domain_name)
+        _update('Finalizing...', 96,
+                title=title, channel=channel, domain=domain_name)
 
-    # Step 8: Taxonomy evolution check — fire-and-forget in background
-    def _bg_taxonomy():
-        try:
-            from domain_detector import propose_taxonomy_evolution
-            propose_taxonomy_evolution(domain_id, all_insights, db_path, user_id=user_id)
-        except Exception as e:
-            logger.warning(f"Taxonomy evolution check skipped: {e}")
-    threading.Thread(target=_bg_taxonomy, daemon=True).start()
+        # Step 8: Taxonomy evolution check — fire-and-forget in background
+        def _bg_taxonomy():
+            try:
+                from domain_detector import propose_taxonomy_evolution
+                propose_taxonomy_evolution(domain_id, all_insights, db_path, user_id=user_id)
+            except Exception as e:
+                logger.warning(f"Taxonomy evolution check skipped: {e}")
+        threading.Thread(target=_bg_taxonomy, daemon=True).start()
 
     if all_insights:
-        _update_status(video_id, 'complete', 'Done', 100,
+        status_msg = 'Done' if not skip_synthesis else 'Ingested'
+        _update_status(video_id, 'complete', status_msg, 100,
                        title=title, channel=channel, domain=domain_name,
                        insights_count=len(all_insights))
     elif word_count < 30:

@@ -438,7 +438,7 @@ def _extract_video_ids_regex(html: str) -> list[dict]:
     return videos
 
 
-def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
+def chunk_transcript(transcript: str, max_tokens: int = 4500, overlap: int = 200) -> list[str]:
     """Split transcript into topic-coherent chunks using sentence boundaries.
 
     Uses a two-pass approach:
