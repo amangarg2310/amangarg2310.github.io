@@ -1029,6 +1029,11 @@
     padding: 2px 8px;
     line-height: 1.4;
 }
+.bio-node-hint {
+    font-size: 10.5px;
+    color: var(--intel-text-tertiary);
+    opacity: 0.7;
+}
 
 /* ── Domain Nodes (Level 1) ── */
 .bio-node-domain .bio-node-core {

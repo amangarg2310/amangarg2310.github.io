@@ -403,7 +403,8 @@
                             <span class="bio-node-icon">{{ cat.icon }}</span>
                             <span class="bio-node-name">{{ cat.name }}</span>
                         </div>
-                        <div class="bio-node-ring">{{ cat.source_count }}</div>
+                        {% if cat.source_count %}<div class="bio-node-ring">{{ cat.source_count }} source{{ 's' if cat.source_count != 1 else '' }}</div>{% endif %}
+                        <div class="bio-node-hint">{{ cat.children|length }} domain{{ 's' if cat.children|length != 1 else '' }}</div>
                     </div>
                     {% endfor %}
                 </div>
@@ -420,8 +421,8 @@
                             <span class="bio-node-icon">{{ d.icon }}</span>
                             <span class="bio-node-name">{{ d.name }}</span>
                         </a>
-                        <div class="bio-node-meta">{{ d.source_count }}s · {{ d.insight_count }}i</div>
-                        {% if d.children %}<div class="bio-node-expand">+{{ d.children|length }}</div>{% endif %}
+                        {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
+                        {% if d.children %}<div class="bio-node-expand">{{ d.children|length }} sub-topic{{ 's' if d.children|length != 1 else '' }}</div>{% endif %}
                     </div>
                     {% endfor %}
                 </div>

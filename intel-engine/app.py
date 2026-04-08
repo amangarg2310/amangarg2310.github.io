@@ -100,19 +100,23 @@ def _compute_live_domain_counts(conn, user_id):
 
 
 def _overlay_live_counts(nodes, live_counts):
-    """Overlay live counts onto domain nodes. For level-0 parents, sum children."""
+    """Overlay live counts onto domain nodes. For parents without own sources, sum children."""
     for node in nodes:
         children = node.get('children', [])
         if children:
-            # Recurse into children first
             _overlay_live_counts(children, live_counts)
-            # Parent = sum of children
+        # Always check live counts for this node first
+        own = live_counts.get(node.get('id'))
+        if own:
+            node['source_count'] = own['source_count']
+            node['insight_count'] = own['insight_count']
+        elif children:
+            # No own sources (e.g., level-0 category) — sum from children
             node['source_count'] = sum(c.get('source_count', 0) for c in children)
             node['insight_count'] = sum(c.get('insight_count', 0) for c in children)
         else:
-            c = live_counts.get(node.get('id'), {'source_count': 0, 'insight_count': 0})
-            node['source_count'] = c['source_count']
-            node['insight_count'] = c['insight_count']
+            node['source_count'] = 0
+            node['insight_count'] = 0
 
 
 # ── Security Headers ──
