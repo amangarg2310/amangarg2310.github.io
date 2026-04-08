@@ -372,7 +372,7 @@
 
     {% elif knowledge_view is defined and knowledge_view %}
     <!-- ══════════════════════════════════════════════════════════
-         KNOWLEDGE BASE BROWSER
+         KNOWLEDGE BASE — Biology-Inspired Hierarchical Tree
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-kb-page">
         <div class="intel-kb-header">
@@ -389,40 +389,66 @@
             </a>
         </div>
 
-        {% for cat in knowledge_categories %}
-        <div class="intel-kb-category">
-            <div class="intel-kb-cat-header">
-                <span class="intel-kb-toggle" onclick="event.stopPropagation(); this.closest('.intel-kb-category').classList.toggle('collapsed')">▾</span>
-                <span class="intel-kb-cat-icon">{{ cat.icon }}</span>
-                {% if cat.id is defined %}
-                <a href="{{ url_for('domain_page', domain_name=cat.name) }}" class="intel-kb-cat-name">{{ cat.name }}</a>
-                {% else %}
-                <span class="intel-kb-cat-name">{{ cat.name }}</span>
-                {% endif %}
-                <span class="intel-kb-cat-meta">{{ cat.children|length }} domain{{ 's' if cat.children|length != 1 else '' }}</span>
-            </div>
-            <div class="intel-kb-domains">
+        {% if knowledge_categories %}
+        <div class="bio-tree" id="bioTree">
+            <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
+            <div class="bio-tree-nodes" id="bioTreeNodes">
+                <!-- Level 0: Category nodes (always visible) -->
+                <div class="bio-tree-level bio-tree-level-0" id="bioLevel0">
+                    {% for cat in knowledge_categories %}
+                    <div class="bio-node bio-node-cat" data-id="cat-{{ loop.index0 }}" data-expanded="false"
+                         onclick="bioToggle(this, 'cat-{{ loop.index0 }}')">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ cat.icon }}</span>
+                            <span class="bio-node-name">{{ cat.name }}</span>
+                        </div>
+                        <div class="bio-node-ring">{{ cat.source_count }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Level 1: Domain nodes (hidden until parent clicked) -->
+                {% for cat in knowledge_categories %}
+                <div class="bio-tree-level bio-tree-level-1 bio-hidden" data-parent="cat-{{ loop.index0 }}">
+                    {% for d in cat.children %}
+                    <div class="bio-node bio-node-domain" data-id="dom-{{ d.id }}"
+                         data-expanded="false" data-has-children="{{ 'true' if d.children else 'false' }}"
+                         onclick="{% if d.children %}bioToggle(this, 'dom-{{ d.id }}'){% endif %}">
+                        <div class="bio-node-pulse"></div>
+                        <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node-core" onclick="event.stopPropagation()">
+                            <span class="bio-node-icon">{{ d.icon }}</span>
+                            <span class="bio-node-name">{{ d.name }}</span>
+                        </a>
+                        <div class="bio-node-meta">{{ d.source_count }}s · {{ d.insight_count }}i</div>
+                        {% if d.children %}<div class="bio-node-expand">+{{ d.children|length }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <!-- Level 2: Sub-topic nodes (hidden until parent domain clicked) -->
+                {% for cat in knowledge_categories %}
                 {% for d in cat.children %}
-                <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-kb-domain-row intel-animate-in" style="animation-delay: {{ loop.index0 * 0.04 }}s">
-                    <span class="intel-kb-domain-icon">{{ d.icon }}</span>
-                    <div class="intel-kb-domain-info">
-                        <div class="intel-kb-domain-name">{{ d.name }}</div>
-                        <div class="intel-kb-domain-desc">{{ d.description or 'Knowledge base' }}</div>
+                {% if d.children %}
+                <div class="bio-tree-level bio-tree-level-2 bio-hidden" data-parent="dom-{{ d.id }}">
+                    {% for sub in d.children %}
+                    <div class="bio-node bio-node-sub">
+                        <div class="bio-node-pulse"></div>
+                        <span class="bio-node-core">
+                            <span class="bio-node-dot"></span>
+                            <span class="bio-node-name">{{ sub.name }}</span>
+                        </span>
                     </div>
-                    <div class="intel-kb-domain-stats">
-                        <span>{{ d.source_count }} sources</span>
-                        <span>{{ d.insight_count }} insights</span>
-                    </div>
-                    <svg class="intel-kb-domain-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
                 {% endfor %}
             </div>
         </div>
-        {% endfor %}
 
-        {% if not knowledge_categories %}
+        {% else %}
         <div class="intel-empty">
             <div class="intel-empty-icon">📚</div>
             <div class="intel-empty-title">No knowledge yet</div>
@@ -432,6 +458,97 @@
         </div>
         {% endif %}
     </div>
+
+    <script>
+    function bioToggle(nodeEl, parentId) {
+        const isExpanded = nodeEl.dataset.expanded === 'true';
+        // Collapse all sibling expansions at same level
+        const level = nodeEl.closest('.bio-tree-level');
+        level.querySelectorAll('.bio-node[data-expanded="true"]').forEach(n => {
+            if (n !== nodeEl) {
+                n.dataset.expanded = 'false';
+                // Hide their children
+                document.querySelectorAll(`.bio-tree-level[data-parent="${n.dataset.id}"]`).forEach(cl => {
+                    cl.classList.add('bio-hidden');
+                    // Also collapse grandchildren
+                    cl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
+                        gc.dataset.expanded = 'false';
+                        document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
+                            gcl.classList.add('bio-hidden');
+                        });
+                    });
+                });
+            }
+        });
+
+        // Toggle this node
+        nodeEl.dataset.expanded = isExpanded ? 'false' : 'true';
+        const childLevels = document.querySelectorAll(`.bio-tree-level[data-parent="${parentId}"]`);
+        childLevels.forEach(cl => {
+            if (isExpanded) {
+                cl.classList.add('bio-hidden');
+                // Collapse grandchildren
+                cl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
+                    gc.dataset.expanded = 'false';
+                    document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
+                        gcl.classList.add('bio-hidden');
+                    });
+                });
+            } else {
+                cl.classList.remove('bio-hidden');
+            }
+        });
+
+        // Redraw connectors after DOM settles
+        requestAnimationFrame(() => requestAnimationFrame(bioDrawConnectors));
+    }
+
+    function bioDrawConnectors() {
+        const svg = document.getElementById('bioTreeSvg');
+        const container = document.getElementById('bioTree');
+        if (!svg || !container) return;
+        const rect = container.getBoundingClientRect();
+        svg.setAttribute('width', container.scrollWidth);
+        svg.setAttribute('height', container.scrollHeight);
+        svg.innerHTML = '';
+
+        // Find all visible parent→child level connections
+        document.querySelectorAll('.bio-tree-level:not(.bio-hidden)').forEach(childLevel => {
+            const parentId = childLevel.dataset.parent;
+            if (!parentId) return;
+            const parentNode = document.querySelector(`.bio-node[data-id="${parentId}"]`);
+            if (!parentNode || !parentNode.closest('.bio-tree-level:not(.bio-hidden)')) return;
+
+            const pRect = parentNode.getBoundingClientRect();
+            const px = pRect.left + pRect.width / 2 - rect.left;
+            const py = pRect.bottom - rect.top;
+
+            childLevel.querySelectorAll('.bio-node').forEach((childNode, i) => {
+                const cRect = childNode.getBoundingClientRect();
+                const cx = cRect.left + cRect.width / 2 - rect.left;
+                const cy = cRect.top - rect.top;
+
+                // Organic S-curve: vertical drop then curve to child
+                const midY = py + (cy - py) * 0.45;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${px} ${py} C ${px} ${midY}, ${cx} ${midY}, ${cx} ${cy}`);
+                path.setAttribute('class', 'bio-connector');
+                path.style.animationDelay = `${i * 0.08}s`;
+                // Thicker for level-0→1, thinner for level-1→2
+                if (childLevel.classList.contains('bio-tree-level-2')) {
+                    path.classList.add('bio-connector-thin');
+                }
+                svg.appendChild(path);
+            });
+        });
+    }
+
+    // Initial draw
+    document.addEventListener('DOMContentLoaded', () => {
+        requestAnimationFrame(bioDrawConnectors);
+        window.addEventListener('resize', bioDrawConnectors);
+    });
+    </script>
 
     {% else %}
     <!-- ══════════════════════════════════════════════════════════

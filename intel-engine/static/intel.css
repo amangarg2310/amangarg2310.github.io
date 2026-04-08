@@ -888,7 +888,7 @@
 
 /* ── Knowledge Base Browser ── */
 .intel-kb-page {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 48px 24px 80px;
 }
@@ -896,7 +896,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
 }
 .intel-kb-title {
     font-size: 26px;
@@ -910,104 +910,205 @@
     color: var(--intel-text-tertiary);
     margin: 0;
 }
-.intel-kb-category {
-    margin-bottom: 8px;
+
+/* ── Biology-Inspired Hierarchical Tree ── */
+.bio-tree {
+    position: relative;
+    min-height: 200px;
 }
-.intel-kb-category.collapsed .intel-kb-domains {
-    display: none;
+.bio-tree-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
 }
-.intel-kb-category.collapsed .intel-kb-toggle {
-    transform: rotate(-90deg);
+.bio-tree-nodes {
+    position: relative;
+    z-index: 1;
 }
-.intel-kb-cat-header {
+.bio-tree-level {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 16px 0;
+    flex-wrap: wrap;
+}
+.bio-tree-level-0 { padding-top: 0; gap: 32px; }
+.bio-tree-level-1 { padding-top: 28px; gap: 20px; }
+.bio-tree-level-2 { padding-top: 20px; gap: 14px; }
+.bio-hidden {
+    display: none !important;
+}
+
+/* ── Tree Connectors (SVG) ── */
+.bio-connector {
+    fill: none;
+    stroke: var(--intel-border);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0;
+    animation: bioGrow 0.5s ease-out forwards;
+}
+.bio-connector-thin {
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    opacity: 0;
+}
+@keyframes bioGrow {
+    from { opacity: 0; stroke-dashoffset: 200; stroke-dasharray: 200; }
+    to { opacity: 0.5; stroke-dashoffset: 0; stroke-dasharray: 200; }
+}
+
+/* ── Node Base ── */
+.bio-node {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.25s ease;
+}
+.bio-node:hover { transform: translateY(-2px); }
+
+/* ── Pulse Ring (bioluminescence) ── */
+.bio-node-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.bio-node:hover .bio-node-pulse {
+    opacity: 1;
+    animation: bioPulse 2s ease-in-out infinite;
+}
+@keyframes bioPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 110, 247, 0.2); }
+    50% { box-shadow: 0 0 0 16px rgba(79, 110, 247, 0); }
+}
+
+/* ── Category Nodes (Level 0) ── */
+.bio-node-cat .bio-node-core {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border-radius: var(--intel-radius-xs);
-    transition: background var(--intel-transition);
-    user-select: none;
+    gap: 10px;
+    padding: 14px 24px;
+    background: var(--intel-surface);
+    border: 1.5px solid var(--intel-border);
+    border-radius: 20px;
+    box-shadow: 0 2px 12px rgba(30, 25, 15, 0.06);
+    transition: all 0.25s ease;
 }
-.intel-kb-cat-header:hover {
-    background: var(--intel-surface-hover);
+.bio-node-cat:hover .bio-node-core {
+    border-color: var(--intel-accent);
+    box-shadow: 0 4px 20px rgba(79, 110, 247, 0.1);
 }
-.intel-kb-toggle {
-    font-size: 11px;
-    color: var(--intel-text-tertiary);
-    transition: transform var(--intel-transition);
-    cursor: pointer;
-    padding: 4px;
+.bio-node-cat[data-expanded="true"] .bio-node-core {
+    border-color: var(--intel-accent);
+    background: rgba(79, 110, 247, 0.04);
 }
-.intel-kb-cat-icon {
-    font-size: 18px;
-}
-.intel-kb-cat-name {
+.bio-node-cat .bio-node-icon { font-size: 22px; }
+.bio-node-cat .bio-node-name {
     font-size: 15px;
     font-weight: 600;
     color: var(--intel-text);
-    text-decoration: none;
-    transition: color var(--intel-transition);
 }
-a.intel-kb-cat-name:hover {
-    color: var(--intel-accent);
-}
-.intel-kb-cat-meta {
-    margin-left: auto;
-    font-size: 12px;
+.bio-node-ring {
+    font-size: 11px;
     color: var(--intel-text-tertiary);
+    background: var(--intel-surface-hover);
+    border-radius: 10px;
+    padding: 2px 8px;
+    line-height: 1.4;
 }
-.intel-kb-domains {
-    padding: 0 0 8px 0;
-}
-.intel-kb-domain-row {
+
+/* ── Domain Nodes (Level 1) ── */
+.bio-node-domain .bio-node-core {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 16px 14px 40px;
+    gap: 8px;
+    padding: 10px 18px;
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: 14px;
     text-decoration: none;
     color: inherit;
-    border-radius: var(--intel-radius-xs);
-    transition: background var(--intel-transition);
+    transition: all 0.25s ease;
 }
-.intel-kb-domain-row:hover {
-    background: var(--intel-surface-hover);
+.bio-node-domain:hover .bio-node-core {
+    border-color: var(--intel-accent);
+    box-shadow: 0 2px 12px rgba(79, 110, 247, 0.08);
 }
-.intel-kb-domain-icon {
-    font-size: 22px;
-    flex-shrink: 0;
+.bio-node-domain[data-expanded="true"] .bio-node-core {
+    border-color: var(--intel-accent);
+    background: rgba(79, 110, 247, 0.04);
 }
-.intel-kb-domain-info {
-    flex: 1;
-    min-width: 0;
-}
-.intel-kb-domain-name {
-    font-size: 14px;
+.bio-node-domain .bio-node-icon { font-size: 18px; }
+.bio-node-domain .bio-node-name {
+    font-size: 13.5px;
     font-weight: 500;
     color: var(--intel-text);
-    margin-bottom: 2px;
 }
-.intel-kb-domain-desc {
-    font-size: 12.5px;
+.bio-node-meta {
+    font-size: 11px;
     color: var(--intel-text-tertiary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
-.intel-kb-domain-stats {
+.bio-node-expand {
+    font-size: 10px;
+    color: var(--intel-accent);
+    background: rgba(79, 110, 247, 0.08);
+    border-radius: 8px;
+    padding: 1px 6px;
+    line-height: 1.5;
+}
+
+/* ── Sub-topic Nodes (Level 2) ── */
+.bio-node-sub .bio-node-core {
     display: flex;
-    gap: 12px;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: 10px;
+    transition: all 0.25s ease;
+}
+.bio-node-sub:hover .bio-node-core {
+    border-color: var(--intel-accent);
+}
+.bio-node-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--intel-accent);
+    opacity: 0.5;
+}
+.bio-node-sub .bio-node-name {
     font-size: 12px;
-    color: var(--intel-text-tertiary);
-    flex-shrink: 0;
+    color: var(--intel-text-secondary);
 }
-.intel-kb-domain-arrow {
-    color: var(--intel-text-tertiary);
-    flex-shrink: 0;
-    opacity: 0;
-    transition: opacity var(--intel-transition);
+
+/* ── Level appearance animation ── */
+.bio-tree-level:not(.bio-hidden) .bio-node {
+    animation: bioFadeIn 0.4s ease-out both;
 }
-.intel-kb-domain-row:hover .intel-kb-domain-arrow {
-    opacity: 1;
+.bio-tree-level:not(.bio-hidden) .bio-node:nth-child(1) { animation-delay: 0s; }
+.bio-tree-level:not(.bio-hidden) .bio-node:nth-child(2) { animation-delay: 0.06s; }
+.bio-tree-level:not(.bio-hidden) .bio-node:nth-child(3) { animation-delay: 0.12s; }
+.bio-tree-level:not(.bio-hidden) .bio-node:nth-child(4) { animation-delay: 0.18s; }
+.bio-tree-level:not(.bio-hidden) .bio-node:nth-child(5) { animation-delay: 0.24s; }
+.bio-tree-level:not(.bio-hidden) .bio-node:nth-child(6) { animation-delay: 0.3s; }
+@keyframes bioFadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* ══════════════════════════════════════════════════════════════

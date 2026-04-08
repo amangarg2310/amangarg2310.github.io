@@ -244,6 +244,19 @@ def knowledge_page():
             ORDER BY source_count DESC
         """, (uid,)).fetchall()
 
+        # Get all level-2 sub-topics keyed by parent_id
+        subtopics_by_parent = {}
+        all_subtopics = [dict(r) for r in conn.execute("""
+            SELECT id, name, icon, source_count, insight_count, description, parent_id
+            FROM domains
+            WHERE (user_id = ? OR user_id IS NULL) AND level = 2
+            ORDER BY name ASC
+        """, (uid,)).fetchall()]
+        for st in all_subtopics:
+            pid = st.get('parent_id')
+            if pid:
+                subtopics_by_parent.setdefault(pid, []).append(st)
+
         for cat in cats:
             cat = dict(cat)
             # Get child domains (level 1) under this category
@@ -253,6 +266,9 @@ def knowledge_page():
                 WHERE parent_id = ? AND level = 1
                 ORDER BY source_count DESC
             """, (cat['id'],)).fetchall()]
+            # Attach level-2 sub-topics to each child
+            for child in children:
+                child['children'] = subtopics_by_parent.get(child['id'], [])
             cat['children'] = children
             total_sources += cat['source_count'] or 0
             total_insights += cat['insight_count'] or 0
@@ -266,6 +282,8 @@ def knowledge_page():
             WHERE (user_id = ? OR user_id IS NULL) AND level = 1 AND parent_id IS NULL
             ORDER BY source_count DESC
         """, (uid,)).fetchall()]
+        for orphan in orphans:
+            orphan['children'] = subtopics_by_parent.get(orphan['id'], [])
         if orphans:
             categories.append({
                 'name': 'Other', 'icon': '📂', 'source_count': 0, 'insight_count': 0,
