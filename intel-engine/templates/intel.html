@@ -388,7 +388,9 @@
                 <div class="bio-tree-level bio-tree-level-0" id="bioLevel0">
                     {% for cat in knowledge_categories %}
                     <div class="bio-node bio-node-cat" data-id="cat-{{ loop.index0 }}" data-expanded="false"
-                         onclick="bioToggle(this, 'cat-{{ loop.index0 }}')">
+                         data-href="{{ url_for('domain_page', domain_name=cat.name) }}"
+                         onclick="bioToggle(this, 'cat-{{ loop.index0 }}')"
+                         ondblclick="window.location.href=this.dataset.href">
                         <div class="bio-node-pulse"></div>
                         <div class="bio-node-core">
                             <span class="bio-node-icon">{{ cat.icon }}</span>
@@ -407,7 +409,9 @@
                     {% if d.children %}
                     <div class="bio-node bio-node-domain" data-id="dom-{{ d.id }}"
                          data-expanded="false" data-has-children="true"
-                         onclick="bioToggle(this, 'dom-{{ d.id }}')">
+                         data-href="{{ url_for('domain_page', domain_name=d.name) }}"
+                         onclick="bioToggle(this, 'dom-{{ d.id }}')"
+                         ondblclick="window.location.href=this.dataset.href">
                         <div class="bio-node-pulse"></div>
                         <div class="bio-node-core">
                             <span class="bio-node-icon">{{ d.icon }}</span>
@@ -437,7 +441,8 @@
                 {% if d.children %}
                 <div class="bio-tree-level bio-tree-level-2 bio-hidden" data-parent="dom-{{ d.id }}">
                     {% for sub in d.children %}
-                    <div class="bio-node bio-node-sub">
+                    <div class="bio-node bio-node-sub" data-href="{{ url_for('domain_page', domain_name=sub.name) }}"
+                         ondblclick="window.location.href=this.dataset.href">
                         <div class="bio-node-pulse"></div>
                         <span class="bio-node-core">
                             <span class="bio-node-dot"></span>
