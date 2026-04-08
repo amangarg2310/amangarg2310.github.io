@@ -1067,6 +1067,7 @@ function pollHomeStatus(videoId) {
 let _progressTarget = 0;
 let _progressCurrent = 0;
 let _progressTimer = null;
+let _driftTimer = null;
 
 function _startProgressTween() {
     if (_progressTimer) return;
@@ -1074,11 +1075,32 @@ function _startProgressTween() {
         if (_progressCurrent >= _progressTarget) {
             clearInterval(_progressTimer);
             _progressTimer = null;
+            // Start drift once tween catches up — creates perception of continuous work
+            _startDrift();
             return;
         }
         _progressCurrent = Math.min(_progressCurrent + 1, _progressTarget);
-        _updateProgressDOM(_progressCurrent);
-    }, 60); // ~1% every 60ms for smooth visual
+        _updateProgressDOM(Math.round(_progressCurrent));
+    }, 60);
+}
+
+function _startDrift() {
+    if (_driftTimer) return;
+    _driftTimer = setInterval(() => {
+        // Drift 0.3% every 3 seconds — subtle forward motion during long API calls
+        // Never exceed 95% (leaves room for real completion) or go past target + 8
+        if (_progressCurrent >= 95 || _progressCurrent >= _progressTarget + 8) {
+            clearInterval(_driftTimer);
+            _driftTimer = null;
+            return;
+        }
+        _progressCurrent += 0.3;
+        _updateProgressDOM(Math.round(_progressCurrent));
+    }, 3000);
+}
+
+function _stopDrift() {
+    if (_driftTimer) { clearInterval(_driftTimer); _driftTimer = null; }
 }
 
 function _updateProgressDOM(pct) {
@@ -1123,6 +1145,7 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
             if (titleEl) titleEl.textContent = title || 'Processing...';
             if (stepEl) stepEl.textContent = step || '';
             _progressTarget = progress || 0;
+            _stopDrift();  // Stop drift when real progress arrives
             _startProgressTween();
             return;
         }
@@ -1139,6 +1162,7 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
         _hideAllSubmitBtns();
     } else if (status === 'complete' || status === 'already_exists') {
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        _stopDrift();
         fillClass = 'complete';
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#34c759"><polyline points="20 6 9 17 4 12"/></svg>';
         pctText = '';
@@ -1147,6 +1171,7 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
         }
     } else if (status === 'error') {
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        _stopDrift();
         fillClass = 'error';
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#ff3b30"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
         pctText = '';

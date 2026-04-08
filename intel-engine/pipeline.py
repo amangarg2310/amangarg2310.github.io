@@ -235,14 +235,30 @@ def _hash_text_id(text: str) -> str:
 # ══════════════════════════════════════════════════════════════
 
 def _map_to_playlist(playlist_ctx, video_progress, title=None):
-    """Map a video's internal progress (0-100) to the parent playlist's progress range."""
+    """Map a video's internal progress (0-100) to the parent playlist's progress range.
+
+    Only updates if mapped progress >= current progress (monotonic guarantee).
+    Prevents race condition where concurrent workers make progress appear to go backward.
+    """
     pid, idx, total = playlist_ctx
     v_start = 10 + int((idx / total) * 85)
     v_end = 10 + int(((idx + 1) / total) * 85)
     mapped = v_start + int((video_progress / 100) * (v_end - v_start))
-    step_title = (title or '')[:50]
-    _update_status(pid, 'processing',
-                   f'Processing {idx + 1}/{total} new: {step_title}...', mapped)
+    step_title = (title or '')[:40]
+
+    with _status_lock:
+        current = _pipeline_status.get(pid, {})
+        current_progress = current.get('progress', 0)
+        if mapped >= current_progress:
+            _pipeline_status[pid] = {
+                'status': 'processing',
+                'step': f'{idx + 1}/{total}: {step_title}',
+                'progress': mapped,
+                'error': None,
+                '_timestamp': time.time(),
+                **{k: v for k, v in current.items()
+                   if k not in ('status', 'step', 'progress', 'error', '_timestamp')},
+            }
 
 
 def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None) -> dict:
@@ -395,7 +411,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
                 return {'status': 'error', 'video_id': video['video_id'], 'error': str(e)}
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 executor.submit(_process_video, i, video): i
                 for i, video in enumerate(new_videos)

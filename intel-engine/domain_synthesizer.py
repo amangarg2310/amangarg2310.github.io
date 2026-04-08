@@ -501,30 +501,42 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     synthesis_content = response.content[0].text.strip()
 
-    suggested_list = _generate_suggested_question(domain_name, synthesis_content, api_key)
-    suggested = json.dumps(suggested_list)
-    try:
-        convergence = _analyze_convergence(domain_id, db_path) or ""
-    except Exception as e:
-        convergence = ""
-        logger.warning(f"Convergence analysis skipped: {e}")
-
+    # Store synthesis immediately (suggested question + convergence generated in background)
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, convergence_data, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?, ?)",
-        (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, convergence, now),
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, convergence_data, created_at) VALUES (?, ?, ?, ?, ?, '[]', 'sub_topic', '', ?)",
+        (domain_id, synthesis_content, source_count, insight_count, next_version, now),
     )
     conn.execute(
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
         (source_count, insight_count, now, domain_id),
     )
-    # Roll up counts to parent category
     _update_parent_counts(conn, domain_id, now)
     conn.commit()
     conn.close()
 
     logger.info(f"Created synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
+
+    # Background: generate suggested question + convergence (non-blocking, saves 3-6s)
+    def _bg_enrich():
+        try:
+            sq = _generate_suggested_question(domain_name, synthesis_content, api_key)
+            convergence = ""
+            try:
+                convergence = _analyze_convergence(domain_id, db_path) or ""
+            except Exception as e:
+                logger.warning(f"Convergence analysis skipped: {e}")
+            c = _get_conn(db_path)
+            c.execute(
+                "UPDATE syntheses SET suggested_questions = ?, convergence_data = ? WHERE domain_id = ? AND version = ?",
+                (json.dumps(sq), convergence, domain_id, next_version),
+            )
+            c.commit()
+            c.close()
+        except Exception as e:
+            logger.warning(f"Background enrichment failed: {e}")
+    threading.Thread(target=_bg_enrich, daemon=True).start()
 
     # Fire-and-forget: cascade, cross-refs, and impact run in background threads
     # These are non-critical and shouldn't block the pipeline from completing
@@ -664,14 +676,12 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     synthesis_content = response.content[0].text.strip()
 
-    suggested_list = _generate_suggested_question(domain_name, synthesis_content, api_key)
-    suggested = json.dumps(suggested_list)
-
+    # Store immediately, enrich in background
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, 'sub_topic', ?)",
-        (domain_id, synthesis_content, source_count, insight_count, next_version, suggested, now),
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, '[]', 'sub_topic', ?)",
+        (domain_id, synthesis_content, source_count, insight_count, next_version, now),
     )
     conn.execute(
         "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
@@ -682,6 +692,20 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
     conn.close()
 
     logger.info(f"Full re-synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
+
+    # Background: generate suggested question (non-blocking)
+    def _bg_suggested():
+        try:
+            sq = _generate_suggested_question(domain_name, synthesis_content, api_key)
+            if sq:
+                c = _get_conn(db_path)
+                c.execute("UPDATE syntheses SET suggested_questions = ? WHERE domain_id = ? AND version = ?",
+                          (json.dumps(sq), domain_id, next_version))
+                c.commit()
+                c.close()
+        except Exception as e:
+            logger.warning(f"Suggested question generation skipped: {e}")
+    threading.Thread(target=_bg_suggested, daemon=True).start()
 
     # Detect cross-domain references
     try:
