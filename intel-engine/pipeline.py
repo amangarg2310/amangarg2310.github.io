@@ -381,11 +381,11 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                 repaired_domains.add(r['domain_id'])
 
         # Pick the most common domain from results for redirect
-        domain_counts = {}
+        domain_frequency = {}
         for r in results:
             if r and r.get('domain_name'):
-                domain_counts[r['domain_name']] = domain_counts.get(r['domain_name'], 0) + 1
-        primary_domain = max(domain_counts, key=domain_counts.get) if domain_counts else None
+                domain_frequency[r['domain_name']] = domain_frequency.get(r['domain_name'], 0) + 1
+        primary_domain = max(domain_frequency, key=domain_frequency.get) if domain_frequency else None
         _update_status(playlist_vid, 'complete',
                        f'Done — {succeeded}/{len(videos)} videos processed', 100,
                        domain=primary_domain)

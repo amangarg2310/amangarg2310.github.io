@@ -473,6 +473,16 @@
     </div>
 
     <script>
+    function collapseDescendants(levelEl) {
+        levelEl.classList.add('bio-hidden');
+        levelEl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
+            gc.dataset.expanded = 'false';
+            document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
+                collapseDescendants(gcl);
+            });
+        });
+    }
+
     function bioToggle(nodeEl, parentId) {
         const isExpanded = nodeEl.dataset.expanded === 'true';
         // Collapse all sibling expansions at same level
@@ -480,16 +490,8 @@
         level.querySelectorAll('.bio-node[data-expanded="true"]').forEach(n => {
             if (n !== nodeEl) {
                 n.dataset.expanded = 'false';
-                // Hide their children
                 document.querySelectorAll(`.bio-tree-level[data-parent="${n.dataset.id}"]`).forEach(cl => {
-                    cl.classList.add('bio-hidden');
-                    // Also collapse grandchildren
-                    cl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
-                        gc.dataset.expanded = 'false';
-                        document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
-                            gcl.classList.add('bio-hidden');
-                        });
-                    });
+                    collapseDescendants(cl);
                 });
             }
         });
@@ -499,14 +501,7 @@
         const childLevels = document.querySelectorAll(`.bio-tree-level[data-parent="${parentId}"]`);
         childLevels.forEach(cl => {
             if (isExpanded) {
-                cl.classList.add('bio-hidden');
-                // Collapse grandchildren
-                cl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
-                    gc.dataset.expanded = 'false';
-                    document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
-                        gcl.classList.add('bio-hidden');
-                    });
-                });
+                collapseDescendants(cl);
             } else {
                 cl.classList.remove('bio-hidden');
             }

@@ -972,10 +972,9 @@
     opacity: 0;
     animation: bioGrow 0.5s ease-out forwards;
 }
-.bio-connector-thin {
+.bio-connector.bio-connector-thin {
     stroke-width: 1;
     stroke-dasharray: 4 3;
-    opacity: 0;
 }
 @keyframes bioGrow {
     from { opacity: 0; stroke-dashoffset: 200; stroke-dasharray: 200; }

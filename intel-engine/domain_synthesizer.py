@@ -13,6 +13,7 @@ After each new source is processed, the synthesizer:
 import json
 import logging
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -537,8 +538,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         except Exception as e:
             logger.warning(f"Ingestion impact skipped: {e}")
 
-    import threading as _threading
-    _threading.Thread(target=_background_followups, daemon=True).start()
+    threading.Thread(target=_background_followups, daemon=True).start()
 
     return synthesis_content
 
