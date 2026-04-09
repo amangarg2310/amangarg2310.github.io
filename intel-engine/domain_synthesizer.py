@@ -61,8 +61,16 @@ FORMAT as clean markdown:
 
 Start with a ## TLDR section:
 
-First, write ONE sentence that frames what this domain IS and why someone would care — like a teacher setting context before a lesson. This sentence should orient a newcomer who has never heard of the topic.
-Example: "Claude Code is Anthropic's CLI tool that lets developers use Claude AI directly in their terminal for coding, debugging, and refactoring tasks."
+**MANDATORY FIRST LINE**: Before ANY bullet points, write exactly ONE plain sentence (not bold, not bulleted) that frames what this domain IS and why someone would care. This is the "teacher setting context" moment — orient a newcomer who has never heard of this topic. This sentence MUST appear before the first bullet point.
+
+Example TLDR structure:
+## TLDR
+Claude Code is Anthropic's CLI tool that lets developers use Claude AI directly in their terminal for coding tasks — it's the fastest path from idea to working code for anyone comfortable in a terminal.
+
+- **First key takeaway** — specific detail...
+- **Second key takeaway** — specific detail...
+
+The framing sentence is NOT optional. Do NOT start the TLDR with a bullet point.
 
 Then 3-5 bullet points with the MOST IMPORTANT specific takeaways. Each bullet should LEAD with a brief "why this matters" clause, then give the specific detail. The reader should understand the significance before hitting the technical specifics.
 
@@ -110,7 +118,16 @@ FORMAT as clean markdown:
 
 Start with a ## TLDR section:
 
-First, write ONE sentence that frames what this domain IS and why someone would care — like a teacher setting context before a lesson. This sentence should orient a newcomer who has never heard of the topic.
+**MANDATORY FIRST LINE**: Before ANY bullet points, write exactly ONE plain sentence (not bold, not bulleted) that frames what this domain IS and why someone would care. This is the "teacher setting context" moment — orient a newcomer who has never heard of this topic. This sentence MUST appear before the first bullet point.
+
+Example TLDR structure:
+## TLDR
+Claude Code is Anthropic's CLI tool that lets developers use Claude AI directly in their terminal for coding tasks — it's the fastest path from idea to working code for anyone comfortable in a terminal.
+
+- **First key takeaway** — specific detail...
+- **Second key takeaway** — specific detail...
+
+The framing sentence is NOT optional. Do NOT start the TLDR with a bullet point.
 
 Then 3-5 bullet points with the MOST IMPORTANT specific takeaways. Each bullet should LEAD with a brief "why this matters" clause, then give the specific detail. The reader should understand the significance before hitting the technical specifics.
 
@@ -445,32 +462,36 @@ def _snapshot_synthesis(current: dict, domain_id: int, db_path):
 
 
 def _generate_suggested_question(domain_name: str, synthesis_content: str, api_key: str) -> list:
-    """Generate 1 simple suggested question from synthesis content."""
+    """Generate 1 short suggested question from synthesis content."""
     try:
         client = Anthropic(api_key=api_key)
         response = client.messages.create(
             model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You help users explore knowledge bases with simple, practical questions.",
-            messages=[{"role": "user", "content": f"""Based on this knowledge about "{domain_name}", generate 1 simple question a beginner would ask.
+            system="You generate short questions. Maximum 12 words. Always end with a question mark.",
+            messages=[{"role": "user", "content": f"""Generate exactly 1 short question a beginner would ask about "{domain_name}".
 
-Rules:
-- ONE sentence, under 15 words
-- Practical and specific to the content (not generic)
-- Something the knowledge base can answer well
-- Simple language — like asking a colleague, not writing an exam
+CRITICAL: Maximum 12 words. One sentence. End with "?"
 
-Good: "How do I set up Claude Code with an existing project?"
-Good: "What's the fastest way to deploy a RAG pipeline?"
-Bad: "Given that agent teams are experimental, what metrics should you establish before deploying a multi-agent system?"
+Examples:
+- "How do I set up Claude Code?"
+- "What's the best way to validate an app idea?"
+- "When should I use RAG vs fine-tuning?"
+- "What's the difference between Sonnet and Opus?"
 
 SYNTHESIS:
-{synthesis_content[:2000]}
+{synthesis_content[:1500]}
 
-Return ONLY the question. No quotes, no prefix."""}],
+Return ONLY the question text. Nothing else."""}],
             temperature=0.4,
-            max_tokens=60,
+            max_tokens=40,
         )
         q = response.content[0].text.strip().strip('"').strip("'")
+        # Safety net: truncate if model still generates too many words
+        if q and len(q.split()) > 20:
+            if '?' in q:
+                q = q[:q.index('?') + 1]
+            else:
+                q = ' '.join(q.split()[:12]) + '?'
         return [q] if q else []
     except Exception as e:
         logger.warning(f"Suggested question generation failed: {e}")
