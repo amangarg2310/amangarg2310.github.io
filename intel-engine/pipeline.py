@@ -49,6 +49,36 @@ SOURCE_TYPE_ICONS = {
     'text': '📋',
 }
 
+class PipelineTimer:
+    """Tracks per-step timing for a pipeline run. Logs summary on finish()."""
+
+    def __init__(self, pipeline_id: str):
+        self.pipeline_id = pipeline_id
+        self.steps = []
+        self.start_time = time.time()
+
+    def step(self, name: str):
+        now = time.time()
+        if self.steps:
+            self.steps[-1]['duration'] = now - self.steps[-1]['start']
+        self.steps.append({'name': name, 'start': now, 'duration': 0})
+
+    def finish(self):
+        now = time.time()
+        if self.steps:
+            self.steps[-1]['duration'] = now - self.steps[-1]['start']
+        total = now - self.start_time
+
+        parts = [f"Pipeline '{self.pipeline_id}' completed in {total:.1f}s:"]
+        for s in self.steps:
+            pct = (s['duration'] / total * 100) if total > 0 else 0
+            parts.append(f"  {s['name']}: {s['duration']:.1f}s ({pct:.0f}%)")
+
+        logger.info('\n'.join(parts))
+
+
+
+
 
 def get_pipeline_status(video_id: str) -> dict:
     """Get the current processing status for a source."""
@@ -366,8 +396,10 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
         return {'status': 'error', 'error': 'Invalid playlist URL'}
 
     playlist_vid = tracking_id or _generate_source_id("playlist")
+    timer = PipelineTimer(f'playlist-{playlist_vid}')
 
     try:
+        timer.step('fetch_urls')
         _update_status(playlist_vid, 'processing', 'Fetching playlist...', 5)
         all_videos = fetch_playlist_videos(playlist_id)
         total_found = len(all_videos)
@@ -406,6 +438,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
         _update_status(playlist_vid, 'processing', '. '.join(parts) + '...', 10)
 
         # ── Phase 1: Parallel ingestion (skip synthesis) ──────────
+        timer.step('phase1_parallel_ingest')
         results = [None] * len(new_videos)
 
         def _process_video(i, video):
@@ -432,6 +465,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
         extraction_failures = sum(1 for r in results if r and r.get('insights_count', -1) == 0 and r.get('status') == 'complete')
 
         # ── Phase 2: Batch synthesis (once per domain) ────────────
+        timer.step('phase2_synthesis')
         # Collect unique domains that need synthesis
         affected_domains = {}  # {domain_id: {'name': ..., 'source_ids': [...]}}
         for r in results:
@@ -501,6 +535,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             done_parts.append(f'{failed} failed')
         if affected_domains:
             done_parts.append(f'{len(affected_domains)} domain{"s" if len(affected_domains) != 1 else ""} enriched')
+        timer.finish()
         _update_status(playlist_vid, 'complete',
                        f'Done — {" · ".join(done_parts)}', 100,
                        domain=primary_domain)
@@ -1158,6 +1193,7 @@ def _run_shared_pipeline(
     Used by all source type pipelines after they've ingested and stored the source.
     """
     db_path = db_path or config.DB_PATH
+    timer = PipelineTimer(video_id)
 
     def _update(step, progress, **kw):
         """Update video status and propagate to playlist if in playlist context."""
@@ -1166,11 +1202,13 @@ def _run_shared_pipeline(
             _map_to_playlist(playlist_ctx, progress, title)
 
     # Step 3: Chunk transcript
+    timer.step('chunking')
     _update('Analyzing content...', start_progress,
             title=title, channel=channel)
     chunks = chunk_transcript(transcript)
 
     # Step 4: Auto-detect domain (hierarchical)
+    timer.step('domain_detection')
     _update('Detecting domain...', start_progress + 10,
             title=title, channel=channel)
     try:
@@ -1197,6 +1235,7 @@ def _run_shared_pipeline(
             title=title, channel=channel, domain=domain_name)
 
     # Step 5: Extract insights (parallel across chunks)
+    timer.step('insight_extraction')
     all_insights = []
     extraction_errors = []  # Per-chunk error tracking
 
@@ -1266,6 +1305,7 @@ def _run_shared_pipeline(
                 pass
 
     # Step 6: Store insights
+    timer.step('store_insights')
     _update('Storing insights...', 80,
             title=title, channel=channel, domain=domain_name)
 
@@ -1293,6 +1333,7 @@ def _run_shared_pipeline(
     conn.commit()
 
     # Step 6.5: Generate embeddings for insights
+    timer.step('embeddings')
     _update('Generating embeddings...', 82,
             title=title, channel=channel, domain=domain_name)
     _embed_insights(conn, source_id)
@@ -1310,6 +1351,7 @@ def _run_shared_pipeline(
 
     if not skip_synthesis:
         # Step 7: Re-synthesize (now source is 'processed' and will be counted)
+        timer.step('synthesis')
         _update('Synthesizing knowledge...', 85,
                 title=title, channel=channel, domain=domain_name)
         try:
@@ -1349,6 +1391,7 @@ def _run_shared_pipeline(
                        100, title=title, channel=channel, domain=domain_name,
                        insights_count=0)
 
+    timer.finish()
     logger.info(f"Pipeline complete: {title} → {domain_name} ({len(all_insights)} insights)")
 
     return {

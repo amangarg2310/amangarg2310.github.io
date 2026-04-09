@@ -1115,10 +1115,16 @@ function _stopDrift() {
 }
 
 function _updateProgressDOM(pct) {
-    const pctEl = statusCard && statusCard.querySelector('.intel-inline-status-pct');
-    if (pctEl) pctEl.textContent = pct + '%';
     const fill = statusCard && statusCard.querySelector('.intel-inline-status-fill:not(.complete):not(.error)');
     if (fill) fill.style.width = pct + '%';
+    // Update stage label based on current progress
+    const labelEl = statusCard && statusCard.querySelector('.intel-inline-status-label');
+    if (labelEl) {
+        const newLabel = getBaseLabel(pct);
+        if (labelEl.textContent !== newLabel && !labelEl.textContent.includes('Source ')) {
+            labelEl.textContent = newLabel;
+        }
+    }
 }
 
 function _hideAllSubmitBtns() {
@@ -1144,66 +1150,84 @@ function _restoreAllSubmitBtns() {
     }
 }
 
+
+function getBaseLabel(progress) {
+    if (progress <= 10) return 'Connecting...';
+    if (progress <= 25) return 'Transcribing sources...';
+    if (progress <= 45) return 'Classifying content...';
+    if (progress <= 75) return 'Extracting insights...';
+    if (progress <= 85) return 'Building knowledge...';
+    if (progress <= 95) return 'Synthesizing...';
+    return 'Finalizing...';
+}
+
+function getStageLabel(progress, step) {
+    // For playlists, detect the "N/M:" pattern in step text to extract counter
+    if (step) {
+        const match = step.match(/^(\d+)\/(\d+)/);
+        if (match) {
+            return 'Source ' + match[1] + ' of ' + match[2] + ' \u00b7 ' + getBaseLabel(progress);
+        }
+    }
+    return getBaseLabel(progress);
+}
+
 function showHomeStatus(status, title, step, progress, domain, sourceId) {
     if (!statusCard) return;
 
-    // For processing status: update existing DOM if already rendered (enables smooth transitions)
+    // For processing: update existing DOM in-place for smooth transitions
     if (status === 'processing') {
-        const existing = statusCard.querySelector('.intel-inline-status-pct');
+        const existing = statusCard.querySelector('.intel-stage-dot');
         if (existing) {
-            const titleEl = statusCard.querySelector('.intel-inline-status-title');
-            const stepEl = statusCard.querySelector('.intel-inline-status-step');
-            if (titleEl) titleEl.textContent = title || 'Processing...';
-            if (stepEl) stepEl.textContent = step || '';
+            const labelEl = statusCard.querySelector('.intel-inline-status-label');
+            const subEl = statusCard.querySelector('.intel-inline-status-sublabel');
+            if (labelEl) labelEl.textContent = getStageLabel(progress, step);
+            if (subEl) subEl.textContent = domain ? ('Domain: ' + domain) : '';
             _progressTarget = progress || 0;
-            _stopDrift();  // Stop drift when real progress arrives
+            _stopDrift();
             _startProgressTween();
             return;
         }
     }
 
     let fillClass = '';
-    let icon = '';
-    let pctText = (progress || 0) + '%';
-    let stepHtml = escapeHtml(step || '');
+    let dotClass = '';
+    let label = '';
+    let sublabel = '';
 
     if (status === 'processing') {
         _progressCurrent = progress || 0;
         _progressTarget = progress || 0;
         _hideAllSubmitBtns();
+        label = getStageLabel(progress, step);
+        sublabel = domain ? ('Domain: ' + domain) : '';
     } else if (status === 'complete' || status === 'already_exists') {
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
         _stopDrift();
         fillClass = 'complete';
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#34c759"><polyline points="20 6 9 17 4 12"/></svg>';
-        pctText = '';
+        dotClass = 'complete';
+        label = step || 'Done';
         if (sourceId) {
-            stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+            sublabel = '<a class="intel-reprocess-link" onclick="reprocessFromHome(' + sourceId + ')">Re-process with latest analysis</a>';
         }
     } else if (status === 'error') {
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
         _stopDrift();
         fillClass = 'error';
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#ff3b30"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        pctText = '';
+        dotClass = 'error';
+        label = 'Something went wrong';
+        sublabel = escapeHtml(step || '');
     }
 
-    // Build spinner for processing state
-    let statusIcon = icon;
-    if (status === 'processing' && !icon) {
-        statusIcon = '<div class="intel-status-spinner"></div>';
-    }
-
-    statusCard.innerHTML = `
-        <div class="intel-inline-status-header">
-            <span class="intel-inline-status-title">${statusIcon} ${escapeHtml(title || 'Processing...')}</span>
-            <span class="intel-inline-status-pct">${pctText}</span>
-        </div>
-        <div class="intel-inline-status-step">${stepHtml}</div>
-        <div class="intel-inline-status-track">
-            <div class="intel-inline-status-fill ${fillClass}" style="width: ${progress || 0}%"></div>
-        </div>
-    `;
+    statusCard.innerHTML =
+        '<div class="intel-inline-status-stage">' +
+            '<div class="intel-stage-dot ' + dotClass + '"></div>' +
+            '<span class="intel-inline-status-label">' + escapeHtml(label) + '</span>' +
+        '</div>' +
+        (sublabel ? '<div class="intel-inline-status-sublabel">' + sublabel + '</div>' : '') +
+        '<div class="intel-inline-status-track">' +
+            '<div class="intel-inline-status-fill ' + fillClass + '" style="width: ' + (progress || 0) + '%"></div>' +
+        '</div>';
     statusCard.style.display = '';
 }
 
