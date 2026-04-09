@@ -59,12 +59,20 @@ RULES:
 
 FORMAT as clean markdown:
 
-Start with a ## TLDR section — 3-5 bullet points that capture the MOST IMPORTANT takeaways from this specific domain's content. Each bullet should be concrete and actionable (include exact commands, URLs, specific names, or precise steps — never vague).
+Start with a ## TLDR section:
 
-CRITICAL: Do NOT use a fixed template or fixed bullet labels. The TLDR should organically reflect whatever matters most for THIS specific topic. A cooking domain's TLDR looks nothing like a programming domain's TLDR. Let the content dictate the structure. Never use labels like "Fastest start:" or "Most valuable capability:" — just write natural, specific bullets.
+First, write ONE sentence that frames what this domain IS and why someone would care — like a teacher setting context before a lesson. This sentence should orient a newcomer who has never heard of the topic.
+Example: "Claude Code is Anthropic's CLI tool that lets developers use Claude AI directly in their terminal for coding, debugging, and refactoring tasks."
 
-Bad example: "- **Fastest start:** Install X" (templated label)
-Good example: "- Install with `pip install openinterpreter`, run `interpreter` — you'll have a working AI coding assistant in 30 seconds" (natural, specific)
+Then 3-5 bullet points with the MOST IMPORTANT specific takeaways. Each bullet should LEAD with a brief "why this matters" clause, then give the specific detail. The reader should understand the significance before hitting the technical specifics.
+
+Bad: "- Deploy Dataflow ETL pipelines with `min_worker` and `max_worker` parameters"
+Good: "- To control costs on batch jobs, set `min_worker` and `max_worker` on Dataflow ETL pipelines — this prevents auto-scaling from spinning up expensive instances"
+
+Bad: "- Use `claude --dangerously-skip-permissions` for unattended runs"
+Good: "- For CI/CD automation where no human is present to approve, run `claude --dangerously-skip-permissions` — but only in sandboxed environments since it bypasses all safety prompts"
+
+Bullets should be concrete and actionable (include exact commands, URLs, specific names) but LEAD with context so the reader knows why they'd care. Do NOT use templated labels like "Fastest start:" — write naturally.
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
@@ -100,9 +108,16 @@ RULES:
 
 FORMAT as clean markdown:
 
-Start with a ## TLDR section — 3-5 bullet points that capture the MOST IMPORTANT takeaways from this specific domain's content. Each bullet should be concrete and actionable (include exact commands, URLs, specific names, or precise steps — never vague).
+Start with a ## TLDR section:
 
-CRITICAL: Do NOT use a fixed template or fixed bullet labels. The TLDR should organically reflect whatever matters most for THIS specific topic. A cooking domain's TLDR looks nothing like a programming domain's TLDR. Let the content dictate the structure. Never use labels like "Fastest start:" or "Most valuable capability:" — just write natural, specific bullets.
+First, write ONE sentence that frames what this domain IS and why someone would care — like a teacher setting context before a lesson. This sentence should orient a newcomer who has never heard of the topic.
+
+Then 3-5 bullet points with the MOST IMPORTANT specific takeaways. Each bullet should LEAD with a brief "why this matters" clause, then give the specific detail. The reader should understand the significance before hitting the technical specifics.
+
+Bad: "- Deploy Dataflow ETL pipelines with `min_worker` and `max_worker` parameters"
+Good: "- To control costs on batch jobs, set `min_worker` and `max_worker` on Dataflow ETL pipelines — this prevents auto-scaling from spinning up expensive instances"
+
+Bullets should be concrete and actionable (include exact commands, URLs, specific names) but LEAD with context. Do NOT use templated labels — write naturally.
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
@@ -254,13 +269,29 @@ def _synthesize_parent(parent_id: int, db_path):
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn(db_path)
     conn.execute(
-        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO syntheses (domain_id, content, source_count, insight_count, version, suggested_questions, synthesis_level, created_at) VALUES (?, ?, ?, ?, ?, '[]', ?, ?)",
         (parent_id, content, parent['source_count'], parent['insight_count'], next_version, synthesis_level, now),
     )
     conn.commit()
     conn.close()
     logger.info(f"Cascaded {synthesis_level} synthesis v{next_version} for '{parent['name']}'")
 
+    # Background: generate suggested question for parent synthesis
+    def _bg_parent_question():
+        try:
+            api_key = config.get_api_key('anthropic')
+            if not api_key:
+                return
+            sq = _generate_suggested_question(parent['name'], content, api_key)
+            if sq:
+                c = _get_conn(db_path)
+                c.execute("UPDATE syntheses SET suggested_questions = ? WHERE domain_id = ? AND version = ?",
+                          (json.dumps(sq), parent_id, next_version))
+                c.commit()
+                c.close()
+        except Exception as e:
+            logger.warning(f"Parent suggested question failed: {e}")
+    threading.Thread(target=_bg_parent_question, daemon=True).start()
 
 def _update_parent_counts(conn, domain_id: int, now: str):
     """Roll up source/insight counts to the parent category."""
@@ -414,20 +445,30 @@ def _snapshot_synthesis(current: dict, domain_id: int, db_path):
 
 
 def _generate_suggested_question(domain_name: str, synthesis_content: str, api_key: str) -> list:
-    """Generate 1 suggested question from synthesis content (NotebookLM-style)."""
+    """Generate 1 simple suggested question from synthesis content."""
     try:
         client = Anthropic(api_key=api_key)
         response = client.messages.create(
             model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You help users explore knowledge bases.",
-            messages=[{"role": "user", "content": f"""Based on this knowledge synthesis about "{domain_name}", generate exactly 1 thought-provoking question that would help someone deepen their understanding. The question should be specific to the content (not generic), practical, and something the knowledge base can answer well.
+            system="You help users explore knowledge bases with simple, practical questions.",
+            messages=[{"role": "user", "content": f"""Based on this knowledge about "{domain_name}", generate 1 simple question a beginner would ask.
+
+Rules:
+- ONE sentence, under 15 words
+- Practical and specific to the content (not generic)
+- Something the knowledge base can answer well
+- Simple language — like asking a colleague, not writing an exam
+
+Good: "How do I set up Claude Code with an existing project?"
+Good: "What's the fastest way to deploy a RAG pipeline?"
+Bad: "Given that agent teams are experimental, what metrics should you establish before deploying a multi-agent system?"
 
 SYNTHESIS:
-{synthesis_content[:3000]}
+{synthesis_content[:2000]}
 
-Return ONLY the question text, nothing else. No quotes, no numbering, no prefix."""}],
-            temperature=0.7,
-            max_tokens=100,
+Return ONLY the question. No quotes, no prefix."""}],
+            temperature=0.4,
+            max_tokens=60,
         )
         q = response.content[0].text.strip().strip('"').strip("'")
         return [q] if q else []

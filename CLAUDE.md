@@ -97,13 +97,44 @@ Each pipeline calls `check_already_ingested()` before processing. Duplicates ret
 
 Background processing uses in-memory status dict (`_pipeline_status`) with thread-safe locking. Frontend polls `/api/status/<video_id>` every 1s. Status entries have 10-minute TTL. The tracking ID must be consistent between `app.py` (which returns it to the frontend) and the pipeline function (which updates it) — both use the same content-based ID passed via `tracking_id` parameter.
 
-### Playlist Support
+### Playlist Support (Two-Phase Pipeline)
 
 YouTube playlists are fetched using two strategies:
 1. RSS feed (fast, works for channel upload playlists)
 2. HTML scraping with `ytInitialData` JSON parsing (fallback for user-created playlists)
 
-Private playlists are detected and the user is told to change to Unlisted. Max 15 videos per playlist.
+Private playlists are detected and the user is told to change to Unlisted. Max 50 videos per playlist (soft cap via `config.MAX_PLAYLIST_VIDEOS`).
+
+**Two-phase processing** (`run_playlist_pipeline`):
+- **Phase 1 — Parallel ingestion** (3 workers): transcript + chunk + extract insights + embed + store. Synthesis is SKIPPED (`skip_synthesis=True`) to avoid redundant API calls and rate limiting.
+- **Phase 2 — Batch synthesis**: After all videos complete, `resynthesize_domain_full()` runs once per affected domain, then `_cascade_synthesis()` once per domain for parent/grandparent levels.
+- This is 3x faster than sequential and eliminates the 10x redundant synthesis calls that occurred when each video synthesized individually.
+
+### Batch Reprocessing
+
+Multiple source reprocesses are debounced on the frontend (600ms) and dispatched to `POST /api/reprocess-batch`. Backend uses the same two-phase pattern as playlists:
+- Phase 1: Parallel re-extraction (3 workers) — delete old insights, re-chunk, re-extract, store, embed
+- Phase 2: `resynthesize_domain_full()` once per affected domain
+- Single source reprocess falls through to existing `POST /api/reprocess/<id>` endpoint unchanged.
+
+### Extraction Diagnostics
+
+When insight extraction fails (0 insights from a chunk), per-chunk error details are stored on the source's `error_message` field:
+- "Chunk 0: API error after 3 attempts: RateLimitError"
+- "Chunk 1: JSON parse failed (response was TRUNCATED by max_tokens)"
+
+Click the ⚠ icon on any 0-insight source to see a diagnostic popup with transcript preview, chunk count/sizes, and error details. Debug endpoint: `GET /api/source/<id>/debug`.
+
+**Truncation recovery**: If the LLM response is cut off by `max_tokens`, the JSON parser finds the last complete object and salvages all complete insights (Strategy 4 in `_parse_insights_json`).
+
+### Synthesis Prompts
+
+Both `SYNTHESIS_PROMPT` and `FULL_RESYNTHESIS_PROMPT` use a "teacher layer" TLDR format:
+- **Context-setting opener**: One sentence framing what the domain IS and why it matters
+- **Bullets lead with "why"**: Each bullet explains significance before the specific detail
+- Detailed sections below TLDR organized by workflow/task, not abstract categories
+
+Suggested questions are generated as simple one-liner questions (under 15 words, beginner-friendly) via `_generate_suggested_question()`. Generated in background threads for both sub-topic and parent/category syntheses.
 
 ### Design System
 
