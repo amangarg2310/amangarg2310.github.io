@@ -1929,6 +1929,7 @@
 
 .intel-source-action-btn.reprocess:hover { color: var(--intel-accent); }
 .intel-source-action-btn.delete:hover { color: var(--intel-red); }
+.intel-source-action-btn.reclassify:hover { color: var(--intel-orange); }
 
 .intel-source-action-btn svg {
     width: 14px;
@@ -2038,6 +2039,21 @@
 .intel-detail-meta {
     font-size: 14px;
     color: var(--intel-text-secondary);
+}
+
+.intel-subtopic-banner {
+    margin-top: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--intel-text-secondary);
+    background: var(--intel-accent-light);
+    border: 1px solid var(--intel-border-light);
+    border-radius: var(--intel-radius-sm);
+    line-height: 1.5;
+}
+.intel-subtopic-banner strong {
+    color: var(--intel-text);
+    font-weight: 600;
 }
 
 /* ── Knowledge Brief ── */

@@ -748,19 +748,20 @@ def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None,
 # Reprocess Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def reprocess_pipeline(source_id: int, db_path=None) -> dict:
+def reprocess_pipeline(source_id: int, db_path=None, reclassify: bool = False) -> dict:
     """
     Re-process an existing source with current prompts.
 
     Loads the stored text, re-chunks, re-extracts insights, and re-synthesizes.
     Does NOT re-fetch the original source.
+    If reclassify=True, also re-detects the domain using current classification prompts.
     """
     db_path = db_path or config.DB_PATH
 
     conn = _get_conn(db_path)
     conn.row_factory = sqlite3.Row
     source = conn.execute(
-        "SELECT id, video_id, title, channel, transcript, domain_id FROM sources WHERE id = ?",
+        "SELECT id, video_id, title, channel, transcript, domain_id, user_id FROM sources WHERE id = ?",
         (source_id,),
     ).fetchone()
     conn.close()
@@ -777,6 +778,7 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         return {'status': 'error', 'video_id': video_id, 'error': 'No text content to re-process'}
 
     domain_id = source['domain_id']
+    old_domain_id = domain_id
 
     try:
         # Delete old insights
@@ -790,6 +792,26 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
 
         # Re-chunk and re-extract
         chunks = chunk_transcript(transcript)
+
+        # Optionally reclassify domain using current detection prompts
+        if reclassify and chunks:
+            _update_status(video_id, 'processing', 'Re-classifying domain...', 15,
+                           title=source['title'], channel=source['channel'])
+            try:
+                domain_result = detect_domain_hierarchical(
+                    source['title'], source['channel'],
+                    chunks[0] if chunks else transcript,
+                    db_path, user_id=source.get('user_id'),
+                )
+                domain_id = domain_result['domain_id']
+                if domain_id != old_domain_id:
+                    conn = _get_conn(db_path)
+                    conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
+                    conn.commit()
+                    conn.close()
+                    logger.info(f"Reclassified source {source_id} from domain {old_domain_id} to {domain_id} ({domain_result.get('domain_name')})")
+            except Exception as e:
+                logger.warning(f"Reclassification failed for source {source_id}, keeping original domain: {e}")
         word_count = len(transcript.split())
 
         all_insights = []
@@ -871,6 +893,16 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
                        title=source['title'], channel=source['channel'])
         _repair_domain_counts(domain_id, db_path)
 
+        # If domain changed, also repair and re-synthesize the old domain
+        if domain_id != old_domain_id:
+            _update_status(video_id, 'processing', 'Updating old domain...', 94,
+                           title=source['title'], channel=source['channel'])
+            _repair_domain_counts(old_domain_id, db_path)
+            try:
+                resynthesize_domain_full(old_domain_id, db_path)
+            except Exception as e:
+                logger.warning(f"Re-synthesis of old domain {old_domain_id} failed: {e}")
+
         _update_status(video_id, 'processing', 'Finalizing...', 97,
                        title=source['title'], channel=source['channel'])
 
@@ -901,7 +933,7 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
 # Batch Reprocess Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, tracking_id=None) -> dict:
+def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, tracking_id=None, reclassify: bool = False) -> dict:
     """Two-phase batch reprocessing: parallel extraction then batch synthesis.
 
     Phase 1: Re-extract insights for all sources in parallel (3 workers).
@@ -922,7 +954,7 @@ def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, track
         sources = []
         for sid in source_ids:
             row = conn.execute(
-                "SELECT id, video_id, title, channel, transcript, domain_id FROM sources WHERE id = ?",
+                "SELECT id, video_id, title, channel, transcript, domain_id, user_id FROM sources WHERE id = ?",
                 (sid,),
             ).fetchone()
             if row:
@@ -955,6 +987,26 @@ def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, track
 
                 # Re-chunk and re-extract
                 chunks = chunk_transcript(transcript)
+
+                # Optionally reclassify domain
+                if reclassify and chunks:
+                    try:
+                        domain_result = detect_domain_hierarchical(
+                            source['title'], source['channel'],
+                            chunks[0] if chunks else transcript,
+                            db_path, user_id=source.get('user_id'),
+                        )
+                        new_domain_id = domain_result['domain_id']
+                        if new_domain_id != domain_id:
+                            c = _get_conn(db_path)
+                            c.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (new_domain_id, source_id))
+                            c.commit()
+                            c.close()
+                            logger.info(f"Batch reclassified source {source_id} from domain {domain_id} to {new_domain_id}")
+                            domain_id = new_domain_id
+                    except Exception as e:
+                        logger.warning(f"Batch reclassification failed for source {source_id}: {e}")
+
                 word_count = len(transcript.split())
                 extraction_errors = []
                 all_insights = []

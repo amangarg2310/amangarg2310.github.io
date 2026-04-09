@@ -465,6 +465,24 @@ def domain_page(domain_name):
             ORDER BY s.created_at DESC
         """, content_domain_ids).fetchall()]
 
+        # For level-2 sub-topic pages, filter sources to those with topic-matching insights
+        total_parent_sources = len(sources)
+        show_filtered_banner = False
+        parent_domain_name = None
+        if subtopic_scope and sources:
+            parent_domain_name = parent['name'] if parent else None
+            filtered = []
+            for src in sources:
+                match = conn.execute("""
+                    SELECT COUNT(*) FROM insights
+                    WHERE source_id = ? AND topics LIKE ?
+                """, (src['id'], f'%{subtopic_scope}%')).fetchone()[0]
+                if match > 0:
+                    filtered.append(src)
+            if filtered:
+                sources = filtered
+                show_filtered_banner = True
+
         domains = [dict(r) for r in conn.execute(
             """SELECT d.*, p.name as parent_name
                FROM domains d
@@ -529,7 +547,10 @@ def domain_page(domain_name):
                            domains=domains,
                            domain_tree=domain_tree,
                            subtopic_scope=subtopic_scope,
-                           convergence=convergence))
+                           convergence=convergence,
+                           show_filtered_banner=show_filtered_banner,
+                           total_parent_sources=total_parent_sources,
+                           parent_domain_name=parent_domain_name))
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return resp
 
@@ -1152,6 +1173,7 @@ def api_reprocess_batch():
 
     data = request.get_json() or {}
     source_ids = data.get('source_ids', [])
+    reclassify = data.get('reclassify', False)
     if not source_ids or not isinstance(source_ids, list):
         return jsonify({"error": "source_ids required"}), 400
     if len(source_ids) > 20:
@@ -1177,7 +1199,7 @@ def api_reprocess_batch():
 
     def _run():
         try:
-            reprocess_batch_pipeline(valid_ids, user_id=uid, tracking_id=batch_vid)
+            reprocess_batch_pipeline(valid_ids, user_id=uid, tracking_id=batch_vid, reclassify=reclassify)
         except Exception as e:
             _update_status(batch_vid, 'error', 'Batch failed', 0, error=str(e))
 
@@ -1192,6 +1214,8 @@ def api_reprocess(source_id):
     """Re-process an existing source with current extraction prompts."""
     from pipeline import reprocess_pipeline, _update_status
 
+    data = request.get_json(silent=True) or {}
+    reclassify = data.get('reclassify', False)
     uid = current_user.id
     conn = None
     try:
@@ -1214,14 +1238,14 @@ def api_reprocess(source_id):
 
         def _run():
             try:
-                reprocess_pipeline(source_id)
+                reprocess_pipeline(source_id, reclassify=reclassify)
             except Exception as e:
                 _update_status(video_id, 'error', 'Failed', 0, error=str(e))
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
-        return jsonify({"status": "started", "video_id": video_id})
+        return jsonify({"status": "started", "video_id": video_id, "reclassify": reclassify})
 
     except Exception as e:
         logger.error(f"Reprocess failed: {e}", exc_info=True)

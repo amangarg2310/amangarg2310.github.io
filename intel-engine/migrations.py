@@ -326,11 +326,61 @@ def _deduplicate_domains(conn):
                 f"UPDATE syntheses SET domain_id = ? WHERE domain_id IN ({placeholders})",
                 [keep_id] + remove_ids,
             )
+            # Re-point synthesis_versions to the kept row
+            try:
+                conn.execute(
+                    f"UPDATE synthesis_versions SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+            except sqlite3.OperationalError:
+                pass  # Table may not exist on very old DBs
+            # Re-point taxonomy_changes to the kept row
+            try:
+                conn.execute(
+                    f"UPDATE taxonomy_changes SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+            except sqlite3.OperationalError:
+                pass
+            # Re-point domain_references (has UNIQUE constraint — use OR IGNORE + cleanup)
+            try:
+                conn.execute(
+                    f"UPDATE OR IGNORE domain_references SET source_domain_id = ? WHERE source_domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+                conn.execute(
+                    f"DELETE FROM domain_references WHERE source_domain_id IN ({placeholders})",
+                    remove_ids,
+                )
+                conn.execute(
+                    f"UPDATE OR IGNORE domain_references SET target_domain_id = ? WHERE target_domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+                conn.execute(
+                    f"DELETE FROM domain_references WHERE target_domain_id IN ({placeholders})",
+                    remove_ids,
+                )
+                # Remove self-referencing rows created by re-pointing
+                conn.execute("DELETE FROM domain_references WHERE source_domain_id = target_domain_id")
+            except sqlite3.OperationalError:
+                pass
             # Delete the duplicates
             conn.execute(
                 f"DELETE FROM domains WHERE id IN ({placeholders})",
                 remove_ids,
             )
+            # Repair counts for the kept domain
+            actual = conn.execute("""
+                SELECT COUNT(DISTINCT s.id), COUNT(DISTINCT i.id)
+                FROM sources s LEFT JOIN insights i ON i.source_id = s.id
+                WHERE s.domain_id = ?
+            """, (keep_id,)).fetchone()
+            if actual:
+                conn.execute(
+                    "UPDATE domains SET source_count = ?, insight_count = ? WHERE id = ?",
+                    (actual[0], actual[1], keep_id),
+                )
+            conn.commit()
             logger.info(f"Deduplicated domain '{row[0]}' level={row[1]}: kept id={keep_id}, removed {remove_ids}")
 
     except sqlite3.OperationalError as e:
