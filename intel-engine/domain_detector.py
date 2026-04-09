@@ -16,9 +16,23 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 from openai import OpenAI
+
+# Serialize domain creation to prevent duplicate level-0/level-1 entries
+# during parallel playlist ingestion (3 workers).
+_domain_create_lock = threading.Lock()
+
+
+def _get_conn(db_path):
+    """Get a DB connection with WAL mode and busy_timeout for concurrent access."""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
 
 try:
     from rapidfuzz import fuzz
@@ -26,7 +40,7 @@ except ImportError:
     fuzz = None
 
 import config
-from embeddings import generate_embedding, cosine_similarity
+from embeddings import generate_embedding, batch_generate_embeddings, cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -52,31 +66,24 @@ DETECTION_PROMPT = """You are a domain taxonomy classifier. Classify content int
 
 {existing_domains_section}
 
-RULES (follow in order):
+RULES:
 
-1. **MATCH EXISTING FIRST**: If this content is about a tool/product/concept that ALREADY EXISTS in the hierarchy above, return that EXACT domain name with is_new=false. Do NOT create variants.
-   - Existing domain "Claude Code" + new video "Claude Code Marketing Team Demo" → domain = "Claude Code" (REUSE)
-   - Existing domain "OpenClaw" + new video "5 OpenClaw Tricks" → domain = "OpenClaw" (REUSE)
+1. **WHAT IS THIS CONTENT ACTUALLY ABOUT?** Read the excerpt. Ignore the title — titles are clickbait. Ask: "What expertise does someone gain from consuming this?" The answer is the domain.
 
-2. **CANONICAL NAME**: Extract the core tool/product/concept name — NOT the video title.
-   - "Ollama + Claude Code = 99% CHEAPER" → domain = "Claude Code" (or "Ollama" — pick the primary)
-   - "Build Your Full AI Marketing Team (Agents + Claude Skills)" → domain = "Claude Code"
-   - "The only OpenClaw video you'll ever need" → domain = "OpenClaw"
-   - Domain names should be 1-3 words: the proper noun of the tool/product.
+2. **MATCH EXISTING only when the content genuinely deepens that domain's knowledge.** Sharing a keyword is NOT enough. A video mentioning "apps" doesn't belong in "Mobile Apps" if it's really teaching business strategy. Only reuse a domain (is_new=false) when this content would make a reader of that domain smarter about that specific subject.
 
-3. **PARENT CATEGORY**: Use an existing parent if one fits. Create a new parent only for truly new categories.
-   - Parent should be a broad 2-3 word category: "AI Tools", "Marketing", "Finance"
+3. **DOMAIN NAME** = the core subject, 1-3 words. Could be a tool ("Claude Code"), a discipline ("Data Engineering"), a concept ("Growth Strategy"), or a field ("Behavioral Economics"). Whatever best answers: "This is a source about ___."
 
-4. **SUB-TOPICS**: 2-4 broad workflow categories (NOT specific steps).
-   - Good: "Setup", "Core Workflows", "Tips & Tricks"
-   - Bad: "Installing Docker", "Port 3000 Configuration"
+4. **PARENT CATEGORY**: Broad 2-3 word grouping. Reuse an existing parent when it fits. Only create new ones for genuinely different areas.
+
+5. **SUB-TOPICS**: 2-4 thematic areas this content covers. Think "what chapters would this belong to" — not granular steps.
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
 EXCERPT: {excerpt}
 
 Return ONLY valid JSON:
-{{"domain": "ToolName", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
+{{"domain": "Name", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
 
 
 def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
@@ -85,7 +92,7 @@ def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
     if not db_path.exists():
         return []
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.row_factory = sqlite3.Row
         if user_id:
             rows = conn.execute(
@@ -140,16 +147,19 @@ def _try_semantic_match(title: str, existing: list[dict], db_path=None) -> dict 
             }
 
     # Layer 2: Embedding cosine similarity (semantic understanding)
-    title_embedding = generate_embedding(title)
+    # Batch all texts in a single API call instead of N+1 sequential calls
+    domain_texts = [f"{d['name']}: {d.get('description', '')}" for d in level1_domains]
+    all_texts = [title] + domain_texts
+    all_embeddings = batch_generate_embeddings(all_texts)
+    title_embedding = all_embeddings[0] if all_embeddings else None
+    domain_embeddings = all_embeddings[1:] if all_embeddings else []
+
     if title_embedding:
         best_match = None
         best_sim = 0
-        for d in level1_domains:
-            # Embed domain name + description for richer comparison
-            domain_text = f"{d['name']}: {d.get('description', '')}"
-            domain_embedding = generate_embedding(domain_text)
-            if domain_embedding:
-                sim = cosine_similarity(title_embedding, domain_embedding)
+        for d, d_emb in zip(level1_domains, domain_embeddings):
+            if d_emb:
+                sim = cosine_similarity(title_embedding, d_emb)
                 if sim > best_sim:
                     best_sim = sim
                     best_match = d
@@ -237,7 +247,8 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
 
     client = OpenAI(api_key=api_key)
 
-    response = client.chat.completions.create(
+    response = config.rate_limited_call(
+        client.chat.completions.create,
         model=config.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": "You classify content into specific, hierarchical knowledge domains. Return only valid JSON."},
@@ -406,7 +417,7 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
                             db_path=None, user_id=None) -> int:
     """Create the full domain hierarchy (parent → domain → sub-topics) and return the domain_id."""
     db_path = db_path or config.DB_PATH
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     now = datetime.now(timezone.utc).isoformat()
 
     # 1. Find existing parent via fuzzy match, or create new one
@@ -420,6 +431,38 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             description=f"Category: {parent_name}",
             user_id=user_id, now=now,
         )
+
+    # 1b. Handle parent/domain name collision — collapse into level-0.
+    # When the LLM returns the same name for both (e.g. domain="AI Tools", parent="AI Tools"),
+    # skip creating a redundant level-1 domain. Attach sources directly to the level-0 parent.
+    if name.lower().strip() == parent_name.lower().strip():
+        logger.info(f"Domain/parent name collision: '{name}' == '{parent_name}'. "
+                     f"Collapsing — sources will attach to level-0 parent (id={parent_id}).")
+
+        # Create sub-topics under the parent directly (skip level-1 creation)
+        existing_subs = conn.execute(
+            "SELECT name FROM domains WHERE parent_id = ? AND level = 2", (parent_id,)
+        ).fetchall()
+        existing_sub_names = {r[0].lower() for r in existing_subs}
+        for sub in (sub_topics or [])[:3]:
+            sub = sub.strip()
+            if not sub or sub.lower() in existing_sub_names:
+                continue
+            if sub.lower() == name.lower() or sub.lower() == parent_name.lower():
+                continue
+            if len(existing_sub_names) >= 5:
+                break
+            _find_or_create_domain(
+                conn, sub, level=2, parent_id=parent_id,
+                path=f"/{parent_name}/{sub}",
+                description=f"{parent_name} — {sub}",
+                user_id=user_id, now=now,
+            )
+            existing_sub_names.add(sub.lower())
+
+        conn.commit()
+        conn.close()
+        return parent_id
 
     # 2. Find existing domain via fuzzy match, or create new one (level 1)
     domain_match = _find_matching_domain(conn, name, parent_id, user_id)
@@ -448,6 +491,9 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
         sub = sub.strip()
         if not sub or sub.lower() in existing_sub_names:
             continue
+        # Skip sub-topics that duplicate the domain or parent name
+        if sub.lower() == name.lower() or sub.lower() == parent_name.lower():
+            continue
         if len(existing_sub_names) >= 5:  # Hard cap at 5 sub-topics per domain
             break
         _find_or_create_domain(
@@ -465,43 +511,225 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
 
 def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
                            path: str, description: str, user_id: int | None, now: str) -> int:
-    """Find existing domain by name+level+user or create a new one."""
+    """Find existing domain by name+level+user or create a new one.
+
+    Uses _domain_create_lock to prevent parallel playlist workers from
+    creating duplicate level-0/level-1 entries (no UNIQUE constraint exists
+    since hierarchy allows the same name at different levels).
+    """
     if level > 2:
         level = 2  # Hard cap: never create deeper than level 2
-    if user_id:
-        row = conn.execute(
-            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
-            (name, level, user_id),
-        ).fetchone()
-    else:
-        row = conn.execute(
-            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ?",
-            (name, level),
-        ).fetchone()
 
-    if row:
-        return row[0]
+    with _domain_create_lock:
+        if user_id:
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
+                (name, level, user_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ?",
+                (name, level),
+            ).fetchone()
 
-    icon = DOMAIN_ICONS.get(name.lower(), "📚")
-    try:
-        cursor = conn.execute(
-            "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, description, icon, parent_id, level, path, user_id, now, now),
-        )
-        logger.info(f"Created domain: {path} (level={level})")
-        return cursor.lastrowid
-    except sqlite3.IntegrityError:
-        # UNIQUE constraint — domain with this name already exists (possibly at different level)
-        # Find the existing one regardless of level
-        row = conn.execute(
-            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE", (name,)
-        ).fetchone()
         if row:
-            # Update its level and parent if needed
-            conn.execute(
-                "UPDATE domains SET level = ?, parent_id = ?, path = ?, updated_at = ? WHERE id = ?",
-                (level, parent_id, path, now, row[0]),
-            )
-            logger.info(f"Reused existing domain '{name}' (updated level={level})")
             return row[0]
-        raise
+
+        icon = DOMAIN_ICONS.get(name.lower(), "📚")
+        try:
+            cursor = conn.execute(
+                "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (name, description, icon, parent_id, level, path, user_id, now, now),
+            )
+            conn.commit()  # Commit immediately so other threads see the new row
+            logger.info(f"Created domain: {path} (level={level})")
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            # UNIQUE constraint — domain with this name already exists (possibly at different level)
+            # Find the existing one regardless of level
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ? COLLATE NOCASE", (name,)
+            ).fetchone()
+            if row:
+                # Update its level and parent if needed
+                conn.execute(
+                    "UPDATE domains SET level = ?, parent_id = ?, path = ?, updated_at = ? WHERE id = ?",
+                    (level, parent_id, path, now, row[0]),
+                )
+                logger.info(f"Reused existing domain '{name}' (updated level={level})")
+                return row[0]
+            raise
+
+
+# ══════════════════════════════════════════════════════════════
+# Taxonomy Evolution (Tier 3A)
+# ══════════════════════════════════════════════════════════════
+
+def propose_taxonomy_evolution(domain_id: int, new_insights: list[dict], db_path=None, user_id=None) -> dict | None:
+    """After classifying a source, check if the taxonomy should evolve.
+
+    Proposes:
+    - New sub-topics when insights don't fit existing ones
+    - Sub-topic splits when one sub-topic covers too many distinct concepts
+
+    Returns a dict describing the proposed change, or None if no change needed.
+    """
+    db_path = db_path or config.DB_PATH
+    api_key = config.get_api_key('openai')
+    if not api_key:
+        return None
+
+    conn = _get_conn(db_path)
+
+    domain = conn.execute("SELECT id, name, level, parent_id FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    if not domain or domain['level'] != 1:
+        conn.close()
+        return None  # Only evolve level-1 domains
+
+    # Get existing sub-topics for this domain
+    sub_topics = conn.execute(
+        "SELECT id, name, source_count FROM domains WHERE parent_id = ? AND level = 2",
+        (domain_id,),
+    ).fetchall()
+    conn.close()
+
+    existing_subs = [dict(s) for s in sub_topics]
+    if not new_insights:
+        return None
+
+    # Extract topic keywords from new insights
+    insight_topics = set()
+    for ins in new_insights:
+        if isinstance(ins, dict):
+            for t in ins.get('topics', []):
+                if isinstance(t, str):
+                    insight_topics.add(t.lower())
+            insight_topics.add(ins.get('title', '').lower()[:50])
+
+    existing_sub_names = [s['name'] for s in existing_subs]
+
+    # Only call LLM if we have enough insights and existing sub-topics to evaluate
+    if len(existing_subs) < 1 and len(new_insights) < 5:
+        return None  # Too early to evolve
+
+    client = OpenAI(api_key=api_key)
+    try:
+        response = config.rate_limited_call(
+            client.chat.completions.create,
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You analyze how a learner's understanding of a domain evolves as they consume new content. Return only valid JSON."},
+                {"role": "user", "content": f"""Domain: {domain['name']}
+Current understanding structure (sub-topics): {', '.join(existing_sub_names) if existing_sub_names else 'None yet — this is a new area of learning'}
+
+New insights from the latest source (topics covered):
+{chr(10).join(f'- {ins.get("title", "")}: topics={ins.get("topics", [])}' for ins in new_insights[:15])}
+
+As the user's understanding of "{domain['name']}" deepens with this new source, should their mental model evolve?
+
+1. EXPAND: Their understanding now covers a new area that doesn't fit existing sub-topics — a new dimension of the domain has emerged
+2. REFINE: One area of understanding has become nuanced enough to distinguish into more specific concepts — what felt like one thing is actually two
+3. NONE: The current structure adequately captures this new knowledge
+
+Return ONLY valid JSON:
+{{"action": "none", "details": {{}}}}
+or
+{{"action": "create", "details": {{"name": "New Area Name", "reason": "what new dimension of understanding this represents"}}}}
+or
+{{"action": "split", "details": {{"original": "Existing Area", "new_names": ["More Specific A", "More Specific B"], "reason": "what distinction has become clear"}}}}"""},
+            ],
+            temperature=0.2,
+            max_tokens=300,
+        )
+
+        text = response.choices[0].message.content.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        result = json.loads(text)
+        action = result.get('action', 'none')
+
+        if action == 'none':
+            return None
+
+        # Execute the taxonomy change
+        if action == 'create':
+            details = result.get('details', {})
+            new_name = details.get('name', '').strip()
+            if new_name and new_name not in existing_sub_names:
+                _execute_taxonomy_create(domain_id, domain['name'], new_name, db_path, user_id)
+                return {'action': 'create', 'domain': domain['name'], 'new_sub_topic': new_name,
+                        'reason': details.get('reason', '')}
+
+        elif action == 'split':
+            details = result.get('details', {})
+            original = details.get('original', '')
+            new_names = details.get('new_names', [])
+            if original and len(new_names) == 2:
+                _execute_taxonomy_split(domain_id, domain['name'], original, new_names, db_path, user_id)
+                return {'action': 'split', 'domain': domain['name'], 'original': original,
+                        'new_sub_topics': new_names, 'reason': details.get('reason', '')}
+
+        return None
+
+    except Exception as e:
+        logger.warning(f"Taxonomy evolution check failed for domain {domain_id}: {e}")
+        return None
+
+
+def _execute_taxonomy_create(domain_id: int, domain_name: str, sub_topic_name: str, db_path, user_id=None):
+    """Create a new sub-topic under a domain."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _get_conn(db_path)
+
+    # Get parent path
+    domain = conn.execute("SELECT path FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    parent_path = domain[0] if domain else f"/{domain_name}"
+
+    conn.execute("""
+        INSERT OR IGNORE INTO domains (name, level, parent_id, path, user_id, icon, source_count, insight_count, created_at, updated_at)
+        VALUES (?, 2, ?, ?, ?, '📌', 0, 0, ?, ?)
+    """, (sub_topic_name, domain_id, f"{parent_path}/{sub_topic_name}", user_id, now, now))
+    conn.commit()
+    conn.close()
+
+    # Record the change
+    _record_taxonomy_change(domain_id, 'create', f"Your understanding of {domain_name} expanded to include {sub_topic_name}", db_path, user_id)
+    logger.info(f"Schema evolution: Understanding of '{domain_name}' expanded to include '{sub_topic_name}'")
+
+
+def _execute_taxonomy_split(domain_id: int, domain_name: str, original: str, new_names: list, db_path, user_id=None):
+    """Split an existing sub-topic into two new ones."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _get_conn(db_path)
+
+    domain = conn.execute("SELECT path FROM domains WHERE id = ?", (domain_id,)).fetchone()
+    parent_path = domain[0] if domain else f"/{domain_name}"
+
+    for name in new_names:
+        conn.execute("""
+            INSERT OR IGNORE INTO domains (name, level, parent_id, path, user_id, icon, source_count, insight_count, created_at, updated_at)
+            VALUES (?, 2, ?, ?, ?, '📌', 0, 0, ?, ?)
+        """, (name, domain_id, f"{parent_path}/{name}", user_id, now, now))
+    conn.commit()
+    conn.close()
+
+    _record_taxonomy_change(domain_id, 'split',
+                            f"Your understanding of {domain_name} refined — '{original}' is now distinguished as '{new_names[0]}' and '{new_names[1]}'",
+                            db_path, user_id)
+    logger.info(f"Schema evolution: Understanding of '{domain_name}' refined — '{original}' → {new_names}")
+
+
+def _record_taxonomy_change(domain_id: int, change_type: str, description: str, db_path, user_id=None):
+    """Record a taxonomy change event."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _get_conn(db_path)
+    try:
+        conn.execute("""
+            INSERT INTO taxonomy_changes (domain_id, change_type, description, user_id, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (domain_id, change_type, description, user_id, now))
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Table may not exist yet
+    conn.close()

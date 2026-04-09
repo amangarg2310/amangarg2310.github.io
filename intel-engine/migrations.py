@@ -188,6 +188,60 @@ def run_migrations(db_path=None):
     except sqlite3.OperationalError:
         pass
 
+    # Schema evolution — structured claim extraction (Tier 1A)
+    _add_column(conn, "insights", "evidence", "TEXT")
+    _add_column(conn, "insights", "source_context", "TEXT")
+    _add_column(conn, "insights", "confidence", "TEXT DEFAULT 'stated'")
+    _add_column(conn, "insights", "topics", "TEXT")  # JSON array
+
+    # Schema evolution — hierarchical synthesis levels (Tier 2A)
+    _add_column(conn, "syntheses", "synthesis_level", "TEXT DEFAULT 'sub_topic'")
+
+    # Schema evolution — cross-source convergence analysis (Tier 3C)
+    _add_column(conn, "syntheses", "convergence_data", "TEXT")
+
+    # Schema evolution — ingestion impact tracking (Tier 4B)
+    _add_column(conn, "sources", "ingestion_impact", "TEXT")
+
+    # Schema evolution — synthesis version history (Tier 4A)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS synthesis_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            synthesis_id INTEGER NOT NULL,
+            domain_id INTEGER NOT NULL,
+            version_number INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            convergence_data TEXT,
+            source_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (synthesis_id) REFERENCES syntheses(id) ON DELETE CASCADE,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    """)
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_synth_versions_domain ON synthesis_versions(domain_id, version_number DESC)")
+    except sqlite3.OperationalError:
+        pass
+
+    # Schema evolution — taxonomy change tracking (Tier 3A/3B)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS taxonomy_changes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain_id INTEGER NOT NULL,
+            change_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            user_id INTEGER,
+            dismissed INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    """)
+
+    # Deduplicate domains — parallel playlist ingestion could create duplicate
+    # level-0/level-1 entries with the same (name, level, user_id). Keep the
+    # lowest-id row, re-point children and sources to it, then delete extras.
+    _deduplicate_domains(conn)
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)
@@ -227,6 +281,110 @@ def _create_fts5(conn):
         conn.commit()
     except sqlite3.OperationalError as e:
         logger.warning(f"FTS5 setup: {e}")
+
+
+def _deduplicate_domains(conn):
+    """Merge duplicate domains created by parallel playlist ingestion.
+
+    Keeps the lowest-id row for each (name, level, user_id) group,
+    re-points child domains and sources to the kept row, then deletes extras.
+    """
+    try:
+        dupes = conn.execute("""
+            SELECT name, level, user_id, MIN(id) as keep_id, GROUP_CONCAT(id) as all_ids, COUNT(*) as cnt
+            FROM domains
+            GROUP BY name COLLATE NOCASE, level, user_id
+            HAVING cnt > 1
+        """).fetchall()
+
+        for row in dupes:
+            keep_id = row[3]  # MIN(id)
+            all_ids = [int(x) for x in row[4].split(',')]
+            remove_ids = [x for x in all_ids if x != keep_id]
+            if not remove_ids:
+                continue
+
+            placeholders = ','.join('?' * len(remove_ids))
+
+            # Re-point child domains (parent_id) to the kept row
+            conn.execute(
+                f"UPDATE domains SET parent_id = ? WHERE parent_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point sources to the kept row
+            conn.execute(
+                f"UPDATE sources SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point insights to the kept row
+            conn.execute(
+                f"UPDATE insights SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point syntheses to the kept row
+            conn.execute(
+                f"UPDATE syntheses SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point synthesis_versions to the kept row
+            try:
+                conn.execute(
+                    f"UPDATE synthesis_versions SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+            except sqlite3.OperationalError:
+                pass  # Table may not exist on very old DBs
+            # Re-point taxonomy_changes to the kept row
+            try:
+                conn.execute(
+                    f"UPDATE taxonomy_changes SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+            except sqlite3.OperationalError:
+                pass
+            # Re-point domain_references (has UNIQUE constraint — use OR IGNORE + cleanup)
+            try:
+                conn.execute(
+                    f"UPDATE OR IGNORE domain_references SET source_domain_id = ? WHERE source_domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+                conn.execute(
+                    f"DELETE FROM domain_references WHERE source_domain_id IN ({placeholders})",
+                    remove_ids,
+                )
+                conn.execute(
+                    f"UPDATE OR IGNORE domain_references SET target_domain_id = ? WHERE target_domain_id IN ({placeholders})",
+                    [keep_id] + remove_ids,
+                )
+                conn.execute(
+                    f"DELETE FROM domain_references WHERE target_domain_id IN ({placeholders})",
+                    remove_ids,
+                )
+                # Remove self-referencing rows created by re-pointing
+                conn.execute("DELETE FROM domain_references WHERE source_domain_id = target_domain_id")
+            except sqlite3.OperationalError:
+                pass
+            # Delete the duplicates
+            conn.execute(
+                f"DELETE FROM domains WHERE id IN ({placeholders})",
+                remove_ids,
+            )
+            # Repair counts for the kept domain
+            actual = conn.execute("""
+                SELECT COUNT(DISTINCT s.id), COUNT(DISTINCT i.id)
+                FROM sources s LEFT JOIN insights i ON i.source_id = s.id
+                WHERE s.domain_id = ?
+            """, (keep_id,)).fetchone()
+            if actual:
+                conn.execute(
+                    "UPDATE domains SET source_count = ?, insight_count = ? WHERE id = ?",
+                    (actual[0], actual[1], keep_id),
+                )
+            conn.commit()
+            logger.info(f"Deduplicated domain '{row[0]}' level={row[1]}: kept id={keep_id}, removed {remove_ids}")
+
+    except sqlite3.OperationalError as e:
+        logger.warning(f"Domain deduplication skipped: {e}")
 
 
 def _add_column(conn, table: str, column: str, definition: str):

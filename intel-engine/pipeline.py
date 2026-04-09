@@ -12,6 +12,8 @@ Each source type produces text that flows through the same pipeline:
 ingest → chunk → extract insights → detect domain → synthesize
 """
 
+import hashlib
+import json
 import logging
 import os
 import re
@@ -19,6 +21,7 @@ import sqlite3
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,7 +37,7 @@ logger = logging.getLogger(__name__)
 # In-memory status tracking for UI polling (thread-safe)
 _pipeline_status = {}
 _status_lock = threading.Lock()
-_STATUS_TTL_SECONDS = 600  # Prune entries older than 10 minutes
+_STATUS_TTL_SECONDS = 3600  # Prune completed entries older than 1 hour (large playlists can take 30+ min)
 
 SOURCE_TYPE_ICONS = {
     'youtube': '🎥',
@@ -89,8 +92,59 @@ def is_processing(video_id: str) -> bool:
         return entry is not None and entry.get('status') == 'processing'
 
 
+def _get_conn(db_path):
+    """Get a database connection with WAL mode and busy timeout for concurrent access."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
+def _repair_domain_counts(domain_id, db_path):
+    """Recompute domain source_count and insight_count from actual data.
+
+    Prevents stale counts when concurrent workers overwrite each other.
+    Also rolls up to parent category.
+    """
+    try:
+        conn = _get_conn(db_path)
+        actual = conn.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')) as sc,
+                (SELECT COUNT(*) FROM insights WHERE domain_id = ?) as ic
+        """, (domain_id, domain_id)).fetchone()
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+            (actual[0], actual[1], now, domain_id),
+        )
+        # Roll up to parent
+        parent_row = conn.execute(
+            "SELECT parent_id FROM domains WHERE id = ?", (domain_id,)
+        ).fetchone()
+        if parent_row and parent_row[0]:
+            parent_id = parent_row[0]
+            agg = conn.execute("""
+                SELECT COALESCE(SUM(source_count), 0), COALESCE(SUM(insight_count), 0)
+                FROM domains WHERE parent_id = ? AND level = 1
+            """, (parent_id,)).fetchone()
+            conn.execute(
+                "UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
+                (agg[0], agg[1], now, parent_id),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Domain count repair failed for {domain_id}: {e}")
+
+
 def _embed_insights(conn, source_id: int):
-    """Generate and store embeddings for all insights from a source."""
+    """Generate and store embeddings for all insights from a source.
+
+    Prepends source metadata (title, channel, domain path) to each insight
+    for domain-aware embeddings — the same phrase from different contexts
+    embeds differently.
+    """
     try:
         rows = conn.execute(
             "SELECT id, title, content FROM insights WHERE source_id = ? AND embedding IS NULL",
@@ -99,7 +153,19 @@ def _embed_insights(conn, source_id: int):
         if not rows:
             return
 
-        texts = [f"{r[1]} {r[2]}" for r in rows]
+        # Fetch source metadata for contextual embedding enrichment
+        source_meta = conn.execute(
+            """SELECT s.title, s.channel, d.path
+               FROM sources s LEFT JOIN domains d ON s.domain_id = d.id
+               WHERE s.id = ?""",
+            (source_id,),
+        ).fetchone()
+        prefix = ""
+        if source_meta:
+            parts = [p for p in [source_meta[0], source_meta[1], source_meta[2]] if p]
+            prefix = " | ".join(parts) + " | " if parts else ""
+
+        texts = [f"{prefix}{r[1]} {r[2]}" for r in rows]
         embeddings = batch_generate_embeddings(texts)
 
         for row, emb in zip(rows, embeddings):
@@ -120,7 +186,7 @@ def check_already_ingested(video_id: str, db_path=None) -> dict | None:
     if not db_path.exists():
         return None
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT id, video_id, title, status, domain_id FROM sources WHERE video_id = ?",
@@ -150,14 +216,58 @@ def _generate_source_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
+def _hash_file_id(file_path: str, prefix: str = "file") -> str:
+    """Generate a deterministic source ID from file content hash."""
+    h = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return f"{prefix}_{h.hexdigest()[:12]}"
+
+
+def _hash_text_id(text: str) -> str:
+    """Generate a deterministic source ID from text content hash."""
+    return f"text_{hashlib.sha256(text.encode()).hexdigest()[:12]}"
+
+
 # ══════════════════════════════════════════════════════════════
 # YouTube Pipeline (existing, refactored)
 # ══════════════════════════════════════════════════════════════
 
-def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
+def _map_to_playlist(playlist_ctx, video_progress, title=None):
+    """Map a video's internal progress (0-100) to the parent playlist's progress range.
+
+    Only updates if mapped progress >= current progress (monotonic guarantee).
+    Prevents race condition where concurrent workers make progress appear to go backward.
+    """
+    pid, idx, total = playlist_ctx
+    v_start = 10 + int((idx / total) * 85)
+    v_end = 10 + int(((idx + 1) / total) * 85)
+    mapped = v_start + int((video_progress / 100) * (v_end - v_start))
+    step_title = (title or '')[:40]
+
+    with _status_lock:
+        current = _pipeline_status.get(pid, {})
+        current_progress = current.get('progress', 0)
+        if mapped >= current_progress:
+            _pipeline_status[pid] = {
+                'status': 'processing',
+                'step': f'{idx + 1}/{total}: {step_title}',
+                'progress': mapped,
+                'error': None,
+                '_timestamp': time.time(),
+                **{k: v for k, v in current.items()
+                   if k not in ('status', 'step', 'progress', 'error', '_timestamp')},
+            }
+
+
+def run_pipeline(url: str, db_path=None, user_id=None, playlist_ctx=None, skip_synthesis: bool = False) -> dict:
     """
     Run the full intelligence pipeline for a YouTube URL.
     Called from Flask route in a background thread.
+
+    playlist_ctx: optional (playlist_vid, video_index, total_videos) tuple
+                  for propagating sub-step progress to a parent playlist status.
     """
     db_path = db_path or config.DB_PATH
     video_id = extract_video_id(url)
@@ -169,6 +279,9 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
         _update_status(video_id, 'already_exists', 'Already processed', 100,
                        title=existing.get('title', ''),
                        source_id=existing.get('id'))
+        # Fast-forward playlist progress through this video's range
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, 100, existing.get('title', ''))
         return {
             'status': 'already_exists', 'video_id': video_id,
             'title': existing.get('title', ''),
@@ -179,13 +292,17 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
     try:
         # Step 1: Ingest video
         _update_status(video_id, 'processing', 'Fetching video...', 10)
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, 10)
         video = ingest_video(url)
         _update_status(video_id, 'processing', 'Got transcript', 25,
                        title=video.title, channel=video.channel)
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, 25, video.title)
 
         # Step 2: Store source
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, thumbnail, duration_seconds, transcript, source_type, status, created_at, user_id)
@@ -209,13 +326,15 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
             db_path=db_path,
             start_progress=35,
             user_id=user_id,
+            playlist_ctx=playlist_ctx,
+            skip_synthesis=skip_synthesis,
         )
 
     except Exception as e:
         logger.error(f"Pipeline failed for {url}: {e}", exc_info=True)
         _update_status(video_id, 'error', 'Failed', 0, error=str(e))
         try:
-            conn = sqlite3.connect(str(db_path))
+            conn = _get_conn(db_path)
             conn.execute(
                 "UPDATE sources SET status = 'error', error_message = ? WHERE video_id = ?",
                 (str(e), video_id),
@@ -231,40 +350,162 @@ def run_pipeline(url: str, db_path=None, user_id=None) -> dict:
 # Playlist Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict:
-    """Ingest all videos from a YouTube playlist sequentially."""
+def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, tracking_id=None) -> dict:
+    """Two-phase playlist processing: parallel ingestion then batch synthesis.
+
+    Phase 1: Ingest videos in parallel (3 workers) — transcript, chunk, extract
+             insights, embed. Synthesis is SKIPPED to avoid redundant API calls.
+    Phase 2: Synthesize once per affected domain using resynthesize_domain_full().
+    """
     from youtube_ingest import extract_playlist_id, fetch_playlist_videos
+    from domain_synthesizer import resynthesize_domain_full, _cascade_synthesis
 
     db_path = db_path or config.DB_PATH
     playlist_id = extract_playlist_id(playlist_url)
     if not playlist_id:
         return {'status': 'error', 'error': 'Invalid playlist URL'}
 
-    playlist_vid = _generate_source_id("playlist")
+    playlist_vid = tracking_id or _generate_source_id("playlist")
 
     try:
         _update_status(playlist_vid, 'processing', 'Fetching playlist...', 5)
-        videos = fetch_playlist_videos(playlist_id)
-        _update_status(playlist_vid, 'processing', f'Found {len(videos)} videos', 10)
+        all_videos = fetch_playlist_videos(playlist_id)
+        total_found = len(all_videos)
 
-        results = []
-        for i, video in enumerate(videos):
-            progress = 10 + int((i / max(len(videos), 1)) * 85)
-            _update_status(playlist_vid, 'processing',
-                           f'Processing {i+1}/{len(videos)}: {video["title"][:50]}...', progress)
+        # Pre-filter: separate already-ingested from new videos
+        new_videos = []
+        skipped_count = 0
+        for v in all_videos:
+            existing = check_already_ingested(v['video_id'], db_path)
+            if existing and existing['status'] in ('processed', 'processed_empty'):
+                skipped_count += 1
+            else:
+                new_videos.append(v)
 
+        # Soft cap on new videos per submission
+        capped = False
+        if len(new_videos) > config.MAX_PLAYLIST_VIDEOS:
+            new_videos = new_videos[:config.MAX_PLAYLIST_VIDEOS]
+            capped = True
+
+        # Edge case: all videos already ingested
+        if not new_videos:
+            _update_status(playlist_vid, 'complete',
+                           f'All {total_found} videos are already in your knowledge base', 100)
+            return {'status': 'complete', 'video_id': playlist_vid, 'total': total_found,
+                    'succeeded': 0, 'skipped': skipped_count, 'results': []}
+
+        # Status: show what we're about to do
+        parts = [f'Found {total_found} videos']
+        if skipped_count:
+            parts.append(f'{skipped_count} already in knowledge base')
+        if capped:
+            parts.append(f'processing first {len(new_videos)} new')
+        else:
+            parts.append(f'processing {len(new_videos)} new')
+        _update_status(playlist_vid, 'processing', '. '.join(parts) + '...', 10)
+
+        # ── Phase 1: Parallel ingestion (skip synthesis) ──────────
+        results = [None] * len(new_videos)
+
+        def _process_video(i, video):
             url = f'https://www.youtube.com/watch?v={video["video_id"]}'
+            ctx = (playlist_vid, i, len(new_videos))
+            _map_to_playlist(ctx, 0, video['title'])
             try:
-                result = run_pipeline(url, db_path=db_path, user_id=user_id)
-                results.append(result)
+                return run_pipeline(url, db_path=db_path, user_id=user_id,
+                                    playlist_ctx=ctx, skip_synthesis=True)
             except Exception as e:
                 logger.error(f"Playlist video failed ({video['video_id']}): {e}")
-                results.append({'status': 'error', 'video_id': video['video_id'], 'error': str(e)})
+                return {'status': 'error', 'video_id': video['video_id'], 'error': str(e)}
 
-        succeeded = sum(1 for r in results if r.get('status') in ('complete', 'already_exists'))
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(_process_video, i, video): i
+                for i, video in enumerate(new_videos)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                results[idx] = future.result()
+
+        succeeded = sum(1 for r in results if r and r.get('status') in ('complete', 'already_exists'))
+        extraction_failures = sum(1 for r in results if r and r.get('insights_count', -1) == 0 and r.get('status') == 'complete')
+
+        # ── Phase 2: Batch synthesis (once per domain) ────────────
+        # Collect unique domains that need synthesis
+        affected_domains = {}  # {domain_id: {'name': ..., 'source_ids': [...]}}
+        for r in results:
+            if r and r.get('domain_id') and r.get('status') == 'complete' and r.get('insights_count', 0) > 0:
+                did = r['domain_id']
+                if did not in affected_domains:
+                    affected_domains[did] = {'name': r.get('domain_name', 'Unknown'), 'source_ids': []}
+                affected_domains[did]['source_ids'].append(r.get('video_id'))
+
+        if affected_domains:
+            num_domains = len(affected_domains)
+            _update_status(playlist_vid, 'processing',
+                           f'Synthesizing knowledge across {num_domains} domain{"s" if num_domains != 1 else ""}...', 82)
+
+            for i, (domain_id, info) in enumerate(affected_domains.items()):
+                domain_name = info['name']
+                progress = 82 + int(((i + 1) / num_domains) * 13)  # 82 → 95
+                _update_status(playlist_vid, 'processing',
+                               f'Synthesizing {i+1}/{num_domains}: {domain_name}...', progress)
+                try:
+                    resynthesize_domain_full(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Batch synthesis failed for domain {domain_id} ({domain_name}): {e}")
+
+                try:
+                    _cascade_synthesis(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Cascade synthesis skipped for domain {domain_id}: {e}")
+
+                _repair_domain_counts(domain_id, db_path)
+
+            # Fire taxonomy evolution checks in background (non-blocking)
+            def _bg_taxonomy_batch():
+                from domain_detector import propose_taxonomy_evolution
+                for domain_id, info in affected_domains.items():
+                    try:
+                        conn = _get_conn(db_path)
+                        insights = [dict(r) for r in conn.execute(
+                            "SELECT * FROM insights WHERE domain_id = ? ORDER BY created_at DESC LIMIT 50",
+                            (domain_id,)
+                        ).fetchall()]
+                        conn.close()
+                        if insights:
+                            propose_taxonomy_evolution(domain_id, insights, db_path, user_id=user_id)
+                    except Exception as e:
+                        logger.warning(f"Taxonomy evolution skipped for domain {domain_id}: {e}")
+            threading.Thread(target=_bg_taxonomy_batch, daemon=True).start()
+
+        # Pick the most common domain from results for redirect
+        domain_frequency = {}
+        for r in results:
+            if r and r.get('domain_name'):
+                domain_frequency[r['domain_name']] = domain_frequency.get(r['domain_name'], 0) + 1
+        primary_domain = max(domain_frequency, key=domain_frequency.get) if domain_frequency else None
+
+        # Build descriptive completion message
+        done_parts = []
+        real_success = succeeded - extraction_failures
+        if real_success > 0:
+            done_parts.append(f'{real_success} processed')
+        if extraction_failures > 0:
+            done_parts.append(f'{extraction_failures} had extraction issues')
+        if skipped_count > 0:
+            done_parts.append(f'{skipped_count} already in knowledge base')
+        failed = len(new_videos) - succeeded
+        if failed > 0:
+            done_parts.append(f'{failed} failed')
+        if affected_domains:
+            done_parts.append(f'{len(affected_domains)} domain{"s" if len(affected_domains) != 1 else ""} enriched')
         _update_status(playlist_vid, 'complete',
-                       f'Done — {succeeded}/{len(videos)} videos processed', 100)
-        return {'status': 'complete', 'video_id': playlist_vid, 'total': len(videos), 'succeeded': succeeded, 'results': results}
+                       f'Done — {" · ".join(done_parts)}', 100,
+                       domain=primary_domain)
+        return {'status': 'complete', 'video_id': playlist_vid, 'total': total_found,
+                'succeeded': succeeded, 'skipped': skipped_count, 'results': results}
 
     except Exception as e:
         logger.error(f"Playlist pipeline failed: {e}", exc_info=True)
@@ -276,12 +517,12 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None) -> dict
 # Article Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
+def run_article_pipeline(url: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for a web article URL."""
     from article_ingest import ingest_article, generate_article_id
 
     db_path = db_path or config.DB_PATH
-    source_vid = generate_article_id(url)
+    source_vid = tracking_id or generate_article_id(url)
 
     existing = check_already_ingested(source_vid, db_path)
     if existing and existing['status'] == 'processed':
@@ -302,7 +543,7 @@ def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
                        title=article.title, channel=article.site_name)
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
             INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
@@ -336,12 +577,20 @@ def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
 # File Pipeline (PDF, DOCX, PPTX)
 # ══════════════════════════════════════════════════════════════
 
-def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None, user_id=None) -> dict:
+def run_file_pipeline(file_path: str, original_filename: str, source_type: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for an uploaded document."""
     from file_ingest import ingest_file
 
     db_path = db_path or config.DB_PATH
-    source_vid = _generate_source_id("file")
+    source_vid = tracking_id or _hash_file_id(file_path, "file")
+
+    # Dedup check
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''), source_id=existing.get('id'))
+        return {'status': 'already_exists', 'video_id': source_vid,
+                'title': existing.get('title', ''), 'source_id': existing.get('id')}
 
     try:
         _update_status(source_vid, 'processing', f'Extracting text from {original_filename}...', 10,
@@ -353,9 +602,9 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
                        title=original_filename, channel=source_type.upper())
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
-            INSERT INTO sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)
         """, (source_vid, "", original_filename, source_type.upper(),
@@ -388,12 +637,20 @@ def run_file_pipeline(file_path: str, original_filename: str, source_type: str, 
 # Image Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_image_pipeline(file_path: str, original_filename: str, db_path=None, user_id=None) -> dict:
+def run_image_pipeline(file_path: str, original_filename: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for an uploaded image/screenshot."""
     from image_ingest import ingest_image
 
     db_path = db_path or config.DB_PATH
-    source_vid = _generate_source_id("img")
+    source_vid = tracking_id or _hash_file_id(file_path, "img")
+
+    # Dedup check
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''), source_id=existing.get('id'))
+        return {'status': 'already_exists', 'video_id': source_vid,
+                'title': existing.get('title', ''), 'source_id': existing.get('id')}
 
     try:
         _update_status(source_vid, 'processing', 'Analyzing image with AI...', 10,
@@ -405,9 +662,9 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None, use
                        title=original_filename, channel='Image')
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
-            INSERT INTO sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, file_path, original_filename, status, created_at, user_id)
             VALUES (?, ?, ?, 'Image', ?, 'image', ?, ?, 'processing', ?, ?)
         """, (source_vid, "", original_filename, text_content, file_path, original_filename, now, user_id))
@@ -439,19 +696,27 @@ def run_image_pipeline(file_path: str, original_filename: str, db_path=None, use
 # Text Pipeline (pasted text)
 # ══════════════════════════════════════════════════════════════
 
-def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None) -> dict:
+def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for pasted text."""
     db_path = db_path or config.DB_PATH
-    source_vid = _generate_source_id("text")
+    source_vid = tracking_id or _hash_text_id(text_content)
+
+    # Dedup check
+    existing = check_already_ingested(source_vid, db_path)
+    if existing and existing['status'] == 'processed':
+        _update_status(source_vid, 'already_exists', 'Already processed', 100,
+                       title=existing.get('title', ''), source_id=existing.get('id'))
+        return {'status': 'already_exists', 'video_id': source_vid,
+                'title': existing.get('title', ''), 'source_id': existing.get('id')}
 
     try:
         _update_status(source_vid, 'processing', 'Processing text...', 15,
                        title=title)
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("""
-            INSERT INTO sources
+            INSERT OR REPLACE INTO sources
             (video_id, url, title, channel, transcript, source_type, status, created_at, user_id)
             VALUES (?, '', ?, 'Text Note', ?, 'text', 'processing', ?, ?)
         """, (source_vid, title, text_content, now, user_id))
@@ -483,19 +748,20 @@ def run_text_pipeline(title: str, text_content: str, db_path=None, user_id=None)
 # Reprocess Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def reprocess_pipeline(source_id: int, db_path=None) -> dict:
+def reprocess_pipeline(source_id: int, db_path=None, reclassify: bool = False) -> dict:
     """
     Re-process an existing source with current prompts.
 
     Loads the stored text, re-chunks, re-extracts insights, and re-synthesizes.
     Does NOT re-fetch the original source.
+    If reclassify=True, also re-detects the domain using current classification prompts.
     """
     db_path = db_path or config.DB_PATH
 
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     conn.row_factory = sqlite3.Row
     source = conn.execute(
-        "SELECT id, video_id, title, channel, transcript, domain_id FROM sources WHERE id = ?",
+        "SELECT id, video_id, title, channel, transcript, domain_id, user_id FROM sources WHERE id = ?",
         (source_id,),
     ).fetchone()
     conn.close()
@@ -512,13 +778,14 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         return {'status': 'error', 'video_id': video_id, 'error': 'No text content to re-process'}
 
     domain_id = source['domain_id']
+    old_domain_id = domain_id
 
     try:
         # Delete old insights
         _update_status(video_id, 'processing', 'Re-analyzing content...', 10,
                        title=source['title'], channel=source['channel'])
 
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("DELETE FROM insights WHERE source_id = ?", (source_id,))
         conn.commit()
         conn.close()
@@ -526,26 +793,69 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         # Re-chunk and re-extract
         chunks = chunk_transcript(transcript)
 
+        # Optionally reclassify domain using current detection prompts
+        if reclassify and chunks:
+            _update_status(video_id, 'processing', 'Re-classifying domain...', 15,
+                           title=source['title'], channel=source['channel'])
+            try:
+                domain_result = detect_domain_hierarchical(
+                    source['title'], source['channel'],
+                    chunks[0] if chunks else transcript,
+                    db_path, user_id=source.get('user_id'),
+                )
+                domain_id = domain_result['domain_id']
+                if domain_id != old_domain_id:
+                    conn = _get_conn(db_path)
+                    conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
+                    conn.commit()
+                    conn.close()
+                    logger.info(f"Reclassified source {source_id} from domain {old_domain_id} to {domain_id} ({domain_result.get('domain_name')})")
+            except Exception as e:
+                logger.warning(f"Reclassification failed for source {source_id}, keeping original domain: {e}")
+        word_count = len(transcript.split())
+
         all_insights = []
+        extraction_errors = []
         for i, chunk in enumerate(chunks):
             progress = 20 + int((i / max(len(chunks), 1)) * 40)
             _update_status(video_id, 'processing',
                            f'Re-extracting insights ({i+1}/{len(chunks)})...', progress,
                            title=source['title'], channel=source['channel'])
-            insights = extract_insights(chunk, chunk_index=i)
+            insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
             all_insights.extend(insights)
+
+        # Store detailed diagnostics if extraction failed
+        if not all_insights and chunks and word_count >= 30:
+            diag_parts = [f"0/{len(chunks)} chunks produced insights. "
+                          f"Transcript: {word_count} words."]
+            for err in extraction_errors[:5]:
+                diag_parts.append(f"Chunk {err.get('chunk', '?')}: {err.get('error', 'unknown')}")
+                preview = err.get('response_preview', '')
+                if preview:
+                    diag_parts.append(f"  Response: {preview[:100]}...")
+            if not extraction_errors:
+                diag_parts.append("No specific errors — chunks returned empty arrays.")
+            diagnostic = "\n".join(diag_parts)
+            try:
+                _conn = _get_conn(db_path)
+                _conn.execute("UPDATE sources SET error_message = ? WHERE id = ?",
+                              (diagnostic, source_id))
+                _conn.commit()
+                _conn.close()
+            except Exception:
+                pass
 
         # Store new insights
         _update_status(video_id, 'processing', 'Storing insights...', 70,
                        title=source['title'], channel=source['channel'])
 
         now = datetime.now(timezone.utc).isoformat()
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         for insight in all_insights:
             conn.execute("""
                 INSERT INTO insights
-                (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, evidence, source_context, confidence, topics, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 source_id, domain_id,
                 insight.get('title', 'Untitled'),
@@ -554,11 +864,16 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
                 insight.get('actionability', 'medium'),
                 insight.get('key_quote', ''),
                 insight.get('chunk_index', 0),
+                insight.get('evidence', ''),
+                insight.get('source_context', ''),
+                insight.get('confidence', 'stated'),
+                json.dumps(insight.get('topics', [])),
                 now,
             ))
+        source_status = 'processed' if all_insights else 'processed_empty'
         conn.execute(
-            "UPDATE sources SET processed_at = ? WHERE id = ?",
-            (now, source_id),
+            "UPDATE sources SET status = ?, processed_at = ?, error_message = NULL WHERE id = ?",
+            (source_status, now, source_id),
         )
         conn.commit()
 
@@ -569,13 +884,30 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
         conn.close()
 
         # Re-synthesize the full domain
-        _update_status(video_id, 'processing', 'Re-synthesizing knowledge...', 85,
+        _update_status(video_id, 'processing', 'Re-synthesizing knowledge...', 82,
                        title=source['title'], channel=source['channel'])
 
         resynthesize_domain_full(domain_id, db_path)
 
+        _update_status(video_id, 'processing', 'Updating domain counts...', 92,
+                       title=source['title'], channel=source['channel'])
+        _repair_domain_counts(domain_id, db_path)
+
+        # If domain changed, also repair and re-synthesize the old domain
+        if domain_id != old_domain_id:
+            _update_status(video_id, 'processing', 'Updating old domain...', 94,
+                           title=source['title'], channel=source['channel'])
+            _repair_domain_counts(old_domain_id, db_path)
+            try:
+                resynthesize_domain_full(old_domain_id, db_path)
+            except Exception as e:
+                logger.warning(f"Re-synthesis of old domain {old_domain_id} failed: {e}")
+
+        _update_status(video_id, 'processing', 'Finalizing...', 97,
+                       title=source['title'], channel=source['channel'])
+
         # Get domain name for status
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         domain_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
         domain_name = domain_row[0] if domain_row else None
         conn.close()
@@ -598,6 +930,212 @@ def reprocess_pipeline(source_id: int, db_path=None) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
+# Batch Reprocess Pipeline
+# ══════════════════════════════════════════════════════════════
+
+def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, tracking_id=None, reclassify: bool = False) -> dict:
+    """Two-phase batch reprocessing: parallel extraction then batch synthesis.
+
+    Phase 1: Re-extract insights for all sources in parallel (3 workers).
+    Phase 2: Synthesize once per affected domain.
+    """
+    from domain_synthesizer import resynthesize_domain_full, _cascade_synthesis
+
+    db_path = db_path or config.DB_PATH
+    batch_vid = tracking_id or _generate_source_id("batch")
+    total = len(source_ids)
+
+    try:
+        _update_status(batch_vid, 'processing', f'Preparing {total} sources...', 5)
+
+        # Load all sources
+        conn = _get_conn(db_path)
+        conn.row_factory = sqlite3.Row
+        sources = []
+        for sid in source_ids:
+            row = conn.execute(
+                "SELECT id, video_id, title, channel, transcript, domain_id, user_id FROM sources WHERE id = ?",
+                (sid,),
+            ).fetchone()
+            if row:
+                sources.append(dict(row))
+        conn.close()
+
+        if not sources:
+            _update_status(batch_vid, 'error', 'No valid sources found', 0)
+            return {'status': 'error', 'video_id': batch_vid, 'error': 'No valid sources'}
+
+        # ── Phase 1: Parallel re-extraction (skip synthesis) ──────
+        results = [None] * len(sources)
+
+        def _reprocess_one(idx, source):
+            """Re-extract insights for one source (no synthesis)."""
+            source_id = source['id']
+            video_id = source['video_id']
+            transcript = source['transcript']
+            domain_id = source['domain_id']
+
+            if not transcript or not transcript.strip():
+                return {'status': 'error', 'source_id': source_id, 'error': 'No transcript'}
+
+            try:
+                # Delete old insights
+                c = _get_conn(db_path)
+                c.execute("DELETE FROM insights WHERE source_id = ?", (source_id,))
+                c.commit()
+                c.close()
+
+                # Re-chunk and re-extract
+                chunks = chunk_transcript(transcript)
+
+                # Optionally reclassify domain
+                if reclassify and chunks:
+                    try:
+                        domain_result = detect_domain_hierarchical(
+                            source['title'], source['channel'],
+                            chunks[0] if chunks else transcript,
+                            db_path, user_id=source.get('user_id'),
+                        )
+                        new_domain_id = domain_result['domain_id']
+                        if new_domain_id != domain_id:
+                            c = _get_conn(db_path)
+                            c.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (new_domain_id, source_id))
+                            c.commit()
+                            c.close()
+                            logger.info(f"Batch reclassified source {source_id} from domain {domain_id} to {new_domain_id}")
+                            domain_id = new_domain_id
+                    except Exception as e:
+                        logger.warning(f"Batch reclassification failed for source {source_id}: {e}")
+
+                word_count = len(transcript.split())
+                extraction_errors = []
+                all_insights = []
+
+                for i, chunk in enumerate(chunks):
+                    insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
+                    all_insights.extend(insights)
+
+                # Store diagnostics if extraction failed
+                if not all_insights and chunks and word_count >= 30:
+                    diag_parts = [f"0/{len(chunks)} chunks produced insights. Transcript: {word_count} words."]
+                    for err in extraction_errors[:5]:
+                        diag_parts.append(f"Chunk {err.get('chunk', '?')}: {err.get('error', 'unknown')}")
+                    try:
+                        c = _get_conn(db_path)
+                        c.execute("UPDATE sources SET error_message = ? WHERE id = ?",
+                                  ("\n".join(diag_parts), source_id))
+                        c.commit()
+                        c.close()
+                    except Exception:
+                        pass
+
+                # Store new insights
+                now = datetime.now(timezone.utc).isoformat()
+                c = _get_conn(db_path)
+                for insight in all_insights:
+                    c.execute("""
+                        INSERT INTO insights
+                        (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, evidence, source_context, confidence, topics, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        source_id, domain_id,
+                        insight.get('title', 'Untitled'),
+                        insight.get('content', ''),
+                        insight.get('insight_type', 'general'),
+                        insight.get('actionability', 'medium'),
+                        insight.get('key_quote', ''),
+                        insight.get('chunk_index', 0),
+                        insight.get('evidence', ''),
+                        insight.get('source_context', ''),
+                        insight.get('confidence', 'stated'),
+                        json.dumps(insight.get('topics', [])),
+                        now,
+                    ))
+                source_status = 'processed' if all_insights else 'processed_empty'
+                c.execute(
+                    "UPDATE sources SET status = ?, processed_at = ?, error_message = NULL WHERE id = ?",
+                    (source_status, now, source_id),
+                )
+                c.commit()
+
+                # Generate embeddings
+                _embed_insights(c, source_id)
+                c.close()
+
+                # Update batch progress
+                progress = 10 + int(((idx + 1) / len(sources)) * 70)  # 10-80%
+                _update_status(batch_vid, 'processing',
+                               f'Re-extracted {idx+1}/{len(sources)}: {source["title"][:40]}...',
+                               progress)
+
+                return {
+                    'status': 'complete', 'source_id': source_id,
+                    'domain_id': domain_id, 'insights_count': len(all_insights),
+                    'title': source['title'],
+                }
+            except Exception as e:
+                logger.error(f"Batch reprocess failed for source {source_id}: {e}", exc_info=True)
+                return {'status': 'error', 'source_id': source_id, 'error': str(e)}
+
+        _update_status(batch_vid, 'processing', f'Re-extracting {len(sources)} sources...', 10)
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(_reprocess_one, i, src): i
+                for i, src in enumerate(sources)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                results[idx] = future.result()
+
+        succeeded = sum(1 for r in results if r and r.get('status') == 'complete' and r.get('insights_count', 0) > 0)
+
+        # ── Phase 2: Batch synthesis (once per domain) ────────────
+        affected_domains = {}
+        for r in results:
+            if r and r.get('domain_id') and r.get('status') == 'complete' and r.get('insights_count', 0) > 0:
+                did = r['domain_id']
+                if did not in affected_domains:
+                    affected_domains[did] = []
+                affected_domains[did].append(r)
+
+        if affected_domains:
+            num_domains = len(affected_domains)
+            _update_status(batch_vid, 'processing',
+                           f'Synthesizing {num_domains} domain{"s" if num_domains != 1 else ""}...', 82)
+
+            for i, (domain_id, domain_results) in enumerate(affected_domains.items()):
+                progress = 82 + int(((i + 1) / num_domains) * 13)  # 82-95%
+                try:
+                    conn = _get_conn(db_path)
+                    d_name = (conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone() or [None])[0]
+                    conn.close()
+                except Exception:
+                    d_name = 'Unknown'
+
+                _update_status(batch_vid, 'processing',
+                               f'Synthesizing {i+1}/{num_domains}: {d_name}...', progress)
+                try:
+                    resynthesize_domain_full(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Batch synthesis failed for domain {domain_id}: {e}")
+                try:
+                    _cascade_synthesis(domain_id, db_path)
+                except Exception as e:
+                    logger.warning(f"Cascade failed for domain {domain_id}: {e}")
+                _repair_domain_counts(domain_id, db_path)
+
+        _update_status(batch_vid, 'complete',
+                       f'Done — {succeeded}/{len(sources)} re-processed', 100)
+        return {'status': 'complete', 'video_id': batch_vid, 'succeeded': succeeded, 'total': len(sources)}
+
+    except Exception as e:
+        logger.error(f"Batch reprocess failed: {e}", exc_info=True)
+        _update_status(batch_vid, 'error', 'Batch reprocess failed', 0, error=str(e))
+        return {'status': 'error', 'video_id': batch_vid, 'error': str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
 # Shared Pipeline (steps 3-7, common to all source types)
 # ══════════════════════════════════════════════════════════════
 
@@ -611,6 +1149,8 @@ def _run_shared_pipeline(
     db_path=None,
     start_progress: int = 35,
     user_id: int = None,
+    playlist_ctx=None,
+    skip_synthesis: bool = False,
 ) -> dict:
     """
     Shared pipeline steps: chunk → detect domain → extract insights → store → synthesize.
@@ -619,14 +1159,20 @@ def _run_shared_pipeline(
     """
     db_path = db_path or config.DB_PATH
 
+    def _update(step, progress, **kw):
+        """Update video status and propagate to playlist if in playlist context."""
+        _update_status(video_id, 'processing', step, progress, **kw)
+        if playlist_ctx:
+            _map_to_playlist(playlist_ctx, progress, title)
+
     # Step 3: Chunk transcript
-    _update_status(video_id, 'processing', 'Analyzing content...', start_progress,
-                   title=title, channel=channel)
+    _update('Analyzing content...', start_progress,
+            title=title, channel=channel)
     chunks = chunk_transcript(transcript)
 
     # Step 4: Auto-detect domain (hierarchical)
-    _update_status(video_id, 'processing', 'Detecting domain...', start_progress + 10,
-                   title=title, channel=channel)
+    _update('Detecting domain...', start_progress + 10,
+            title=title, channel=channel)
     try:
         domain_result = detect_domain_hierarchical(
             title, channel, chunks[0] if chunks else transcript, db_path, user_id=user_id
@@ -639,7 +1185,7 @@ def _run_shared_pipeline(
         raise
 
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = _get_conn(db_path)
         conn.execute("UPDATE sources SET domain_id = ? WHERE id = ?", (domain_id, source_id))
         conn.commit()
         conn.close()
@@ -647,30 +1193,89 @@ def _run_shared_pipeline(
         logger.error(f"Failed to update source domain: {e}", exc_info=True)
         raise
 
-    _update_status(video_id, 'processing', f'Domain: {domain_name}', start_progress + 15,
-                   title=title, channel=channel, domain=domain_name)
+    _update(f'Domain: {domain_name}', start_progress + 15,
+            title=title, channel=channel, domain=domain_name)
 
-    # Step 5: Extract insights
+    # Step 5: Extract insights (parallel across chunks)
     all_insights = []
-    for i, chunk in enumerate(chunks):
-        progress = (start_progress + 15) + int((i / max(len(chunks), 1)) * 25)
-        _update_status(video_id, 'processing',
-                       f'Extracting insights ({i+1}/{len(chunks)})...', progress,
-                       title=title, channel=channel, domain=domain_name)
-        insights = extract_insights(chunk, chunk_index=i)
-        all_insights.extend(insights)
+    extraction_errors = []  # Per-chunk error tracking
+
+    # Guard: skip extraction if transcript is too short to produce insights
+    word_count = len(transcript.split())
+    if word_count < 30:
+        logger.warning(f"Transcript too short ({word_count} words) for '{title}' — skipping extraction")
+        _update('Transcript too short for extraction',
+                start_progress + 40, title=title, channel=channel, domain=domain_name)
+    else:
+        _update(f'Extracting insights from {len(chunks)} chunks...',
+                start_progress + 15, title=title, channel=channel, domain=domain_name)
+
+        if len(chunks) <= 1:
+            for i, chunk in enumerate(chunks):
+                insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
+                all_insights.extend(insights)
+        else:
+            completed = 0
+            # Each chunk gets its own error list (thread-safe — no shared mutations)
+            chunk_error_lists = [[] for _ in chunks]
+            with ThreadPoolExecutor(max_workers=min(len(chunks), 2)) as executor:
+                futures = {
+                    executor.submit(extract_insights, chunk, chunk_index=i, errors=chunk_error_lists[i]): i
+                    for i, chunk in enumerate(chunks)
+                }
+                chunk_results = [None] * len(chunks)
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    chunk_results[idx] = future.result()
+                    completed += 1
+                    progress = (start_progress + 15) + int((completed / len(chunks)) * 25)
+                    _update(f'Extracting insights ({completed}/{len(chunks)})...',
+                            progress, title=title, channel=channel, domain=domain_name)
+                for result in chunk_results:
+                    if result:
+                        all_insights.extend(result)
+                # Merge per-chunk errors
+                for el in chunk_error_lists:
+                    extraction_errors.extend(el)
+
+        # Track if extraction produced no results — store detailed diagnostics
+        if not all_insights and chunks:
+            # Build diagnostic string from per-chunk errors
+            diag_parts = [f"0/{len(chunks)} chunks produced insights. "
+                          f"Transcript: {word_count} words, {len(chunks)} chunks."]
+            if extraction_errors:
+                for err in extraction_errors[:5]:  # Cap at 5 to fit tooltip
+                    chunk_num = err.get('chunk', '?')
+                    error_msg = err.get('error', 'unknown')
+                    preview = err.get('response_preview', '')
+                    diag_parts.append(f"Chunk {chunk_num}: {error_msg}")
+                    if preview:
+                        diag_parts.append(f"  Response: {preview[:100]}...")
+            else:
+                diag_parts.append("No specific errors captured — chunks may have returned empty arrays.")
+            diagnostic = "\n".join(diag_parts)
+
+            logger.warning(f"0 insights for '{title}': {diagnostic}")
+            try:
+                _conn = _get_conn(db_path)
+                _conn.execute("UPDATE sources SET error_message = ? WHERE id = ?",
+                              (diagnostic, source_id))
+                _conn.commit()
+                _conn.close()
+            except Exception:
+                pass
 
     # Step 6: Store insights
-    _update_status(video_id, 'processing', 'Storing insights...', 80,
-                   title=title, channel=channel, domain=domain_name)
+    _update('Storing insights...', 80,
+            title=title, channel=channel, domain=domain_name)
 
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(str(db_path))
+    conn = _get_conn(db_path)
     for insight in all_insights:
         conn.execute("""
             INSERT INTO insights
-            (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (source_id, domain_id, title, content, insight_type, actionability, key_quotes, chunk_index, evidence, source_context, confidence, topics, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             source_id, domain_id,
             insight.get('title', 'Untitled'),
@@ -679,33 +1284,70 @@ def _run_shared_pipeline(
             insight.get('actionability', 'medium'),
             insight.get('key_quote', ''),
             insight.get('chunk_index', 0),
+            insight.get('evidence', ''),
+            insight.get('source_context', ''),
+            insight.get('confidence', 'stated'),
+            json.dumps(insight.get('topics', [])),
             now,
         ))
     conn.commit()
 
     # Step 6.5: Generate embeddings for insights
-    _update_status(video_id, 'processing', 'Generating embeddings...', 82,
-                   title=title, channel=channel, domain=domain_name)
+    _update('Generating embeddings...', 82,
+            title=title, channel=channel, domain=domain_name)
     _embed_insights(conn, source_id)
     conn.close()
 
     # Step 6.5: Mark as processed BEFORE synthesis (so source_count query includes this source)
-    conn = sqlite3.connect(str(db_path))
+    source_status = 'processed' if all_insights else 'processed_empty'
+    conn = _get_conn(db_path)
     conn.execute(
-        "UPDATE sources SET status = 'processed', processed_at = ? WHERE id = ?",
-        (datetime.now(timezone.utc).isoformat(), source_id),
+        "UPDATE sources SET status = ?, processed_at = ? WHERE id = ?",
+        (source_status, datetime.now(timezone.utc).isoformat(), source_id),
     )
     conn.commit()
     conn.close()
 
-    # Step 7: Re-synthesize (now source is 'processed' and will be counted)
-    _update_status(video_id, 'processing', 'Synthesizing knowledge...', 90,
-                   title=title, channel=channel, domain=domain_name)
-    synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+    if not skip_synthesis:
+        # Step 7: Re-synthesize (now source is 'processed' and will be counted)
+        _update('Synthesizing knowledge...', 85,
+                title=title, channel=channel, domain=domain_name)
+        try:
+            synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+        except Exception as e:
+            logger.warning(f"Synthesis failed for domain {domain_id}: {e}")
 
-    _update_status(video_id, 'complete', 'Done', 100,
-                   title=title, channel=channel, domain=domain_name,
-                   insights_count=len(all_insights))
+        _update('Updating domain counts...', 92,
+                title=title, channel=channel, domain=domain_name)
+        _repair_domain_counts(domain_id, db_path)
+
+        _update('Finalizing...', 96,
+                title=title, channel=channel, domain=domain_name)
+
+        # Step 8: Taxonomy evolution check — fire-and-forget in background
+        def _bg_taxonomy():
+            try:
+                from domain_detector import propose_taxonomy_evolution
+                propose_taxonomy_evolution(domain_id, all_insights, db_path, user_id=user_id)
+            except Exception as e:
+                logger.warning(f"Taxonomy evolution check skipped: {e}")
+        threading.Thread(target=_bg_taxonomy, daemon=True).start()
+
+    if all_insights:
+        status_msg = 'Done' if not skip_synthesis else 'Ingested'
+        _update_status(video_id, 'complete', status_msg, 100,
+                       title=title, channel=channel, domain=domain_name,
+                       insights_count=len(all_insights))
+    elif word_count < 30:
+        _update_status(video_id, 'complete',
+                       'Done — transcript too short for extraction', 100,
+                       title=title, channel=channel, domain=domain_name,
+                       insights_count=0)
+    else:
+        _update_status(video_id, 'complete',
+                       f'Done — 0 insights from {word_count}-word transcript (extraction may have failed, try re-processing)',
+                       100, title=title, channel=channel, domain=domain_name,
+                       insights_count=0)
 
     logger.info(f"Pipeline complete: {title} → {domain_name} ({len(all_insights)} insights)")
 

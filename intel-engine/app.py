@@ -5,6 +5,7 @@ Paste a YouTube URL, web article, upload a file, or paste text → everything is
 Knowledge compounds over time per domain.
 """
 
+import json
 import logging
 import os
 import sqlite3
@@ -13,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import (
-    Flask, render_template, request, redirect, url_for, jsonify, session,
+    Flask, render_template, request, redirect, url_for, jsonify, session, make_response,
 )
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
@@ -33,11 +34,26 @@ app.config['MAX_CONTENT_LENGTH'] = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 login_manager = LoginManager(app)
 login_manager.login_view = 'login_page'
 
+@login_manager.unauthorized_handler
+def unauthorized_api():
+    """Return JSON for API requests, redirect for page requests."""
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Session expired. Please refresh the page and sign in again."}), 401
+    return redirect(url_for('login_page'))
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.get(int(user_id))
 
 logger = logging.getLogger(__name__)
+
+@app.errorhandler(500)
+def handle_500(e):
+    """Return JSON for API routes, HTML for page routes."""
+    logger.error(f"500 error: {e}", exc_info=True)
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
+    return f"<h1>Internal Server Error</h1><p>{e}</p>", 500
 
 
 # ── Helpers ──
@@ -74,6 +90,49 @@ def get_source_type_from_ext(filename: str) -> str:
     elif ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
         return 'image'
     return 'unknown'
+
+
+def _compute_live_domain_counts(conn, user_id):
+    """Compute actual source_count and insight_count per domain from live data.
+
+    Returns {domain_id: {'source_count': N, 'insight_count': N}}.
+    """
+    rows = conn.execute("""
+        SELECT s.domain_id,
+               COUNT(DISTINCT s.id) as source_count,
+               COUNT(i.id) as insight_count
+        FROM sources s
+        LEFT JOIN insights i ON i.source_id = s.id
+        WHERE s.status IN ('processed', 'processed_empty') AND (s.user_id = ? OR s.user_id IS NULL)
+        GROUP BY s.domain_id
+    """, (user_id,)).fetchall()
+    counts = {}
+    for r in rows:
+        counts[r['domain_id']] = {
+            'source_count': r['source_count'],
+            'insight_count': r['insight_count'],
+        }
+    return counts
+
+
+def _overlay_live_counts(nodes, live_counts):
+    """Overlay live counts onto domain nodes. For parents without own sources, sum children."""
+    for node in nodes:
+        children = node.get('children', [])
+        if children:
+            _overlay_live_counts(children, live_counts)
+        # Always check live counts for this node first
+        own = live_counts.get(node.get('id'))
+        if own:
+            node['source_count'] = own['source_count']
+            node['insight_count'] = own['insight_count']
+        elif children:
+            # No own sources (e.g., level-0 category) — sum from children
+            node['source_count'] = sum(c.get('source_count', 0) for c in children)
+            node['insight_count'] = sum(c.get('insight_count', 0) for c in children)
+        else:
+            node['source_count'] = 0
+            node['insight_count'] = 0
 
 
 # ── Security Headers ──
@@ -150,7 +209,7 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    """Main page — URL input + domain grid."""
+    """Main page — ingestion hub + domain grid. Homepage is for adding content."""
     if needs_setup():
         return redirect(url_for('setup_page'))
 
@@ -163,10 +222,17 @@ def index():
             """SELECT d.*, p.name as parent_name
                FROM domains d
                LEFT JOIN domains p ON d.parent_id = p.id
-               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+               WHERE (d.user_id = ? OR d.user_id IS NULL)
+               AND (d.level = 1 OR (d.level = 0 AND d.source_count > 0))
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
+        # Overlay live counts
+        live_counts = _compute_live_domain_counts(conn, uid)
+        for d in domains:
+            c = live_counts.get(d.get('id'), {'source_count': 0, 'insight_count': 0})
+            d['source_count'] = c['source_count']
+            d['insight_count'] = c['insight_count']
     except sqlite3.OperationalError:
         pass
     finally:
@@ -174,6 +240,125 @@ def index():
             conn.close()
 
     return render_template("intel.html", domains=domains, domain=None, synthesis=None)
+
+
+@app.route("/knowledge")
+@login_required
+def knowledge_page():
+    """Knowledge Base browser — all categories with their domains in a scannable overview."""
+    if needs_setup():
+        return redirect(url_for('setup_page'))
+
+    uid = current_user.id
+    conn = None
+    categories = []
+    total_sources = 0
+    total_insights = 0
+    total_domains = 0
+    try:
+        conn = get_db()
+
+        # Build tree bottom-up from level-1 domains (same resilient strategy as homepage).
+        # This works regardless of whether level-0 parents exist or have correct levels.
+        level1_domains = [dict(r) for r in conn.execute("""
+            SELECT d.id, d.name, d.icon, d.source_count, d.insight_count, d.description, d.parent_id,
+                   p.name as parent_name, p.icon as parent_icon, p.description as parent_description
+            FROM domains d
+            LEFT JOIN domains p ON d.parent_id = p.id
+            WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+            ORDER BY d.source_count DESC
+        """, (uid,)).fetchall()]
+
+        # Get all level-2 sub-topics keyed by parent_id
+        subtopics_by_parent = {}
+        all_subtopics = [dict(r) for r in conn.execute("""
+            SELECT id, name, icon, source_count, insight_count, description, parent_id
+            FROM domains
+            WHERE (user_id = ? OR user_id IS NULL) AND level = 2
+            ORDER BY name ASC
+        """, (uid,)).fetchall()]
+        for st in all_subtopics:
+            pid = st.get('parent_id')
+            if pid:
+                subtopics_by_parent.setdefault(pid, []).append(st)
+
+        # Group level-1 domains by their parent
+        parent_groups = {}  # keyed by parent_name for grouping
+        for d in level1_domains:
+            pname = d['parent_name'] or 'Other'
+            picon = d['parent_icon'] or '\U0001f4c2'
+            if pname not in parent_groups:
+                parent_groups[pname] = {
+                    'name': pname, 'icon': picon,
+                    'source_count': 0, 'insight_count': 0,
+                    'description': d.get('parent_description') or f'Category: {pname}',
+                    'children': [],
+                }
+            child = dict(d)
+            child['children'] = subtopics_by_parent.get(d['id'], [])
+            parent_groups[pname]['children'].append(child)
+        # Include collapsed level-0 domains (sources attached directly, no level-1 children)
+        collapsed_parents = [dict(r) for r in conn.execute("""
+            SELECT d.id, d.name, d.icon, d.source_count, d.insight_count, d.description
+            FROM domains d
+            WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 0 AND d.source_count > 0
+            AND d.name NOT IN (SELECT DISTINCT p.name FROM domains c JOIN domains p ON c.parent_id = p.id
+                               WHERE c.level = 1 AND (c.user_id = ? OR c.user_id IS NULL))
+            ORDER BY d.source_count DESC
+        """, (uid, uid)).fetchall()]
+        for cp in collapsed_parents:
+            if cp['name'] not in parent_groups:
+                parent_groups[cp['name']] = {
+                    'name': cp['name'], 'icon': cp['icon'] or '\U0001f4c2',
+                    'source_count': cp['source_count'], 'insight_count': cp['insight_count'],
+                    'description': cp.get('description') or f'Category: {cp["name"]}',
+                    'children': [],
+                    'is_collapsed': True,  # Flag for template to link directly
+                    'domain_id': cp['id'],
+                }
+                # Attach sub-topics if any
+                subs = subtopics_by_parent.get(cp['id'], [])
+                if subs:
+                    parent_groups[cp['name']]['children'] = subs
+
+        categories = list(parent_groups.values())
+
+        # Overlay live counts (prevents stale column values)
+        live_counts = _compute_live_domain_counts(conn, uid)
+        _overlay_live_counts(categories, live_counts)
+        total_sources = sum(cat.get('source_count', 0) for cat in categories)
+        total_insights = sum(cat.get('insight_count', 0) for cat in categories)
+        total_domains = sum(len(cat.get('children', [])) for cat in categories)
+
+    except sqlite3.OperationalError as e:
+        logger.error(f"Knowledge page query failed: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+
+    return render_template("intel.html", domain=None, synthesis=None, domains=[],
+                           knowledge_view=True, knowledge_categories=categories,
+                           total_sources=total_sources, total_insights=total_insights,
+                           total_domains=total_domains)
+
+
+def _extract_tldr_from_synthesis(content: str) -> str:
+    """Extract the TLDR section from a synthesis markdown string."""
+    if not content:
+        return ""
+    lines = content.split('\n')
+    in_tldr = False
+    tldr_lines = []
+    for line in lines:
+        stripped = line.strip().lower()
+        if stripped.startswith('## ') and 'tldr' in stripped:
+            in_tldr = True
+            continue
+        if in_tldr and line.strip().startswith('## '):
+            break
+        if in_tldr:
+            tldr_lines.append(line)
+    return '\n'.join(tldr_lines).strip()
 
 
 @app.route("/domain/<domain_name>")
@@ -193,65 +378,143 @@ def domain_page(domain_name):
         conn = get_db()
 
         uid = current_user.id
-        domain = conn.execute(
-            "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL)",
-            (domain_name, uid),
-        ).fetchone()
+        # Accept optional ?level= param to disambiguate when the same name
+        # exists at multiple hierarchy levels (e.g. "AI Tools" at level-0 AND level-1).
+        # Knowledge tree passes ?level=0 for category nodes.
+        requested_level = request.args.get('level', type=int)
+        domain = None
+        if requested_level is not None:
+            domain = conn.execute(
+                "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
+                (domain_name, requested_level, uid),
+            ).fetchone()
+        if not domain:
+            # Fallback: find by name with deterministic ordering.
+            # If level=0 was requested (category click), prefer lowest level.
+            # Otherwise prefer level-1 (the domain itself).
+            if requested_level == 0:
+                order = "level ASC"
+            else:
+                order = "CASE WHEN level = 1 THEN 0 WHEN level = 2 THEN 1 ELSE 2 END"
+            domain = conn.execute(
+                f"SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL) ORDER BY {order} LIMIT 1",
+                (domain_name, uid),
+            ).fetchone()
         if not domain:
             return redirect(url_for('index'))
         domain = dict(domain)
 
-        # Level-2 sub-topics redirect to their parent domain (the actual knowledge base)
+        # Level-2 sub-topics: render using parent's data, scoped to sub-topic
+        subtopic_scope = None
+        child_ids = []
         if domain.get('level') == 2 and domain.get('parent_id'):
-            parent = conn.execute("SELECT name FROM domains WHERE id = ?", (domain['parent_id'],)).fetchone()
+            subtopic_scope = domain['name']
+            parent = conn.execute("SELECT * FROM domains WHERE id = ?", (domain['parent_id'],)).fetchone()
             if parent:
-                # Don't close conn here — finally block handles it
-                redirect_name = parent[0]
-                conn.close()
-                conn = None  # Prevent finally from double-closing
-                return redirect(url_for('domain_page', domain_name=redirect_name))
-
+                parent = dict(parent)
+                # Use parent's domain ID for content, but keep the sub-topic domain object for display
+                content_domain_ids = [parent['id']]
+            else:
+                content_domain_ids = [domain['id']]
         # Determine content source based on hierarchy level
-        content_domain_ids = [domain['id']]
-        if domain.get('level') == 0:
-            # Parent category: aggregate all child domains
+        elif domain.get('level') == 0:
+            content_domain_ids = [domain['id']]
+            # Parent category: aggregate child domains + own sources (from collapsed collisions)
             child_ids = [r[0] for r in conn.execute(
                 "SELECT id FROM domains WHERE parent_id = ? AND level = 1", (domain['id'],)
             ).fetchall()]
             if child_ids:
-                content_domain_ids = child_ids
+                content_domain_ids = [domain['id']] + child_ids
+        else:
+            content_domain_ids = [domain['id']]
 
-        # Latest synthesis (for level-0, find first child with synthesis)
+        # Latest synthesis
         synthesis_row = None
-        if not content_domain_ids:
-            synthesis_row = None
-        for cid in content_domain_ids:
+        synthesis = None
+        synthesis_html = ""
+        if domain.get('level') == 0 and child_ids:
+            # Level-0 with children: aggregate child TLDRs + own synthesis if present
+            child_tldrs = []
+            for cid in child_ids:
+                row = conn.execute(
+                    "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (cid,),
+                ).fetchone()
+                cname = conn.execute("SELECT name FROM domains WHERE id = ?", (cid,)).fetchone()
+                if row and cname:
+                    tldr = _extract_tldr_from_synthesis(row["content"])
+                    child_tldrs.append({"name": cname["name"], "tldr_md": tldr})
+
+            if child_tldrs:
+                parts = []
+                # Include the parent's own synthesis if it has one (from collapsed sources)
+                own_synth = conn.execute(
+                    "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (domain['id'],),
+                ).fetchone()
+                if own_synth:
+                    own_tldr = _extract_tldr_from_synthesis(own_synth["content"])
+                    if own_tldr:
+                        parts.append(f"## Overview\n\n{own_tldr}")
+                for ct in child_tldrs:
+                    section = f"## {ct['name']}\n\n{ct['tldr_md']}" if ct['tldr_md'] else f"## {ct['name']}\n\n*No summary yet.*"
+                    parts.append(section)
+                aggregated_md = '\n\n---\n\n'.join(parts)
+                if md:
+                    synthesis_html = md.markdown(aggregated_md, extensions=['extra', 'nl2br', 'fenced_code'])
+                else:
+                    synthesis_html = f"<p>{aggregated_md}</p>"
+                synthesis = {
+                    "content": aggregated_md, "version": 1, "suggested_questions": "[]",
+                    "source_count": 0,  # Will be overridden with live counts below
+                    "insight_count": 0,
+                }
+            else:
+                # Level-0 with children but none have synthesis yet — try own synthesis
+                own_row = conn.execute(
+                    "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (domain['id'],),
+                ).fetchone()
+                synthesis = dict(own_row) if own_row else None
+                if synthesis and md:
+                    try:
+                        synthesis_html = md.markdown(synthesis['content'], extensions=['extra', 'nl2br', 'fenced_code'])
+                    except Exception:
+                        synthesis_html = f"<p>{synthesis['content']}</p>"
+                elif synthesis:
+                    synthesis_html = f"<p>{synthesis['content']}</p>"
+        elif domain.get('level') == 0 and not child_ids:
+            # Level-0 with no children (collapsed domain): show own synthesis like a level-1
             synthesis_row = conn.execute(
                 "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
-                (cid,),
+                (domain['id'],),
             ).fetchone()
-            if synthesis_row:
-                break
-        synthesis = dict(synthesis_row) if synthesis_row else None
-        synthesis_html = ""
-        suggested_questions = []
-        if synthesis and md:
-            try:
-                synthesis_html = md.markdown(
-                    synthesis['content'],
-                    extensions=['extra', 'nl2br', 'fenced_code']
-                )
-            except Exception:
+            synthesis = dict(synthesis_row) if synthesis_row else None
+            if synthesis and md:
+                try:
+                    synthesis_html = md.markdown(synthesis['content'], extensions=['extra', 'nl2br', 'fenced_code'])
+                except Exception:
+                    synthesis_html = f"<p>{synthesis['content']}</p>"
+            elif synthesis:
                 synthesis_html = f"<p>{synthesis['content']}</p>"
-        elif synthesis:
-            synthesis_html = f"<p>{synthesis['content']}</p>"
-
-        if synthesis and synthesis.get('suggested_questions'):
-            import json
-            try:
-                suggested_questions = json.loads(synthesis['suggested_questions'])
-            except (json.JSONDecodeError, TypeError):
-                suggested_questions = []
+        else:
+            # Level 1 or level 2 (scoped): use the domain's own synthesis
+            target_id = content_domain_ids[0] if content_domain_ids else domain['id']
+            synthesis_row = conn.execute(
+                "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                (target_id,),
+            ).fetchone()
+            synthesis = dict(synthesis_row) if synthesis_row else None
+            if synthesis and md:
+                try:
+                    synthesis_html = md.markdown(
+                        synthesis['content'],
+                        extensions=['extra', 'nl2br', 'fenced_code']
+                    )
+                except Exception:
+                    synthesis_html = f"<p>{synthesis['content']}</p>"
+            elif synthesis:
+                synthesis_html = f"<p>{synthesis['content']}</p>"
 
         # Sources with insight counts — aggregate from all content domains
         placeholders = ','.join('?' * len(content_domain_ids))
@@ -259,16 +522,35 @@ def domain_page(domain_name):
             SELECT s.*, COUNT(i.id) as insight_count
             FROM sources s
             LEFT JOIN insights i ON i.source_id = s.id
-            WHERE s.domain_id IN ({placeholders}) AND s.status = 'processed'
+            WHERE s.domain_id IN ({placeholders}) AND s.status IN ('processed', 'processed_empty')
             GROUP BY s.id
             ORDER BY s.created_at DESC
         """, content_domain_ids).fetchall()]
+
+        # For level-2 sub-topic pages, filter sources to those with topic-matching insights
+        total_parent_sources = len(sources)
+        show_filtered_banner = False
+        parent_domain_name = None
+        if subtopic_scope and sources:
+            parent_domain_name = parent['name'] if parent else None
+            filtered = []
+            for src in sources:
+                match = conn.execute("""
+                    SELECT COUNT(*) FROM insights
+                    WHERE source_id = ? AND topics LIKE ?
+                """, (src['id'], f'%{subtopic_scope}%')).fetchone()[0]
+                if match > 0:
+                    filtered.append(src)
+            if filtered:
+                sources = filtered
+                show_filtered_banner = True
 
         domains = [dict(r) for r in conn.execute(
             """SELECT d.*, p.name as parent_name
                FROM domains d
                LEFT JOIN domains p ON d.parent_id = p.id
-               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+               WHERE (d.user_id = ? OR d.user_id IS NULL)
+               AND (d.level = 1 OR (d.level = 0 AND d.source_count > 0))
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
@@ -288,32 +570,76 @@ def domain_page(domain_name):
             elif r.get('level', 0) == 0 or not pid:
                 domain_tree.append(node)
 
+        # Overlay live counts (prevents stale column values)
+        live_counts = _compute_live_domain_counts(conn, uid)
+        _overlay_live_counts(domain_tree, live_counts)
+        # Fix the current domain's counts to match the content actually displayed.
+        # For level-2 sub-topics, content comes from the parent domain, so use
+        # the parent's counts (len(sources)) instead of the sub-topic's own (0).
+        if domain:
+            domain['source_count'] = len(sources)
+            domain['insight_count'] = sum(s.get('insight_count', 0) for s in sources)
+        # Sync synthesis metadata with live counts (DB record may be stale)
+        if synthesis:
+            synthesis['source_count'] = len(sources)
+            synthesis['insight_count'] = domain['insight_count'] if domain else 0
+
     except sqlite3.OperationalError:
         return redirect(url_for('index'))
     finally:
         if conn:
             conn.close()
 
-    return render_template("intel.html",
+    # Parse convergence data if available
+    convergence = None
+    if synthesis and synthesis.get('convergence_data'):
+        import json as _json
+        try:
+            convergence = _json.loads(synthesis['convergence_data'])
+        except (ValueError, TypeError):
+            pass
+
+    # Parse suggested questions for template
+    if synthesis:
+        try:
+            synthesis['suggested_questions_list'] = json.loads(synthesis.get('suggested_questions') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            synthesis['suggested_questions_list'] = []
+
+    resp = make_response(render_template("intel.html",
                            domain=domain,
                            synthesis=synthesis,
                            synthesis_html=synthesis_html,
-                           suggested_questions=suggested_questions,
                            sources=sources,
                            domains=domains,
-                           domain_tree=domain_tree)
+                           domain_tree=domain_tree,
+                           subtopic_scope=subtopic_scope,
+                           convergence=convergence,
+                           show_filtered_banner=show_filtered_banner,
+                           total_parent_sources=total_parent_sources,
+                           parent_domain_name=parent_domain_name))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
 
 
 @app.route("/setup")
 def setup_page():
     """API key setup page."""
-    return render_template("setup.html")
+    # Show which keys are already configured
+    configured = {}
+    for service in ('openai', 'anthropic', 'supadata'):
+        key = config.get_api_key(service)
+        configured[service] = bool(key)
+    return render_template("setup.html", configured=configured)
 
 
 @app.route("/setup/save", methods=["POST"])
 def save_setup():
-    """Save API key."""
+    """Save API keys."""
     openai_key = request.form.get('openai_key', '').strip()
+    anthropic_key = request.form.get('anthropic_key', '').strip()
+    supadata_key = request.form.get('supadata_key', '').strip()
+
     if not openai_key:
         return render_template("setup.html", error="OpenAI API key is required.")
 
@@ -325,6 +651,16 @@ def save_setup():
             INSERT OR REPLACE INTO api_credentials (service, api_key, created_at, updated_at)
             VALUES ('openai', ?, ?, ?)
         """, (openai_key, now, now))
+        if anthropic_key:
+            conn.execute("""
+                INSERT OR REPLACE INTO api_credentials (service, api_key, created_at, updated_at)
+                VALUES ('anthropic', ?, ?, ?)
+            """, (anthropic_key, now, now))
+        if supadata_key:
+            conn.execute("""
+                INSERT OR REPLACE INTO api_credentials (service, api_key, created_at, updated_at)
+                VALUES ('supadata', ?, ?, ?)
+            """, (supadata_key, now, now))
         conn.commit()
     finally:
         if conn:
@@ -363,7 +699,7 @@ def api_ingest():
 
         def _run():
             try:
-                run_playlist_pipeline(url, user_id=uid)
+                run_playlist_pipeline(url, user_id=uid, tracking_id=playlist_vid)
             except Exception as e:
                 _update_status(playlist_vid, 'error', 'Failed', 0, error=str(e))
 
@@ -432,7 +768,7 @@ def api_ingest():
 
         def _run():
             try:
-                run_article_pipeline(url, user_id=uid)
+                run_article_pipeline(url, user_id=uid, tracking_id=source_vid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
 
@@ -446,7 +782,7 @@ def api_ingest():
 def api_upload():
     """Accept a file upload and start background processing."""
     from pipeline import (
-        run_file_pipeline, run_image_pipeline, _update_status, _generate_source_id,
+        run_file_pipeline, run_image_pipeline, _update_status, _hash_file_id,
     )
 
     if 'file' not in request.files:
@@ -468,8 +804,9 @@ def api_upload():
     file_path = str(config.UPLOADS_DIR / unique_name)
     file.save(file_path)
 
-    # Generate a tracking ID
-    source_vid = _generate_source_id("file" if source_type != 'image' else "img")
+    # Content-based tracking ID (deterministic — same file = same ID for dedup)
+    prefix = "img" if source_type == 'image' else "file"
+    source_vid = _hash_file_id(file_path, prefix)
     _update_status(source_vid, 'processing', f'Uploading {original_filename}...', 5,
                    title=original_filename)
 
@@ -477,7 +814,7 @@ def api_upload():
     if source_type == 'image':
         def _run():
             try:
-                run_image_pipeline(file_path, original_filename, user_id=uid)
+                run_image_pipeline(file_path, original_filename, user_id=uid, tracking_id=source_vid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
         thread = threading.Thread(target=_run, daemon=True)
@@ -485,7 +822,7 @@ def api_upload():
     else:
         def _run():
             try:
-                run_file_pipeline(file_path, original_filename, source_type, user_id=uid)
+                run_file_pipeline(file_path, original_filename, source_type, user_id=uid, tracking_id=source_vid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
         thread = threading.Thread(target=_run, daemon=True)
@@ -498,7 +835,7 @@ def api_upload():
 @login_required
 def api_ingest_text():
     """Accept pasted text and start background processing."""
-    from pipeline import run_text_pipeline, _update_status, _generate_source_id
+    from pipeline import run_text_pipeline, _update_status, _hash_text_id
 
     data = request.get_json()
     title = (data or {}).get('title', '').strip()
@@ -511,12 +848,12 @@ def api_ingest_text():
         title = content[:60] + ("..." if len(content) > 60 else "")
 
     uid = current_user.id
-    source_vid = _generate_source_id("text")
+    source_vid = _hash_text_id(content)
     _update_status(source_vid, 'processing', 'Processing text...', 5, title=title)
 
     def _run():
         try:
-            run_text_pipeline(title, content, user_id=uid)
+            run_text_pipeline(title, content, user_id=uid, tracking_id=source_vid)
         except Exception as e:
             _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
 
@@ -531,6 +868,45 @@ def api_status(video_id):
     """Poll processing status for a source."""
     from pipeline import get_pipeline_status
     return jsonify(get_pipeline_status(video_id))
+
+
+@app.route("/api/source/<int:source_id>/debug")
+@login_required
+def api_source_debug(source_id):
+    """Diagnostic endpoint for debugging extraction failures."""
+    from youtube_ingest import chunk_transcript
+    conn = get_db()
+    source = conn.execute(
+        "SELECT id, video_id, title, channel, source_type, status, error_message, transcript, domain_id "
+        "FROM sources WHERE id = ? AND user_id = ?",
+        (source_id, current_user.id),
+    ).fetchone()
+    if not source:
+        return jsonify({"error": "Source not found"}), 404
+    source = dict(source)
+    transcript = source.get('transcript') or ''
+    word_count = len(transcript.split()) if transcript else 0
+    chunks = chunk_transcript(transcript) if word_count >= 30 else []
+    insight_count = conn.execute(
+        "SELECT COUNT(*) FROM insights WHERE source_id = ?", (source_id,)
+    ).fetchone()[0]
+    domain_row = conn.execute(
+        "SELECT name FROM domains WHERE id = ?", (source['domain_id'],)
+    ).fetchone() if source.get('domain_id') else None
+    return jsonify({
+        "source_id": source_id,
+        "title": source.get('title'),
+        "channel": source.get('channel'),
+        "source_type": source.get('source_type'),
+        "status": source.get('status'),
+        "error_message": source.get('error_message'),
+        "domain": domain_row[0] if domain_row else None,
+        "transcript_word_count": word_count,
+        "transcript_preview": transcript[:500] if transcript else None,
+        "chunk_count": len(chunks),
+        "chunk_sizes": [len(c.split()) for c in chunks],
+        "insight_count": insight_count,
+    })
 
 
 @app.route("/api/domains")
@@ -577,6 +953,10 @@ def api_domain_tree():
             elif r.get('level', 0) == 0 or not parent_id:
                 roots.append(node)
 
+        # Overlay live counts
+        live_counts = _compute_live_domain_counts(conn, uid)
+        _overlay_live_counts(roots, live_counts)
+
         return jsonify({"tree": roots})
     except sqlite3.OperationalError:
         return jsonify({"tree": []})
@@ -615,7 +995,7 @@ def api_merge_domains():
         conn.execute("UPDATE domains SET parent_id = ? WHERE parent_id = ? AND level = 2", (target_id, source_id))
 
         # Update counts on target
-        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'", (target_id,)).fetchone()[0]
+        src_count = conn.execute("SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')", (target_id,)).fetchone()[0]
         ins_count = conn.execute("SELECT COUNT(*) FROM insights WHERE domain_id = ?", (target_id,)).fetchone()[0]
         now = datetime.now(timezone.utc).isoformat()
         conn.execute("UPDATE domains SET source_count = ?, insight_count = ?, updated_at = ? WHERE id = ?",
@@ -796,7 +1176,7 @@ def api_delete_source(source_id):
 
         # Check if domain has remaining sources
         remaining = conn.execute(
-            "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status = 'processed'",
+            "SELECT COUNT(*) FROM sources WHERE domain_id = ? AND status IN ('processed', 'processed_empty')",
             (domain_id,),
         ).fetchone()[0]
 
@@ -852,12 +1232,57 @@ def api_delete_source(source_id):
             conn.close()
 
 
+@app.route("/api/reprocess-batch", methods=["POST"])
+@login_required
+def api_reprocess_batch():
+    """Batch re-process multiple sources in parallel."""
+    from pipeline import reprocess_batch_pipeline, _update_status, _generate_source_id
+
+    data = request.get_json() or {}
+    source_ids = data.get('source_ids', [])
+    reclassify = data.get('reclassify', False)
+    if not source_ids or not isinstance(source_ids, list):
+        return jsonify({"error": "source_ids required"}), 400
+    if len(source_ids) > 20:
+        return jsonify({"error": "Max 20 sources per batch"}), 400
+
+    uid = current_user.id
+    conn = get_db()
+    valid_ids = []
+    for sid in source_ids:
+        row = conn.execute(
+            "SELECT id FROM sources WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+            (sid, uid),
+        ).fetchone()
+        if row:
+            valid_ids.append(row[0])
+    conn.close()
+
+    if not valid_ids:
+        return jsonify({"error": "No valid sources found"}), 404
+
+    batch_vid = _generate_source_id("batch")
+    _update_status(batch_vid, 'processing', f'Starting batch re-process ({len(valid_ids)} sources)...', 2)
+
+    def _run():
+        try:
+            reprocess_batch_pipeline(valid_ids, user_id=uid, tracking_id=batch_vid, reclassify=reclassify)
+        except Exception as e:
+            _update_status(batch_vid, 'error', 'Batch failed', 0, error=str(e))
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({"status": "started", "video_id": batch_vid, "count": len(valid_ids)})
+
+
 @app.route("/api/reprocess/<int:source_id>", methods=["POST"])
 @login_required
 def api_reprocess(source_id):
     """Re-process an existing source with current extraction prompts."""
     from pipeline import reprocess_pipeline, _update_status
 
+    data = request.get_json(silent=True) or {}
+    reclassify = data.get('reclassify', False)
     uid = current_user.id
     conn = None
     try:
@@ -880,14 +1305,14 @@ def api_reprocess(source_id):
 
         def _run():
             try:
-                reprocess_pipeline(source_id)
+                reprocess_pipeline(source_id, reclassify=reclassify)
             except Exception as e:
                 _update_status(video_id, 'error', 'Failed', 0, error=str(e))
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
-        return jsonify({"status": "started", "video_id": video_id})
+        return jsonify({"status": "started", "video_id": video_id, "reclassify": reclassify})
 
     except Exception as e:
         logger.error(f"Reprocess failed: {e}", exc_info=True)
@@ -1049,6 +1474,151 @@ def api_visual(domain_id):
             conn.close()
 
 
+@app.route("/api/taxonomy-changes")
+@login_required
+def api_taxonomy_changes():
+    """Return recent taxonomy changes for notification display (Tier 3B)."""
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        changes = conn.execute("""
+            SELECT tc.id, tc.domain_id, tc.change_type, tc.description, tc.created_at,
+                   d.name as domain_name
+            FROM taxonomy_changes tc
+            JOIN domains d ON tc.domain_id = d.id
+            WHERE (tc.user_id = ? OR tc.user_id IS NULL) AND tc.dismissed = 0
+            ORDER BY tc.created_at DESC LIMIT 10
+        """, (uid,)).fetchall()
+        return jsonify([dict(c) for c in changes])
+    except Exception:
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/taxonomy-changes/<int:change_id>/dismiss", methods=["POST"])
+@login_required
+def api_dismiss_taxonomy_change(change_id):
+    """Dismiss a taxonomy change notification."""
+    conn = None
+    try:
+        conn = get_db()
+        conn.execute("UPDATE taxonomy_changes SET dismissed = 1 WHERE id = ?", (change_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception:
+        return jsonify({"ok": False}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/threshold-concepts")
+@login_required
+def api_threshold_concepts():
+    """Identify foundational concepts that appear across 3+ domains (Threshold Concepts).
+
+    Queries the topics JSON field across all insights, finds topics with high
+    cross-domain spread — these are the foundational concepts that connect
+    different areas of understanding.
+    """
+    import json as _json
+    uid = current_user.id
+    conn = None
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT i.domain_id, i.topics, d.name as domain_name
+            FROM insights i
+            JOIN domains d ON i.domain_id = d.id
+            WHERE d.user_id = ? AND i.topics IS NOT NULL AND i.topics != '' AND i.topics != '[]'
+        """, (uid,)).fetchall()
+
+        # topic → set of domain names
+        topic_domains = {}
+        for r in rows:
+            try:
+                topics = _json.loads(r['topics']) if isinstance(r['topics'], str) else r['topics']
+                if isinstance(topics, list):
+                    for t in topics:
+                        if isinstance(t, str):
+                            t = t.lower().strip()
+                            if t and len(t) > 2:
+                                if t not in topic_domains:
+                                    topic_domains[t] = set()
+                                topic_domains[t].add(r['domain_name'])
+            except (ValueError, TypeError):
+                continue
+
+        # Filter to topics appearing in 3+ domains
+        threshold = [
+            {"topic": topic, "domains": sorted(domains), "spread": len(domains)}
+            for topic, domains in topic_domains.items()
+            if len(domains) >= 3
+        ]
+        threshold.sort(key=lambda x: x['spread'], reverse=True)
+
+        return jsonify(threshold[:15])
+    except Exception:
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+
+def _build_domain_topic_map(conn, user_id):
+    """Build a mapping of domain_id → set of topic strings from insights."""
+    import json as _json
+    domain_topics = {}
+    try:
+        rows = conn.execute("""
+            SELECT i.domain_id, i.topics
+            FROM insights i
+            JOIN domains d ON i.domain_id = d.id
+            WHERE d.user_id = ? AND i.topics IS NOT NULL AND i.topics != '' AND i.topics != '[]'
+        """, (user_id,)).fetchall()
+    except Exception:
+        return domain_topics
+
+    for r in rows:
+        did = r['domain_id']
+        try:
+            topics = _json.loads(r['topics']) if isinstance(r['topics'], str) else r['topics']
+            if isinstance(topics, list):
+                if did not in domain_topics:
+                    domain_topics[did] = set()
+                domain_topics[did].update(t.lower().strip() for t in topics if isinstance(t, str))
+        except (ValueError, TypeError):
+            continue
+    return domain_topics
+
+
+def _build_conceptual_edges(conn, user_id, domain_topics=None):
+    """Build topic-based conceptual edges between domains (Connectivism)."""
+    if domain_topics is None:
+        domain_topics = _build_domain_topic_map(conn, user_id)
+
+    edges = []
+    seen = set()
+    domain_ids = list(domain_topics.keys())
+    for i, d1 in enumerate(domain_ids):
+        for d2 in domain_ids[i + 1:]:
+            shared = domain_topics[d1] & domain_topics[d2]
+            if shared:
+                pair = (min(d1, d2), max(d1, d2))
+                if pair not in seen:
+                    seen.add(pair)
+                    edges.append({
+                        "source": d1, "target": d2,
+                        "type": "conceptual",
+                        "label": ", ".join(sorted(shared)[:3]),
+                        "weight": len(shared),
+                    })
+    return edges
+
+
 @app.route("/api/knowledge-graph")
 @login_required
 def api_knowledge_graph():
@@ -1061,14 +1631,14 @@ def api_knowledge_graph():
         # Domain nodes
         domains = conn.execute("""
             SELECT id, name, level, parent_id, source_count, insight_count
-            FROM domains WHERE user_id = ?
+            FROM domains WHERE (user_id = ? OR user_id IS NULL)
             ORDER BY level ASC, insight_count DESC
         """, (uid,)).fetchall()
 
         # Source nodes (processed only)
         sources = conn.execute("""
             SELECT id, title, url, domain_id, source_type
-            FROM sources WHERE user_id = ? AND status = 'processed'
+            FROM sources WHERE (user_id = ? OR user_id IS NULL) AND status IN ('processed', 'processed_empty')
             ORDER BY created_at DESC
         """, (uid,)).fetchall()
 
@@ -1079,11 +1649,14 @@ def api_knowledge_graph():
             WHERE source_domain_id IN (SELECT id FROM domains WHERE user_id = ?)
         """, (uid,)).fetchall()
 
-        # Build domain nodes (integer IDs)
+        # Build domain nodes with live counts (integer IDs)
+        live_counts = _compute_live_domain_counts(conn, uid)
         domain_nodes = [
             {"id": r["id"], "name": r["name"], "level": r["level"],
-             "parentId": r["parent_id"], "sources": r["source_count"],
-             "insights": r["insight_count"], "type": "domain"}
+             "parentId": r["parent_id"],
+             "sources": live_counts.get(r["id"], {}).get('source_count', 0),
+             "insights": live_counts.get(r["id"], {}).get('insight_count', 0),
+             "type": "domain"}
             for r in domains
         ]
 
@@ -1110,9 +1683,39 @@ def api_knowledge_graph():
             for r in refs
         ]
 
+        # Build topic map once, reuse for both conceptual and category bridge edges
+        domain_topics = _build_domain_topic_map(conn, uid)
+        conceptual_edges = _build_conceptual_edges(conn, uid, domain_topics=domain_topics)
+
+        # Category bridge edges: connect level-0 categories sharing child topics
+        category_bridges = []
+        cat_ids = {r["id"] for r in domains if r["level"] == 0}
+        if len(cat_ids) > 1:
+            child_to_cat = {r["id"]: r["parent_id"] for r in domains if r["parent_id"] in cat_ids}
+            cat_topics = {cid: set() for cid in cat_ids}
+            for did, topics in domain_topics.items():
+                cat_id = child_to_cat.get(did)
+                if cat_id and cat_id in cat_topics:
+                    cat_topics[cat_id].update(topics)
+            cat_list = list(cat_topics.keys())
+            seen_cats = set()
+            for i, c1 in enumerate(cat_list):
+                for c2 in cat_list[i + 1:]:
+                    shared = cat_topics[c1] & cat_topics[c2]
+                    if shared:
+                        pair = (min(c1, c2), max(c1, c2))
+                        if pair not in seen_cats:
+                            seen_cats.add(pair)
+                            category_bridges.append({
+                                "source": c1, "target": c2,
+                                "type": "conceptual",
+                                "label": ", ".join(sorted(shared)[:3]),
+                                "weight": len(shared),
+                            })
+
         return jsonify({
             "nodes": domain_nodes + source_nodes,
-            "edges": hierarchy_edges + source_edges + ref_edges,
+            "edges": hierarchy_edges + source_edges + ref_edges + conceptual_edges + category_bridges,
         })
 
     except Exception as e:
@@ -1131,15 +1734,15 @@ def api_reset_all():
     conn = None
     try:
         conn = get_db()
-        # Delete in dependency order: refs → insights → sources → syntheses → domains
-        # Handle both user-owned and legacy (user_id IS NULL) data
-        conn.execute("""DELETE FROM domain_references WHERE source_domain_id IN (
-            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
-        conn.execute("""DELETE FROM insights WHERE domain_id IN (
-            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
+        # Delete in dependency order — cover ALL tables referencing domains
+        domain_filter = "SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL"
+        conn.execute(f"DELETE FROM taxonomy_changes WHERE domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM synthesis_versions WHERE domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM domain_references WHERE source_domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM domain_references WHERE target_domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM insights WHERE domain_id IN ({domain_filter})", (uid,))
+        conn.execute(f"DELETE FROM syntheses WHERE domain_id IN ({domain_filter})", (uid,))
         conn.execute("DELETE FROM sources WHERE user_id = ? OR user_id IS NULL", (uid,))
-        conn.execute("""DELETE FROM syntheses WHERE domain_id IN (
-            SELECT id FROM domains WHERE user_id = ? OR user_id IS NULL)""", (uid,))
         conn.execute("DELETE FROM domains WHERE user_id = ? OR user_id IS NULL", (uid,))
         conn.commit()
 

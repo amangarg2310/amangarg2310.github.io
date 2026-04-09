@@ -1,5 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply saved theme immediately to prevent flash
+(function() {
+    var t = localStorage.getItem('intel-theme');
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+})();
+</script>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,6 +31,34 @@
         </a>
         {% if current_user and current_user.is_authenticated %}
         <div class="intel-nav-user">
+            <a href="{{ url_for('knowledge_page') }}" class="intel-nav-graph-btn" title="Browse your knowledge base">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                Knowledge
+            </a>
+            <button class="intel-nav-graph-btn" onclick="openGraphView()" title="Knowledge Graph">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="6" r="3"/>
+                    <circle cx="18" cy="18" r="3"/>
+                    <circle cx="18" cy="6" r="3"/>
+                    <line x1="8.5" y1="7.5" x2="15.5" y2="16.5"/>
+                    <line x1="8.5" y1="6" x2="15.5" y2="6"/>
+                </svg>
+                Graph
+            </button>
+            <button class="intel-nav-graph-btn" onclick="toggleDarkMode()" id="darkModeToggle" title="Toggle dark mode">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="darkModeIcon">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+            </button>
+            <a href="{{ url_for('setup_page') }}" class="intel-nav-settings-btn" title="API Keys &amp; Settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+            </a>
             <span class="intel-nav-user-name">{{ current_user.display_name }}</span>
             <a href="{{ url_for('logout') }}" class="intel-nav-logout">Sign out</a>
         </div>
@@ -37,17 +72,14 @@
     <div class="intel-detail-layout">
 
         <!-- ── Sidebar (Left) ── -->
-        <aside class="intel-sources-panel">
+        <aside class="intel-sources-panel" id="sourcesPanel">
 
             <!-- Taxonomy Tree -->
             {% if domain_tree %}
             <div class="intel-taxonomy-section">
                 <div class="intel-taxonomy-header">
                     <span class="intel-sources-title">Domains</span>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <a href="javascript:void(0)" onclick="openGraphView()" class="intel-reset-link" title="Knowledge graph view">Graph</a>
-                        <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link" title="Reset all data">Reset</a>
-                    </div>
+                    <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link" title="Reset all data">Reset</a>
                 </div>
                 <div class="intel-taxonomy-tree">
                     {% for node in domain_tree %}
@@ -116,9 +148,9 @@
                     <!-- Link Tab -->
                     <div class="intel-add-pane active" id="addPaneLink">
                         <input type="text" class="intel-add-input" id="addLinkInput"
-                               placeholder="Paste YouTube, playlist (max 15 videos), or article URL..."
+                               placeholder="Paste YouTube, playlist, or article URL..."
                                onkeydown="if(event.key==='Enter')submitLink()">
-                        <button class="intel-add-submit" onclick="submitLink()">Add Link</button>
+                        <button class="intel-add-submit" onclick="submitLink()">Add to Knowledge Base</button>
                     </div>
                     <!-- Upload Tab -->
                     <div class="intel-add-pane" id="addPaneUpload">
@@ -133,6 +165,7 @@
                         <input type="file" class="intel-file-input" id="sidebarFileInput"
                                accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
                                onchange="uploadFile(this.files[0])">
+                        <button class="intel-add-submit" onclick="document.getElementById('sidebarFileInput').click()">Add to Knowledge Base</button>
                     </div>
                     <!-- Text Tab -->
                     <div class="intel-add-pane" id="addPaneText">
@@ -140,7 +173,7 @@
                                placeholder="Title (optional)" style="margin-bottom:6px">
                         <textarea class="intel-add-textarea" id="addTextContent"
                                   placeholder="Paste your notes, text, or content..."></textarea>
-                        <button class="intel-add-submit" onclick="submitText()">Add Text</button>
+                        <button class="intel-add-submit" onclick="submitText()">Add to Knowledge Base</button>
                     </div>
                 </div>
             </div>
@@ -187,7 +220,10 @@
                     </div>
                     <div class="intel-source-item-info">
                         <div class="intel-source-item-title">{{ source.title }}</div>
-                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insights</div>
+                        <div class="intel-source-item-meta">{{ source.channel }} · {{ source.insight_count }} insight{{ 's' if source.insight_count != 1 else '' }}{% if source.insight_count == 0 %} <span class="intel-source-warn" title="Click for details" onclick="event.stopPropagation(); showSourceDebug({{ source.id }})">⚠</span>{% endif %}</div>
+                        {% if source.ingestion_impact %}
+                        <div class="intel-source-impact">{{ source.ingestion_impact }}</div>
+                        {% endif %}
                     </div>
                     <div class="intel-source-actions">
                         <button class="intel-source-action-btn reprocess" title="Re-process"
@@ -195,6 +231,13 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"/>
                                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                        </button>
+                        <button class="intel-source-action-btn reclassify" title="Re-classify domain"
+                                onclick="event.stopPropagation(); reclassifySource({{ source.id }}, '{{ source.video_id }}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
                             </svg>
                         </button>
                         <button class="intel-source-action-btn delete" title="Delete"
@@ -224,12 +267,8 @@
 
             <!-- Admin tools -->
             <div style="padding:12px 16px;border-top:1px solid var(--intel-border-light);">
-                <button onclick="backfillEmbeddings()" id="backfillBtn"
-                    style="width:100%;padding:8px;font-size:12px;color:var(--intel-text-tertiary);background:none;border:1px solid var(--intel-border-light);border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);">
-                    Backfill Embeddings
-                </button>
                 <button onclick="resetAllData()" id="resetBtn"
-                    style="width:100%;padding:8px;font-size:12px;color:#ff3b30;background:none;border:1px solid #ffcdd2;border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);margin-top:6px;">
+                    style="width:100%;padding:8px;font-size:12px;color:var(--intel-red);background:none;border:1px solid var(--intel-border);border-radius:var(--intel-radius-xs);cursor:pointer;font-family:var(--intel-font);">
                     Reset All Data
                 </button>
             </div>
@@ -239,17 +278,34 @@
         <main class="intel-main-content">
             <div class="intel-detail-header">
                 <div class="intel-detail-icon">{{ domain.icon }}</div>
+                {% if subtopic_scope %}
+                <p class="intel-detail-breadcrumb" style="font-size:12px;color:var(--intel-text-tertiary);margin-bottom:4px;">
+                    <a href="/domain/{{ domain.path.split('/')[1] if domain.path else '' }}" style="color:var(--intel-accent);text-decoration:none;">{{ domain.path.split('/')[1] if domain.path else '' }}</a>
+                    &rsaquo;
+                    <a href="/domain/{{ domain.path.split('/')[2] if domain.path and domain.path.split('/')|length > 2 else '' }}" style="color:var(--intel-accent);text-decoration:none;">{{ domain.path.split('/')[2] if domain.path and domain.path.split('/')|length > 2 else '' }}</a>
+                    &rsaquo;
+                </p>
+                {% endif %}
                 <h1 class="intel-detail-title">{{ domain.name }}</h1>
                 <p class="intel-detail-meta">
                     {{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} &middot;
                     {{ domain.insight_count }} insight{{ 's' if domain.insight_count != 1 else '' }}
                     {% if synthesis %} &middot; Synthesis v{{ synthesis.version }}{% endif %}
                 </p>
+                {% if subtopic_scope %}
+                <div class="intel-subtopic-banner">
+                    {% if show_filtered_banner %}
+                    Showing {{ sources|length }} of {{ total_parent_sources }} sources relevant to <strong>{{ subtopic_scope }}</strong>
+                    {% else %}
+                    Showing all sources from <strong>{{ parent_domain_name or 'parent domain' }}</strong>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
 
             <!-- ── AI SEARCH (top of page) ── -->
             <div class="intel-search-section">
-                <h3 class="intel-search-heading">Ask anything about {{ domain.name }}</h3>
+                <h3 class="intel-search-heading">Ask anything about {{ subtopic_scope or domain.name }}</h3>
 
                 <div class="intel-search-bar" id="searchBar">
                     <svg class="intel-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -259,10 +315,17 @@
                     <input type="text"
                            class="intel-search-input"
                            id="searchInput"
-                           placeholder="What do you want to know?"
+                           placeholder="{% if subtopic_scope %}Ask about {{ subtopic_scope }}...{% else %}What do you want to know?{% endif %}"
                            autocomplete="off"
                            oninput="onSearchInput()"
                            onkeydown="if(event.key==='Enter')askQuestion()">
+                    <span class="intel-search-shortcut" id="searchShortcut">⌘K</span>
+                    <button class="intel-search-clear" id="searchClear" onclick="clearSearch()" title="Clear search">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                     <button class="intel-search-ai-btn" id="searchBtn" onclick="askQuestion()" title="Search with AI">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
@@ -270,11 +333,14 @@
                     </button>
                 </div>
 
-                <!-- Suggested questions (hidden until user starts typing) -->
-                {% if suggested_questions %}
-                <div class="intel-suggested-questions" id="suggestedQuestions" style="display:none">
-                    {% for q in suggested_questions %}
-                    <button class="intel-suggested-q" onclick="askQuestion(this.textContent)">{{ q }}</button>
+                <!-- Suggested question (NotebookLM-inspired) -->
+                {% if synthesis and synthesis.suggested_questions_list %}
+                <div class="intel-suggested-questions" id="suggestedQuestions">
+                    {% for q in synthesis.suggested_questions_list %}
+                    <button class="intel-suggested-item" onclick="askQuestion(this.dataset.q)" data-q="{{ q }}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        {{ q }}
+                    </button>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -292,6 +358,35 @@
                 </div>
             </div>
 
+            <!-- ── CONVERGENCE SUMMARY ── -->
+            {% if convergence %}
+            <div class="intel-convergence-section intel-animate-in">
+                {% if convergence.agreements %}
+                <div class="intel-convergence-card intel-convergence-agree">
+                    <div class="intel-convergence-label">Sources Agree</div>
+                    {% for a in convergence.agreements[:3] %}
+                    <div class="intel-convergence-item">
+                        <span class="intel-convergence-dot agree"></span>
+                        {{ a.claim }}
+                        <span class="intel-convergence-sources">({{ a.sources|join(', ') }})</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if convergence.disagreements %}
+                <div class="intel-convergence-card intel-convergence-disagree">
+                    <div class="intel-convergence-label">Sources Differ</div>
+                    {% for d in convergence.disagreements[:2] %}
+                    <div class="intel-convergence-item">
+                        <span class="intel-convergence-dot disagree"></span>
+                        {{ d.topic }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <!-- ── SYNTHESIS ── -->
             {% if synthesis and synthesis.content %}
             <div class="intel-brief-header">
@@ -305,18 +400,240 @@
                 <ul class="intel-toc-list" id="tocList"></ul>
             </div>
 
-            <div class="intel-synthesis intel-animate-in" id="synthesisContent">
+            <div class="intel-synthesis intel-animate-in" id="synthesisContent" data-level="{{ domain.level or 0 }}">
                 {{ synthesis_html | safe }}
+            </div>
+            {% elif domain.insight_count == 0 %}
+            <!-- Empty state: sources exist but no insights extracted -->
+            <div class="intel-empty-domain">
+                <div class="intel-empty-domain-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4M12 16h.01"/>
+                    </svg>
+                </div>
+                <h3 class="intel-empty-domain-title">No insights extracted yet</h3>
+                <p class="intel-empty-domain-desc">
+                    The {{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} in this domain didn't produce extractable insights.
+                    This can happen when transcripts are unavailable or content couldn't be parsed.
+                </p>
+                <p class="intel-empty-domain-hint">Try adding a different source, or re-process existing ones from the sidebar.</p>
             </div>
             {% endif %}
         </main>
     </div>
+
+    {% elif knowledge_view is defined and knowledge_view %}
+    <!-- ══════════════════════════════════════════════════════════
+         KNOWLEDGE BASE — Biology-Inspired Hierarchical Tree
+         ══════════════════════════════════════════════════════════ -->
+    <div class="intel-kb-page">
+        <div class="intel-kb-header">
+            <div>
+                <h1 class="intel-kb-title">Knowledge Base</h1>
+                <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ total_domains }} domains</p>
+            </div>
+            <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Source
+            </a>
+        </div>
+
+        {% if knowledge_categories %}
+        <div class="intel-stats-bar">
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ total_sources }}</span> sources</div>
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ total_insights }}</span> insights</div>
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ total_domains }}</span> domains</div>
+        </div>
+
+        <div class="bio-tree" id="bioTree">
+            <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
+            <div class="bio-tree-nodes" id="bioTreeNodes">
+                <!-- Level 0: Category nodes (always visible) -->
+                <div class="bio-tree-level bio-tree-level-0" id="bioLevel0">
+                    {% for cat in knowledge_categories %}
+                    <div class="bio-node bio-node-cat" data-id="cat-{{ loop.index0 }}" data-expanded="false"
+                         data-href="{{ url_for('domain_page', domain_name=cat.name, level=0) }}"
+                         onclick="bioToggle(this, 'cat-{{ loop.index0 }}')"
+                         ondblclick="window.location.href=this.dataset.href">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ cat.icon }}</span>
+                            <span class="bio-node-name">{{ cat.name }}</span>
+                        </div>
+                        {% if cat.source_count %}<div class="bio-node-ring">{{ cat.source_count }} source{{ 's' if cat.source_count != 1 else '' }}</div>{% endif %}
+                        <div class="bio-node-hint">{{ cat.children|length }} domain{{ 's' if cat.children|length != 1 else '' }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Level 1: Domain nodes (hidden until parent clicked) -->
+                {% for cat in knowledge_categories %}
+                <div class="bio-tree-level bio-tree-level-1 bio-hidden" data-parent="cat-{{ loop.index0 }}">
+                    {% for d in cat.children %}
+                    {% if d.children %}
+                    <div class="bio-node bio-node-domain" data-id="dom-{{ d.id }}"
+                         data-expanded="false" data-has-children="true"
+                         data-href="{{ url_for('domain_page', domain_name=d.name) }}"
+                         onclick="bioToggle(this, 'dom-{{ d.id }}')"
+                         ondblclick="window.location.href=this.dataset.href">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ d.icon }}</span>
+                            <span class="bio-node-name">{{ d.name }}</span>
+                        </div>
+                        {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
+                        <div class="bio-node-expand">{{ d.children|length }} sub-topic{{ 's' if d.children|length != 1 else '' }}</div>
+                        <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node-open" onclick="event.stopPropagation()">Open →</a>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node bio-node-domain" data-id="dom-{{ d.id }}" data-has-children="false">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ d.icon }}</span>
+                            <span class="bio-node-name">{{ d.name }}</span>
+                        </div>
+                        {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <!-- Level 2: Sub-topic nodes (hidden until parent domain clicked) -->
+                {% for cat in knowledge_categories %}
+                {% for d in cat.children %}
+                {% if d.children %}
+                <div class="bio-tree-level bio-tree-level-2 bio-hidden" data-parent="dom-{{ d.id }}">
+                    {% for sub in d.children %}
+                    <div class="bio-node bio-node-sub" data-href="{{ url_for('domain_page', domain_name=sub.name) }}"
+                         ondblclick="window.location.href=this.dataset.href">
+                        <div class="bio-node-pulse"></div>
+                        <span class="bio-node-core">
+                            <span class="bio-node-dot"></span>
+                            <span class="bio-node-name">{{ sub.name }}</span>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% else %}
+        <div class="intel-empty">
+            <div class="intel-empty-icon">📚</div>
+            <div class="intel-empty-title">No knowledge yet</div>
+            <div class="intel-empty-desc">
+                <a href="{{ url_for('index') }}">Add your first source</a> to start building your knowledge base.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+    function collapseDescendants(levelEl) {
+        levelEl.classList.add('bio-hidden');
+        levelEl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
+            gc.dataset.expanded = 'false';
+            document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
+                collapseDescendants(gcl);
+            });
+        });
+    }
+
+    function bioToggle(nodeEl, parentId) {
+        const isExpanded = nodeEl.dataset.expanded === 'true';
+        // Collapse all sibling expansions at same level
+        const level = nodeEl.closest('.bio-tree-level');
+        level.querySelectorAll('.bio-node[data-expanded="true"]').forEach(n => {
+            if (n !== nodeEl) {
+                n.dataset.expanded = 'false';
+                document.querySelectorAll(`.bio-tree-level[data-parent="${n.dataset.id}"]`).forEach(cl => {
+                    collapseDescendants(cl);
+                });
+            }
+        });
+
+        // Toggle this node
+        nodeEl.dataset.expanded = isExpanded ? 'false' : 'true';
+        const childLevels = document.querySelectorAll(`.bio-tree-level[data-parent="${parentId}"]`);
+        childLevels.forEach(cl => {
+            if (isExpanded) {
+                collapseDescendants(cl);
+            } else {
+                cl.classList.remove('bio-hidden');
+            }
+        });
+
+        // Redraw connectors after DOM settles
+        requestAnimationFrame(() => requestAnimationFrame(bioDrawConnectors));
+    }
+
+    function bioDrawConnectors() {
+        const svg = document.getElementById('bioTreeSvg');
+        const container = document.getElementById('bioTree');
+        if (!svg || !container) return;
+        const rect = container.getBoundingClientRect();
+        svg.setAttribute('width', container.scrollWidth);
+        svg.setAttribute('height', container.scrollHeight);
+        svg.innerHTML = '';
+
+        // Find all visible parent→child level connections
+        document.querySelectorAll('.bio-tree-level:not(.bio-hidden)').forEach(childLevel => {
+            const parentId = childLevel.dataset.parent;
+            if (!parentId) return;
+            const parentNode = document.querySelector(`.bio-node[data-id="${parentId}"]`);
+            if (!parentNode || !parentNode.closest('.bio-tree-level:not(.bio-hidden)')) return;
+
+            const pRect = parentNode.getBoundingClientRect();
+            const px = pRect.left + pRect.width / 2 - rect.left;
+            const py = pRect.bottom - rect.top;
+
+            childLevel.querySelectorAll('.bio-node').forEach((childNode, i) => {
+                const cRect = childNode.getBoundingClientRect();
+                const cx = cRect.left + cRect.width / 2 - rect.left;
+                const cy = cRect.top - rect.top;
+
+                // Organic S-curve: vertical drop then curve to child
+                const midY = py + (cy - py) * 0.45;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${px} ${py} C ${px} ${midY}, ${cx} ${midY}, ${cx} ${cy}`);
+                path.setAttribute('class', 'bio-connector');
+                path.style.animationDelay = `${i * 0.08}s`;
+                // Thicker for level-0→1, thinner for level-1→2
+                if (childLevel.classList.contains('bio-tree-level-2')) {
+                    path.classList.add('bio-connector-thin');
+                }
+                svg.appendChild(path);
+            });
+        });
+    }
+
+    // Initial draw
+    document.addEventListener('DOMContentLoaded', () => {
+        requestAnimationFrame(bioDrawConnectors);
+        window.addEventListener('resize', bioDrawConnectors);
+    });
+    </script>
 
     {% else %}
     <!-- ══════════════════════════════════════════════════════════
          HOME VIEW — URL Input + Domain Grid
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-hero" id="heroSection">
+        <!-- Decorative floating SVGs -->
+        <svg class="intel-hero-decor decor-book" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <svg class="intel-hero-decor decor-bulb" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+        <svg class="intel-hero-decor decor-dots" width="60" height="40" viewBox="0 0 60 40"><circle cx="8" cy="20" r="6" fill="currentColor" opacity="0.4"/><circle cx="28" cy="10" r="4" fill="currentColor" opacity="0.3"/><circle cx="24" cy="30" r="3" fill="currentColor" opacity="0.25"/><circle cx="46" cy="18" r="5" fill="currentColor" opacity="0.35"/><circle cx="52" cy="34" r="2.5" fill="currentColor" opacity="0.2"/></svg>
+        <svg class="intel-hero-decor decor-cap" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
+
+        <div class="intel-hero-tag">Your knowledge, distilled</div>
         <h1 class="intel-hero-title">Learn from any source.</h1>
         <p class="intel-hero-subtitle">
             Paste a link, upload a document, or add notes — we'll extract every insight and build your knowledge base automatically.
@@ -354,22 +671,32 @@
 
             <!-- Link pane -->
             <div class="intel-hub-pane active" id="hubPaneLink">
-                <div class="intel-hub-input-row">
-                    <input type="text"
-                           class="intel-input"
-                           id="urlInput"
-                           placeholder="Paste a YouTube video, playlist (max 15), or article URL..."
-                           autocomplete="off"
-                           spellcheck="false"
-                           autofocus
-                           onkeydown="if(event.key==='Enter')ingestFromHome()">
-                    <button class="intel-hub-submit" id="ingestBtn" onclick="ingestFromHome()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                            <polyline points="12 5 19 12 12 19"/>
-                        </svg>
-                    </button>
+                <input type="text"
+                       class="intel-hub-link-input"
+                       id="urlInput"
+                       placeholder="Paste a YouTube video, playlist, or article URL..."
+                       oninput="checkPlaylistHint(this.value)"
+                       autocomplete="off"
+                       spellcheck="false"
+                       autofocus
+                       onkeydown="if(event.key==='Enter')ingestFromHome()">
+                <!-- Playlist visibility hint (appears when playlist URL detected) -->
+                <div class="intel-playlist-hint" id="playlistHint" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <span>
+                        <strong>Playlist detected.</strong>
+                        We'll process up to 50 new videos — already-ingested ones are skipped automatically.
+                        Must be set to <strong>Unlisted</strong> (not Private) in YouTube.
+                        Large playlists may take 15–30 minutes.
+                    </span>
                 </div>
+                <button class="intel-hub-submit wide" id="ingestBtn" onclick="ingestFromHome()">
+                    Add to Knowledge Base
+                </button>
             </div>
 
             <!-- Upload pane -->
@@ -393,6 +720,9 @@
                 <input type="file" class="intel-file-input" id="homeFileInput"
                        accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp"
                        onchange="uploadFileFromHome(this.files[0])">
+                <button class="intel-hub-submit wide" id="homeUploadBtn" onclick="document.getElementById('homeFileInput').click()">
+                    Add to Knowledge Base
+                </button>
             </div>
 
             <!-- Text pane -->
@@ -406,24 +736,45 @@
                     Add to Knowledge Base
                 </button>
             </div>
+
+            <!-- Inline processing status (inside source hub) -->
+            <div class="intel-inline-status" id="statusCard" style="display:none"></div>
         </div>
 
-        <div class="intel-status" id="statusCard"></div>
+        {% if not domains %}
+        <div class="intel-how-it-works">
+            <div class="intel-step">
+                <div class="intel-step-num">1</div>
+                <div class="intel-step-title">Add a source</div>
+                <div class="intel-step-desc">Paste a YouTube link, article URL, or upload any document</div>
+            </div>
+            <div class="intel-step">
+                <div class="intel-step-num">2</div>
+                <div class="intel-step-title">AI extracts insights</div>
+                <div class="intel-step-desc">Every claim, technique, and concept gets structured automatically</div>
+            </div>
+            <div class="intel-step">
+                <div class="intel-step-num">3</div>
+                <div class="intel-step-title">Knowledge compounds</div>
+                <div class="intel-step-desc">Sources converge into a synthesized, queryable knowledge base</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     {% if domains %}
+    <div class="intel-domains-band">
     <div class="intel-domains-section">
         <div class="intel-section-header">
-            <h2 class="intel-section-title">Your Knowledge</h2>
+            <a href="{{ url_for('knowledge_page') }}" class="intel-section-title intel-section-title-link">Your Knowledge <span class="intel-section-arrow">&rsaquo;</span></a>
             <div style="display:flex;align-items:center;gap:12px;">
                 <span class="intel-section-count">{{ domains|length }} domain{{ 's' if domains|length != 1 else '' }}</span>
-                <a href="javascript:void(0)" onclick="openGraphView()" class="intel-reset-link">Graph</a>
                 <a href="javascript:void(0)" onclick="resetAllData()" class="intel-reset-link">Reset</a>
             </div>
         </div>
         <div class="intel-domains-grid">
             {% for d in domains %}
-            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in" style="animation-delay: {{ loop.index0 * 0.06 }}s">
+            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="intel-domain-card intel-animate-in {% if d.source_count >= 6 %}depth-deep{% elif d.source_count >= 3 %}depth-moderate{% else %}depth-thin{% endif %}" style="animation-delay: {{ loop.index0 * 0.06 }}s">
                 <span class="intel-domain-icon">{{ d.icon }}</span>
                 {% if d.parent_name %}<div class="intel-domain-parent">{{ d.parent_name }}</div>{% endif %}
                 <div class="intel-domain-name">{{ d.name }}</div>
@@ -448,6 +799,7 @@
             {% endfor %}
         </div>
     </div>
+    </div>
     {% else %}
     <div class="intel-empty">
         <div class="intel-empty-icon">📚</div>
@@ -461,6 +813,19 @@
     {% endif %}
 
 </div>
+
+<!-- Footer -->
+<footer class="intel-footer">
+    <div class="intel-footer-inner">
+        <div class="intel-footer-brand">
+            <span class="intel-footer-logo">distylme</span>
+            <span class="intel-footer-tagline">Your knowledge, distilled.</span>
+        </div>
+        <div class="intel-footer-links">
+            <span class="intel-footer-copy">&copy; 2026 distylme</span>
+        </div>
+    </div>
+</footer>
 
 <!-- Domain Context Menu -->
 <div class="intel-context-menu" id="domainContextMenu" style="display:none;">
@@ -487,6 +852,38 @@
 
 <script>
 // ══════════════════════════════════════════════════════════
+// Dark Mode Toggle
+// ══════════════════════════════════════════════════════════
+
+function toggleDarkMode() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('intel-theme', 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('intel-theme', 'dark');
+    }
+    _updateDarkModeIcon();
+}
+
+function _updateDarkModeIcon() {
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+        // Sun icon for "switch to light"
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+    } else {
+        // Moon icon for "switch to dark"
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    }
+}
+
+// Set correct icon on page load
+document.addEventListener('DOMContentLoaded', _updateDarkModeIcon);
+
+
 // Shared Utilities
 // ══════════════════════════════════════════════════════════
 
@@ -560,6 +957,7 @@ function submitTextFromHome() {
             showHomeStatus('error', 'Error', data.error, 0);
             contentInput.disabled = false;
             titleInput.disabled = false;
+            setTimeout(() => resetHomeInput(), 3000);
             return;
         }
         pollHomeStatus(data.video_id);
@@ -568,7 +966,15 @@ function submitTextFromHome() {
         showHomeStatus('error', 'Error', err.message, 0);
         contentInput.disabled = false;
         titleInput.disabled = false;
+        setTimeout(() => resetHomeInput(), 3000);
     });
+}
+
+function checkPlaylistHint(val) {
+    const hint = document.getElementById('playlistHint');
+    if (!hint) return;
+    const isPlaylist = /youtube\.com\/playlist\b.*[?&]list=/.test(val) && !/[?&]v=/.test(val);
+    hint.style.display = isPlaylist ? '' : 'none';
 }
 
 function ingestFromHome() {
@@ -580,8 +986,8 @@ function ingestFromHome() {
     }
 
     urlInput.disabled = true;
-    ingestBtn.disabled = true;
-    ingestBtn.innerHTML = '<div class="intel-spinner white"></div>';
+    _hideAllSubmitBtns();
+    showHomeStatus('processing', 'Starting...', 'Connecting...', 2);
 
     fetch('/api/ingest', {
         method: 'POST',
@@ -592,20 +998,20 @@ function ingestFromHome() {
     .then(data => {
         if (data.error) {
             showHomeStatus('error', 'Error', data.error, 0);
-            resetHomeInput();
+            setTimeout(() => resetHomeInput(), 3000);
             return;
         }
         if (data.status === 'already_exists') {
             showHomeStatus('complete', data.title || 'Source',
                 `Already in your knowledge base.`, 100, null, data.source_id);
-            resetHomeInput();
+            setTimeout(() => resetHomeInput(), 2000);
             return;
         }
         pollHomeStatus(data.video_id);
     })
     .catch(err => {
         showHomeStatus('error', 'Error', err.message, 0);
-        resetHomeInput();
+        setTimeout(() => resetHomeInput(), 3000);
     });
 }
 
@@ -625,12 +1031,14 @@ function uploadFileFromHome(file) {
     .then(data => {
         if (data.error) {
             showHomeStatus('error', 'Error', data.error, 0);
+            setTimeout(() => resetHomeInput(), 3000);
             return;
         }
         pollHomeStatus(data.video_id);
     })
     .catch(err => {
         showHomeStatus('error', 'Error', err.message, 0);
+        setTimeout(() => resetHomeInput(), 3000);
     });
 
     // Reset file input
@@ -656,7 +1064,7 @@ function pollHomeStatus(videoId) {
                     }, 1200);
                 } else if (data.status === 'error') {
                     clearInterval(interval);
-                    resetHomeInput();
+                    setTimeout(() => resetHomeInput(), 3000);
                 }
             })
             .catch(() => {
@@ -670,6 +1078,7 @@ function pollHomeStatus(videoId) {
 let _progressTarget = 0;
 let _progressCurrent = 0;
 let _progressTimer = null;
+let _driftTimer = null;
 
 function _startProgressTween() {
     if (_progressTimer) return;
@@ -677,113 +1086,125 @@ function _startProgressTween() {
         if (_progressCurrent >= _progressTarget) {
             clearInterval(_progressTimer);
             _progressTimer = null;
+            // Start drift once tween catches up — creates perception of continuous work
+            _startDrift();
             return;
         }
         _progressCurrent = Math.min(_progressCurrent + 1, _progressTarget);
-        _updateProgressDOM(_progressCurrent);
-    }, 60); // ~1% every 60ms for smooth visual
+        _updateProgressDOM(Math.round(_progressCurrent));
+    }, 60);
+}
+
+function _startDrift() {
+    if (_driftTimer) return;
+    _driftTimer = setInterval(() => {
+        // Drift 0.3% every 3 seconds — subtle forward motion during long API calls
+        // Never exceed 95% (leaves room for real completion) or go past target + 8
+        if (_progressCurrent >= 95 || _progressCurrent >= _progressTarget + 8) {
+            clearInterval(_driftTimer);
+            _driftTimer = null;
+            return;
+        }
+        _progressCurrent += 0.3;
+        _updateProgressDOM(Math.round(_progressCurrent));
+    }, 3000);
+}
+
+function _stopDrift() {
+    if (_driftTimer) { clearInterval(_driftTimer); _driftTimer = null; }
 }
 
 function _updateProgressDOM(pct) {
-    const circ = 125.66;
-    const offset = circ * (1 - pct / 100);
-    const ring = document.querySelector('.intel-ring-fill:not(.complete):not(.error)');
-    if (ring) ring.setAttribute('stroke-dashoffset', offset);
-    const pctEl = document.querySelector('.intel-ring-pct');
-    if (pctEl && !pctEl.querySelector('svg')) pctEl.textContent = pct + '%';
-    const fill = document.querySelector('.intel-progress-fill:not(.complete):not(.error)');
+    const pctEl = statusCard && statusCard.querySelector('.intel-inline-status-pct');
+    if (pctEl) pctEl.textContent = pct + '%';
+    const fill = statusCard && statusCard.querySelector('.intel-inline-status-fill:not(.complete):not(.error)');
     if (fill) fill.style.width = pct + '%';
+}
+
+function _hideAllSubmitBtns() {
+    if (ingestBtn) ingestBtn.style.display = 'none';
+    const upBtn = document.getElementById('homeUploadBtn');
+    if (upBtn) upBtn.style.display = 'none';
+    // Text pane button has no id — hide via pane query
+    const textPane = document.getElementById('hubPaneText');
+    if (textPane) {
+        const btn = textPane.querySelector('.intel-hub-submit');
+        if (btn) btn.style.display = 'none';
+    }
+}
+
+function _restoreAllSubmitBtns() {
+    if (ingestBtn) { ingestBtn.style.display = ''; ingestBtn.disabled = false; ingestBtn.textContent = 'Add to Knowledge Base'; }
+    const upBtn = document.getElementById('homeUploadBtn');
+    if (upBtn) { upBtn.style.display = ''; upBtn.disabled = false; }
+    const textPane = document.getElementById('hubPaneText');
+    if (textPane) {
+        const btn = textPane.querySelector('.intel-hub-submit');
+        if (btn) { btn.style.display = ''; btn.disabled = false; }
+    }
 }
 
 function showHomeStatus(status, title, step, progress, domain, sourceId) {
     if (!statusCard) return;
 
-    const circ = 125.66;  // 2 * π * 20
-
-    // For processing status: update existing DOM if card already exists (enables CSS transitions)
+    // For processing status: update existing DOM if already rendered (enables smooth transitions)
     if (status === 'processing') {
-        const existingCard = statusCard.querySelector('.intel-status-card');
-        const existingRing = statusCard.querySelector('.intel-ring-fill:not(.complete):not(.error)');
-
-        if (existingCard && existingRing) {
-            // Update step text and title only
-            const titleEl = statusCard.querySelector('.intel-status-title');
-            const stepEl = statusCard.querySelector('.intel-status-step');
-            if (titleEl) titleEl.textContent = title;
-            if (stepEl) stepEl.innerHTML = escapeHtml(step || '');
-
-            // Tween progress smoothly
+        const existing = statusCard.querySelector('.intel-inline-status-pct');
+        if (existing) {
+            const titleEl = statusCard.querySelector('.intel-inline-status-title');
+            const stepEl = statusCard.querySelector('.intel-inline-status-step');
+            if (titleEl) titleEl.textContent = title || 'Processing...';
+            if (stepEl) stepEl.textContent = step || '';
             _progressTarget = progress || 0;
+            _stopDrift();  // Stop drift when real progress arrives
             _startProgressTween();
             return;
         }
     }
 
-    // First render or non-processing status — build full card
     let fillClass = '';
-    let ringContent = '';
-    const offset = circ * (1 - (progress || 0) / 100);
+    let icon = '';
+    let pctText = (progress || 0) + '%';
+    let stepHtml = escapeHtml(step || '');
 
     if (status === 'processing') {
         _progressCurrent = progress || 0;
         _progressTarget = progress || 0;
-        fillClass = '';
-        ringContent = `
-            <div class="intel-progress-ring-wrapper">
-                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
-                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
-                    <circle class="intel-ring-fill" cx="24" cy="24" r="20"
-                        stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
-                </svg>
-                <span class="intel-ring-pct">${progress}%</span>
-            </div>`;
+        _hideAllSubmitBtns();
     } else if (status === 'complete' || status === 'already_exists') {
-        // Stop any running tween
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        _stopDrift();
         fillClass = 'complete';
-        ringContent = `
-            <div class="intel-progress-ring-wrapper">
-                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
-                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
-                    <circle class="intel-ring-fill complete" cx="24" cy="24" r="20"
-                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
-                </svg>
-                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
-            </div>`;
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#34c759"><polyline points="20 6 9 17 4 12"/></svg>';
+        pctText = '';
+        if (sourceId) {
+            stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+        }
     } else if (status === 'error') {
         if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        _stopDrift();
         fillClass = 'error';
-        ringContent = `
-            <div class="intel-progress-ring-wrapper">
-                <svg class="intel-progress-ring" width="48" height="48" viewBox="0 0 48 48">
-                    <circle class="intel-ring-bg" cx="24" cy="24" r="20"/>
-                    <circle class="intel-ring-fill error" cx="24" cy="24" r="20"
-                        stroke-dasharray="${circ}" stroke-dashoffset="0"/>
-                </svg>
-                <span class="intel-ring-pct"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
-            </div>`;
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:#ff3b30"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        pctText = '';
     }
 
-    let stepHtml = escapeHtml(step || '');
-    if (sourceId) {
-        stepHtml += ` <a class="intel-reprocess-link" onclick="reprocessFromHome(${sourceId})">Re-process with latest analysis</a>`;
+    // Build spinner for processing state
+    let statusIcon = icon;
+    if (status === 'processing' && !icon) {
+        statusIcon = '<div class="intel-status-spinner"></div>';
     }
 
     statusCard.innerHTML = `
-        <div class="intel-status-card">
-            <div class="intel-status-header">
-                ${ringContent}
-                <div class="intel-status-info">
-                    <div class="intel-status-title">${escapeHtml(title)}</div>
-                    <div class="intel-status-step">${stepHtml}</div>
-                </div>
-            </div>
-            <div class="intel-progress-track">
-                <div class="intel-progress-fill ${fillClass}" style="width: ${progress}%"></div>
-            </div>
+        <div class="intel-inline-status-header">
+            <span class="intel-inline-status-title">${statusIcon} ${escapeHtml(title || 'Processing...')}</span>
+            <span class="intel-inline-status-pct">${pctText}</span>
+        </div>
+        <div class="intel-inline-status-step">${stepHtml}</div>
+        <div class="intel-inline-status-track">
+            <div class="intel-inline-status-fill ${fillClass}" style="width: ${progress || 0}%"></div>
         </div>
     `;
-    statusCard.classList.add('active');
+    statusCard.style.display = '';
 }
 
 function reprocessFromHome(sourceId) {
@@ -801,11 +1222,12 @@ function reprocessFromHome(sourceId) {
 }
 
 function resetHomeInput() {
-    if (urlInput) urlInput.disabled = false;
-    if (ingestBtn) {
-        ingestBtn.disabled = false;
-        ingestBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
-    }
+    if (urlInput) { urlInput.disabled = false; urlInput.value = ''; }
+    _restoreAllSubmitBtns();
+    // Hide status card after a brief delay so user sees final state
+    setTimeout(() => {
+        if (statusCard) statusCard.style.display = 'none';
+    }, 300);
 }
 
 
@@ -1146,61 +1568,184 @@ function closeDomainModal() {
 
 // ── Admin Tools ──
 
-function backfillEmbeddings() {
-    const btn = document.getElementById('backfillBtn');
-    btn.disabled = true;
-    btn.textContent = 'Generating embeddings...';
-
-    fetch('/api/backfill-embeddings', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.textContent = data.error ? 'Error — try again' : `✓ ${data.message}`;
-            setTimeout(() => { btn.textContent = 'Backfill Embeddings'; }, 4000);
-        })
-        .catch(() => {
-            btn.disabled = false;
-            btn.textContent = 'Failed — try again';
-        });
-}
-
 function resetAllData() {
     if (!confirm('Delete ALL domains, sources, insights, and syntheses? This cannot be undone.')) return;
     if (!confirm('Are you sure? This will permanently erase your entire knowledge base.')) return;
     const btn = document.getElementById('resetBtn');
-    btn.disabled = true;
-    btn.textContent = 'Resetting...';
+    if (btn) { btn.disabled = true; btn.textContent = 'Resetting...'; }
     fetch('/api/reset-all', { method: 'POST' })
         .then(r => r.json())
         .then(d => {
             if (d.status === 'ok') window.location.href = '/';
-            else { alert(d.error || 'Reset failed'); btn.disabled = false; btn.textContent = 'Reset All Data'; }
+            else { alert(d.error || 'Reset failed'); if (btn) { btn.disabled = false; btn.textContent = 'Reset All Data'; } }
         })
-        .catch(() => { btn.disabled = false; btn.textContent = 'Reset failed'; });
+        .catch(() => { if (btn) { btn.disabled = false; btn.textContent = 'Reset failed'; } });
 }
 
 // ── Source Management ──
 
-function reprocessSource(sourceId, videoId) {
-    const item = document.getElementById(`source-${sourceId}`);
-    if (item) item.classList.add('processing');
+// On page load, clear any stale .processing spinners left from
+// previous reprocess attempts that completed while the page was stale.
+document.querySelectorAll('.intel-source-item.processing').forEach(el => {
+    el.classList.remove('processing');
+});
 
-    showSidebarStatus('Re-processing...');
+function showSourceDebug(sourceId) {
+    // Remove any existing debug popup
+    const existing = document.getElementById('source-debug-popup');
+    if (existing) existing.remove();
 
-    fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+    const popup = document.createElement('div');
+    popup.id = 'source-debug-popup';
+    popup.innerHTML = '<div class="debug-popup-content"><div class="debug-loading">Loading diagnostics...</div></div>';
+    document.body.appendChild(popup);
+    popup.addEventListener('click', function(e) {
+        if (e.target === popup) popup.remove();
+    });
+
+    fetch(`/api/source/${sourceId}/debug`)
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                hideSidebarStatus();
-                if (item) item.classList.remove('processing');
+                popup.querySelector('.debug-popup-content').innerHTML =
+                    `<div class="debug-header">Error</div><div class="debug-body">${data.error}</div>
+                     <button class="debug-close" onclick="this.closest('#source-debug-popup').remove()">Close</button>`;
                 return;
             }
-            pollSidebarStatus(data.video_id);
+            const errorHtml = data.error_message
+                ? `<div class="debug-section"><div class="debug-label">Error Details</div><pre class="debug-error">${escapeHtml(data.error_message)}</pre></div>`
+                : `<div class="debug-section"><div class="debug-label">Error Details</div><div class="debug-value" style="color:#999">No error recorded — re-process to capture diagnostics</div></div>`;
+            popup.querySelector('.debug-popup-content').innerHTML = `
+                <div class="debug-header">Diagnostic: ${escapeHtml(data.title || 'Unknown')}</div>
+                <div class="debug-body">
+                    <div class="debug-section">
+                        <div class="debug-label">Source</div>
+                        <div class="debug-value">${escapeHtml(data.channel || '')} &middot; ${data.source_type || 'unknown'} &middot; ID: ${data.source_id}</div>
+                    </div>
+                    <div class="debug-section">
+                        <div class="debug-label">Transcript</div>
+                        <div class="debug-value">${data.transcript_word_count} words &middot; ${data.chunk_count} chunk${data.chunk_count !== 1 ? 's' : ''}${data.chunk_sizes ? ' (' + data.chunk_sizes.join(', ') + ' words)' : ''}</div>
+                    </div>
+                    ${data.transcript_preview ? `<div class="debug-section"><div class="debug-label">Transcript Preview</div><pre class="debug-transcript">${escapeHtml(data.transcript_preview)}</pre></div>` : ''}
+                    ${errorHtml}
+                    <div class="debug-section">
+                        <div class="debug-label">Domain</div>
+                        <div class="debug-value">${escapeHtml(data.domain || 'Not assigned')}</div>
+                    </div>
+                    <div class="debug-section">
+                        <div class="debug-label">Insights</div>
+                        <div class="debug-value">${data.insight_count} extracted &middot; Status: ${data.status}</div>
+                    </div>
+                </div>
+                <button class="debug-close" onclick="this.closest('#source-debug-popup').remove()">Close</button>
+            `;
         })
-        .catch(() => {
+        .catch(err => {
+            popup.querySelector('.debug-popup-content').innerHTML =
+                `<div class="debug-header">Error</div><div class="debug-body">Failed to load: ${err.message}</div>
+                 <button class="debug-close" onclick="this.closest('#source-debug-popup').remove()">Close</button>`;
+        });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ── Reprocess queue: collects rapid clicks, dispatches as batch ──
+let _reprocessQueue = [];
+let _reprocessDebounce = null;
+
+function reprocessSource(sourceId, videoId) {
+    const item = document.getElementById(`source-${sourceId}`);
+    if (item) item.classList.add('processing');
+    _reprocessQueue.push({ sourceId, videoId });
+
+    // Debounce 600ms to collect multiple rapid clicks
+    if (_reprocessDebounce) clearTimeout(_reprocessDebounce);
+    _reprocessDebounce = setTimeout(_flushReprocessQueue, 600);
+}
+
+function reclassifySource(sourceId, videoId) {
+    const item = document.getElementById(`source-${sourceId}`);
+    if (item) item.classList.add('processing');
+    showSidebarStatus('Re-classifying domain...');
+    fetch(`/api/reprocess/${sourceId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reclassify: true })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
             hideSidebarStatus();
             if (item) item.classList.remove('processing');
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(() => {
+        hideSidebarStatus();
+        if (item) item.classList.remove('processing');
+    });
+}
+
+function _flushReprocessQueue() {
+    const queue = [..._reprocessQueue];
+    _reprocessQueue = [];
+    _reprocessDebounce = null;
+    if (queue.length === 0) return;
+
+    if (queue.length === 1) {
+        // Single source — use existing endpoint (no overhead)
+        const { sourceId, videoId } = queue[0];
+        showSidebarStatus('Re-processing...');
+        fetch(`/api/reprocess/${sourceId}`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    hideSidebarStatus();
+                    const item = document.getElementById(`source-${sourceId}`);
+                    if (item) item.classList.remove('processing');
+                    return;
+                }
+                pollSidebarStatus(data.video_id);
+            })
+            .catch(() => {
+                hideSidebarStatus();
+                const item = document.getElementById(`source-${sourceId}`);
+                if (item) item.classList.remove('processing');
+            });
+        return;
+    }
+
+    // Multiple sources — use batch endpoint
+    showSidebarStatus(`Re-processing ${queue.length} sources...`, 5);
+    fetch('/api/reprocess-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_ids: queue.map(q => q.sourceId) })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            hideSidebarStatus();
+            queue.forEach(q => {
+                const item = document.getElementById(`source-${q.sourceId}`);
+                if (item) item.classList.remove('processing');
+            });
+            return;
+        }
+        pollSidebarStatus(data.video_id);
+    })
+    .catch(() => {
+        hideSidebarStatus();
+        queue.forEach(q => {
+            const item = document.getElementById(`source-${q.sourceId}`);
+            if (item) item.classList.remove('processing');
         });
+    });
 }
 
 function showDeleteConfirm(sourceId) {
@@ -1312,9 +1857,12 @@ if (dropZone) {
 })();
 
 // TLDR-first: split TLDR from full brief, collapse detailed content
+// Level-0 parent domains show aggregated child TLDRs — no collapsing needed
 (function() {
     const el = document.getElementById('synthesisContent');
     if (!el) return;
+    // Level-0 parent domains: content is already aggregated TLDRs, no split needed
+    if (el.dataset.level === '0') return;
     const h2s = el.querySelectorAll('h2');
     if (h2s.length < 2) return;
 
@@ -1411,18 +1959,49 @@ function generateVisual() {
         });
 }
 
-// Show suggested questions when user starts typing
+// Show/hide clear button + fade out answer when input is cleared
 function onSearchInput() {
     const input = document.getElementById('searchInput');
-    const suggestedEl = document.getElementById('suggestedQuestions');
-    if (!suggestedEl) return;
+    const clearBtn = document.getElementById('searchClear');
+    const shortcutHint = document.getElementById('searchShortcut');
+    const hasText = input && input.value.trim().length > 0;
 
-    if (input && input.value.trim().length > 0) {
-        suggestedEl.style.display = 'flex';
-    } else {
-        suggestedEl.style.display = 'none';
+    // Toggle clear button visibility
+    if (clearBtn) clearBtn.classList.toggle('visible', hasText);
+    // Hide shortcut hint when typing
+    if (shortcutHint) shortcutHint.style.display = hasText ? 'none' : '';
+    // Hide/show suggested questions
+    const suggestedEl = document.getElementById('suggestedQuestions');
+    if (suggestedEl) suggestedEl.style.display = hasText ? 'none' : '';
+
+    // When input is cleared, fade out the answer and restore suggested questions
+    if (!hasText) {
+        const answerEl = document.getElementById('searchAnswer');
+        if (answerEl && answerEl.style.display !== 'none') {
+            answerEl.classList.add('fading');
+            setTimeout(() => {
+                answerEl.style.display = 'none';
+                answerEl.classList.remove('fading');
+            }, 300);
+        }
     }
 }
+
+// Clear search input, answer, and restore default state
+function clearSearch() {
+    const input = document.getElementById('searchInput');
+    if (input) { input.value = ''; input.focus(); }
+    onSearchInput(); // triggers fade-out + clear button hide
+}
+
+// Keyboard shortcut: Cmd/Ctrl+K to focus search
+document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('searchInput');
+        if (input) { input.focus(); input.select(); }
+    }
+});
 
 // ══════════════════════════════════════════════════════════
 // AI Search (SafetyWing-style inline answers)
@@ -1438,6 +2017,9 @@ function askQuestion(questionText) {
 
     // Set input value if from suggested question
     if (input && questionText) input.value = questionText;
+    // Hide suggested questions
+    const suggestedEl = document.getElementById('suggestedQuestions');
+    if (suggestedEl) suggestedEl.style.display = 'none';
 
     const answerEl = document.getElementById('searchAnswer');
     const contentEl = document.getElementById('searchAnswerContent');
@@ -1450,10 +2032,6 @@ function askQuestion(questionText) {
     loadingEl.style.display = 'flex';
     if (btn) btn.disabled = true;
     if (input) input.disabled = true;
-
-    // Hide suggested questions after first use
-    const suggestedEl = document.getElementById('suggestedQuestions');
-    if (suggestedEl) suggestedEl.style.display = 'none';
 
     fetch('/api/query', {
         method: 'POST',
@@ -1472,13 +2050,23 @@ function askQuestion(questionText) {
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-        // Convert markdown-style lists and paragraphs
+        // Convert markdown-style headings, lists, and paragraphs
         const lines = html.split('\n');
         let inList = false;
         let processed = '';
         for (const line of lines) {
             const trimmed = line.trim();
-            if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+            // Headings
+            if (trimmed.startsWith('### ')) {
+                if (inList) { processed += '</ul>'; inList = false; }
+                processed += `<h4>${trimmed.slice(4)}</h4>`;
+            } else if (trimmed.startsWith('## ')) {
+                if (inList) { processed += '</ul>'; inList = false; }
+                processed += `<h3>${trimmed.slice(3)}</h3>`;
+            } else if (trimmed.startsWith('# ')) {
+                if (inList) { processed += '</ul>'; inList = false; }
+                processed += `<h2>${trimmed.slice(2)}</h2>`;
+            } else if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
                 if (!inList) { processed += '<ul>'; inList = true; }
                 processed += `<li>${trimmed.slice(2)}</li>`;
             } else if (/^\d+\.\s/.test(trimmed)) {
@@ -1520,7 +2108,7 @@ function askQuestion(questionText) {
 <!-- Knowledge Graph Overlay -->
 <div id="graphOverlay" style="display:none;position:fixed;inset:0;background:#080b12;z-index:1000;flex-direction:column;">
     <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
-        <button onclick="closeGraphView()" style="display:flex;align-items:center;gap:6px;color:#94a3b8;background:rgba(255,255,255,0.08);border:none;font-size:13px;cursor:pointer;padding:6px 14px;border-radius:20px;font-family:inherit;transition:all 0.2s;letter-spacing:0.3px;" onmouseenter="this.style.background='rgba(255,255,255,0.15)';this.style.color='#e2e8f0'" onmouseleave="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8'">&larr; Back</button>
+        <button onclick="closeGraphView()" class="intel-graph-back-btn">&larr; Back</button>
         <span id="graphNodeCount" style="font-size:11px;color:#334155;"></span>
     </div>
     <div id="graphContainer" style="flex:1;width:100%;position:relative;"></div>
@@ -1553,7 +2141,36 @@ function openGraphView() {
     }
 }
 
+function _showGraphNodeDetail(node) {
+    let detail = document.getElementById('graphNodeDetail');
+    if (!detail) {
+        detail = document.createElement('div');
+        detail.id = 'graphNodeDetail';
+        detail.style.cssText = 'position:absolute;bottom:20px;left:20px;width:320px;max-height:240px;background:rgba(15,20,30,0.95);border:1px solid rgba(148,163,184,0.2);border-radius:12px;padding:16px 18px;color:#e2e8f0;font-family:Inter,-apple-system,sans-serif;font-size:13px;overflow-y:auto;z-index:10;backdrop-filter:blur(8px);';
+        document.getElementById('graphOverlay').appendChild(detail);
+    }
+    const levelLabel = node.level === 0 ? 'Category' : node.level === 1 ? 'Domain' : 'Sub-topic';
+    const depth = (node.sources || 0) >= 6 ? 'Deep' : (node.sources || 0) >= 3 ? 'Moderate' : 'Thin';
+    const depthColor = depth === 'Deep' ? '#c4a46c' : depth === 'Moderate' ? '#94a3b8' : '#64748b';
+    detail.innerHTML = `
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:4px;">${levelLabel}</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px;">${node.name}</div>
+        <div style="display:flex;gap:12px;font-size:11px;color:#94a3b8;margin-bottom:10px;">
+            <span>${node.sources || 0} sources</span>
+            <span>${node.insights || 0} insights</span>
+            <span style="color:${depthColor}">● ${depth} coverage</span>
+        </div>
+        <button onclick="closeGraphView();window.location.href='/domain/'+encodeURIComponent('${node.name.replace(/'/g, "\\'")}')"
+                style="width:100%;padding:8px;font-size:12px;font-weight:500;color:#c4b5fd;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);border-radius:8px;cursor:pointer;font-family:inherit;">
+            Open Knowledge Base →
+        </button>
+    `;
+    detail.style.display = 'block';
+}
+
 function closeGraphView() {
+    const detail = document.getElementById('graphNodeDetail');
+    if (detail) detail.style.display = 'none';
     document.getElementById('graphOverlay').style.display = 'none';
     document.removeEventListener('keydown', _graphKeyHandler);
 }
@@ -1600,42 +2217,71 @@ async function _renderGraph() {
         countEl.textContent = domainCount + ' domains · ' + sourceCount + ' sources';
     }
 
-    // ── Color palette — violet accent (kept per user preference) ──
+    // ── Color palette — cluster colors per category ──
+    const clusterPalette = [
+        '#a78bfa', // violet
+        '#60a5fa', // blue
+        '#34d399', // emerald
+        '#fbbf24', // amber
+        '#f87171', // red
+        '#a78bfa', // violet (repeat)
+        '#38bdf8', // sky
+        '#fb923c', // orange
+    ];
+    // Map each category (level-0) to a cluster color
+    const catColorMap = {};
+    let _catIdx = 0;
+    _graphData.nodes.filter(n => n.type === 'domain' && n.level === 0).forEach(n => {
+        catColorMap[n.id] = clusterPalette[_catIdx % clusterPalette.length];
+        _catIdx++;
+    });
+    // Build O(1) lookup map for parent resolution
+    const nodeById = Object.fromEntries(_graphData.nodes.map(n => [n.id, n]));
+    // Map each domain to its category color
+    function getClusterColor(n) {
+        if (n.type === 'source') return '#475569';
+        if (n.level === 0) return catColorMap[n.id] || '#a78bfa';
+        // Level-1: check parent in catColorMap
+        if (n.parentId && catColorMap[n.parentId]) return catColorMap[n.parentId];
+        // Level-2: check grandparent
+        const parent = nodeById[n.parentId];
+        if (parent && parent.parentId && catColorMap[parent.parentId]) return catColorMap[parent.parentId];
+        // Fallback: assign a stable color per parent group (or per domain if orphan)
+        const key = n.parentId || n.id;
+        if (!catColorMap[key]) {
+            catColorMap[key] = clusterPalette[_catIdx % clusterPalette.length];
+            _catIdx++;
+        }
+        return catColorMap[key];
+    }
+
     const C = {
-        // Domain nodes by level
-        domainCategory: '#a78bfa',  // violet-400
-        domain:         '#7c3aed',  // violet-600
-        domainSub:      '#5b21b6',  // violet-800
         // Source nodes
         source:         '#475569',  // slate-600
         // Hover
         hover:          '#c4b5fd',  // violet-300
         // Lines
-        line:           'rgba(100, 116, 139, 0.12)',
-        lineRef:        'rgba(167, 139, 250, 0.2)',
+        line:           'rgba(100, 116, 139, 0.15)',
+        lineRef:        'rgba(167, 139, 250, 0.25)',
+        lineConceptual: 'rgba(196, 164, 108, 0.25)',
+        lineConceptualActive: 'rgba(196, 164, 108, 0.6)',
         lineSource:     'rgba(100, 116, 139, 0.08)',
         lineActive:     'rgba(196, 181, 253, 0.6)',
         lineActiveGrey: 'rgba(148, 163, 184, 0.35)',
         lineDim:        'rgba(100, 116, 139, 0.03)',
     };
 
-    // ── Node sizing — Quartz-inspired: 2 + sqrt(links) ──
+    // ── Node sizing — level-based with source count influence ──
     function nodeRadius(n) {
-        if (n.type === 'source') return 1.8;
-        // Domain nodes: count connections in the graph
-        const links = _graphData.edges.filter(
-            e => e.source === n.id || e.target === n.id ||
-                 (typeof e.source === 'object' && e.source.id === n.id) ||
-                 (typeof e.target === 'object' && e.target.id === n.id)
-        ).length;
-        return 2 + Math.sqrt(links);
+        if (n.type === 'source') return 2;
+        const sources = n.sources || 0;
+        if (n.level === 0) return 6 + Math.sqrt(sources) * 0.8;  // Categories: large
+        if (n.level === 2) return 3 + Math.sqrt(sources) * 0.3;  // Sub-topics: small
+        return 4 + Math.sqrt(sources) * 0.5;                     // Domains: medium
     }
 
     function nodeColor(n) {
-        if (n.type === 'source') return C.source;
-        if (n.level === 0) return C.domainCategory;
-        if (n.level === 2) return C.domainSub;
-        return C.domain;
+        return getClusterColor(n);
     }
 
     // Truncate long source titles
@@ -1669,7 +2315,12 @@ async function _renderGraph() {
         .nodeLabel('')
         .nodeCanvasObjectMode(() => 'replace')
         .nodeCanvasObject((node, ctx, globalScale) => {
-            const r = nodeRadius(node);
+            // Breathing pulse — each node oscillates at its own phase
+            const t = performance.now() / 1000;
+            const phase = typeof node.id === 'string' ? node.id.length * 2.3 : node.id * 1.7;
+            const breathe = 1 + Math.sin(t * 0.8 + phase) * 0.08;
+            const r = nodeRadius(node) * breathe;
+
             const isHovered = _hoveredNode && _hoveredNode.id === node.id;
             const isNeighbor = _neighborSet && _neighborSet.has(node.id);
             const isDimmed = _hoveredNode && !isHovered && !isNeighbor;
@@ -1677,7 +2328,19 @@ async function _renderGraph() {
             // Quartz dim: 0.2 opacity for non-neighbors
             ctx.globalAlpha = isDimmed ? 0.2 : 1;
 
-            // Glow effect on hover/neighbor (violet bloom — kept per user preference)
+            // Ambient glow on all domain nodes (subtle light emission)
+            if (node.type !== 'source' && !isDimmed) {
+                const ambientR = r * 3;
+                const ambientGrad = ctx.createRadialGradient(node.x, node.y, r, node.x, node.y, ambientR);
+                ambientGrad.addColorStop(0, nodeColor(node) + '18');
+                ambientGrad.addColorStop(1, nodeColor(node) + '00');
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, ambientR, 0, 2 * Math.PI);
+                ctx.fillStyle = ambientGrad;
+                ctx.fill();
+            }
+
+            // Stronger glow on hover/neighbor
             if ((isHovered || isNeighbor) && !isDimmed) {
                 const glowR = r * (isHovered ? 7 : 4);
                 const grad = ctx.createRadialGradient(node.x, node.y, r * 0.3, node.x, node.y, glowR);
@@ -1724,37 +2387,37 @@ async function _renderGraph() {
             ctx.fillStyle = color;
             ctx.fill();
         })
-        .linkCanvasObjectMode(() => 'replace')
-        .linkCanvasObject((link, ctx) => {
+        // Native link rendering (enables built-in directional particles)
+        .linkColor(link => {
             const sid = typeof link.source === 'object' ? link.source.id : link.source;
             const tid = typeof link.target === 'object' ? link.target.id : link.target;
-            const sx = link.source.x, sy = link.source.y;
-            const tx = link.target.x, ty = link.target.y;
-            if (sx === undefined || tx === undefined) return;
-
             const isHighlighted = _hoveredNode && _neighborSet &&
                 (_neighborSet.has(sid) && _neighborSet.has(tid)) &&
                 (_hoveredNode.id === sid || _hoveredNode.id === tid);
             const isDimmed = _hoveredNode && !isHighlighted;
             const isRef = link.type === 'reference';
             const isSrc = link.type === 'source';
-
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.lineTo(tx, ty);
-
-            if (isHighlighted) {
-                ctx.strokeStyle = isRef ? C.lineActive : C.lineActiveGrey;
-                ctx.lineWidth = 1;
-            } else if (isDimmed) {
-                ctx.strokeStyle = C.lineDim;
-                ctx.lineWidth = 0.3;
-            } else {
-                ctx.strokeStyle = isRef ? C.lineRef : isSrc ? C.lineSource : C.line;
-                ctx.lineWidth = 1;
-            }
-
-            ctx.stroke();
+            const isConcept = link.type === 'conceptual';
+            if (isHighlighted) return isConcept ? C.lineConceptualActive : isRef ? C.lineActive : C.lineActiveGrey;
+            if (isDimmed) return C.lineDim;
+            return isConcept ? C.lineConceptual : isRef ? C.lineRef : isSrc ? C.lineSource : C.line;
+        })
+        .linkWidth(link => {
+            const sid = typeof link.source === 'object' ? link.source.id : link.source;
+            const tid = typeof link.target === 'object' ? link.target.id : link.target;
+            const isHighlighted = _hoveredNode && _neighborSet &&
+                (_neighborSet.has(sid) && _neighborSet.has(tid)) &&
+                (_hoveredNode.id === sid || _hoveredNode.id === tid);
+            const baseWidth = link.type === 'reference' ? 1.5 : link.type === 'hierarchy' ? 1.2 : link.type === 'conceptual' ? 1.0 : 0.5;
+            return isHighlighted ? baseWidth * 2 : baseWidth;
+        })
+        .linkLineDash(link => link.type === 'reference' ? [4, 2] : link.type === 'conceptual' ? [2, 3] : null)
+        // Flowing particles along edges — signature Quid/NetBase effect
+        .linkDirectionalParticles(link => link.type === 'reference' ? 3 : link.type === 'source' ? 1 : 2)
+        .linkDirectionalParticleSpeed(0.003)
+        .linkDirectionalParticleWidth(1.2)
+        .linkDirectionalParticleColor(link => {
+            return link.type === 'reference' ? 'rgba(167, 139, 250, 0.5)' : 'rgba(148, 163, 184, 0.3)';
         })
         .onNodeHover(node => {
             container.style.cursor = node ? 'pointer' : 'default';
@@ -1769,37 +2432,48 @@ async function _renderGraph() {
         .onNodeClick(node => {
             if (!node) return;
             if (node.type === 'source' && node.url) {
-                // Source node → open source URL in new tab
                 window.open(node.url, '_blank');
             } else {
-                // Domain node (any level) → navigate to domain page
-                // Use node.id directly — domain IDs are integers,
-                // source IDs start with "s-" (handled above)
-                closeGraphView();
-                window.location.href = '/domain/' + node.id;
+                // Domain node → show info panel, double-click navigates
+                _showGraphNodeDetail(node);
             }
         })
-        // Quartz-inspired physics
-        .d3AlphaDecay(0.015)
-        .d3VelocityDecay(0.25)
-        .warmupTicks(0)
-        .cooldownTime(6000);
+        .onBackgroundClick(() => {
+            const detail = document.getElementById('graphNodeDetail');
+            if (detail) detail.style.display = 'none';
+        })
+        // Physics: converge then settle with gentle drift
+        .d3AlphaDecay(0.02)
+        .d3AlphaMin(0.005)
+        .d3VelocityDecay(0.45)
+        .warmupTicks(60)
+        .cooldownTicks(300)
+        .cooldownTime(5000);
 
-    // Quartz force parameters: charge -50, center 0.2, link distance 30, collide
-    _graphInstance.d3Force('charge').strength(-80);
-    _graphInstance.d3Force('link').distance(30);
-    _graphInstance.d3Force('center').strength(0.3);
+    // Force parameters: tighter layout with strong centering
+    _graphInstance.d3Force('charge').strength(-40);
+    _graphInstance.d3Force('link').distance(link => {
+        if (link.type === 'hierarchy') return 25;
+        if (link.type === 'conceptual') return 50;
+        if (link.type === 'source') return 15;
+        return 35;
+    });
+    _graphInstance.d3Force('center').strength(0.8);
     // Add collide force to prevent node overlap
     if (window.d3) {
-        _graphInstance.d3Force('collide', d3.forceCollide(n => nodeRadius(n) + 1).iterations(3));
+        _graphInstance.d3Force('collide', d3.forceCollide(n => nodeRadius(n) + 2).iterations(3));
+        // Cluster force: group nodes by parent category
+        _graphInstance.d3Force('cluster', d3.forceManyBody().strength(n => {
+            return n.type === 'source' ? -2 : -15;
+        }));
     }
 
-    // Kick the simulation with high alpha for the expanding animation
+    // Zoom to fit all nodes after simulation settles
     setTimeout(() => {
         if (_graphInstance) {
-            _graphInstance.d3ReheatSimulation();
+            _graphInstance.zoomToFit(600, 60);
         }
-    }, 50);
+    }, 1500);
 
     // Handle resize
     window.addEventListener('resize', () => {

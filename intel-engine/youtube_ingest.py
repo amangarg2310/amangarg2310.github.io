@@ -106,7 +106,14 @@ def _extract_text(transcript) -> str:
 
 def _fetch_transcript_supadata(video_id: str) -> str:
     """Fetch transcript via Supadata.ai free API (100 req/month free, no proxy needed)."""
-    api_key = os.environ.get('SUPADATA_API_KEY', '').strip()
+    # Try DB-stored key first (from setup page), then env var
+    try:
+        import config as _cfg
+        api_key = _cfg.get_api_key('supadata')
+    except Exception:
+        api_key = ''
+    if not api_key:
+        api_key = os.environ.get('SUPADATA_API_KEY', '').strip()
     if not api_key:
         return ""
 
@@ -216,13 +223,17 @@ def ingest_video(url: str) -> VideoMeta:
     transcript = fetch_transcript(video_id)
 
     if not transcript:
-        has_supadata = bool(os.environ.get('SUPADATA_API_KEY', '').strip())
+        # Check if Supadata key is configured (DB or env var)
+        try:
+            import config as _cfg
+            has_supadata = bool(_cfg.get_api_key('supadata'))
+        except Exception:
+            has_supadata = bool(os.environ.get('SUPADATA_API_KEY', '').strip())
         has_proxy = bool(os.environ.get('WEBSHARE_PROXY_USERNAME', '').strip())
         if not has_supadata and not has_proxy:
             raise ValueError(
                 "YouTube is blocking transcript requests from this server. "
-                "Set SUPADATA_API_KEY env var (free at supadata.ai, 100 videos/month) "
-                "to fix this."
+                "Add a Supadata API key in Settings (free at supadata.ai, 100 videos/month)."
             )
         raise ValueError(f"No transcript available for video: {video_id}")
 
@@ -244,10 +255,30 @@ def extract_playlist_id(url: str) -> Optional[str]:
 
 
 def fetch_playlist_videos(playlist_id: str) -> list[dict]:
-    """Fetch video IDs and titles from a YouTube playlist via RSS feed (no API key needed).
+    """Fetch video IDs and titles from a YouTube playlist.
 
-    Returns up to ~15 most recent videos (YouTube RSS limit).
+    Strategy:
+    1. Try RSS feed (fast, no JS, works for channel upload playlists — returns ~15 max)
+    2. Fall back to scraping playlist page HTML (gets all videos in playlist)
+
+    Returns all videos found. Caller is responsible for applying caps and dedup filtering.
     """
+    # Strategy 1: RSS feed (fast, works for channel upload playlists)
+    videos = _fetch_playlist_rss(playlist_id)
+    if videos:
+        return videos
+
+    # Strategy 2: Scrape playlist page HTML (works for public/unlisted user playlists)
+    # Note: _fetch_playlist_html raises ValueError with clear message for private playlists
+    videos = _fetch_playlist_html(playlist_id)
+    if videos:
+        return videos
+
+    raise ValueError("No videos found in playlist. It may be empty or unavailable.")
+
+
+def _fetch_playlist_rss(playlist_id: str) -> list[dict]:
+    """Try fetching playlist via RSS/Atom feed (works for channel upload playlists)."""
     import xml.etree.ElementTree as ET
 
     rss_url = f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}"
@@ -257,12 +288,9 @@ def fetch_playlist_videos(playlist_id: str) -> list[dict]:
         })
         with urllib.request.urlopen(req, timeout=20) as resp:
             xml_data = resp.read().decode()
-    except urllib.error.HTTPError as e:
-        raise ValueError(f"Could not fetch playlist (HTTP {e.code}). Check the playlist URL or ensure it's public.")
-    except Exception as e:
-        raise ValueError(f"Failed to fetch playlist RSS: {e}")
+    except Exception:
+        return []
 
-    # Parse Atom XML feed
     ns = {
         'atom': 'http://www.w3.org/2005/Atom',
         'yt': 'http://www.youtube.com/xml/schemas/2015',
@@ -278,13 +306,266 @@ def fetch_playlist_videos(playlist_id: str) -> list[dict]:
                 'video_id': vid_el.text,
                 'title': title_el.text if title_el is not None else 'Untitled',
             })
-    if not videos:
-        raise ValueError("No videos found in playlist. It may be empty or private.")
     return videos
 
 
-def chunk_transcript(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
-    """Split transcript into overlapping chunks for processing."""
+def _fetch_playlist_html(playlist_id: str) -> list[dict]:
+    """Scrape playlist page HTML for video IDs and titles (fallback for user-created playlists).
+
+    Only works for Public or Unlisted playlists — Private playlists require authentication.
+    """
+    url = f"https://www.youtube.com/playlist?list={playlist_id}"
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            html = resp.read().decode('utf-8', errors='replace')
+    except Exception as e:
+        logger.warning(f"Failed to fetch playlist page: {e}")
+        return []
+
+    # Detect private playlist from page alerts
+    if '"This playlist is private"' in html or '"PLAYLIST_PRIVATE"' in html:
+        raise ValueError(
+            "This playlist is private. Change it to Unlisted in YouTube (only people with the link can see it — it won't appear in search) and try again."
+        )
+
+    # Extract ytInitialData JSON — find the start marker and brace-match to get full object
+    data = _extract_yt_initial_data(html)
+    if data is None:
+        # Fallback: extract video IDs directly with regex
+        return _extract_video_ids_regex(html)
+
+    # Navigate the nested JSON structure to find playlist video renderers
+    videos = _extract_from_yt_data(data)
+    if not videos:
+        # Fallback: regex extraction
+        videos = _extract_video_ids_regex(html)
+
+    return videos
+
+
+def _extract_yt_initial_data(html: str) -> dict | None:
+    """Extract ytInitialData JSON from YouTube page HTML using brace matching."""
+    marker = 'var ytInitialData = '
+    start = html.find(marker)
+    if start == -1:
+        marker = 'ytInitialData = '
+        start = html.find(marker)
+    if start == -1:
+        return None
+
+    start += len(marker)
+
+    # Brace-match to find the full JSON object
+    depth = 0
+    in_string = False
+    escape = False
+    end = start
+    for i in range(start, min(start + 2_000_000, len(html))):
+        c = html[i]
+        if escape:
+            escape = False
+            continue
+        if c == '\\' and in_string:
+            escape = True
+            continue
+        if c == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    else:
+        return None
+
+    try:
+        return json.loads(html[start:end])
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse ytInitialData JSON")
+        return None
+
+
+def _extract_from_yt_data(data: dict) -> list[dict]:
+    """Extract video IDs and titles from parsed ytInitialData."""
+    videos = []
+    try:
+        tabs = data.get('contents', {}).get('twoColumnBrowseResultsRenderer', {}).get('tabs', [])
+        for tab in tabs:
+            tab_content = tab.get('tabRenderer', {}).get('content', {})
+            section_list = tab_content.get('sectionListRenderer', {}).get('contents', [])
+            for section in section_list:
+                items = (section.get('itemSectionRenderer', {})
+                        .get('contents', [{}])[0]
+                        .get('playlistVideoListRenderer', {})
+                        .get('contents', []))
+                for item in items:
+                    renderer = item.get('playlistVideoRenderer', {})
+                    vid = renderer.get('videoId')
+                    title_runs = renderer.get('title', {}).get('runs', [])
+                    title = title_runs[0].get('text', 'Untitled') if title_runs else 'Untitled'
+                    if vid:
+                        videos.append({'video_id': vid, 'title': title})
+    except (KeyError, IndexError, TypeError) as e:
+        logger.warning(f"Failed to extract videos from ytInitialData: {e}")
+    return videos
+
+
+def _extract_video_ids_regex(html: str) -> list[dict]:
+    """Last-resort: extract video IDs from raw HTML via regex patterns."""
+    seen = set()
+    videos = []
+    # Match "videoId":"XXXXXXXXXXX" patterns
+    for match in re.finditer(r'"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"', html):
+        vid = match.group(1)
+        if vid not in seen:
+            seen.add(vid)
+            videos.append({'video_id': vid, 'title': 'Untitled'})
+    # Try to backfill titles from "title":{"runs":[{"text":"..."}]} near each videoId
+    for v in videos:
+        pattern = rf'"videoId"\s*:\s*"{re.escape(v["video_id"])}".*?"title"\s*:\s*\{{"runs"\s*:\s*\[\{{"text"\s*:\s*"([^"]+)"'
+        title_match = re.search(pattern, html[:500000])
+        if title_match:
+            v['title'] = title_match.group(1)
+    return videos
+
+
+def chunk_transcript(transcript: str, max_tokens: int = 4500, overlap: int = 200) -> list[str]:
+    """Split transcript into topic-coherent chunks using sentence boundaries.
+
+    Uses a two-pass approach:
+    1. Split into sentences
+    2. Group sentences into chunks that respect topic boundaries by detecting
+       vocabulary shifts between sentence groups
+    3. Fall back to word-based chunking if sentence splitting fails
+    """
+    # Split into sentences (handles ., !, ?, and common abbreviations)
+    sentences = _split_sentences(transcript)
+    if len(sentences) < 3:
+        # Too few sentences — use simple word-based chunking
+        return _chunk_by_words(transcript, max_tokens, overlap)
+
+    max_words = int(max_tokens * 1.3)
+    overlap_words = int(overlap * 1.3)
+
+    # Calculate cumulative word counts per sentence
+    sentence_words = [len(s.split()) for s in sentences]
+    total_words = sum(sentence_words)
+
+    if total_words <= max_words:
+        return [transcript]
+
+    # Score each sentence boundary for topic shift using vocabulary overlap
+    shift_scores = _compute_topic_shifts(sentences, window=3)
+
+    # Build chunks respecting topic boundaries
+    chunks = []
+    current_start = 0
+    current_words = 0
+
+    for i, s in enumerate(sentences):
+        current_words += sentence_words[i]
+
+        # Check if we should break here
+        if current_words >= max_words * 0.7:  # Start looking for break at 70% capacity
+            # Find the best break point between here and max
+            if current_words >= max_words or (i < len(shift_scores) and shift_scores[i] > 0.5):
+                chunk_text = " ".join(sentences[current_start:i + 1])
+                chunks.append(chunk_text)
+
+                # Overlap: go back a few sentences
+                overlap_sents = 0
+                overlap_word_count = 0
+                backtrack = i
+                while backtrack > current_start and overlap_word_count < overlap_words:
+                    overlap_word_count += sentence_words[backtrack]
+                    overlap_sents += 1
+                    backtrack -= 1
+
+                current_start = max(current_start + 1, i + 1 - overlap_sents)
+                current_words = sum(sentence_words[current_start:i + 1])
+
+    # Don't forget the last chunk
+    if current_start < len(sentences):
+        remaining = " ".join(sentences[current_start:])
+        if remaining.strip():
+            chunks.append(remaining)
+
+    return chunks if chunks else [transcript]
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences, handling common edge cases."""
+    # Split on sentence-ending punctuation followed by space/newline
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    # Filter empty strings and merge very short fragments
+    sentences = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        if sentences and len(sentences[-1].split()) < 4:
+            sentences[-1] += " " + p
+        else:
+            sentences.append(p)
+    return sentences
+
+
+def _compute_topic_shifts(sentences: list[str], window: int = 3) -> list[float]:
+    """Score each sentence boundary for topic shift using vocabulary overlap.
+
+    Returns a list of scores (0-1) where higher = bigger topic shift.
+    Uses Jaccard distance between word sets of adjacent windows.
+    """
+    scores = []
+    stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+                  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+                  'should', 'may', 'might', 'shall', 'can', 'to', 'of', 'in', 'for',
+                  'on', 'with', 'at', 'by', 'from', 'it', 'its', 'this', 'that', 'and',
+                  'or', 'but', 'not', 'so', 'if', 'then', 'than', 'when', 'what', 'which',
+                  'who', 'how', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
+                  'other', 'some', 'such', 'no', 'nor', 'only', 'own', 'same', 'too',
+                  'very', 'just', 'because', 'as', 'until', 'while', 'about', 'between',
+                  'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down',
+                  'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there',
+                  'where', 'why', 'i', 'you', 'he', 'she', 'we', 'they', 'me', 'him', 'her',
+                  'us', 'them', 'my', 'your', 'his', 'our', 'their'}
+
+    def get_words(text):
+        return {w.lower() for w in re.findall(r'\b[a-zA-Z]{3,}\b', text)} - stop_words
+
+    for i in range(len(sentences) - 1):
+        # Words in the window before this boundary
+        before_start = max(0, i - window + 1)
+        before_text = " ".join(sentences[before_start:i + 1])
+        before_words = get_words(before_text)
+
+        # Words in the window after this boundary
+        after_end = min(len(sentences), i + 1 + window)
+        after_text = " ".join(sentences[i + 1:after_end])
+        after_words = get_words(after_text)
+
+        # Jaccard distance: 1 - (intersection / union)
+        if not before_words and not after_words:
+            scores.append(0.0)
+        else:
+            intersection = len(before_words & after_words)
+            union = len(before_words | after_words)
+            scores.append(1.0 - (intersection / union) if union > 0 else 0.0)
+
+    return scores
+
+
+def _chunk_by_words(transcript: str, max_tokens: int = 3000, overlap: int = 200) -> list[str]:
+    """Fallback: simple word-based chunking with overlap."""
     words = transcript.split()
     max_words = int(max_tokens * 1.3)
     overlap_words = int(overlap * 1.3)
