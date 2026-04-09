@@ -21,7 +21,7 @@ python backfill.py --all  # Optional: upgrade existing data to enriched pipeline
 app.py                  # Flask web server, REST API, background thread spawning
 pipeline.py             # Core pipeline: ingest → chunk → extract → classify → embed → synthesize
 youtube_ingest.py       # YouTube transcripts (Supadata) + playlist support (RSS + HTML scraping)
-article_ingest.py       # Web article extraction (trafilatura)
+article_ingest.py       # Web article extraction (trafilatura + BeautifulSoup fallback, HTTP 403 detection)
 file_ingest.py          # PDF, DOCX, PPTX text extraction
 image_ingest.py         # Image/screenshot analysis (OpenAI Vision)
 domain_detector.py      # 3-level hierarchical domain classification + taxonomy evolution
@@ -87,9 +87,9 @@ Private playlists are detected and the user is told to change to Unlisted. Max 1
 
 **Homepage** (`/`): Platform landing — hero section with floating decorative SVGs and aspirational tagline, multi-source input hub (Link/Upload/Text tabs), "How it Works" 3-step onboarding for empty state, domain card grid on warm tinted background band. Footer with brand.
 
-**Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content (AI search → convergence indicators → synthesis brief). This is where the user reads and queries their knowledge.
+**Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content (AI search → convergence indicators → synthesis brief). This is where the user reads and queries their knowledge. Level-2 sub-topic pages show the parent domain's content (sources, synthesis); header counts use `len(sources)` to match what's actually displayed, not the sub-topic's own (empty) counts.
 
-**Knowledge Base** (`/knowledge`): Hierarchical bio-tree of all domains with stats bar (sources/insights/domains counts) and SVG connectors. Double-click any node to navigate.
+**Knowledge Base** (`/knowledge`): Hierarchical bio-tree of all domains with stats bar (sources/insights/domains counts) and SVG connectors. Double-click any node to navigate. Built bottom-up from level-1 domains with LEFT JOIN to parents (no level filter) — resilient to missing or corrupted level-0 parents. Groups domains by parent name; orphans go under "Other".
 
 **Knowledge Graph** (overlay via nav button): Force-graph visualization with breathing nodes, flowing particles, conceptual edges (amber dotted) between domains sharing topics, glassmorphism back button.
 
@@ -129,6 +129,9 @@ Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD),
 - **Status updates:** `_update_status(video_id, status, step, progress, **extra)` — thread-safe via `_status_lock`.
 - **INSERT OR REPLACE:** Used for YouTube, Article, File, Image, Text sources to handle re-processing of failed entries.
 - **Error boundaries:** Each video in a playlist has its own `try/except` so one failure doesn't stop the rest.
+- **Domain creation lock:** `_domain_create_lock` (threading.Lock) in `domain_detector.py` serializes `_find_or_create_domain` to prevent parallel playlist workers from creating duplicate level-0/level-1 domains. Each INSERT is committed immediately inside the lock so other threads see the new row.
+- **User ID filtering:** All queries that return user-visible data use `(user_id = ? OR user_id IS NULL)` — never bare `user_id = ?`. This covers both user-owned and legacy/shared records.
+- **Domain deduplication:** `migrations.py` includes `_deduplicate_domains()` that merges duplicate (name, level, user_id) entries — keeps lowest ID, re-points children/sources/insights/syntheses, deletes extras. Runs automatically on startup.
 
 ## Learning Science Principles
 

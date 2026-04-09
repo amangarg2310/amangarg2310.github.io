@@ -75,12 +75,12 @@ python app.py           # Run at http://localhost:5002
 ### Architecture
 
 - **Pipeline** (`pipeline.py`): Source → topic-aware chunk → structured claim extraction → domain classification → contextual embedding → synthesis with convergence analysis → cascade to parent levels → taxonomy evolution check → ingestion impact summary. All DB connections use `_get_conn()` helper with WAL mode + `busy_timeout=5000`.
-- **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata, playlist support via RSS + HTML scraping fallback), `article_ingest.py` (trafilatura), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
-- **Domain taxonomy** (`domain_detector.py`): Hierarchical 3-level — parent category → specific domain → sub-topics. Taxonomy evolution proposes new sub-topics or splits as understanding deepens.
+- **Multi-source ingestors**: `youtube_ingest.py` (transcripts via Supadata, playlist support via RSS + HTML scraping fallback), `article_ingest.py` (trafilatura + BeautifulSoup fallback, HTTP 403 detection with user-friendly error), `file_ingest.py` (PDF/DOCX/PPTX), `image_ingest.py` (OpenAI Vision)
+- **Domain taxonomy** (`domain_detector.py`): Hierarchical 3-level — parent category → specific domain → sub-topics. Taxonomy evolution proposes new sub-topics or splits as understanding deepens. Domain creation serialized via `_domain_create_lock` to prevent duplicates during parallel playlist ingestion. Deduplication migration in `migrations.py` cleans up any existing duplicates on startup.
 - **RAG query** (`intel_query.py`): Hybrid search (vector + FTS5) → source-grounded answers with `[Source: title]` citations. Cross-domain retrieval for parent-level queries.
 - **Auth** (`auth.py`): Flask-Login session-based, multi-user with per-user data isolation
 - **Backend** (`app.py`): Flask web server with REST API. Background processing via threading. Endpoints for ingestion, status polling, knowledge graph, taxonomy changes, threshold concepts.
-- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired scholarly design. Homepage = ingestion hub + domain cards. Domain detail = AI search + convergence indicators + synthesis brief. Knowledge graph overlay with conceptual edges.
+- **Frontend** (`templates/intel.html`, `static/intel.css`): NotebookLM-inspired scholarly design. Homepage = ingestion hub + domain cards. Domain detail = AI search + convergence indicators + synthesis brief (sub-topic pages show parent's content with matching counts). Knowledge Base page = bio-tree built bottom-up from level-1 domains. Knowledge graph overlay with conceptual edges.
 - **Database:** SQLite with tables: users, domains (hierarchical), sources (+ ingestion_impact), insights (+ evidence/confidence/topics), syntheses (+ convergence_data/synthesis_level), synthesis_versions, taxonomy_changes, domain_references, usage_logs
 
 ### Deduplication
