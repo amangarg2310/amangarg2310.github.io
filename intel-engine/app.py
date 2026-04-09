@@ -355,16 +355,24 @@ def domain_page(domain_name):
         uid = current_user.id
         # Accept optional ?level= param to disambiguate when the same name
         # exists at multiple hierarchy levels (e.g. "AI Tools" at level-0 AND level-1).
+        # Knowledge tree passes ?level=0 for category nodes.
         requested_level = request.args.get('level', type=int)
+        domain = None
         if requested_level is not None:
             domain = conn.execute(
                 "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
                 (domain_name, requested_level, uid),
             ).fetchone()
-        else:
-            # Default: prefer level-1 (the domain itself, not the parent category)
+        if not domain:
+            # Fallback: find by name with deterministic ordering.
+            # If level=0 was requested (category click), prefer lowest level.
+            # Otherwise prefer level-1 (the domain itself).
+            if requested_level == 0:
+                order = "level ASC"
+            else:
+                order = "CASE WHEN level = 1 THEN 0 WHEN level = 2 THEN 1 ELSE 2 END"
             domain = conn.execute(
-                "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL) ORDER BY CASE WHEN level = 1 THEN 0 WHEN level = 2 THEN 1 ELSE 2 END LIMIT 1",
+                f"SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL) ORDER BY {order} LIMIT 1",
                 (domain_name, uid),
             ).fetchone()
         if not domain:
