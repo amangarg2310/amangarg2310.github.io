@@ -53,6 +53,7 @@ def ingest_article(url: str) -> ArticleMeta:
     # Try trafilatura first
     text_content = None
     title = None
+    access_denied = False
     try:
         import trafilatura
         downloaded = trafilatura.fetch_url(url)
@@ -79,10 +80,19 @@ def ingest_article(url: str) -> ArticleMeta:
     if not text_content:
         try:
             text_content, title = _beautifulsoup_extract(url)
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 401):
+                access_denied = True
+            logger.warning(f"BeautifulSoup fallback failed for {url}: HTTP {e.code}")
         except Exception as e:
             logger.warning(f"BeautifulSoup fallback failed for {url}: {e}")
 
     if not text_content or not text_content.strip():
+        if access_denied:
+            raise ValueError(
+                f"Access denied (HTTP 403). This site blocks automated access. "
+                f"Try copying the article text and using 'Paste text' instead."
+            )
         raise ValueError(f"Could not extract text content from {url}")
 
     if not title:

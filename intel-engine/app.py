@@ -308,14 +308,37 @@ def knowledge_page():
                 'children': orphans,
             })
 
+        # Fallback: if hierarchical queries found nothing, rebuild from level-1 domains
+        if not categories:
+            level1_domains = [dict(r) for r in conn.execute("""
+                SELECT d.id, d.name, d.icon, d.source_count, d.insight_count, d.description, d.parent_id,
+                       p.name as parent_name, p.icon as parent_icon
+                FROM domains d
+                LEFT JOIN domains p ON d.parent_id = p.id AND p.level = 0
+                WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+                ORDER BY d.source_count DESC
+            """, (uid,)).fetchall()]
+
+            if level1_domains:
+                parent_groups = {}
+                for d in level1_domains:
+                    pname = d['parent_name'] or 'Other'
+                    picon = d['parent_icon'] or '\U0001f4c2'
+                    if pname not in parent_groups:
+                        parent_groups[pname] = {'name': pname, 'icon': picon, 'source_count': 0, 'insight_count': 0, 'children': []}
+                    child = dict(d)
+                    child['children'] = subtopics_by_parent.get(d['id'], [])
+                    parent_groups[pname]['children'].append(child)
+                categories = list(parent_groups.values())
+
         # Overlay live counts (prevents stale column values)
         live_counts = _compute_live_domain_counts(conn, uid)
         _overlay_live_counts(categories, live_counts)
         total_sources = sum(cat.get('source_count', 0) for cat in categories)
         total_insights = sum(cat.get('insight_count', 0) for cat in categories)
 
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as e:
+        logger.error(f"Knowledge page query failed: {e}", exc_info=True)
     finally:
         if conn:
             conn.close()
@@ -669,7 +692,7 @@ def api_ingest():
 
         def _run():
             try:
-                run_article_pipeline(url, user_id=uid)
+                run_article_pipeline(url, user_id=uid, tracking_id=source_vid)
             except Exception as e:
                 _update_status(source_vid, 'error', 'Failed', 0, error=str(e))
 

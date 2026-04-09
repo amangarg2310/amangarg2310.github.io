@@ -517,12 +517,12 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
 # Article Pipeline
 # ══════════════════════════════════════════════════════════════
 
-def run_article_pipeline(url: str, db_path=None, user_id=None) -> dict:
+def run_article_pipeline(url: str, db_path=None, user_id=None, tracking_id=None) -> dict:
     """Run the pipeline for a web article URL."""
     from article_ingest import ingest_article, generate_article_id
 
     db_path = db_path or config.DB_PATH
-    source_vid = generate_article_id(url)
+    source_vid = tracking_id or generate_article_id(url)
 
     existing = check_already_ingested(source_vid, db_path)
     if existing and existing['status'] == 'processed':
