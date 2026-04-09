@@ -253,6 +253,7 @@ def knowledge_page():
     categories = []
     total_sources = 0
     total_insights = 0
+    total_domains = 0
     try:
         conn = get_db()
 
@@ -302,6 +303,7 @@ def knowledge_page():
         _overlay_live_counts(categories, live_counts)
         total_sources = sum(cat.get('source_count', 0) for cat in categories)
         total_insights = sum(cat.get('insight_count', 0) for cat in categories)
+        total_domains = sum(len(cat.get('children', [])) for cat in categories)
 
     except sqlite3.OperationalError as e:
         logger.error(f"Knowledge page query failed: {e}", exc_info=True)
@@ -311,7 +313,8 @@ def knowledge_page():
 
     return render_template("intel.html", domain=None, synthesis=None, domains=[],
                            knowledge_view=True, knowledge_categories=categories,
-                           total_sources=total_sources, total_insights=total_insights)
+                           total_sources=total_sources, total_insights=total_insights,
+                           total_domains=total_domains)
 
 
 def _extract_tldr_from_synthesis(content: str) -> str:
@@ -471,11 +474,12 @@ def domain_page(domain_name):
         # Overlay live counts (prevents stale column values)
         live_counts = _compute_live_domain_counts(conn, uid)
         _overlay_live_counts(domain_tree, live_counts)
-        # Also fix the current domain's counts for the header
+        # Fix the current domain's counts to match the content actually displayed.
+        # For level-2 sub-topics, content comes from the parent domain, so use
+        # the parent's counts (len(sources)) instead of the sub-topic's own (0).
         if domain:
-            c = live_counts.get(domain['id'], {'source_count': 0, 'insight_count': 0})
-            domain['source_count'] = c['source_count']
-            domain['insight_count'] = c['insight_count']
+            domain['source_count'] = len(sources)
+            domain['insight_count'] = sum(s.get('insight_count', 0) for s in sources)
 
     except sqlite3.OperationalError:
         return redirect(url_for('index'))

@@ -415,7 +415,7 @@
         <div class="intel-kb-header">
             <div>
                 <h1 class="intel-kb-title">Knowledge Base</h1>
-                <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ knowledge_categories|length }} categories</p>
+                <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ total_domains }} domains</p>
             </div>
             <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -430,7 +430,7 @@
         <div class="intel-stats-bar">
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_sources }}</span> sources</div>
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_insights }}</span> insights</div>
-            <div class="intel-stat-item"><span class="intel-stat-value">{{ knowledge_categories|length }}</span> domains</div>
+            <div class="intel-stat-item"><span class="intel-stat-value">{{ total_domains }}</span> domains</div>
         </div>
 
         <div class="bio-tree" id="bioTree">
