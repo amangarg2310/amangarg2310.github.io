@@ -1539,6 +1539,18 @@
     color: var(--intel-text-tertiary);
 }
 
+/* Level-1 domains — bold text to distinguish from level-2 topics */
+.intel-tree-node[data-level="1"] > .intel-tree-row .intel-tree-name {
+    font-weight: 600;
+    color: var(--intel-text-secondary);
+}
+
+/* Level-2 topics — lighter weight, grayed out */
+.intel-tree-node[data-level="2"] > .intel-tree-row .intel-tree-name {
+    font-weight: 400;
+    color: var(--intel-text-tertiary);
+}
+
 .intel-tree-count {
     font-size: 10px;
     color: var(--intel-text-tertiary);

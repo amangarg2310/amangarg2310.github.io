@@ -4,7 +4,7 @@ A knowledge platform that ingests expert content from multiple sources, processe
 
 ## Tech Stack
 
-Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings + WAL mode), OpenAI GPT-4o-mini, Anthropic Claude (visuals), Supadata (transcript fallback)
+Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings + WAL mode), OpenAI GPT-4o-mini (extraction + synthesis), Anthropic Claude Sonnet (image analysis only), Supadata (transcript fallback)
 
 ## Quick Start
 
@@ -25,7 +25,7 @@ article_ingest.py       # Web article extraction (trafilatura + BeautifulSoup fa
 file_ingest.py          # PDF, DOCX, PPTX text extraction
 image_ingest.py         # Image/screenshot analysis (OpenAI Vision)
 domain_detector.py      # 3-level hierarchical domain classification + taxonomy evolution
-domain_synthesizer.py   # LLM-powered knowledge synthesis with temporal awareness + convergence
+domain_synthesizer.py   # LLM-powered knowledge synthesis (OpenAI GPT-4o-mini) with temporal awareness + convergence
 insight_extractor.py    # Structured claim extraction (evidence, confidence, topics)
 intel_query.py          # Hybrid RAG search (vector + FTS5) → source-grounded answer synthesis
 embeddings.py           # Contextual vector embedding generation and storage
@@ -132,7 +132,8 @@ Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD),
 - **Domain creation lock:** `_domain_create_lock` (threading.Lock) in `domain_detector.py` serializes `_find_or_create_domain` to prevent parallel playlist workers from creating duplicate level-0/level-1 domains. Each INSERT is committed immediately inside the lock so other threads see the new row.
 - **User ID filtering:** All queries that return user-visible data use `(user_id = ? OR user_id IS NULL)` — never bare `user_id = ?`. This covers both user-owned and legacy/shared records.
 - **Domain name collisions (collapsed):** When the LLM returns the same name for domain and parent (e.g. domain="AI Tools", parent="AI Tools"), `ensure_domain_hierarchy()` collapses the collision — it skips creating the level-1 domain and attaches sources directly to the level-0 parent. Sub-topics still attach as level-2 under the parent. This prevents duplicate names at different hierarchy levels. Homepage, knowledge page, and domain page queries include `(d.level = 0 AND d.source_count > 0)` to surface these collapsed domains alongside normal level-1 domains.
-- **Domain classification:** `DETECTION_PROMPT` in `domain_detector.py` classifies by what expertise the content actually builds — not by title keywords. Only reuses existing domains when the content genuinely deepens that domain's knowledge. Domain names can be tools, disciplines, concepts, or fields.
+- **Domain classification:** `DETECTION_PROMPT` in `domain_detector.py` classifies by what expertise the content actually builds — not by title keywords. Only reuses existing domains when the content genuinely deepens that domain's knowledge. Domain names can be tools, disciplines, concepts, or fields. LLM also returns icon emoji for domain and parent.
+- **API concurrency:** `config.api_semaphore = Semaphore(6)` limits concurrent LLM calls. All synthesis uses OpenAI GPT-4o-mini (switched from Anthropic Haiku for 5-8x speed improvement). Anthropic only used for image analysis.
 - **Domain deduplication:** `migrations.py` includes `_deduplicate_domains()` that merges duplicate (name, level, user_id) entries — keeps lowest ID, re-points children/sources/insights/syntheses, deletes extras. Runs automatically on startup.
 
 ## Learning Science Principles

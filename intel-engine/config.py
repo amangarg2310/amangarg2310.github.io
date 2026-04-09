@@ -32,7 +32,7 @@ MAX_PLAYLIST_VIDEOS = 50  # Soft cap on new (non-deduped) videos per playlist su
 # ── API concurrency ──
 # Global semaphore to limit concurrent LLM API calls across all threads.
 # Prevents rate limiting when processing playlists + other sources simultaneously.
-api_semaphore = threading.Semaphore(3)
+api_semaphore = threading.Semaphore(6)
 
 
 def rate_limited_call(fn, *args, **kwargs):

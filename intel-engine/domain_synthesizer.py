@@ -1,7 +1,7 @@
 """
 Domain synthesis — compounds knowledge as new sources are ingested.
 
-Uses Anthropic Haiku 4.5 for superior long-form synthesis quality.
+Uses OpenAI GPT-4o-mini for fast synthesis (switched from Anthropic Haiku for speed).
 
 After each new source is processed, the synthesizer:
 1. Loads the existing synthesis for the domain
@@ -18,7 +18,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from anthropic import Anthropic
+from openai import OpenAI
 
 import config
 
@@ -232,7 +232,7 @@ def _cascade_synthesis(domain_id: int, db_path, user_id=None):
 
 def _synthesize_parent(parent_id: int, db_path):
     """Synthesize a parent domain (level 0 or 1) from its children's syntheses."""
-    api_key = config.get_api_key('anthropic')
+    api_key = config.get_api_key('openai')
     if not api_key:
         return
 
@@ -281,19 +281,21 @@ def _synthesize_parent(parent_id: int, db_path):
             child_count=len(children),
         )
 
-    client = Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
     _parent_start = time.time()
     try:
         response = config.rate_limited_call(
-            client.messages.create,
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You synthesize knowledge across sub-domains into clear, structured overviews. Write in clean markdown.",
-            messages=[{"role": "user", "content": prompt}],
+            client.chat.completions.create,
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You synthesize knowledge across sub-domains into clear, structured overviews. Write in clean markdown."},
+                {"role": "user", "content": prompt},
+            ],
             temperature=0.3,
             max_tokens=4000,
             timeout=120,
         )
-        content = response.content[0].text.strip()
+        content = response.choices[0].message.content.strip()
         logger.info(f"Parent synthesis for '{parent['name']}' (level {level}) completed in {time.time()-_parent_start:.1f}s")
     except Exception as e:
         logger.warning(f"Parent synthesis failed for '{parent['name']}' after {time.time()-_parent_start:.1f}s: {e}")
@@ -313,7 +315,7 @@ def _synthesize_parent(parent_id: int, db_path):
     # Background: generate suggested question for parent synthesis
     def _bg_parent_question():
         try:
-            api_key = config.get_api_key('anthropic')
+            api_key = config.get_api_key('openai')
             if not api_key:
                 return
             sq = _generate_suggested_question(parent['name'], content, api_key)
@@ -401,18 +403,19 @@ def _analyze_convergence(domain_id: int, db_path) -> str:
         for source, insights in sources.items()
     )
 
-    api_key = config.get_api_key('anthropic')
+    api_key = config.get_api_key('openai')
     if not api_key:
         return ""
 
-    client = Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
     _conv_start = time.time()
     try:
         response = config.rate_limited_call(
-            client.messages.create,
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You analyze cross-source agreement patterns. Return ONLY valid JSON.",
-            messages=[{"role": "user", "content": f"""Analyze these insights from {len(sources)} sources about the same domain.
+            client.chat.completions.create,
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You analyze cross-source agreement patterns. Return ONLY valid JSON."},
+                {"role": "user", "content": f"""Analyze these insights from {len(sources)} sources about the same domain.
 
 {grouped_text}
 
@@ -424,12 +427,13 @@ Identify:
 Return ONLY valid JSON:
 {{"agreements": [{{"claim": "...", "sources": ["source1", "source2"]}}], "disagreements": [{{"topic": "...", "views": [{{"source": "...", "position": "..."}}]}}], "unique": [{{"claim": "...", "source": "..."}}]}}
 
-Keep each array to max 5 entries. Be specific about what the agreement/disagreement is."""}],
+Keep each array to max 5 entries. Be specific about what the agreement/disagreement is."""},
+            ],
             temperature=0.2,
             max_tokens=2000,
             timeout=90,
         )
-        result = response.content[0].text.strip()
+        result = response.choices[0].message.content.strip()
         logger.info(f"Convergence analysis completed in {time.time()-_conv_start:.1f}s")
         return result
     except Exception as e:
@@ -437,15 +441,19 @@ Keep each array to max 5 entries. Be specific about what the agreement/disagreem
         return ""
 
 
-def _generate_ingestion_impact(client, domain_name: str, prev_synthesis: str, new_synthesis: str, source_title: str) -> str:
+def _generate_ingestion_impact(domain_name: str, prev_synthesis: str, new_synthesis: str, source_title: str) -> str:
     """Generate a brief summary of what a source added to the knowledge base (Tier 4B)."""
     try:
+        api_key = config.get_api_key('openai')
+        if not api_key:
+            return ""
+        client = OpenAI(api_key=api_key)
         response = config.rate_limited_call(
-            client.messages.create,
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You summarize knowledge changes concisely. Return 2-3 plain sentences only.",
-            timeout=30,
-            messages=[{"role": "user", "content": f"""The knowledge base for "{domain_name}" was updated after ingesting "{source_title}".
+            client.chat.completions.create,
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You summarize knowledge changes concisely. Return 2-3 plain sentences only."},
+                {"role": "user", "content": f"""The knowledge base for "{domain_name}" was updated after ingesting "{source_title}".
 
 PREVIOUS SYNTHESIS (excerpt):
 {prev_synthesis[:1500]}
@@ -453,11 +461,12 @@ PREVIOUS SYNTHESIS (excerpt):
 UPDATED SYNTHESIS (excerpt):
 {new_synthesis[:1500]}
 
-In 2-3 sentences, describe what new information this source added. Focus on: new claims or concepts introduced, existing points that were reinforced with new evidence, and any perspectives that changed. Be specific about WHAT was added, not just "new information was added"."""}],
+In 2-3 sentences, describe what new information this source added. Focus on: new claims or concepts introduced, existing points that were reinforced with new evidence, and any perspectives that changed. Be specific about WHAT was added, not just "new information was added"."""},
+            ],
             temperature=0.3,
             max_tokens=300,
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         logger.warning(f"Ingestion impact generation failed: {e}")
         return ""
@@ -488,13 +497,13 @@ def _snapshot_synthesis(current: dict, domain_id: int, db_path):
 def _generate_suggested_question(domain_name: str, synthesis_content: str, api_key: str) -> list:
     """Generate 1 short suggested question from synthesis content."""
     try:
-        client = Anthropic(api_key=api_key)
+        client = OpenAI(api_key=api_key)
         response = config.rate_limited_call(
-            client.messages.create,
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You generate short questions. Maximum 12 words. Always end with a question mark.",
-            timeout=30,
-            messages=[{"role": "user", "content": f"""Generate exactly 1 short question a beginner would ask about "{domain_name}".
+            client.chat.completions.create,
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You generate short questions. Maximum 12 words. Always end with a question mark."},
+                {"role": "user", "content": f"""Generate exactly 1 short question a beginner would ask about "{domain_name}".
 
 CRITICAL: Maximum 12 words. One sentence. End with "?"
 
@@ -507,11 +516,12 @@ Examples:
 SYNTHESIS:
 {synthesis_content[:1500]}
 
-Return ONLY the question text. Nothing else."""}],
+Return ONLY the question text. Nothing else."""},
+            ],
             temperature=0.4,
             max_tokens=40,
         )
-        q = response.content[0].text.strip().strip('"').strip("'")
+        q = response.choices[0].message.content.strip().strip('"').strip("'")
         # Safety net: truncate if model still generates too many words
         if q and len(q.split()) > 20:
             if '?' in q:
@@ -527,9 +537,9 @@ Return ONLY the question text. Nothing else."""}],
 def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel: str, db_path=None, source_date: str = None) -> str:
     """Create or update the domain synthesis after a new source is processed."""
     db_path = db_path or config.DB_PATH
-    api_key = config.get_api_key('anthropic')
+    api_key = config.get_api_key('openai')
     if not api_key:
-        raise ValueError("Anthropic API key not configured")
+        raise ValueError("OpenAI API key not configured")
 
     current = get_current_synthesis(domain_id, db_path)
 
@@ -568,13 +578,13 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     if not source_date:
         source_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    client = Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
 
     response = config.rate_limited_call(
-        client.messages.create,
-        model=config.ANTHROPIC_HAIKU_MODEL,
-        system="You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown. This is a how-to reference, not an executive summary.",
+        client.chat.completions.create,
+        model=config.OPENAI_MODEL,
         messages=[
+            {"role": "system", "content": "You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown. This is a how-to reference, not an executive summary."},
             {"role": "user", "content": SYNTHESIS_PROMPT.format(
                 domain_name=domain_name,
                 existing_section=existing_section,
@@ -589,7 +599,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         timeout=120,
     )
 
-    synthesis_content = response.content[0].text.strip()
+    synthesis_content = response.choices[0].message.content.strip()
 
     # Store synthesis immediately (suggested question + convergence generated in background)
     now = datetime.now(timezone.utc).isoformat()
@@ -644,7 +654,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         try:
             if prev_content and source_id:
                 impact = _generate_ingestion_impact(
-                    client, domain_name, prev_content, synthesis_content, source_title
+                    domain_name, prev_content, synthesis_content, source_title
                 )
                 if impact:
                     c = _get_conn(db_path)
@@ -667,9 +677,9 @@ def resynthesize_domain_full(domain_id: int, db_path=None, skip_enrichment: bool
     rather than doing incremental synthesis.
     """
     db_path = db_path or config.DB_PATH
-    api_key = config.get_api_key('anthropic')
+    api_key = config.get_api_key('openai')
     if not api_key:
-        raise ValueError("Anthropic API key not configured")
+        raise ValueError("OpenAI API key not configured")
 
     conn = _get_conn(db_path)
 
@@ -749,14 +759,14 @@ def resynthesize_domain_full(domain_id: int, db_path=None, skip_enrichment: bool
 
     all_insights_text = "\n".join(all_insights_parts)
 
-    client = Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
 
     _synth_start = time.time()
     response = config.rate_limited_call(
-        client.messages.create,
-        model=config.ANTHROPIC_HAIKU_MODEL,
-        system="You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown.",
+        client.chat.completions.create,
+        model=config.OPENAI_MODEL,
         messages=[
+            {"role": "system", "content": "You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown."},
             {"role": "user", "content": FULL_RESYNTHESIS_PROMPT.format(
                 domain_name=domain_name,
                 all_insights=all_insights_text,
@@ -767,7 +777,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None, skip_enrichment: bool
         timeout=120,
     )
 
-    synthesis_content = response.content[0].text.strip()
+    synthesis_content = response.choices[0].message.content.strip()
     logger.info(f"Resynthesis for '{domain_name}' completed in {time.time()-_synth_start:.1f}s ({source_count} sources, {insight_count} insights)")
 
     # Store immediately, enrich in background
@@ -835,7 +845,7 @@ Return ONLY the JSON array:"""
 def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None):
     """Detect cross-domain references from synthesis content and store them."""
     db_path = db_path or config.DB_PATH
-    api_key = config.get_api_key('anthropic')
+    api_key = config.get_api_key('openai')
     if not api_key:
         return
 
@@ -867,12 +877,12 @@ def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None
     excerpt = " ".join(synthesis_content.split()[:1500])
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = OpenAI(api_key=api_key)
         response = config.rate_limited_call(
-            client.messages.create,
-            model=config.ANTHROPIC_HAIKU_MODEL,
-            system="You identify meaningful connections between knowledge domains. Return only valid JSON arrays.",
+            client.chat.completions.create,
+            model=config.OPENAI_MODEL,
             messages=[
+                {"role": "system", "content": "You identify meaningful connections between knowledge domains. Return only valid JSON arrays."},
                 {"role": "user", "content": CROSS_REFERENCE_PROMPT.format(
                     domain_name=domain_name,
                     synthesis_excerpt=excerpt,
@@ -884,7 +894,7 @@ def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None
             timeout=60,
         )
 
-        content = response.content[0].text.strip()
+        content = response.choices[0].message.content.strip()
         # Strip markdown code fences if present
         if content.startswith("```"):
             content = content.split("\n", 1)[1] if "\n" in content else content[3:]

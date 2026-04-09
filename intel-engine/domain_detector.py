@@ -202,6 +202,8 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
                 description=semantic_match.get('description', ''),
                 db_path=db_path,
                 user_id=user_id,
+                icon=semantic_match.get('icon'),
+                parent_icon=semantic_match.get('parent_icon'),
             )
             return {
                 'domain_name': semantic_match['domain'],
@@ -299,6 +301,8 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
         description=result.get('description', ''),
         db_path=db_path,
         user_id=user_id,
+        icon=result.get('icon'),
+        parent_icon=result.get('parent_icon'),
     )
 
     return {
@@ -415,7 +419,7 @@ def _find_matching_domain(conn, name: str, parent_id: int, user_id=None) -> tupl
 
 
 def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, description: str = "",
-                            db_path=None, user_id=None) -> int:
+                            db_path=None, user_id=None, icon: str = None, parent_icon: str = None) -> int:
     """Create the full domain hierarchy (parent → domain → sub-topics) and return the domain_id."""
     db_path = db_path or config.DB_PATH
     conn = _get_conn(db_path)
@@ -431,6 +435,7 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             path=f"/{parent_name}",
             description=f"Category: {parent_name}",
             user_id=user_id, now=now,
+            icon=parent_icon,
         )
 
     # 1b. Handle parent/domain name collision — collapse into level-0.
@@ -480,6 +485,7 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             path=f"/{parent_name}/{name}",
             description=description,
             user_id=user_id, now=now,
+            icon=icon,
         )
 
     # 3. Find or create sub-topics (level 2) — with hard cap of 5 total
@@ -511,7 +517,8 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
 
 
 def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
-                           path: str, description: str, user_id: int | None, now: str) -> int:
+                           path: str, description: str, user_id: int | None, now: str,
+                           icon: str = None) -> int:
     """Find existing domain by name+level+user or create a new one.
 
     Uses _domain_create_lock to prevent parallel playlist workers from
@@ -534,9 +541,16 @@ def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
             ).fetchone()
 
         if row:
+            # Backfill: if domain has default 📚 icon and we have a better one, update it
+            if icon and icon != "📚":
+                conn.execute(
+                    "UPDATE domains SET icon = ? WHERE id = ? AND icon = '📚'",
+                    (icon, row[0]),
+                )
+                conn.commit()
             return row[0]
 
-        icon = DOMAIN_ICONS.get(name.lower(), "📚")
+        icon = icon or DOMAIN_ICONS.get(name.lower(), "📚")
         try:
             cursor = conn.execute(
                 "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

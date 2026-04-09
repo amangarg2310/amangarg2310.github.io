@@ -61,7 +61,7 @@ See `outlier-content-engine/CLAUDE.md` for detailed documentation.
 
 **What it is:** A domain intelligence engine that ingests expert content from multiple sources (YouTube videos, YouTube playlists, articles, PDFs, images, text), processes it through an LLM pipeline, and builds a compounding knowledge base with hierarchical domain taxonomy. Deployed at [distylme.com](https://distylme.com).
 
-**Tech Stack:** Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings + WAL mode), OpenAI GPT-4o-mini, Anthropic Claude (visuals), Supadata (transcript fallback)
+**Tech Stack:** Python 3.11, Flask, Flask-Login, SQLite (FTS5 + vector embeddings + WAL mode), OpenAI GPT-4o-mini (extraction + synthesis), Anthropic Claude Sonnet (image analysis only), Supadata (transcript fallback)
 
 ### Key Commands
 

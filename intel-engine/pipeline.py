@@ -480,7 +480,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
             _update_status(playlist_vid, 'processing',
                            f'Synthesizing knowledge across {num_domains} domain{"s" if num_domains != 1 else ""}...', 82)
 
-            for i, (domain_id, info) in enumerate(affected_domains.items()):
+            def _synth_domain(domain_id, info, i):
                 domain_name = info['name']
                 progress = 82 + int(((i + 1) / num_domains) * 13)  # 82 → 95
                 _update_status(playlist_vid, 'processing',
@@ -489,13 +489,24 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                     resynthesize_domain_full(domain_id, db_path, skip_enrichment=True)
                 except Exception as e:
                     logger.warning(f"Batch synthesis failed for domain {domain_id} ({domain_name}): {e}")
-
-                try:
-                    _cascade_synthesis(domain_id, db_path)
-                except Exception as e:
-                    logger.warning(f"Cascade synthesis skipped for domain {domain_id}: {e}")
-
                 _repair_domain_counts(domain_id, db_path)
+
+            with ThreadPoolExecutor(max_workers=min(num_domains, 3)) as executor:
+                futures = [
+                    executor.submit(_synth_domain, did, info, i)
+                    for i, (did, info) in enumerate(affected_domains.items())
+                ]
+                for f in futures:
+                    f.result()
+
+            # Cascade synthesis in background (non-blocking — user sees Done faster)
+            def _bg_cascades():
+                for domain_id in affected_domains:
+                    try:
+                        _cascade_synthesis(domain_id, db_path)
+                    except Exception as e:
+                        logger.warning(f"Background cascade failed for {domain_id}: {e}")
+            threading.Thread(target=_bg_cascades, daemon=True).start()
 
             # Fire taxonomy evolution checks in background (non-blocking)
             def _bg_taxonomy_batch():
@@ -1139,8 +1150,7 @@ def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, track
             _update_status(batch_vid, 'processing',
                            f'Synthesizing {num_domains} domain{"s" if num_domains != 1 else ""}...', 82)
 
-            for i, (domain_id, domain_results) in enumerate(affected_domains.items()):
-                progress = 82 + int(((i + 1) / num_domains) * 13)  # 82-95%
+            def _synth_batch_domain(domain_id, i):
                 try:
                     conn = _get_conn(db_path)
                     d_name = (conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone() or [None])[0]
@@ -1148,17 +1158,31 @@ def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, track
                 except Exception:
                     d_name = 'Unknown'
 
+                progress = 82 + int(((i + 1) / num_domains) * 13)  # 82-95%
                 _update_status(batch_vid, 'processing',
                                f'Synthesizing {i+1}/{num_domains}: {d_name}...', progress)
                 try:
                     resynthesize_domain_full(domain_id, db_path, skip_enrichment=True)
                 except Exception as e:
                     logger.warning(f"Batch synthesis failed for domain {domain_id}: {e}")
-                try:
-                    _cascade_synthesis(domain_id, db_path)
-                except Exception as e:
-                    logger.warning(f"Cascade failed for domain {domain_id}: {e}")
                 _repair_domain_counts(domain_id, db_path)
+
+            with ThreadPoolExecutor(max_workers=min(num_domains, 3)) as executor:
+                futures = [
+                    executor.submit(_synth_batch_domain, did, i)
+                    for i, (did, _) in enumerate(affected_domains.items())
+                ]
+                for f in futures:
+                    f.result()
+
+            # Cascade synthesis in background
+            def _bg_batch_cascades():
+                for domain_id in affected_domains:
+                    try:
+                        _cascade_synthesis(domain_id, db_path)
+                    except Exception as e:
+                        logger.warning(f"Cascade failed for domain {domain_id}: {e}")
+            threading.Thread(target=_bg_batch_cascades, daemon=True).start()
 
         _update_status(batch_vid, 'complete',
                        f'Done — {succeeded}/{len(sources)} re-processed', 100)
@@ -1257,7 +1281,7 @@ def _run_shared_pipeline(
             completed = 0
             # Each chunk gets its own error list (thread-safe — no shared mutations)
             chunk_error_lists = [[] for _ in chunks]
-            with ThreadPoolExecutor(max_workers=min(len(chunks), 2)) as executor:
+            with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as executor:
                 futures = {
                     executor.submit(extract_insights, chunk, chunk_index=i, errors=chunk_error_lists[i]): i
                     for i, chunk in enumerate(chunks)
