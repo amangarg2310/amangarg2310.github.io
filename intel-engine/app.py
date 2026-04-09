@@ -432,8 +432,8 @@ def domain_page(domain_name):
                     synthesis_html = f"<p>{aggregated_md}</p>"
                 synthesis = {
                     "content": aggregated_md, "version": 1, "suggested_questions": "[]",
-                    "source_count": domain.get("source_count", 0),
-                    "insight_count": domain.get("insight_count", 0),
+                    "source_count": 0,  # Will be overridden with live counts below
+                    "insight_count": 0,
                 }
         else:
             # Level 1 or level 2 (scoped): use the domain's own synthesis
@@ -516,6 +516,10 @@ def domain_page(domain_name):
         if domain:
             domain['source_count'] = len(sources)
             domain['insight_count'] = sum(s.get('insight_count', 0) for s in sources)
+        # Sync synthesis metadata with live counts (DB record may be stale)
+        if synthesis:
+            synthesis['source_count'] = len(sources)
+            synthesis['insight_count'] = domain['insight_count'] if domain else 0
 
     except sqlite3.OperationalError:
         return redirect(url_for('index'))
