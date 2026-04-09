@@ -222,7 +222,8 @@ def index():
             """SELECT d.*, p.name as parent_name
                FROM domains d
                LEFT JOIN domains p ON d.parent_id = p.id
-               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+               WHERE (d.user_id = ? OR d.user_id IS NULL)
+               AND (d.level = 1 OR (d.level = 0 AND d.source_count > 0))
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]
@@ -296,6 +297,30 @@ def knowledge_page():
             child = dict(d)
             child['children'] = subtopics_by_parent.get(d['id'], [])
             parent_groups[pname]['children'].append(child)
+        # Include collapsed level-0 domains (sources attached directly, no level-1 children)
+        collapsed_parents = [dict(r) for r in conn.execute("""
+            SELECT d.id, d.name, d.icon, d.source_count, d.insight_count, d.description
+            FROM domains d
+            WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 0 AND d.source_count > 0
+            AND d.name NOT IN (SELECT DISTINCT p.name FROM domains c JOIN domains p ON c.parent_id = p.id
+                               WHERE c.level = 1 AND (c.user_id = ? OR c.user_id IS NULL))
+            ORDER BY d.source_count DESC
+        """, (uid, uid)).fetchall()]
+        for cp in collapsed_parents:
+            if cp['name'] not in parent_groups:
+                parent_groups[cp['name']] = {
+                    'name': cp['name'], 'icon': cp['icon'] or '\U0001f4c2',
+                    'source_count': cp['source_count'], 'insight_count': cp['insight_count'],
+                    'description': cp.get('description') or f'Category: {cp["name"]}',
+                    'children': [],
+                    'is_collapsed': True,  # Flag for template to link directly
+                    'domain_id': cp['id'],
+                }
+                # Attach sub-topics if any
+                subs = subtopics_by_parent.get(cp['id'], [])
+                if subs:
+                    parent_groups[cp['name']]['children'] = subs
+
         categories = list(parent_groups.values())
 
         # Overlay live counts (prevents stale column values)
@@ -394,12 +419,12 @@ def domain_page(domain_name):
         # Determine content source based on hierarchy level
         elif domain.get('level') == 0:
             content_domain_ids = [domain['id']]
-            # Parent category: aggregate all child domains
+            # Parent category: aggregate child domains + own sources (from collapsed collisions)
             child_ids = [r[0] for r in conn.execute(
                 "SELECT id FROM domains WHERE parent_id = ? AND level = 1", (domain['id'],)
             ).fetchall()]
             if child_ids:
-                content_domain_ids = child_ids
+                content_domain_ids = [domain['id']] + child_ids
         else:
             content_domain_ids = [domain['id']]
 
@@ -408,7 +433,7 @@ def domain_page(domain_name):
         synthesis = None
         synthesis_html = ""
         if domain.get('level') == 0 and child_ids:
-            # Level-0: build aggregated TLDR from all children
+            # Level-0 with children: aggregate child TLDRs + own synthesis if present
             child_tldrs = []
             for cid in child_ids:
                 row = conn.execute(
@@ -422,6 +447,15 @@ def domain_page(domain_name):
 
             if child_tldrs:
                 parts = []
+                # Include the parent's own synthesis if it has one (from collapsed sources)
+                own_synth = conn.execute(
+                    "SELECT content FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (domain['id'],),
+                ).fetchone()
+                if own_synth:
+                    own_tldr = _extract_tldr_from_synthesis(own_synth["content"])
+                    if own_tldr:
+                        parts.append(f"## Overview\n\n{own_tldr}")
                 for ct in child_tldrs:
                     section = f"## {ct['name']}\n\n{ct['tldr_md']}" if ct['tldr_md'] else f"## {ct['name']}\n\n*No summary yet.*"
                     parts.append(section)
@@ -435,6 +469,34 @@ def domain_page(domain_name):
                     "source_count": 0,  # Will be overridden with live counts below
                     "insight_count": 0,
                 }
+            else:
+                # Level-0 with children but none have synthesis yet — try own synthesis
+                own_row = conn.execute(
+                    "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                    (domain['id'],),
+                ).fetchone()
+                synthesis = dict(own_row) if own_row else None
+                if synthesis and md:
+                    try:
+                        synthesis_html = md.markdown(synthesis['content'], extensions=['extra', 'nl2br', 'fenced_code'])
+                    except Exception:
+                        synthesis_html = f"<p>{synthesis['content']}</p>"
+                elif synthesis:
+                    synthesis_html = f"<p>{synthesis['content']}</p>"
+        elif domain.get('level') == 0 and not child_ids:
+            # Level-0 with no children (collapsed domain): show own synthesis like a level-1
+            synthesis_row = conn.execute(
+                "SELECT * FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+                (domain['id'],),
+            ).fetchone()
+            synthesis = dict(synthesis_row) if synthesis_row else None
+            if synthesis and md:
+                try:
+                    synthesis_html = md.markdown(synthesis['content'], extensions=['extra', 'nl2br', 'fenced_code'])
+                except Exception:
+                    synthesis_html = f"<p>{synthesis['content']}</p>"
+            elif synthesis:
+                synthesis_html = f"<p>{synthesis['content']}</p>"
         else:
             # Level 1 or level 2 (scoped): use the domain's own synthesis
             target_id = content_domain_ids[0] if content_domain_ids else domain['id']
@@ -487,7 +549,8 @@ def domain_page(domain_name):
             """SELECT d.*, p.name as parent_name
                FROM domains d
                LEFT JOIN domains p ON d.parent_id = p.id
-               WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+               WHERE (d.user_id = ? OR d.user_id IS NULL)
+               AND (d.level = 1 OR (d.level = 0 AND d.source_count > 0))
                ORDER BY d.updated_at DESC""",
             (uid,),
         ).fetchall()]

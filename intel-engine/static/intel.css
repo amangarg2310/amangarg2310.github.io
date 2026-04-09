@@ -612,21 +612,22 @@
 
 .intel-progress-track {
     width: 100%;
-    height: 4px;
+    height: 5px;
     background: var(--intel-border-light);
-    border-radius: 2px;
+    border-radius: 3px;
     overflow: hidden;
 }
 
 .intel-progress-fill {
     height: 100%;
-    background: var(--intel-accent);
-    border-radius: 2px;
-    transition: width 80ms linear;
+    background: linear-gradient(90deg, var(--intel-accent), #6b8af9);
+    border-radius: 3px;
+    transition: width 120ms ease-out;
     width: 0%;
+    position: relative;
 }
 
-.intel-progress-fill.complete { background: var(--intel-green); }
+.intel-progress-fill.complete { background: linear-gradient(90deg, var(--intel-green), #4fd672); }
 .intel-progress-fill.error { background: var(--intel-red); }
 
 /* ── Circular Progress Ring ── */
@@ -2270,8 +2271,9 @@
 
 .intel-sidebar-progress-card {
     background: var(--intel-accent-light);
-    border-radius: var(--intel-radius-xs);
-    padding: 10px 12px;
+    border: 1px solid rgba(79, 110, 247, 0.12);
+    border-radius: var(--intel-radius-sm);
+    padding: 12px 14px;
 }
 
 .intel-sidebar-progress-header {
@@ -2284,8 +2286,10 @@
 .intel-sidebar-progress-info {
     flex: 1;
     font-size: 12px;
+    font-weight: 500;
     color: var(--intel-accent);
     min-width: 0;
+    letter-spacing: -0.01em;
 }
 
 .intel-progress-ring-wrapper.small {
@@ -2295,6 +2299,7 @@
 
 .intel-ring-pct.small {
     font-size: 9px;
+    font-weight: 700;
 }
 
 /* ── Animations ── */
@@ -2767,58 +2772,98 @@
 
 /* ── Inline Processing Status (inside source hub) ── */
 .intel-inline-status {
-    padding: 16px;
-    border-top: 1px solid var(--intel-border-light);
+    margin: 12px 0 4px;
+    padding: 16px 18px;
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border-light);
+    border-radius: var(--intel-radius-sm);
+    box-shadow: var(--intel-shadow);
     animation: intel-fadeUp 0.3s ease-out both;
 }
 .intel-inline-status-header {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 4px;
+    align-items: center;
+    margin-bottom: 8px;
 }
 .intel-inline-status-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--intel-text);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+    letter-spacing: -0.01em;
 }
 .intel-inline-status-pct {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--intel-accent);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
     margin-left: 12px;
+    background: var(--intel-accent-light);
+    padding: 2px 8px;
+    border-radius: 10px;
 }
 .intel-inline-status-step {
     font-size: 12px;
-    color: var(--intel-text-secondary);
-    margin-bottom: 10px;
+    color: var(--intel-text-tertiary);
+    margin-bottom: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.4;
 }
 .intel-inline-status-track {
-    height: 4px;
+    height: 5px;
     background: var(--intel-border-light);
-    border-radius: 2px;
+    border-radius: 3px;
     overflow: hidden;
 }
 .intel-inline-status-fill {
     height: 100%;
-    background: var(--intel-accent);
-    border-radius: 2px;
-    transition: width 80ms linear;
+    background: linear-gradient(90deg, var(--intel-accent), #6b8af9);
+    border-radius: 3px;
+    transition: width 120ms ease-out;
+    position: relative;
 }
-.intel-inline-status-fill.complete { background: var(--intel-green, #34c759); }
-.intel-inline-status-fill.error { background: var(--intel-red, #ff3b30); }
+.intel-inline-status-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%);
+    animation: intel-shimmer 2s ease-in-out infinite;
+}
+@keyframes intel-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+.intel-inline-status-fill.complete {
+    background: linear-gradient(90deg, var(--intel-green, #34c759), #4fd672);
+}
+.intel-inline-status-fill.complete::after { animation: none; }
+.intel-inline-status-fill.error {
+    background: var(--intel-red, #ff3b30);
+}
+.intel-inline-status-fill.error::after { animation: none; }
+
+.intel-status-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--intel-border-light);
+    border-top-color: var(--intel-accent);
+    border-radius: 50%;
+    animation: intel-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
 
 /* ── Empty Domain State ── */
 .intel-empty-domain {

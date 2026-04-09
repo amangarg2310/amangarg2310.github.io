@@ -70,13 +70,13 @@ RULES:
 
 1. **WHAT IS THIS CONTENT ACTUALLY ABOUT?** Read the excerpt. Ignore the title — titles are clickbait. Ask: "What expertise does someone gain from consuming this?" The answer is the domain.
 
-2. **MATCH EXISTING first.** Strongly prefer reusing an existing domain when the content genuinely deepens that domain's knowledge. Only create a new domain when the content teaches something clearly different from all existing domains. Sharing a keyword is NOT enough — but covering the same subject area IS.
+2. **MATCH EXISTING only when the content genuinely deepens that domain's knowledge.** Sharing a keyword is NOT enough. A video mentioning "apps" doesn't belong in "Mobile Apps" if it's really teaching business strategy. Only reuse a domain (is_new=false) when this content would make a reader of that domain smarter about that specific subject.
 
-3. **DOMAIN NAME** = the core subject, 1-3 words. Should be clear and simple — a tool name ("Claude Code"), a discipline ("Data Engineering"), or a focused field ("App Business"). Avoid overly long or hyper-specific names. Multiple sources about the same broad subject should share ONE domain.
+3. **DOMAIN NAME** = the core subject, 1-3 words. Could be a tool ("Claude Code"), a discipline ("Data Engineering"), a concept ("Growth Strategy"), or a field ("Behavioral Economics"). Whatever best answers: "This is a source about ___."
 
-4. **PARENT CATEGORY**: Broad 1-2 word grouping. Reuse an existing parent when it fits. The parent must be DIFFERENT from the domain name — it should be a broader category that could contain multiple domains.
+4. **PARENT CATEGORY**: Broad 2-3 word grouping. Reuse an existing parent when it fits. Only create new ones for genuinely different areas.
 
-5. **SUB-TOPICS**: 2-4 thematic areas this content covers. These capture the specific angles within the domain.
+5. **SUB-TOPICS**: 2-4 thematic areas this content covers. Think "what chapters would this belong to" — not granular steps.
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
@@ -432,10 +432,37 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             user_id=user_id, now=now,
         )
 
-    # 1b. Log parent/domain name collision (prompt should prevent this)
+    # 1b. Handle parent/domain name collision — collapse into level-0.
+    # When the LLM returns the same name for both (e.g. domain="AI Tools", parent="AI Tools"),
+    # skip creating a redundant level-1 domain. Attach sources directly to the level-0 parent.
     if name.lower().strip() == parent_name.lower().strip():
-        logger.warning(f"Parent/domain name collision: '{name}' == '{parent_name}'. "
-                       f"Prompt should prevent this. Proceeding with both.")
+        logger.info(f"Domain/parent name collision: '{name}' == '{parent_name}'. "
+                     f"Collapsing — sources will attach to level-0 parent (id={parent_id}).")
+
+        # Create sub-topics under the parent directly (skip level-1 creation)
+        existing_subs = conn.execute(
+            "SELECT name FROM domains WHERE parent_id = ? AND level = 2", (parent_id,)
+        ).fetchall()
+        existing_sub_names = {r[0].lower() for r in existing_subs}
+        for sub in (sub_topics or [])[:3]:
+            sub = sub.strip()
+            if not sub or sub.lower() in existing_sub_names:
+                continue
+            if sub.lower() == name.lower() or sub.lower() == parent_name.lower():
+                continue
+            if len(existing_sub_names) >= 5:
+                break
+            _find_or_create_domain(
+                conn, sub, level=2, parent_id=parent_id,
+                path=f"/{parent_name}/{sub}",
+                description=f"{parent_name} — {sub}",
+                user_id=user_id, now=now,
+            )
+            existing_sub_names.add(sub.lower())
+
+        conn.commit()
+        conn.close()
+        return parent_id
 
     # 2. Find existing domain via fuzzy match, or create new one (level 1)
     domain_match = _find_matching_domain(conn, name, parent_id, user_id)

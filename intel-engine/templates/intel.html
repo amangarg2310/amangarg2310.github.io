@@ -1188,9 +1188,15 @@ function showHomeStatus(status, title, step, progress, domain, sourceId) {
         pctText = '';
     }
 
+    // Build spinner for processing state
+    let statusIcon = icon;
+    if (status === 'processing' && !icon) {
+        statusIcon = '<div class="intel-status-spinner"></div>';
+    }
+
     statusCard.innerHTML = `
         <div class="intel-inline-status-header">
-            <span class="intel-inline-status-title">${icon} ${escapeHtml(title || 'Processing...')}</span>
+            <span class="intel-inline-status-title">${statusIcon} ${escapeHtml(title || 'Processing...')}</span>
             <span class="intel-inline-status-pct">${pctText}</span>
         </div>
         <div class="intel-inline-status-step">${stepHtml}</div>
