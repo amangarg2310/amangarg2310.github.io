@@ -11,6 +11,7 @@ After each new source is processed, the synthesizer:
 """
 
 import json
+import time
 import logging
 import sqlite3
 import threading
@@ -269,6 +270,7 @@ def _synthesize_parent(parent_id: int, db_path):
         )
 
     client = Anthropic(api_key=api_key)
+    _parent_start = time.time()
     try:
         response = config.rate_limited_call(
             client.messages.create,
@@ -280,8 +282,9 @@ def _synthesize_parent(parent_id: int, db_path):
             timeout=120,
         )
         content = response.content[0].text.strip()
+        logger.info(f"Parent synthesis for '{parent['name']}' (level {level}) completed in {time.time()-_parent_start:.1f}s")
     except Exception as e:
-        logger.warning(f"Parent synthesis failed for domain {parent_id}: {e}")
+        logger.warning(f"Parent synthesis failed for '{parent['name']}' after {time.time()-_parent_start:.1f}s: {e}")
         return
 
     synthesis_level = 'category' if level == 0 else 'domain'
@@ -391,6 +394,7 @@ def _analyze_convergence(domain_id: int, db_path) -> str:
         return ""
 
     client = Anthropic(api_key=api_key)
+    _conv_start = time.time()
     try:
         response = config.rate_limited_call(
             client.messages.create,
@@ -413,9 +417,11 @@ Keep each array to max 5 entries. Be specific about what the agreement/disagreem
             max_tokens=2000,
             timeout=90,
         )
-        return response.content[0].text.strip()
+        result = response.content[0].text.strip()
+        logger.info(f"Convergence analysis completed in {time.time()-_conv_start:.1f}s")
+        return result
     except Exception as e:
-        logger.warning(f"Convergence analysis failed for domain {domain_id}: {e}")
+        logger.warning(f"Convergence analysis failed after {time.time()-_conv_start:.1f}s: {e}")
         return ""
 
 
@@ -733,6 +739,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None, skip_enrichment: bool
 
     client = Anthropic(api_key=api_key)
 
+    _synth_start = time.time()
     response = config.rate_limited_call(
         client.messages.create,
         model=config.ANTHROPIC_HAIKU_MODEL,
@@ -749,6 +756,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None, skip_enrichment: bool
     )
 
     synthesis_content = response.content[0].text.strip()
+    logger.info(f"Resynthesis for '{domain_name}' completed in {time.time()-_synth_start:.1f}s ({source_count} sources, {insight_count} insights)")
 
     # Store immediately, enrich in background
     now = datetime.now(timezone.utc).isoformat()

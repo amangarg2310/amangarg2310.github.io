@@ -1,14 +1,14 @@
 """
-Insight extraction — Anthropic Haiku extracts structured insights from transcript chunks.
+Insight extraction — OpenAI GPT-4o-mini extracts structured insights from transcript chunks.
 
-Uses Claude Haiku 4.5 for superior comprehension and detail extraction.
+Uses GPT-4o-mini for high-volume extraction with generous rate limits.
 """
 
 import json
 import logging
 import re
 
-from anthropic import Anthropic
+from openai import OpenAI
 
 import config
 
@@ -48,10 +48,9 @@ Return ONLY a JSON array, no markdown:
 
 
 def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> list[dict]:
-    """Extract structured insights from a transcript chunk using Anthropic Haiku.
+    """Extract structured insights from a transcript chunk using OpenAI GPT-4o-mini.
 
-    Retries up to 2 times with exponential backoff on failure (handles rate limits
-    when multiple playlist videos are processing concurrently).
+    Retries up to 3 times with exponential backoff on failure.
 
     Args:
         errors: Optional list that receives per-chunk error dicts on failure.
@@ -59,34 +58,36 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
     """
     import time as _time
 
-    api_key = config.get_api_key('anthropic')
+    api_key = config.get_api_key('openai')
     if not api_key:
-        logger.error("Anthropic API key not configured")
+        logger.error("OpenAI API key not configured")
         if errors is not None:
-            errors.append({'chunk': chunk_index, 'error': 'Anthropic API key not configured'})
+            errors.append({'chunk': chunk_index, 'error': 'OpenAI API key not configured'})
         return []
 
-    client = Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
     import random as _random
     max_retries = 3
 
     for attempt in range(max_retries + 1):
         try:
+            call_start = _time.time()
             with config.api_semaphore:
-                response = client.messages.create(
-                    model=config.ANTHROPIC_HAIKU_MODEL,
-                    system="You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays.",
+                response = client.chat.completions.create(
+                    model=config.OPENAI_MODEL,
                     messages=[
+                        {"role": "system", "content": "You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays."},
                         {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
                     ],
-                    temperature=0.3,
-                    max_tokens=8192,
+                    temperature=config.OPENAI_TEMPERATURE,
+                    max_tokens=config.OPENAI_MAX_TOKENS,
                     timeout=120,
                 )
+            call_elapsed = _time.time() - call_start
 
-            raw_content = response.content[0].text.strip()
-            stop_reason = response.stop_reason  # 'end_turn' or 'max_tokens'
-            if stop_reason == 'max_tokens':
+            raw_content = response.choices[0].message.content.strip()
+            finish_reason = response.choices[0].finish_reason  # 'stop' or 'length'
+            if finish_reason == 'length':
                 logger.warning(f"Chunk {chunk_index}: response truncated by max_tokens — attempting recovery")
             insights = _parse_insights_json(raw_content, chunk_index)
 
@@ -103,14 +104,14 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
             # Track when API succeeded but produced no valid insights
             if not valid and errors is not None:
                 if not insights:
-                    truncation_note = ' (response was TRUNCATED by max_tokens)' if stop_reason == 'max_tokens' else ''
+                    truncation_note = ' (response was TRUNCATED by max_tokens)' if finish_reason == 'length' else ''
                     errors.append({'chunk': chunk_index,
                                    'error': f'JSON parse failed or empty response{truncation_note}',
                                    'response_preview': raw_content[:300]})
                 else:
                     errors.append({'chunk': chunk_index, 'error': f'All {len(insights)} parsed items failed validation'})
 
-            logger.info(f"Extracted {len(valid)} insights from chunk {chunk_index}")
+            logger.info(f"Chunk {chunk_index}: extracted {len(valid)} insights in {call_elapsed:.1f}s (attempt {attempt+1})")
             return valid
 
         except Exception as e:
@@ -119,13 +120,14 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
                 # Longer backoff for rate limits, shorter for other errors
                 if '429' in error_str or 'rate' in error_str.lower() or 'overloaded' in error_str.lower():
                     wait = min(30, 5 * (2 ** attempt))  # 5s, 10s, 20s
+                    logger.warning(f"Chunk {chunk_index}: rate limited (429), retrying in {wait:.1f}s (attempt {attempt+1}/{max_retries+1})")
                 else:
                     wait = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                    logger.warning(f"Chunk {chunk_index}: {type(e).__name__}, retrying in {wait:.1f}s (attempt {attempt+1}/{max_retries+1})")
                 wait += _random.uniform(0, 2)  # Jitter to prevent thundering herd
-                logger.warning(f"Chunk {chunk_index} attempt {attempt + 1} failed: {e}. Retrying in {wait:.1f}s...")
                 _time.sleep(wait)
             else:
-                logger.error(f"Insight extraction failed for chunk {chunk_index} after {max_retries + 1} attempts: {e}")
+                logger.error(f"Chunk {chunk_index}: FAILED after {max_retries+1} attempts — {e}")
                 if errors is not None:
                     errors.append({'chunk': chunk_index, 'error': f'API error after {max_retries + 1} attempts: {e}'})
                 return []
