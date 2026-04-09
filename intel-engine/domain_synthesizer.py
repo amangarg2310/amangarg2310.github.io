@@ -73,15 +73,25 @@ Claude Code is Anthropic's CLI tool that lets developers use Claude AI directly 
 
 The framing sentence is NOT optional. Do NOT start the TLDR with a bullet point.
 
-Then 3-5 bullet points with the MOST IMPORTANT specific takeaways. Each bullet should LEAD with a brief "why this matters" clause, then give the specific detail. The reader should understand the significance before hitting the technical specifics.
+Then 3-5 bullet points that BUILD UNDERSTANDING progressively — like a tutor walking someone through the subject:
 
-Bad: "- Deploy Dataflow ETL pipelines with `min_worker` and `max_worker` parameters"
-Good: "- To control costs on batch jobs, set `min_worker` and `max_worker` on Dataflow ETL pipelines — this prevents auto-scaling from spinning up expensive instances"
+- Start with the foundational concept or first principle of this domain
+- Each bullet should CONNECT to the previous one, advancing the reader's mental model step by step
+- Fill in logical gaps between insights — add brief connective context ("Once you have X, the next consideration is Y") that the sources didn't explicitly state but a teacher would naturally explain to bridge concepts
+- Group related ideas together rather than listing them as separate bullets
+- Drop random tool recommendations or narrow technique tips that don't build domain understanding — only include specifics when they illustrate a broader principle
+- The reader should finish feeling they UNDERSTAND the subject's key concepts and how they fit together, not like they read a list of unrelated tips
 
-Bad: "- Use `claude --dangerously-skip-permissions` for unattended runs"
-Good: "- For CI/CD automation where no human is present to approve, run `claude --dangerously-skip-permissions` — but only in sandboxed environments since it bypasses all safety prompts"
+BAD (disconnected tips — each bullet is a random standalone fact):
+- Commission original hand-drawn art as your mascot foundation
+- Iterate mascot designs in ChatGPT by chunking requests into single changes
+- Name your app after personal connections to increase memorability
+- Use Whisper Flow for hands-free dictation during design iteration
 
-Bullets should be concrete and actionable (include exact commands, URLs, specific names) but LEAD with context so the reader knows why they'd care. Do NOT use templated labels like "Fastest start:" — write naturally.
+GOOD (progressive narrative — each bullet builds on the last, teacher fills gaps):
+- **App branding starts with visual identity** — a distinctive mascot or illustration that users instantly associate with your product; hand-drawn original art creates authenticity that AI-generated or stock imagery can't match (Source: Chris Raroque, 2026-04-09)
+- **Once you have a visual foundation, refine it iteratively** rather than trying to nail it in one pass — whether using AI tools or working with an illustrator, make one focused change at a time to maintain stylistic consistency (Source: Chris Raroque, 2026-04-09)
+- **Pair your visual identity with a name that has personal meaning** — emotionally resonant names ("Ellie", "Luna") are more memorable than generic descriptive names, though stay open to renaming if the name doesn't age well (Source: Chris Raroque, 2026-04-09)
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)
@@ -130,12 +140,14 @@ Claude Code is Anthropic's CLI tool that lets developers use Claude AI directly 
 
 The framing sentence is NOT optional. Do NOT start the TLDR with a bullet point.
 
-Then 3-5 bullet points with the MOST IMPORTANT specific takeaways. Each bullet should LEAD with a brief "why this matters" clause, then give the specific detail. The reader should understand the significance before hitting the technical specifics.
+Then 3-5 bullet points that BUILD UNDERSTANDING progressively — like a tutor walking someone through the subject:
 
-Bad: "- Deploy Dataflow ETL pipelines with `min_worker` and `max_worker` parameters"
-Good: "- To control costs on batch jobs, set `min_worker` and `max_worker` on Dataflow ETL pipelines — this prevents auto-scaling from spinning up expensive instances"
-
-Bullets should be concrete and actionable (include exact commands, URLs, specific names) but LEAD with context. Do NOT use templated labels — write naturally.
+- Start with the foundational concept or first principle of this domain
+- Each bullet should CONNECT to the previous one, advancing the reader's mental model step by step
+- Fill in logical gaps between insights — add brief connective context that the sources didn't explicitly state but a teacher would naturally explain to bridge concepts
+- Group related ideas into coherent points rather than listing them as separate random bullets
+- Drop narrow tool recommendations that don't build domain understanding — only include specifics when they illustrate a broader principle
+- The reader should finish feeling they UNDERSTAND the subject, not like they read a list of unrelated tips
 
 Then continue with detailed sections:
 - ## Headers organized by task/workflow (not abstract categories)

@@ -1526,6 +1526,19 @@
     font-weight: 600;
 }
 
+/* Level-0 categories — visually heavier to distinguish from level-1 domains */
+.intel-tree-node[data-level="0"] > .intel-tree-row .intel-tree-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--intel-text);
+}
+
+/* Level-1 domains — subtler icon to visually demote below categories */
+.intel-tree-node[data-level="1"] > .intel-tree-row .intel-tree-icon {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
+}
+
 .intel-tree-count {
     font-size: 10px;
     color: var(--intel-text-tertiary);

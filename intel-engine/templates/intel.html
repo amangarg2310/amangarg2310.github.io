@@ -96,7 +96,7 @@
                             <div class="intel-tree-node {% if domain and domain.id == child.id %}active{% endif %}" data-level="{{ child.level }}" data-domain-id="{{ child.id }}" data-domain-name="{{ child.name }}">
                                 <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ child.id }}, '{{ child.name }}', {{ child.level }})">
                                     {% if child.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
-                                    <span class="intel-tree-icon">{{ child.icon }}</span>
+                                    <span class="intel-tree-icon">▸</span>
                                     <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-tree-name {% if domain and domain.name == child.name %}active{% endif %}">{{ child.name }}</a>
                                     {% if child.source_count %}<span class="intel-tree-count">{{ child.source_count }}</span>{% endif %}
                                 </div>

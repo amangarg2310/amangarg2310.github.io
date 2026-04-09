@@ -8,6 +8,7 @@ Knowledge compounds over time per domain.
 import json
 import logging
 import os
+import sys
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -22,6 +23,13 @@ from werkzeug.utils import secure_filename
 import config
 from migrations import run_migrations
 from auth import User
+
+# Configure logging for both direct execution and gunicorn
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+    stream=sys.stdout,
+)
 
 # Run migrations at import time so they execute under gunicorn too
 run_migrations()
@@ -233,6 +241,21 @@ def index():
             c = live_counts.get(d.get('id'), {'source_count': 0, 'insight_count': 0})
             d['source_count'] = c['source_count']
             d['insight_count'] = c['insight_count']
+        # For level-0 parents with no direct sources, sum children's counts
+        for d in domains:
+            if d.get('level') == 0 and d['source_count'] == 0:
+                child_agg = conn.execute("""
+                    SELECT COUNT(DISTINCT s.id) as sc, COUNT(i.id) as ic
+                    FROM domains cd
+                    JOIN sources s ON s.domain_id = cd.id
+                    LEFT JOIN insights i ON i.source_id = s.id
+                    WHERE cd.parent_id = ?
+                      AND s.status IN ('processed', 'processed_empty')
+                      AND (s.user_id = ? OR s.user_id IS NULL)
+                """, (d['id'], uid)).fetchone()
+                if child_agg:
+                    d['source_count'] = child_agg['sc'] or 0
+                    d['insight_count'] = child_agg['ic'] or 0
     except sqlite3.OperationalError:
         pass
     finally:
@@ -515,6 +538,23 @@ def domain_page(domain_name):
                     synthesis_html = f"<p>{synthesis['content']}</p>"
             elif synthesis:
                 synthesis_html = f"<p>{synthesis['content']}</p>"
+
+        # Auto-trigger synthesis for domains with insights but no synthesis
+        if synthesis is None:
+            # Check if domain has insights (use live count from sources)
+            insight_check = conn.execute(
+                "SELECT COUNT(*) FROM insights WHERE domain_id = ?",
+                (domain['id'],)
+            ).fetchone()
+            if insight_check and insight_check[0] > 0:
+                def _bg_synth(did, dbp):
+                    try:
+                        from domain_synthesizer import resynthesize_domain_full
+                        resynthesize_domain_full(did, db_path=dbp)
+                    except Exception as e:
+                        logger.error(f"Auto-synthesis failed for domain {did}: {e}")
+                threading.Thread(target=_bg_synth, args=(domain['id'], config.DB_PATH), daemon=True).start()
+                logger.info(f"Auto-triggered synthesis for domain '{domain['name']}' (has insights but no synthesis)")
 
         # Sources with insight counts — aggregate from all content domains
         placeholders = ','.join('?' * len(content_domain_ids))
@@ -1772,8 +1812,6 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5002)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO)
 
     print(f"\n  Domain Intelligence Engine")
     print(f"  Running at: http://localhost:{args.port}\n")
