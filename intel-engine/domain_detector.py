@@ -68,22 +68,22 @@ DETECTION_PROMPT = """You are a domain taxonomy classifier. Classify content int
 
 RULES:
 
-1. **WHAT IS THIS CONTENT ACTUALLY ABOUT?** Read the excerpt carefully. Ignore the title — titles are clickbait. Ask: "If someone studied this content deeply, what would they become an expert in?" That specific expertise is the domain. Be precise: "App Monetization Strategy" not "Mobile Apps". "AI-Assisted Development" not "AI Tools". Capture the ANGLE, not just the topic.
+1. **WHAT IS THIS CONTENT ACTUALLY ABOUT?** Read the excerpt. Ignore the title — titles are clickbait. Ask: "What expertise does someone gain from consuming this?" The answer is the domain.
 
-2. **MATCH EXISTING only when the content genuinely deepens that domain's knowledge.** Sharing a keyword is NOT enough. A video mentioning "apps" doesn't belong in "Mobile Apps" if it's really teaching business strategy. Only reuse a domain (is_new=false) when this content would make a reader of that domain smarter about that specific subject.
+2. **MATCH EXISTING first.** Strongly prefer reusing an existing domain when the content genuinely deepens that domain's knowledge. Only create a new domain when the content teaches something clearly different from all existing domains. Sharing a keyword is NOT enough — but covering the same subject area IS.
 
-3. **DOMAIN NAME** = the specific expertise built, 2-4 words. Be descriptive enough to distinguish from related topics. "Solo App Business" not "Apps". "Claude Code Workflows" not "AI Tools". "RAG Pipeline Design" not "AI". The name should tell a reader exactly what knowledge they'll find — generic names like "Mobile Apps" or "AI Tools" are too vague.
+3. **DOMAIN NAME** = the core subject, 1-3 words. Should be clear and simple — a tool name ("Claude Code"), a discipline ("Data Engineering"), or a focused field ("App Business"). Avoid overly long or hyper-specific names. Multiple sources about the same broad subject should share ONE domain.
 
-4. **PARENT CATEGORY**: Broad 2-3 word grouping that covers multiple related domains. Reuse an existing parent when it fits. CRITICAL: The parent name must be DIFFERENT from the domain name. If your domain is "Claude Code", the parent should be something broader like "AI Development Tools", never "Claude Code" again.
+4. **PARENT CATEGORY**: Broad 1-2 word grouping. Reuse an existing parent when it fits. The parent must be DIFFERENT from the domain name — it should be a broader category that could contain multiple domains.
 
-5. **SUB-TOPICS**: 2-4 thematic areas within this specific content. Think "what chapters would this belong to" — not granular steps. Sub-topic names must also differ from both the domain and parent names.
+5. **SUB-TOPICS**: 2-4 thematic areas this content covers. These capture the specific angles within the domain.
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
 EXCERPT: {excerpt}
 
 Return ONLY valid JSON:
-{{"domain": "Name", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence about what expertise this builds", "is_new": true/false}}"""
+{{"domain": "Name", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
 
 
 def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
@@ -431,24 +431,18 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             user_id=user_id, now=now,
         )
 
-    # 1b. Prevent parent/domain name collision — same name at level-0 and level-1 is confusing
+    # 1b. Prevent parent/domain name collision — same name at level-0 and level-1 breaks navigation
     if name.lower().strip() == parent_name.lower().strip():
-        # Disambiguate: make the domain name more specific
-        # Try appending a qualifier based on the description
-        if description and len(description) > 10:
-            # Extract a distinguishing word from the description
-            desc_words = [w for w in description.split() if w.lower() not in (
-                'a', 'an', 'the', 'is', 'are', 'was', 'about', 'for', 'and', 'or', 'of', 'in', 'to', 'on', 'with',
-                'this', 'that', 'how', 'what', 'which', 'domain', 'category', 'content', 'source',
-                name.lower(), parent_name.lower(),
-            ) and len(w) > 3]
-            if desc_words:
-                name = f"{name} — {desc_words[0].strip('.,;:').title()}"
-                logger.info(f"Disambiguated domain name to '{name}' (was identical to parent '{parent_name}')")
-        if name.lower().strip() == parent_name.lower().strip():
-            # Still matching — use "Core" suffix as fallback
-            name = f"{name} Core"
-            logger.info(f"Fallback disambiguation: domain name set to '{name}'")
+        # Change the parent to be broader by adding a generic suffix
+        parent_name_new = f"{parent_name} & Related"
+        logger.info(f"Parent/domain name collision: renamed parent from '{parent_name}' to '{parent_name_new}'")
+        # Update the existing parent domain's name
+        conn.execute(
+            "UPDATE domains SET name = ?, path = ? WHERE id = ?",
+            (parent_name_new, f"/{parent_name_new}", parent_id),
+        )
+        conn.commit()
+        parent_name = parent_name_new
 
     # 2. Find existing domain via fuzzy match, or create new one (level 1)
     domain_match = _find_matching_domain(conn, name, parent_id, user_id)
