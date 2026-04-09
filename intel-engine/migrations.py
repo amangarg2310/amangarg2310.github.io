@@ -237,6 +237,11 @@ def run_migrations(db_path=None):
         )
     """)
 
+    # Deduplicate domains — parallel playlist ingestion could create duplicate
+    # level-0/level-1 entries with the same (name, level, user_id). Keep the
+    # lowest-id row, re-point children and sources to it, then delete extras.
+    _deduplicate_domains(conn)
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)
@@ -276,6 +281,60 @@ def _create_fts5(conn):
         conn.commit()
     except sqlite3.OperationalError as e:
         logger.warning(f"FTS5 setup: {e}")
+
+
+def _deduplicate_domains(conn):
+    """Merge duplicate domains created by parallel playlist ingestion.
+
+    Keeps the lowest-id row for each (name, level, user_id) group,
+    re-points child domains and sources to the kept row, then deletes extras.
+    """
+    try:
+        dupes = conn.execute("""
+            SELECT name, level, user_id, MIN(id) as keep_id, GROUP_CONCAT(id) as all_ids, COUNT(*) as cnt
+            FROM domains
+            GROUP BY name COLLATE NOCASE, level, user_id
+            HAVING cnt > 1
+        """).fetchall()
+
+        for row in dupes:
+            keep_id = row[3]  # MIN(id)
+            all_ids = [int(x) for x in row[4].split(',')]
+            remove_ids = [x for x in all_ids if x != keep_id]
+            if not remove_ids:
+                continue
+
+            placeholders = ','.join('?' * len(remove_ids))
+
+            # Re-point child domains (parent_id) to the kept row
+            conn.execute(
+                f"UPDATE domains SET parent_id = ? WHERE parent_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point sources to the kept row
+            conn.execute(
+                f"UPDATE sources SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point insights to the kept row
+            conn.execute(
+                f"UPDATE insights SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Re-point syntheses to the kept row
+            conn.execute(
+                f"UPDATE syntheses SET domain_id = ? WHERE domain_id IN ({placeholders})",
+                [keep_id] + remove_ids,
+            )
+            # Delete the duplicates
+            conn.execute(
+                f"DELETE FROM domains WHERE id IN ({placeholders})",
+                remove_ids,
+            )
+            logger.info(f"Deduplicated domain '{row[0]}' level={row[1]}: kept id={keep_id}, removed {remove_ids}")
+
+    except sqlite3.OperationalError as e:
+        logger.warning(f"Domain deduplication skipped: {e}")
 
 
 def _add_column(conn, table: str, column: str, definition: str):

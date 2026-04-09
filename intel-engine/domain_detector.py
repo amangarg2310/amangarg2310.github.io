@@ -16,9 +16,14 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 from openai import OpenAI
+
+# Serialize domain creation to prevent duplicate level-0/level-1 entries
+# during parallel playlist ingestion (3 workers).
+_domain_create_lock = threading.Lock()
 
 
 def _get_conn(db_path):
@@ -477,46 +482,54 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
 
 def _find_or_create_domain(conn, name: str, level: int, parent_id: int | None,
                            path: str, description: str, user_id: int | None, now: str) -> int:
-    """Find existing domain by name+level+user or create a new one."""
+    """Find existing domain by name+level+user or create a new one.
+
+    Uses _domain_create_lock to prevent parallel playlist workers from
+    creating duplicate level-0/level-1 entries (no UNIQUE constraint exists
+    since hierarchy allows the same name at different levels).
+    """
     if level > 2:
         level = 2  # Hard cap: never create deeper than level 2
-    if user_id:
-        row = conn.execute(
-            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
-            (name, level, user_id),
-        ).fetchone()
-    else:
-        row = conn.execute(
-            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ?",
-            (name, level),
-        ).fetchone()
 
-    if row:
-        return row[0]
+    with _domain_create_lock:
+        if user_id:
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
+                (name, level, user_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ? COLLATE NOCASE AND level = ?",
+                (name, level),
+            ).fetchone()
 
-    icon = DOMAIN_ICONS.get(name.lower(), "📚")
-    try:
-        cursor = conn.execute(
-            "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, description, icon, parent_id, level, path, user_id, now, now),
-        )
-        logger.info(f"Created domain: {path} (level={level})")
-        return cursor.lastrowid
-    except sqlite3.IntegrityError:
-        # UNIQUE constraint — domain with this name already exists (possibly at different level)
-        # Find the existing one regardless of level
-        row = conn.execute(
-            "SELECT id FROM domains WHERE name = ? COLLATE NOCASE", (name,)
-        ).fetchone()
         if row:
-            # Update its level and parent if needed
-            conn.execute(
-                "UPDATE domains SET level = ?, parent_id = ?, path = ?, updated_at = ? WHERE id = ?",
-                (level, parent_id, path, now, row[0]),
-            )
-            logger.info(f"Reused existing domain '{name}' (updated level={level})")
             return row[0]
-        raise
+
+        icon = DOMAIN_ICONS.get(name.lower(), "📚")
+        try:
+            cursor = conn.execute(
+                "INSERT INTO domains (name, description, icon, parent_id, level, path, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (name, description, icon, parent_id, level, path, user_id, now, now),
+            )
+            conn.commit()  # Commit immediately so other threads see the new row
+            logger.info(f"Created domain: {path} (level={level})")
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            # UNIQUE constraint — domain with this name already exists (possibly at different level)
+            # Find the existing one regardless of level
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ? COLLATE NOCASE", (name,)
+            ).fetchone()
+            if row:
+                # Update its level and parent if needed
+                conn.execute(
+                    "UPDATE domains SET level = ?, parent_id = ?, path = ?, updated_at = ? WHERE id = ?",
+                    (level, parent_id, path, now, row[0]),
+                )
+                logger.info(f"Reused existing domain '{name}' (updated level={level})")
+                return row[0]
+            raise
 
 
 # ══════════════════════════════════════════════════════════════
