@@ -277,6 +277,7 @@ def _synthesize_parent(parent_id: int, db_path):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=4000,
+            timeout=120,
         )
         content = response.content[0].text.strip()
     except Exception as e:
@@ -410,6 +411,7 @@ Return ONLY valid JSON:
 Keep each array to max 5 entries. Be specific about what the agreement/disagreement is."""}],
             temperature=0.2,
             max_tokens=2000,
+            timeout=90,
         )
         return response.content[0].text.strip()
     except Exception as e:
@@ -424,6 +426,7 @@ def _generate_ingestion_impact(client, domain_name: str, prev_synthesis: str, ne
             client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You summarize knowledge changes concisely. Return 2-3 plain sentences only.",
+            timeout=30,
             messages=[{"role": "user", "content": f"""The knowledge base for "{domain_name}" was updated after ingesting "{source_title}".
 
 PREVIOUS SYNTHESIS (excerpt):
@@ -472,6 +475,7 @@ def _generate_suggested_question(domain_name: str, synthesis_content: str, api_k
             client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You generate short questions. Maximum 12 words. Always end with a question mark.",
+            timeout=30,
             messages=[{"role": "user", "content": f"""Generate exactly 1 short question a beginner would ask about "{domain_name}".
 
 CRITICAL: Maximum 12 words. One sentence. End with "?"
@@ -564,6 +568,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
         ],
         temperature=0.3,
         max_tokens=8000,
+        timeout=120,
     )
 
     synthesis_content = response.content[0].text.strip()
@@ -636,7 +641,7 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
     return synthesis_content
 
 
-def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
+def resynthesize_domain_full(domain_id: int, db_path=None, skip_enrichment: bool = False) -> str:
     """
     Rebuild the domain synthesis from ALL remaining insights.
 
@@ -740,6 +745,7 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
         ],
         temperature=0.3,
         max_tokens=8000,
+        timeout=120,
     )
 
     synthesis_content = response.content[0].text.strip()
@@ -761,25 +767,26 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     logger.info(f"Full re-synthesis v{next_version} for '{domain_name}' ({source_count} sources, {insight_count} insights)")
 
-    # Background: generate suggested question (non-blocking)
-    def _bg_suggested():
-        try:
-            sq = _generate_suggested_question(domain_name, synthesis_content, api_key)
-            if sq:
-                c = _get_conn(db_path)
-                c.execute("UPDATE syntheses SET suggested_questions = ? WHERE domain_id = ? AND version = ?",
-                          (json.dumps(sq), domain_id, next_version))
-                c.commit()
-                c.close()
-        except Exception as e:
-            logger.warning(f"Suggested question generation skipped: {e}")
-    threading.Thread(target=_bg_suggested, daemon=True).start()
+    if not skip_enrichment:
+        # Background: generate suggested question (non-blocking)
+        def _bg_suggested():
+            try:
+                sq = _generate_suggested_question(domain_name, synthesis_content, api_key)
+                if sq:
+                    c = _get_conn(db_path)
+                    c.execute("UPDATE syntheses SET suggested_questions = ? WHERE domain_id = ? AND version = ?",
+                              (json.dumps(sq), domain_id, next_version))
+                    c.commit()
+                    c.close()
+            except Exception as e:
+                logger.warning(f"Suggested question generation skipped: {e}")
+        threading.Thread(target=_bg_suggested, daemon=True).start()
 
-    # Detect cross-domain references
-    try:
-        detect_cross_references(domain_id, synthesis_content, db_path)
-    except Exception as e:
-        logger.warning(f"Cross-reference detection skipped: {e}")
+        # Detect cross-domain references
+        try:
+            detect_cross_references(domain_id, synthesis_content, db_path)
+        except Exception as e:
+            logger.warning(f"Cross-reference detection skipped: {e}")
 
     return synthesis_content
 
@@ -854,6 +861,7 @@ def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None
             ],
             temperature=0.2,
             max_tokens=500,
+            timeout=60,
         )
 
         content = response.content[0].text.strip()

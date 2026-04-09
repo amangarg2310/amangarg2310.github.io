@@ -259,6 +259,7 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
         ],
         temperature=0.2,
         max_tokens=300,
+        timeout=60,
     )
 
     content = response.choices[0].message.content.strip()
@@ -640,6 +641,7 @@ or
             ],
             temperature=0.2,
             max_tokens=300,
+            timeout=60,
         )
 
         text = response.choices[0].message.content.strip()

@@ -486,7 +486,7 @@ def run_playlist_pipeline(playlist_url: str, db_path=None, user_id=None, trackin
                 _update_status(playlist_vid, 'processing',
                                f'Synthesizing {i+1}/{num_domains}: {domain_name}...', progress)
                 try:
-                    resynthesize_domain_full(domain_id, db_path)
+                    resynthesize_domain_full(domain_id, db_path, skip_enrichment=True)
                 except Exception as e:
                     logger.warning(f"Batch synthesis failed for domain {domain_id} ({domain_name}): {e}")
 
@@ -1151,7 +1151,7 @@ def reprocess_batch_pipeline(source_ids: list, db_path=None, user_id=None, track
                 _update_status(batch_vid, 'processing',
                                f'Synthesizing {i+1}/{num_domains}: {d_name}...', progress)
                 try:
-                    resynthesize_domain_full(domain_id, db_path)
+                    resynthesize_domain_full(domain_id, db_path, skip_enrichment=True)
                 except Exception as e:
                     logger.warning(f"Batch synthesis failed for domain {domain_id}: {e}")
                 try:

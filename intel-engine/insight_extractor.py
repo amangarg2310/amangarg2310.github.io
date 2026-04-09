@@ -81,6 +81,7 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
                     ],
                     temperature=0.3,
                     max_tokens=8192,
+                    timeout=120,
                 )
 
             raw_content = response.content[0].text.strip()
