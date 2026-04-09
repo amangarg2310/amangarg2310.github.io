@@ -68,21 +68,22 @@ DETECTION_PROMPT = """You are a domain taxonomy classifier. Classify content int
 
 RULES (follow in order):
 
-1. **MATCH EXISTING FIRST**: If this content is about a tool/product/concept that ALREADY EXISTS in the hierarchy above, return that EXACT domain name with is_new=false. Do NOT create variants.
-   - Existing domain "Claude Code" + new video "Claude Code Marketing Team Demo" → domain = "Claude Code" (REUSE)
-   - Existing domain "OpenClaw" + new video "5 OpenClaw Tricks" → domain = "OpenClaw" (REUSE)
+1. **MATCH EXISTING — only if it's truly the same subject**: If this content is primarily about a tool/product/concept that ALREADY EXISTS in the hierarchy above, return that EXACT domain name with is_new=false. But do NOT force a match based on surface keywords alone.
+   - Existing domain "Claude Code" + new video "Claude Code Marketing Team Demo" → domain = "Claude Code" (REUSE — same tool)
+   - Existing domain "Mobile Apps" + new video "How to build a 7-figure app business" → domain = "App Entrepreneurship" (NEW — this is about business strategy, not mobile app development)
+   - Existing domain "AI Tools" + new article about AI job displacement → NEW domain, not "AI Tools" (different topic)
 
-2. **CANONICAL NAME**: Extract the core tool/product/concept name — NOT the video title.
-   - "Ollama + Claude Code = 99% CHEAPER" → domain = "Claude Code" (or "Ollama" — pick the primary)
-   - "Build Your Full AI Marketing Team (Agents + Claude Skills)" → domain = "Claude Code"
-   - "The only OpenClaw video you'll ever need" → domain = "OpenClaw"
-   - Domain names should be 1-3 words: the proper noun of the tool/product.
+2. **CLASSIFY BY PRIMARY TOPIC, not surface keywords**: Read the excerpt carefully. What is this content actually TEACHING?
+   - If it teaches how to USE a specific tool → domain = tool name (e.g. "Claude Code", "OpenClaw")
+   - If it teaches a concept, strategy, or methodology → domain = the core topic (e.g. "App Entrepreneurship", "AI Job Impact", "RAG Architecture")
+   - If it analyzes an industry or trend → domain = the subject (e.g. "AI Employment", "SaaS Growth")
+   - Domain names should be 1-3 words. Use proper nouns for tools, descriptive nouns for concepts.
 
 3. **PARENT CATEGORY**: Use an existing parent if one fits. Create a new parent only for truly new categories.
-   - Parent should be a broad 2-3 word category: "AI Tools", "Marketing", "Finance"
+   - Parent should be a broad 2-3 word category: "AI Tools", "Business", "Marketing", "Career"
 
-4. **SUB-TOPICS**: 2-4 broad workflow categories (NOT specific steps).
-   - Good: "Setup", "Core Workflows", "Tips & Tricks"
+4. **SUB-TOPICS**: 2-4 broad thematic areas covered in the content (NOT specific steps).
+   - Good: "Revenue Models", "Growth Strategy", "Market Analysis"
    - Bad: "Installing Docker", "Port 3000 Configuration"
 
 CONTENT TITLE: {title}
@@ -90,7 +91,7 @@ CONTENT SOURCE: {channel}
 EXCERPT: {excerpt}
 
 Return ONLY valid JSON:
-{{"domain": "ToolName", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
+{{"domain": "TopicName", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence about what this domain covers", "is_new": true/false}}"""
 
 
 def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
