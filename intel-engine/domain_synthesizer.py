@@ -270,7 +270,8 @@ def _synthesize_parent(parent_id: int, db_path):
 
     client = Anthropic(api_key=api_key)
     try:
-        response = client.messages.create(
+        response = config.rate_limited_call(
+            client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You synthesize knowledge across sub-domains into clear, structured overviews. Write in clean markdown.",
             messages=[{"role": "user", "content": prompt}],
@@ -390,7 +391,8 @@ def _analyze_convergence(domain_id: int, db_path) -> str:
 
     client = Anthropic(api_key=api_key)
     try:
-        response = client.messages.create(
+        response = config.rate_limited_call(
+            client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You analyze cross-source agreement patterns. Return ONLY valid JSON.",
             messages=[{"role": "user", "content": f"""Analyze these insights from {len(sources)} sources about the same domain.
@@ -418,7 +420,8 @@ Keep each array to max 5 entries. Be specific about what the agreement/disagreem
 def _generate_ingestion_impact(client, domain_name: str, prev_synthesis: str, new_synthesis: str, source_title: str) -> str:
     """Generate a brief summary of what a source added to the knowledge base (Tier 4B)."""
     try:
-        response = client.messages.create(
+        response = config.rate_limited_call(
+            client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You summarize knowledge changes concisely. Return 2-3 plain sentences only.",
             messages=[{"role": "user", "content": f"""The knowledge base for "{domain_name}" was updated after ingesting "{source_title}".
@@ -465,7 +468,8 @@ def _generate_suggested_question(domain_name: str, synthesis_content: str, api_k
     """Generate 1 short suggested question from synthesis content."""
     try:
         client = Anthropic(api_key=api_key)
-        response = client.messages.create(
+        response = config.rate_limited_call(
+            client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You generate short questions. Maximum 12 words. Always end with a question mark.",
             messages=[{"role": "user", "content": f"""Generate exactly 1 short question a beginner would ask about "{domain_name}".
@@ -544,7 +548,8 @@ def synthesize_domain(domain_id: int, source_id: int, source_title: str, channel
 
     client = Anthropic(api_key=api_key)
 
-    response = client.messages.create(
+    response = config.rate_limited_call(
+        client.messages.create,
         model=config.ANTHROPIC_HAIKU_MODEL,
         system="You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown. This is a how-to reference, not an executive summary.",
         messages=[
@@ -723,7 +728,8 @@ def resynthesize_domain_full(domain_id: int, db_path=None) -> str:
 
     client = Anthropic(api_key=api_key)
 
-    response = client.messages.create(
+    response = config.rate_limited_call(
+        client.messages.create,
         model=config.ANTHROPIC_HAIKU_MODEL,
         system="You synthesize knowledge into detailed, practical reference documents. Preserve specific steps, commands, tool names, configurations, and actionable detail. Write in clean markdown.",
         messages=[
@@ -835,7 +841,8 @@ def detect_cross_references(domain_id: int, synthesis_content: str, db_path=None
 
     try:
         client = Anthropic(api_key=api_key)
-        response = client.messages.create(
+        response = config.rate_limited_call(
+            client.messages.create,
             model=config.ANTHROPIC_HAIKU_MODEL,
             system="You identify meaningful connections between knowledge domains. Return only valid JSON arrays.",
             messages=[

@@ -5,6 +5,7 @@ Global configuration for the Domain Intelligence Engine.
 import os
 import sqlite3
 import logging
+import threading
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -27,6 +28,20 @@ ALLOWED_EXTENSIONS = {'pdf', 'docx', 'pptx', 'png', 'jpg', 'jpeg', 'gif', 'webp'
 
 # ── Playlist limits ──
 MAX_PLAYLIST_VIDEOS = 50  # Soft cap on new (non-deduped) videos per playlist submission
+
+# ── API concurrency ──
+# Global semaphore to limit concurrent LLM API calls across all threads.
+# Prevents rate limiting when processing playlists + other sources simultaneously.
+api_semaphore = threading.Semaphore(3)
+
+
+def rate_limited_call(fn, *args, **kwargs):
+    """Execute an API call within the global semaphore.
+    
+    Usage: result = config.rate_limited_call(client.messages.create, model=..., messages=...)
+    """
+    with api_semaphore:
+        return fn(*args, **kwargs)
 
 # ── OpenAI ──
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

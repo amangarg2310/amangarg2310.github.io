@@ -247,7 +247,8 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
 
     client = OpenAI(api_key=api_key)
 
-    response = client.chat.completions.create(
+    response = config.rate_limited_call(
+        client.chat.completions.create,
         model=config.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": "You classify content into specific, hierarchical knowledge domains. Return only valid JSON."},
@@ -431,18 +432,10 @@ def ensure_domain_hierarchy(name: str, parent_name: str, sub_topics: list, descr
             user_id=user_id, now=now,
         )
 
-    # 1b. Prevent parent/domain name collision — same name at level-0 and level-1 breaks navigation
+    # 1b. Log parent/domain name collision (prompt should prevent this)
     if name.lower().strip() == parent_name.lower().strip():
-        # Change the parent to be broader by adding a generic suffix
-        parent_name_new = f"{parent_name} & Related"
-        logger.info(f"Parent/domain name collision: renamed parent from '{parent_name}' to '{parent_name_new}'")
-        # Update the existing parent domain's name
-        conn.execute(
-            "UPDATE domains SET name = ?, path = ? WHERE id = ?",
-            (parent_name_new, f"/{parent_name_new}", parent_id),
-        )
-        conn.commit()
-        parent_name = parent_name_new
+        logger.warning(f"Parent/domain name collision: '{name}' == '{parent_name}'. "
+                       f"Prompt should prevent this. Proceeding with both.")
 
     # 2. Find existing domain via fuzzy match, or create new one (level 1)
     domain_match = _find_matching_domain(conn, name, parent_id, user_id)
@@ -594,7 +587,8 @@ def propose_taxonomy_evolution(domain_id: int, new_insights: list[dict], db_path
 
     client = OpenAI(api_key=api_key)
     try:
-        response = client.chat.completions.create(
+        response = config.rate_limited_call(
+            client.chat.completions.create,
             model=config.OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": "You analyze how a learner's understanding of a domain evolves as they consume new content. Return only valid JSON."},

@@ -67,19 +67,21 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
         return []
 
     client = Anthropic(api_key=api_key)
-    max_retries = 2
+    import random as _random
+    max_retries = 3
 
     for attempt in range(max_retries + 1):
         try:
-            response = client.messages.create(
-                model=config.ANTHROPIC_HAIKU_MODEL,
-                system="You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays.",
-                messages=[
-                    {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
-                ],
-                temperature=0.3,
-                max_tokens=8192,
-            )
+            with config.api_semaphore:
+                response = client.messages.create(
+                    model=config.ANTHROPIC_HAIKU_MODEL,
+                    system="You extract detailed, granular, actionable knowledge from content (transcripts, articles, documents, notes). Capture specifics — steps, commands, tool names, configurations, exact values. Return only valid JSON arrays.",
+                    messages=[
+                        {"role": "user", "content": EXTRACTION_PROMPT.format(chunk=chunk)},
+                    ],
+                    temperature=0.3,
+                    max_tokens=8192,
+                )
 
             raw_content = response.content[0].text.strip()
             stop_reason = response.stop_reason  # 'end_turn' or 'max_tokens'
@@ -111,9 +113,15 @@ def extract_insights(chunk: str, chunk_index: int = 0, errors: list = None) -> l
             return valid
 
         except Exception as e:
+            error_str = str(e)
             if attempt < max_retries:
-                wait = 2 ** (attempt + 1)  # 2s, 4s
-                logger.warning(f"Insight extraction attempt {attempt + 1} failed for chunk {chunk_index}: {e}. Retrying in {wait}s...")
+                # Longer backoff for rate limits, shorter for other errors
+                if '429' in error_str or 'rate' in error_str.lower() or 'overloaded' in error_str.lower():
+                    wait = min(30, 5 * (2 ** attempt))  # 5s, 10s, 20s
+                else:
+                    wait = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                wait += _random.uniform(0, 2)  # Jitter to prevent thundering herd
+                logger.warning(f"Chunk {chunk_index} attempt {attempt + 1} failed: {e}. Retrying in {wait:.1f}s...")
                 _time.sleep(wait)
             else:
                 logger.error(f"Insight extraction failed for chunk {chunk_index} after {max_retries + 1} attempts: {e}")

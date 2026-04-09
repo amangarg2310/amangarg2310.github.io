@@ -1312,7 +1312,10 @@ def _run_shared_pipeline(
         # Step 7: Re-synthesize (now source is 'processed' and will be counted)
         _update('Synthesizing knowledge...', 85,
                 title=title, channel=channel, domain=domain_name)
-        synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+        try:
+            synthesize_domain(domain_id, source_id, title, channel, db_path, source_date=source_date)
+        except Exception as e:
+            logger.warning(f"Synthesis failed for domain {domain_id}: {e}")
 
         _update('Updating domain counts...', 92,
                 title=title, channel=channel, domain=domain_name)
