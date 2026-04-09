@@ -353,10 +353,20 @@ def domain_page(domain_name):
         conn = get_db()
 
         uid = current_user.id
-        domain = conn.execute(
-            "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL)",
-            (domain_name, uid),
-        ).fetchone()
+        # Accept optional ?level= param to disambiguate when the same name
+        # exists at multiple hierarchy levels (e.g. "AI Tools" at level-0 AND level-1).
+        requested_level = request.args.get('level', type=int)
+        if requested_level is not None:
+            domain = conn.execute(
+                "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND level = ? AND (user_id = ? OR user_id IS NULL)",
+                (domain_name, requested_level, uid),
+            ).fetchone()
+        else:
+            # Default: prefer level-1 (the domain itself, not the parent category)
+            domain = conn.execute(
+                "SELECT * FROM domains WHERE name = ? COLLATE NOCASE AND (user_id = ? OR user_id IS NULL) ORDER BY CASE WHEN level = 1 THEN 0 WHEN level = 2 THEN 1 ELSE 2 END LIMIT 1",
+                (domain_name, uid),
+            ).fetchone()
         if not domain:
             return redirect(url_for('index'))
         domain = dict(domain)

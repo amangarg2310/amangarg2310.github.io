@@ -131,6 +131,7 @@ Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD),
 - **Error boundaries:** Each video in a playlist has its own `try/except` so one failure doesn't stop the rest.
 - **Domain creation lock:** `_domain_create_lock` (threading.Lock) in `domain_detector.py` serializes `_find_or_create_domain` to prevent parallel playlist workers from creating duplicate level-0/level-1 domains. Each INSERT is committed immediately inside the lock so other threads see the new row.
 - **User ID filtering:** All queries that return user-visible data use `(user_id = ? OR user_id IS NULL)` — never bare `user_id = ?`. This covers both user-owned and legacy/shared records.
+- **Domain name collisions:** The same name can exist at different hierarchy levels (e.g. "AI Tools" at level-0 parent AND level-1 domain). `domain_page()` accepts `?level=N` query param to disambiguate. Default prefers level-1 (the actual domain, not the parent category). The knowledge tree bio-tree passes `?level=0` for category node links.
 - **Domain deduplication:** `migrations.py` includes `_deduplicate_domains()` that merges duplicate (name, level, user_id) entries — keeps lowest ID, re-points children/sources/insights/syntheses, deletes extras. Runs automatically on startup.
 
 ## Learning Science Principles
