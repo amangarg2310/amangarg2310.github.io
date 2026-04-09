@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import (
-    Flask, render_template, request, redirect, url_for, jsonify, session,
+    Flask, render_template, request, redirect, url_for, jsonify, session, make_response,
 )
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
@@ -510,7 +510,7 @@ def domain_page(domain_name):
         except (json.JSONDecodeError, TypeError):
             synthesis['suggested_questions_list'] = []
 
-    return render_template("intel.html",
+    resp = make_response(render_template("intel.html",
                            domain=domain,
                            synthesis=synthesis,
                            synthesis_html=synthesis_html,
@@ -518,7 +518,9 @@ def domain_page(domain_name):
                            domains=domains,
                            domain_tree=domain_tree,
                            subtopic_scope=subtopic_scope,
-                           convergence=convergence)
+                           convergence=convergence))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
 
 
 @app.route("/setup")

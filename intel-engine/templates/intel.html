@@ -1562,6 +1562,12 @@ function resetAllData() {
 
 // ── Source Management ──
 
+// On page load, clear any stale .processing spinners left from
+// previous reprocess attempts that completed while the page was stale.
+document.querySelectorAll('.intel-source-item.processing').forEach(el => {
+    el.classList.remove('processing');
+});
+
 function showSourceDebug(sourceId) {
     // Remove any existing debug popup
     const existing = document.getElementById('source-debug-popup');
