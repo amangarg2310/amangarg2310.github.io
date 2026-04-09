@@ -256,13 +256,16 @@ def knowledge_page():
     try:
         conn = get_db()
 
-        # Get all level-0 categories
-        cats = conn.execute("""
-            SELECT id, name, icon, source_count, insight_count, description
-            FROM domains
-            WHERE (user_id = ? OR user_id IS NULL) AND level = 0
-            ORDER BY source_count DESC
-        """, (uid,)).fetchall()
+        # Build tree bottom-up from level-1 domains (same resilient strategy as homepage).
+        # This works regardless of whether level-0 parents exist or have correct levels.
+        level1_domains = [dict(r) for r in conn.execute("""
+            SELECT d.id, d.name, d.icon, d.source_count, d.insight_count, d.description, d.parent_id,
+                   p.name as parent_name, p.icon as parent_icon, p.description as parent_description
+            FROM domains d
+            LEFT JOIN domains p ON d.parent_id = p.id
+            WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
+            ORDER BY d.source_count DESC
+        """, (uid,)).fetchall()]
 
         # Get all level-2 sub-topics keyed by parent_id
         subtopics_by_parent = {}
@@ -277,59 +280,22 @@ def knowledge_page():
             if pid:
                 subtopics_by_parent.setdefault(pid, []).append(st)
 
-        for cat in cats:
-            cat = dict(cat)
-            # Get child domains (level 1) under this category
-            children = [dict(r) for r in conn.execute("""
-                SELECT id, name, icon, source_count, insight_count, description
-                FROM domains
-                WHERE parent_id = ? AND level = 1
-                ORDER BY source_count DESC
-            """, (cat['id'],)).fetchall()]
-            # Attach level-2 sub-topics to each child
-            for child in children:
-                child['children'] = subtopics_by_parent.get(child['id'], [])
-            cat['children'] = children
-            if children:
-                categories.append(cat)
-
-        # Also get level-1 domains without a parent (orphans)
-        orphans = [dict(r) for r in conn.execute("""
-            SELECT id, name, icon, source_count, insight_count, description
-            FROM domains
-            WHERE (user_id = ? OR user_id IS NULL) AND level = 1 AND parent_id IS NULL
-            ORDER BY source_count DESC
-        """, (uid,)).fetchall()]
-        for orphan in orphans:
-            orphan['children'] = subtopics_by_parent.get(orphan['id'], [])
-        if orphans:
-            categories.append({
-                'name': 'Other', 'icon': '📂', 'source_count': 0, 'insight_count': 0,
-                'children': orphans,
-            })
-
-        # Fallback: if hierarchical queries found nothing, rebuild from level-1 domains
-        if not categories:
-            level1_domains = [dict(r) for r in conn.execute("""
-                SELECT d.id, d.name, d.icon, d.source_count, d.insight_count, d.description, d.parent_id,
-                       p.name as parent_name, p.icon as parent_icon
-                FROM domains d
-                LEFT JOIN domains p ON d.parent_id = p.id AND p.level = 0
-                WHERE (d.user_id = ? OR d.user_id IS NULL) AND d.level = 1
-                ORDER BY d.source_count DESC
-            """, (uid,)).fetchall()]
-
-            if level1_domains:
-                parent_groups = {}
-                for d in level1_domains:
-                    pname = d['parent_name'] or 'Other'
-                    picon = d['parent_icon'] or '\U0001f4c2'
-                    if pname not in parent_groups:
-                        parent_groups[pname] = {'name': pname, 'icon': picon, 'source_count': 0, 'insight_count': 0, 'children': []}
-                    child = dict(d)
-                    child['children'] = subtopics_by_parent.get(d['id'], [])
-                    parent_groups[pname]['children'].append(child)
-                categories = list(parent_groups.values())
+        # Group level-1 domains by their parent
+        parent_groups = {}  # keyed by parent_name for grouping
+        for d in level1_domains:
+            pname = d['parent_name'] or 'Other'
+            picon = d['parent_icon'] or '\U0001f4c2'
+            if pname not in parent_groups:
+                parent_groups[pname] = {
+                    'name': pname, 'icon': picon,
+                    'source_count': 0, 'insight_count': 0,
+                    'description': d.get('parent_description') or f'Category: {pname}',
+                    'children': [],
+                }
+            child = dict(d)
+            child['children'] = subtopics_by_parent.get(d['id'], [])
+            parent_groups[pname]['children'].append(child)
+        categories = list(parent_groups.values())
 
         # Overlay live counts (prevents stale column values)
         live_counts = _compute_live_domain_counts(conn, uid)
@@ -1552,14 +1518,14 @@ def api_knowledge_graph():
         # Domain nodes
         domains = conn.execute("""
             SELECT id, name, level, parent_id, source_count, insight_count
-            FROM domains WHERE user_id = ?
+            FROM domains WHERE (user_id = ? OR user_id IS NULL)
             ORDER BY level ASC, insight_count DESC
         """, (uid,)).fetchall()
 
         # Source nodes (processed only)
         sources = conn.execute("""
             SELECT id, title, url, domain_id, source_type
-            FROM sources WHERE user_id = ? AND status IN ('processed', 'processed_empty')
+            FROM sources WHERE (user_id = ? OR user_id IS NULL) AND status IN ('processed', 'processed_empty')
             ORDER BY created_at DESC
         """, (uid,)).fetchall()
 
