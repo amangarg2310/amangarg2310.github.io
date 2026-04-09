@@ -66,32 +66,24 @@ DETECTION_PROMPT = """You are a domain taxonomy classifier. Classify content int
 
 {existing_domains_section}
 
-RULES (follow in order):
+RULES:
 
-1. **MATCH EXISTING — only if it's truly the same subject**: If this content is primarily about a tool/product/concept that ALREADY EXISTS in the hierarchy above, return that EXACT domain name with is_new=false. But do NOT force a match based on surface keywords alone.
-   - Existing domain "Claude Code" + new video "Claude Code Marketing Team Demo" → domain = "Claude Code" (REUSE — same tool)
-   - Existing domain "Mobile Apps" + new video "How to build a 7-figure app business" → domain = "App Entrepreneurship" (NEW — this is about business strategy, not mobile app development)
-   - Existing domain "AI Tools" + new article about AI job displacement → NEW domain, not "AI Tools" (different topic)
+1. **WHAT IS THIS CONTENT ACTUALLY ABOUT?** Read the excerpt. Ignore the title — titles are clickbait. Ask: "What expertise does someone gain from consuming this?" The answer is the domain.
 
-2. **CLASSIFY BY PRIMARY TOPIC, not surface keywords**: Read the excerpt carefully. What is this content actually TEACHING?
-   - If it teaches how to USE a specific tool → domain = tool name (e.g. "Claude Code", "OpenClaw")
-   - If it teaches a concept, strategy, or methodology → domain = the core topic (e.g. "App Entrepreneurship", "AI Job Impact", "RAG Architecture")
-   - If it analyzes an industry or trend → domain = the subject (e.g. "AI Employment", "SaaS Growth")
-   - Domain names should be 1-3 words. Use proper nouns for tools, descriptive nouns for concepts.
+2. **MATCH EXISTING only when the content genuinely deepens that domain's knowledge.** Sharing a keyword is NOT enough. A video mentioning "apps" doesn't belong in "Mobile Apps" if it's really teaching business strategy. Only reuse a domain (is_new=false) when this content would make a reader of that domain smarter about that specific subject.
 
-3. **PARENT CATEGORY**: Use an existing parent if one fits. Create a new parent only for truly new categories.
-   - Parent should be a broad 2-3 word category: "AI Tools", "Business", "Marketing", "Career"
+3. **DOMAIN NAME** = the core subject, 1-3 words. Could be a tool ("Claude Code"), a discipline ("Data Engineering"), a concept ("Growth Strategy"), or a field ("Behavioral Economics"). Whatever best answers: "This is a source about ___."
 
-4. **SUB-TOPICS**: 2-4 broad thematic areas covered in the content (NOT specific steps).
-   - Good: "Revenue Models", "Growth Strategy", "Market Analysis"
-   - Bad: "Installing Docker", "Port 3000 Configuration"
+4. **PARENT CATEGORY**: Broad 2-3 word grouping. Reuse an existing parent when it fits. Only create new ones for genuinely different areas.
+
+5. **SUB-TOPICS**: 2-4 thematic areas this content covers. Think "what chapters would this belong to" — not granular steps.
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
 EXCERPT: {excerpt}
 
 Return ONLY valid JSON:
-{{"domain": "TopicName", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence about what this domain covers", "is_new": true/false}}"""
+{{"domain": "Name", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
 
 
 def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
