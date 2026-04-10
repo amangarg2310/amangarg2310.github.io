@@ -449,53 +449,80 @@
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_domains }}</span> domains</div>
         </div>
 
-        <!-- Horizontal Mind Map — inspired by NotebookLM, color-coded by level -->
-        <div class="mm-container" id="mindMap">
-            {% for cat in knowledge_categories %}
-            <div class="mm-root">
-                <div class="mm-node mm-cat" data-id="cat-{{ loop.index0 }}" data-expanded="false"
-                     onclick="mmToggle(this)">
-                    <span class="mm-node-icon">{{ cat.icon }}</span>
-                    <a href="{{ url_for('domain_page', domain_name=cat.name, level=0) }}" class="mm-node-label" onclick="event.stopPropagation()">{{ cat.name }}</a>
-                    {% if cat.source_count %}<span class="mm-badge mm-badge-cat">{{ cat.source_count }}s</span>{% endif %}
-                    <span class="mm-badge mm-badge-cat">{{ cat.children|length }}</span>
-                    {% if cat.children %}<span class="mm-chevron">&#8250;</span>{% endif %}
+        <div class="bio-tree" id="bioTree">
+            <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
+            <div class="bio-tree-nodes" id="bioTreeNodes">
+                <!-- Level 0: Category nodes (always visible, leftmost column) -->
+                <div class="bio-tree-level bio-tree-level-0" id="bioLevel0">
+                    {% for cat in knowledge_categories %}
+                    <div class="bio-node bio-node-cat" data-id="cat-{{ loop.index0 }}" data-expanded="false"
+                         data-href="{{ url_for('domain_page', domain_name=cat.name, level=0) }}"
+                         onclick="bioToggle(this, 'cat-{{ loop.index0 }}')"
+                         ondblclick="window.location.href=this.dataset.href">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ cat.icon }}</span>
+                            <span class="bio-node-name">{{ cat.name }}</span>
+                        </div>
+                        {% if cat.source_count %}<div class="bio-node-ring">{{ cat.source_count }} source{{ 's' if cat.source_count != 1 else '' }}</div>{% endif %}
+                        <div class="bio-node-hint">{{ cat.children|length }} domain{{ 's' if cat.children|length != 1 else '' }}</div>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% if cat.children %}
-                <div class="mm-children mm-children-1 mm-collapsed">
+
+                <!-- Level 1: Domain nodes (hidden until parent clicked, appears to the right) -->
+                {% for cat in knowledge_categories %}
+                <div class="bio-tree-level bio-tree-level-1 bio-hidden" data-parent="cat-{{ loop.index0 }}">
                     {% for d in cat.children %}
-                    <div class="mm-branch">
-                        {% if d.children %}
-                        <div class="mm-node mm-domain" data-id="dom-{{ d.id }}" data-expanded="false"
-                             onclick="mmToggle(this)">
-                            <span class="mm-node-icon">{{ d.icon }}</span>
-                            <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="mm-node-label" onclick="event.stopPropagation()">{{ d.name }}</a>
-                            {% if d.source_count %}<span class="mm-badge mm-badge-domain">{{ d.source_count }}s</span>{% endif %}
-                            <span class="mm-chevron">&#8250;</span>
+                    {% if d.children %}
+                    <div class="bio-node bio-node-domain" data-id="dom-{{ d.id }}"
+                         data-expanded="false" data-has-children="true"
+                         data-href="{{ url_for('domain_page', domain_name=d.name) }}"
+                         onclick="bioToggle(this, 'dom-{{ d.id }}')"
+                         ondblclick="window.location.href=this.dataset.href">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ d.icon }}</span>
+                            <span class="bio-node-name">{{ d.name }}</span>
                         </div>
-                        <div class="mm-children mm-children-2 mm-collapsed">
-                            {% for sub in d.children %}
-                            <div class="mm-branch">
-                                <a class="mm-node mm-sub" href="{{ url_for('domain_page', domain_name=sub.name) }}">
-                                    <span class="mm-node-dot"></span>
-                                    <span class="mm-node-label">{{ sub.name }}</span>
-                                </a>
-                            </div>
-                            {% endfor %}
+                        {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
+                        <div class="bio-node-expand">{{ d.children|length }} sub-topic{{ 's' if d.children|length != 1 else '' }}</div>
+                        <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node-open" onclick="event.stopPropagation()">Open &rarr;</a>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node bio-node-domain" data-id="dom-{{ d.id }}" data-has-children="false">
+                        <div class="bio-node-pulse"></div>
+                        <div class="bio-node-core">
+                            <span class="bio-node-icon">{{ d.icon }}</span>
+                            <span class="bio-node-name">{{ d.name }}</span>
                         </div>
-                        {% else %}
-                        <a class="mm-node mm-domain mm-leaf" href="{{ url_for('domain_page', domain_name=d.name) }}">
-                            <span class="mm-node-icon">{{ d.icon }}</span>
-                            <span class="mm-node-label">{{ d.name }}</span>
-                            {% if d.source_count %}<span class="mm-badge mm-badge-domain">{{ d.source_count }}s</span>{% endif %}
-                        </a>
-                        {% endif %}
+                        {% if d.source_count or d.insight_count %}<div class="bio-node-meta">{{ d.source_count }} source{{ 's' if d.source_count != 1 else '' }}</div>{% endif %}
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <!-- Level 2: Sub-topic nodes (hidden until parent domain clicked) -->
+                {% for cat in knowledge_categories %}
+                {% for d in cat.children %}
+                {% if d.children %}
+                <div class="bio-tree-level bio-tree-level-2 bio-hidden" data-parent="dom-{{ d.id }}">
+                    {% for sub in d.children %}
+                    <div class="bio-node bio-node-sub" data-href="{{ url_for('domain_page', domain_name=sub.name) }}"
+                         ondblclick="window.location.href=this.dataset.href">
+                        <div class="bio-node-pulse"></div>
+                        <span class="bio-node-core">
+                            <span class="bio-node-dot"></span>
+                            <span class="bio-node-name">{{ sub.name }}</span>
+                        </span>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
+                {% endfor %}
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
 
         {% else %}
@@ -510,42 +537,91 @@
     </div>
 
     <script>
-    function mmToggle(nodeEl) {
-        const isExpanded = nodeEl.dataset.expanded === 'true';
-        // Collapse expanded siblings at same level
-        const wrapper = nodeEl.closest('.mm-root, .mm-branch');
-        const parent = wrapper ? wrapper.parentElement : null;
-        if (parent) {
-            const selector = parent.classList.contains('mm-container')
-                ? ':scope > .mm-root > .mm-node[data-expanded="true"]'
-                : ':scope > .mm-branch > .mm-node[data-expanded="true"]';
-            parent.querySelectorAll(selector).forEach(n => {
-                if (n !== nodeEl) {
-                    n.dataset.expanded = 'false';
-                    const w = n.closest('.mm-root, .mm-branch');
-                    const ch = w ? w.querySelector(':scope > .mm-children') : null;
-                    if (ch) {
-                        ch.querySelectorAll('.mm-node[data-expanded="true"]').forEach(d => d.dataset.expanded = 'false');
-                        ch.querySelectorAll('.mm-children').forEach(c => c.classList.add('mm-collapsed'));
-                        ch.classList.add('mm-collapsed');
-                    }
-                }
+    function collapseDescendants(levelEl) {
+        levelEl.classList.add('bio-hidden');
+        levelEl.querySelectorAll('.bio-node[data-expanded="true"]').forEach(gc => {
+            gc.dataset.expanded = 'false';
+            document.querySelectorAll(`.bio-tree-level[data-parent="${gc.dataset.id}"]`).forEach(gcl => {
+                collapseDescendants(gcl);
             });
-        }
+        });
+    }
+
+    function bioToggle(nodeEl, parentId) {
+        const isExpanded = nodeEl.dataset.expanded === 'true';
+        // Collapse all sibling expansions at same level
+        const level = nodeEl.closest('.bio-tree-level');
+        level.querySelectorAll('.bio-node[data-expanded="true"]').forEach(n => {
+            if (n !== nodeEl) {
+                n.dataset.expanded = 'false';
+                document.querySelectorAll(`.bio-tree-level[data-parent="${n.dataset.id}"]`).forEach(cl => {
+                    collapseDescendants(cl);
+                });
+            }
+        });
+
         // Toggle this node
         nodeEl.dataset.expanded = isExpanded ? 'false' : 'true';
-        const myWrapper = nodeEl.closest('.mm-root, .mm-branch');
-        const myChildren = myWrapper ? myWrapper.querySelector(':scope > .mm-children') : null;
-        if (myChildren) {
+        const childLevels = document.querySelectorAll(`.bio-tree-level[data-parent="${parentId}"]`);
+        childLevels.forEach(cl => {
             if (isExpanded) {
-                myChildren.querySelectorAll('.mm-node[data-expanded="true"]').forEach(d => d.dataset.expanded = 'false');
-                myChildren.querySelectorAll('.mm-children').forEach(c => c.classList.add('mm-collapsed'));
-                myChildren.classList.add('mm-collapsed');
+                collapseDescendants(cl);
             } else {
-                myChildren.classList.remove('mm-collapsed');
+                cl.classList.remove('bio-hidden');
             }
-        }
+        });
+
+        // Redraw connectors after DOM settles
+        requestAnimationFrame(() => requestAnimationFrame(bioDrawConnectors));
     }
+
+    function bioDrawConnectors() {
+        const svg = document.getElementById('bioTreeSvg');
+        const container = document.getElementById('bioTree');
+        if (!svg || !container) return;
+        const rect = container.getBoundingClientRect();
+        svg.setAttribute('width', container.scrollWidth);
+        svg.setAttribute('height', container.scrollHeight);
+        svg.innerHTML = '';
+
+        // Find all visible parent->child level connections
+        document.querySelectorAll('.bio-tree-level:not(.bio-hidden)').forEach(childLevel => {
+            const parentId = childLevel.dataset.parent;
+            if (!parentId) return;
+            const parentNode = document.querySelector(`.bio-node[data-id="${parentId}"]`);
+            if (!parentNode || !parentNode.closest('.bio-tree-level:not(.bio-hidden)')) return;
+
+            const pRect = parentNode.getBoundingClientRect();
+            // HORIZONTAL: start from right-center of parent
+            const px = pRect.right - rect.left;
+            const py = pRect.top + pRect.height / 2 - rect.top;
+
+            childLevel.querySelectorAll('.bio-node').forEach((childNode, i) => {
+                const cRect = childNode.getBoundingClientRect();
+                // HORIZONTAL: end at left-center of child
+                const cx = cRect.left - rect.left;
+                const cy = cRect.top + cRect.height / 2 - rect.top;
+
+                // Horizontal S-curve: right of parent -> left of child
+                const midX = px + (cx - px) * 0.5;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${px} ${py} C ${midX} ${py}, ${midX} ${cy}, ${cx} ${cy}`);
+                path.setAttribute('class', 'bio-connector');
+                path.style.animationDelay = `${i * 0.08}s`;
+                // Thinner for level-1->2
+                if (childLevel.classList.contains('bio-tree-level-2')) {
+                    path.classList.add('bio-connector-thin');
+                }
+                svg.appendChild(path);
+            });
+        });
+    }
+
+    // Initial draw
+    document.addEventListener('DOMContentLoaded', () => {
+        requestAnimationFrame(bioDrawConnectors);
+        window.addEventListener('resize', bioDrawConnectors);
+    });
     </script>
 
     {% else %}
