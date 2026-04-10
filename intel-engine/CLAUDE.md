@@ -21,7 +21,7 @@ python backfill.py --all  # Optional: upgrade existing data to enriched pipeline
 app.py                  # Flask web server, REST API, background thread spawning
 pipeline.py             # Core pipeline: ingest → chunk → extract → classify → embed → synthesize
 youtube_ingest.py       # YouTube transcripts (Supadata) + playlist support (RSS + HTML scraping)
-article_ingest.py       # Web article extraction (trafilatura + BeautifulSoup fallback, HTTP 403 detection)
+article_ingest.py       # Web article extraction (trafilatura → requests+cookies → BeautifulSoup fallback, HTTP 403 handling)
 file_ingest.py          # PDF, DOCX, PPTX text extraction
 image_ingest.py         # Image/screenshot analysis (OpenAI Vision)
 domain_detector.py      # 3-level hierarchical domain classification + taxonomy evolution
@@ -30,7 +30,7 @@ insight_extractor.py    # Structured claim extraction (evidence, confidence, top
 intel_query.py          # Hybrid RAG search (vector + FTS5) → source-grounded answer synthesis
 embeddings.py           # Contextual vector embedding generation and storage
 auth.py                 # Flask-Login session auth, multi-user data isolation
-migrations.py           # Database schema creation and migrations
+migrations.py           # Database schema creation, migrations, taxonomy consolidation, icon refresh
 config.py               # Environment config, API keys, paths
 backfill.py             # One-time upgrade script for existing data (--insights/--embeddings/--synthesis/--all)
 templates/intel.html    # Single-page frontend (Jinja2 template)
@@ -89,7 +89,7 @@ Private playlists are detected and the user is told to change to Unlisted. Max 1
 
 **Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content (AI search → convergence indicators → synthesis brief). This is where the user reads and queries their knowledge. Level-2 sub-topic pages show the parent domain's content (sources, synthesis); header counts use `len(sources)` to match what's actually displayed, not the sub-topic's own (empty) counts.
 
-**Knowledge Base** (`/knowledge`): Hierarchical bio-tree of all domains with stats bar (sources/insights/domains counts) and SVG connectors. Double-click any node to navigate. Built bottom-up from level-1 domains with LEFT JOIN to parents (no level filter) — resilient to missing or corrupted level-0 parents. Groups domains by parent name; orphans go under "Other".
+**Knowledge Base** (`/knowledge`): Horizontal mind-map (NotebookLM-inspired) with color-coded levels — amber categories, indigo domains, emerald sub-topics. CSS-based connectors (no JS redraw). Click card to expand/collapse children, click label text to navigate to domain page. Staggered slide-in animation on expand. Responsive vertical fallback on mobile. Built bottom-up from level-1 domains with LEFT JOIN to parents — resilient to missing or corrupted level-0 parents. Groups domains by parent name; orphans go under "Other".
 
 **Knowledge Graph** (overlay via nav button): Force-graph visualization with breathing nodes, flowing particles, conceptual edges (amber dotted) between domains sharing topics, glassmorphism back button.
 
@@ -120,7 +120,7 @@ Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD),
 - **Graph:** Force-graph with breathing pulse, flowing particles, conceptual edges (amber dotted for shared topics), glassmorphism back button.
 - **Coverage Depth:** Domain cards show thin (dashed border, 1-2 sources), moderate (solid, 3-5), deep (amber border + warm gradient bg, 6+)
 - **Convergence:** Side-by-side cards — green left border for agreements, orange for disagreements — with hover lift and shadow.
-- **Knowledge Tree:** Bio-tree with SVG connectors, pulse animations, staggered node entrance. Single-click expands, double-click navigates to domain page.
+- **Knowledge Tree:** Horizontal mind-map with CSS connectors and color-coded level borders. Categories = warm amber left border, Domains = indigo left border, Sub-topics = emerald left border. Staggered slide-in from left. Click label to navigate, click card to expand. Responsive vertical on mobile.
 
 ## Key Patterns
 
@@ -132,9 +132,9 @@ Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD),
 - **Domain creation lock:** `_domain_create_lock` (threading.Lock) in `domain_detector.py` serializes `_find_or_create_domain` to prevent parallel playlist workers from creating duplicate level-0/level-1 domains. Each INSERT is committed immediately inside the lock so other threads see the new row.
 - **User ID filtering:** All queries that return user-visible data use `(user_id = ? OR user_id IS NULL)` — never bare `user_id = ?`. This covers both user-owned and legacy/shared records.
 - **Domain name collisions (collapsed):** When the LLM returns the same name for domain and parent (e.g. domain="AI Tools", parent="AI Tools"), `ensure_domain_hierarchy()` collapses the collision — it skips creating the level-1 domain and attaches sources directly to the level-0 parent. Sub-topics still attach as level-2 under the parent. This prevents duplicate names at different hierarchy levels. Homepage, knowledge page, and domain page queries include `(d.level = 0 AND d.source_count > 0)` to surface these collapsed domains alongside normal level-1 domains.
-- **Domain classification:** `DETECTION_PROMPT` in `domain_detector.py` classifies by what expertise the content actually builds — not by title keywords. Only reuses existing domains when the content genuinely deepens that domain's knowledge. Domain names can be tools, disciplines, concepts, or fields. LLM also returns icon emoji for domain and parent.
+- **Domain classification:** `DETECTION_PROMPT` in `domain_detector.py` classifies by what expertise the content actually builds — not by title keywords. Only reuses existing domains when the content genuinely deepens that domain's knowledge. Domain names can be tools, disciplines, concepts, or fields. LLM returns icon emoji for domain and parent. `_find_matching_parent()` uses exact match → normalized stem → RapidFuzz token_set_ratio (80% threshold) to prevent category proliferation.
 - **API concurrency:** `config.api_semaphore = Semaphore(6)` limits concurrent LLM calls. All synthesis uses OpenAI GPT-4o-mini (switched from Anthropic Haiku for 5-8x speed improvement). Anthropic only used for image analysis.
-- **Domain deduplication:** `migrations.py` includes `_deduplicate_domains()` that merges duplicate (name, level, user_id) entries — keeps lowest ID, re-points children/sources/insights/syntheses, deletes extras. Runs automatically on startup.
+- **Domain deduplication:** `migrations.py` includes `_deduplicate_domains()` that merges duplicate (name, level, user_id) entries — keeps lowest ID, re-points children/sources/insights/syntheses, deletes extras. Also runs `_consolidate_taxonomy()` (merges small categories into largest, fixes name collisions) and `_refresh_domain_icons()` (assigns contextual emoji to domains still showing default). All run automatically on startup.
 
 ## Learning Science Principles
 
