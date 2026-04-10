@@ -237,6 +237,23 @@ def run_migrations(db_path=None):
         )
     """)
 
+    # Schema evolution — playbooks
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS playbooks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain_id INTEGER NOT NULL,
+            user_id INTEGER,
+            goal TEXT,
+            experience TEXT,
+            format_type TEXT,
+            constraints TEXT,
+            content TEXT NOT NULL,
+            source_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    """)
+
     # Deduplicate domains — parallel playlist ingestion could create duplicate
     # level-0/level-1 entries with the same (name, level, user_id). Keep the
     # lowest-id row, re-point children and sources to it, then delete extras.

@@ -1588,6 +1588,128 @@ def api_dismiss_taxonomy_change(change_id):
             conn.close()
 
 
+
+
+@app.route("/api/generate-playbook/<int:domain_id>", methods=["POST"])
+@login_required
+def api_generate_playbook(domain_id):
+    """Generate a strategic playbook from domain knowledge."""
+    from playbook_generator import generate_playbook
+    from intel_query import search_insights_hybrid
+
+    uid = current_user.id
+    conn = get_db()
+
+    # Verify domain access
+    domain = conn.execute(
+        "SELECT id, name, source_count, insight_count, level FROM domains WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+        (domain_id, uid),
+    ).fetchone()
+    if not domain:
+        return jsonify({"error": "Domain not found"}), 404
+
+    # Minimum source threshold
+    if domain['source_count'] < 2:
+        return jsonify({
+            "error": f"Need at least 2 sources to generate a playbook (currently {domain['source_count']}). Add more sources for validated recommendations.",
+            "sources_needed": 2 - domain['source_count'],
+        }), 400
+
+    data = request.get_json() or {}
+    goal = data.get('goal', '').strip()
+    experience = data.get('experience', 'some experience')
+    format_type = data.get('format_type', 'steps')
+    constraints = data.get('constraints', '').strip()
+
+    # Get synthesis
+    synthesis = conn.execute(
+        "SELECT content, convergence_data, source_count FROM syntheses WHERE domain_id = ? ORDER BY version DESC LIMIT 1",
+        (domain_id,),
+    ).fetchone()
+
+    synthesis_content = synthesis['content'] if synthesis else ''
+    convergence_data = {}
+    if synthesis and synthesis['convergence_data']:
+        try:
+            convergence_data = json.loads(synthesis['convergence_data'])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Get insights via RAG retrieval (not just synthesis)
+    insights = search_insights_hybrid(domain_id, domain['name'], limit=40)
+
+    # Also get child domain insights for broader coverage
+    children = conn.execute("SELECT id FROM domains WHERE parent_id = ?", (domain_id,)).fetchall()
+    for child in children:
+        child_insights = search_insights_hybrid(child['id'], domain['name'], limit=10)
+        insights.extend(child_insights)
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for ins in insights:
+        if ins['id'] not in seen:
+            seen.add(ins['id'])
+            unique.append(ins)
+    insights = unique[:40]
+
+    try:
+        playbook_content = generate_playbook(
+            domain_name=domain['name'],
+            goal=goal,
+            experience=experience,
+            format_type=format_type,
+            constraints=constraints,
+            synthesis_content=synthesis_content,
+            convergence_data=convergence_data,
+            insights=insights,
+            source_count=domain['source_count'],
+        )
+
+        # Save to database
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO playbooks (domain_id, user_id, goal, experience, format_type, constraints, content, source_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (domain_id, uid, goal, experience, format_type, constraints, playbook_content, domain['source_count'], now),
+        )
+        conn.commit()
+
+        return jsonify({
+            "status": "ok",
+            "content": playbook_content,
+            "source_count": domain['source_count'],
+            "insight_count": len(insights),
+        })
+
+    except Exception as e:
+        logger.error(f"Playbook generation failed for domain {domain_id}: {e}")
+        return jsonify({"error": f"Generation failed: {str(e)}"}), 500
+
+
+@app.route("/api/playbook/<int:domain_id>")
+@login_required
+def api_get_playbook(domain_id):
+    """Get the most recent playbook for a domain."""
+    uid = current_user.id
+    conn = get_db()
+    playbook = conn.execute(
+        "SELECT content, goal, experience, format_type, source_count, created_at FROM playbooks WHERE domain_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1",
+        (domain_id, uid),
+    ).fetchone()
+    if not playbook:
+        return jsonify({"exists": False})
+    return jsonify({
+        "exists": True,
+        "content": playbook['content'],
+        "goal": playbook['goal'],
+        "experience": playbook['experience'],
+        "format_type": playbook['format_type'],
+        "source_count": playbook['source_count'],
+        "created_at": playbook['created_at'],
+    })
+
+
 @app.route("/api/threshold-concepts")
 @login_required
 def api_threshold_concepts():

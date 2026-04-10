@@ -38,6 +38,318 @@
     --intel-transition: 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
     --intel-sidebar-width: 280px;
 }
+/* ══════════════════════════════════════════════════════════════
+   PLAYBOOK — Generation modal + full-screen view
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Trigger Button (in domain header) ── */
+.intel-playbook-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: var(--intel-font);
+    color: var(--intel-accent);
+    background: var(--intel-accent-light);
+    border: 1px solid rgba(79, 110, 247, 0.15);
+    border-radius: var(--intel-radius-xs);
+    cursor: pointer;
+    transition: all var(--intel-transition);
+    margin-top: 8px;
+}
+.intel-playbook-btn:hover {
+    background: rgba(79, 110, 247, 0.12);
+    border-color: var(--intel-accent);
+}
+.intel-playbook-unlock {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    font-size: 11.5px;
+    color: var(--intel-text-tertiary);
+    font-family: var(--intel-font);
+}
+
+/* ── Modal (configuration form) ── */
+.intel-playbook-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.intel-playbook-modal-content {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius);
+    padding: 32px;
+    width: 460px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: var(--intel-shadow-lg);
+    animation: playbookModalIn 0.25s ease-out;
+}
+@keyframes playbookModalIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.intel-playbook-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: var(--intel-text-tertiary);
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+}
+.intel-playbook-modal-close:hover { color: var(--intel-text); }
+.intel-playbook-modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--intel-text);
+    margin: 0 0 4px;
+    font-family: var(--intel-font);
+}
+.intel-playbook-modal-subtitle {
+    font-size: 13.5px;
+    color: var(--intel-text-tertiary);
+    margin: 0 0 24px;
+    line-height: 1.5;
+}
+
+/* ── Form ── */
+.intel-playbook-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.intel-playbook-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--intel-text-secondary);
+    margin-bottom: -8px;
+    font-family: var(--intel-font);
+}
+.intel-playbook-input,
+.intel-playbook-select {
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: var(--intel-font);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius-xs);
+    background: var(--intel-bg);
+    color: var(--intel-text);
+    transition: border-color var(--intel-transition);
+    outline: none;
+}
+.intel-playbook-input:focus,
+.intel-playbook-select:focus {
+    border-color: var(--intel-accent);
+    box-shadow: var(--intel-shadow-focus);
+}
+.intel-playbook-input::placeholder {
+    color: var(--intel-text-tertiary);
+    font-size: 13px;
+}
+.intel-playbook-generate-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--intel-font);
+    color: #fff;
+    background: linear-gradient(135deg, var(--intel-accent), var(--intel-accent-hover));
+    border: none;
+    border-radius: var(--intel-radius-xs);
+    cursor: pointer;
+    transition: all var(--intel-transition);
+    margin-top: 6px;
+}
+.intel-playbook-generate-btn:hover {
+    box-shadow: 0 4px 16px rgba(79, 110, 247, 0.3);
+    transform: translateY(-1px);
+}
+
+/* ── Full-Screen Playbook View ── */
+.intel-playbook-view {
+    position: fixed;
+    inset: 0;
+    background: var(--intel-bg);
+    z-index: 950;
+    display: flex;
+    flex-direction: column;
+    animation: playbookViewIn 0.3s ease-out;
+}
+@keyframes playbookViewIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.intel-playbook-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--intel-border);
+    background: var(--intel-surface);
+    flex-shrink: 0;
+}
+.intel-playbook-back {
+    background: none;
+    border: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: var(--intel-font);
+    color: var(--intel-accent);
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: var(--intel-radius-xs);
+    transition: background var(--intel-transition);
+}
+.intel-playbook-back:hover { background: var(--intel-accent-light); }
+.intel-playbook-view-meta {
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+    font-family: var(--intel-font);
+}
+.intel-playbook-regen {
+    background: none;
+    border: 1px solid var(--intel-border);
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: var(--intel-font);
+    color: var(--intel-text-secondary);
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: var(--intel-radius-xs);
+    transition: all var(--intel-transition);
+}
+.intel-playbook-regen:hover {
+    border-color: var(--intel-accent);
+    color: var(--intel-accent);
+}
+.intel-playbook-view-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px;
+}
+.intel-playbook-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 80px 0;
+    font-size: 14px;
+    color: var(--intel-text-tertiary);
+    font-family: var(--intel-font);
+}
+
+/* ── Playbook Content Styling ── */
+.intel-playbook-content {
+    max-width: 720px;
+    margin: 0 auto;
+    font-family: var(--intel-font);
+    line-height: 1.75;
+    color: var(--intel-text);
+}
+.intel-playbook-content h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--intel-text);
+}
+.intel-playbook-content h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 32px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--intel-border);
+    color: var(--intel-text);
+}
+.intel-playbook-content h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 24px 0 8px;
+    color: var(--intel-text-secondary);
+}
+.intel-playbook-content p {
+    margin: 8px 0;
+    font-size: 14.5px;
+}
+.intel-playbook-content ul {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+.intel-playbook-content li {
+    margin: 6px 0;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.intel-playbook-content strong {
+    font-weight: 600;
+    color: var(--intel-text);
+}
+.intel-playbook-content code {
+    background: var(--intel-surface-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+.intel-playbook-cite {
+    font-size: 11.5px;
+    color: var(--intel-accent);
+    font-style: normal;
+    opacity: 0.8;
+}
+.intel-playbook-validated {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--intel-green);
+    background: var(--intel-green-light);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+}
+.intel-playbook-error {
+    text-align: center;
+    padding: 40px;
+    font-size: 14px;
+    color: var(--intel-text-secondary);
+    font-family: var(--intel-font);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+    .intel-playbook-modal-content {
+        padding: 24px 20px;
+        margin: 16px;
+    }
+    .intel-playbook-view-body {
+        padding: 20px 16px;
+    }
+    .intel-playbook-view-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .intel-playbook-content h1 { font-size: 22px; }
+    .intel-playbook-content h2 { font-size: 16px; }
+}
+
+
 
 /* ── Dark Mode ── */
 [data-theme="dark"] {
