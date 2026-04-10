@@ -1590,6 +1590,60 @@ def api_dismiss_taxonomy_change(change_id):
 
 
 
+
+# ══════════════════════════════════════════════════════════════
+# DIGEST ENDPOINTS
+# ══════════════════════════════════════════════════════════════
+
+@app.route("/api/digest/preview")
+@login_required
+def api_digest_preview():
+    """Generate and return a digest preview for the current user."""
+    from digest import generate_digest
+    uid = current_user.id
+    result = generate_digest(uid)
+    return jsonify(result)
+
+
+@app.route("/api/digest/preferences", methods=["GET"])
+@login_required
+def api_digest_prefs_get():
+    """Get current digest preferences."""
+    uid = current_user.id
+    conn = get_db()
+    prefs = conn.execute(
+        "SELECT enabled, frequency, depth, last_generated_at FROM digest_preferences WHERE user_id = ?",
+        (uid,),
+    ).fetchone()
+    if not prefs:
+        return jsonify({"enabled": True, "frequency": "weekly", "depth": "standard", "last_generated_at": None})
+    return jsonify(dict(prefs))
+
+
+@app.route("/api/digest/preferences", methods=["POST"])
+@login_required
+def api_digest_prefs_update():
+    """Update digest preferences."""
+    uid = current_user.id
+    data = request.get_json() or {}
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO digest_preferences (user_id, enabled, frequency, depth)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            enabled = excluded.enabled,
+            frequency = excluded.frequency,
+            depth = excluded.depth
+    """, (
+        uid,
+        1 if data.get("enabled", True) else 0,
+        data.get("frequency", "weekly"),
+        data.get("depth", "standard"),
+    ))
+    conn.commit()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/generate-playbook/<int:domain_id>", methods=["POST"])
 @login_required
 def api_generate_playbook(domain_id):

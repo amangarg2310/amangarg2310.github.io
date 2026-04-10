@@ -237,6 +237,18 @@ def run_migrations(db_path=None):
         )
     """)
 
+    # Schema evolution — digest preferences
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS digest_preferences (
+            user_id INTEGER PRIMARY KEY,
+            enabled INTEGER DEFAULT 1,
+            frequency TEXT DEFAULT 'weekly',
+            depth TEXT DEFAULT 'standard',
+            last_generated_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     # Schema evolution — playbooks
     conn.execute("""
         CREATE TABLE IF NOT EXISTS playbooks (

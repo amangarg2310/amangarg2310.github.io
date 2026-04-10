@@ -447,6 +447,181 @@
                 <p class="intel-empty-domain-hint">Try adding a different source, or re-process existing ones from the sidebar.</p>
             </div>
             {% endif %}
+        
+<!-- ══════════════════════════════════════════════════════════
+     PLAYBOOK MODAL + VIEW
+     ══════════════════════════════════════════════════════════ -->
+<div id="playbookModal" class="intel-playbook-modal" style="display:none" onclick="if(event.target===this)closePlaybookModal()">
+    <div class="intel-playbook-modal-content">
+        <button class="intel-playbook-modal-close" onclick="closePlaybookModal()">&times;</button>
+        <h2 class="intel-playbook-modal-title">Generate Your Playbook</h2>
+        <p class="intel-playbook-modal-subtitle">We'll create an actionable plan from your {{ domain.name if domain else '' }} knowledge base.</p>
+
+        <div class="intel-playbook-form">
+            <label class="intel-playbook-label">What do you want to accomplish?</label>
+            <input type="text" id="playbookGoal" class="intel-playbook-input" placeholder="e.g. Launch my app in 30 days, Learn to bake sourdough, Build a home gym routine...">
+
+            <label class="intel-playbook-label">Your experience level</label>
+            <select id="playbookExperience" class="intel-playbook-select">
+                <option value="complete beginner">Complete beginner</option>
+                <option value="some experience" selected>Some experience</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+                <option value="teaching others">Teaching others</option>
+            </select>
+
+            <label class="intel-playbook-label">Format</label>
+            <select id="playbookFormat" class="intel-playbook-select">
+                <option value="steps">Step-by-step guide</option>
+                <option value="weekly">Weekly plan</option>
+                <option value="checklist">Checklist</option>
+                <option value="decision">Decision guide (compare options)</option>
+                <option value="learning">Learning path (beginner &rarr; advanced)</option>
+            </select>
+
+            <label class="intel-playbook-label">Any constraints? <span style="color:var(--intel-text-tertiary);font-weight:400">(optional)</span></label>
+            <input type="text" id="playbookConstraints" class="intel-playbook-input" placeholder="e.g. No budget, solo, only weekends, already use Notion...">
+
+            <button class="intel-playbook-generate-btn" id="playbookGenerateBtn" onclick="generatePlaybook()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                Generate Playbook
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Playbook View (full-screen overlay) -->
+<div id="playbookView" class="intel-playbook-view" style="display:none">
+    <div class="intel-playbook-view-header">
+        <button class="intel-playbook-back" onclick="closePlaybookView()">&larr; Back to {{ domain.name if domain else 'domain' }}</button>
+        <div class="intel-playbook-view-meta" id="playbookViewMeta"></div>
+        <button class="intel-playbook-regen" onclick="openPlaybookModal()">Regenerate</button>
+    </div>
+    <div class="intel-playbook-view-body" id="playbookViewBody">
+        <div class="intel-playbook-loading" id="playbookLoading" style="display:none">
+            <div class="intel-spinner"></div>
+            <span>Generating your playbook...</span>
+        </div>
+        <div class="intel-playbook-content" id="playbookContent"></div>
+    </div>
+</div>
+
+<script>
+function openPlaybookModal() {
+    document.getElementById('playbookModal').style.display = 'flex';
+}
+function closePlaybookModal() {
+    document.getElementById('playbookModal').style.display = 'none';
+}
+function closePlaybookView() {
+    document.getElementById('playbookView').style.display = 'none';
+}
+
+async function generatePlaybook() {
+    const goal = document.getElementById('playbookGoal').value.trim();
+    const experience = document.getElementById('playbookExperience').value;
+    const format_type = document.getElementById('playbookFormat').value;
+    const constraints = document.getElementById('playbookConstraints').value.trim();
+
+    closePlaybookModal();
+    const view = document.getElementById('playbookView');
+    view.style.display = 'flex';
+    document.getElementById('playbookLoading').style.display = 'flex';
+    document.getElementById('playbookContent').innerHTML = '';
+
+    try {
+        const domainId = {{ domain.id if domain else 0 }};
+        const resp = await fetch(`/api/generate-playbook/${domainId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ goal, experience, format_type, constraints }),
+        });
+        const data = await resp.json();
+
+        document.getElementById('playbookLoading').style.display = 'none';
+
+        if (data.error) {
+            document.getElementById('playbookContent').innerHTML =
+                `<div class="intel-playbook-error">${data.error}</div>`;
+            return;
+        }
+
+        // Render markdown
+        let html = data.content
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            .replace(/^- (.*$)/gm, '<li>$1</li>')
+            .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
+            .replace(/(<li>.*<\/li>
+?)+/g, '<ul>$&</ul>')
+            .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
+            .replace(/✓ Validated/g, '<span class="intel-playbook-validated">✓ Validated</span>')
+            .replace(/
+
+/g, '</p><p>')
+            .replace(/
+/g, '<br>');
+        html = '<p>' + html + '</p>';
+
+        document.getElementById('playbookContent').innerHTML = html;
+        document.getElementById('playbookViewMeta').textContent =
+            `${data.source_count} sources · ${data.insight_count} insights`;
+
+    } catch (err) {
+        document.getElementById('playbookLoading').style.display = 'none';
+        document.getElementById('playbookContent').innerHTML =
+            `<div class="intel-playbook-error">Failed to generate playbook. Please try again.</div>`;
+    }
+}
+
+// Check for existing playbook on page load
+{% if domain %}
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const resp = await fetch('/api/playbook/{{ domain.id }}');
+        const data = await resp.json();
+        if (data.exists) {
+            const btn = document.querySelector('.intel-playbook-btn');
+            if (btn) {
+                btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> View Playbook`;
+                btn.onclick = () => {
+                    const view = document.getElementById('playbookView');
+                    view.style.display = 'flex';
+                    let html = data.content
+                        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                        .replace(/`(.*?)`/g, '<code>$1</code>')
+                        .replace(/^- (.*$)/gm, '<li>$1</li>')
+                        .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
+                        .replace(/(<li>.*<\/li>
+?)+/g, '<ul>$&</ul>')
+                        .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
+                        .replace(/✓ Validated/g, '<span class="intel-playbook-validated">✓ Validated</span>')
+                        .replace(/
+
+/g, '</p><p>')
+                        .replace(/
+/g, '<br>');
+                    document.getElementById('playbookContent').innerHTML = '<p>' + html + '</p>';
+                    document.getElementById('playbookViewMeta').textContent =
+                        `${data.source_count} sources · Generated ${new Date(data.created_at).toLocaleDateString()}`;
+                };
+            }
+        }
+    } catch (e) {}
+});
+{% endif %}
+</script>
+
         </main>
     </div>
 
@@ -460,13 +635,22 @@
                 <h1 class="intel-kb-title">Knowledge Base</h1>
                 <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ total_domains }} domains</p>
             </div>
-            <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                Add Source
-            </a>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button class="intel-digest-preview-btn" onclick="previewDigest()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Preview Digest
+                </button>
+                <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Add Source
+                </a>
+            </div>
         </div>
 
         {% if knowledge_categories %}
@@ -2159,178 +2343,53 @@ function askQuestion(questionText) {
 </script>
 
 
+
 <!-- ══════════════════════════════════════════════════════════
-     PLAYBOOK MODAL + VIEW
+     DIGEST PREVIEW MODAL
      ══════════════════════════════════════════════════════════ -->
-<div id="playbookModal" class="intel-playbook-modal" style="display:none" onclick="if(event.target===this)closePlaybookModal()">
-    <div class="intel-playbook-modal-content">
-        <button class="intel-playbook-modal-close" onclick="closePlaybookModal()">&times;</button>
-        <h2 class="intel-playbook-modal-title">Generate Your Playbook</h2>
-        <p class="intel-playbook-modal-subtitle">We'll create an actionable plan from your {{ domain.name if domain else '' }} knowledge base.</p>
-
-        <div class="intel-playbook-form">
-            <label class="intel-playbook-label">What do you want to accomplish?</label>
-            <input type="text" id="playbookGoal" class="intel-playbook-input" placeholder="e.g. Launch my app in 30 days, Learn to bake sourdough, Build a home gym routine...">
-
-            <label class="intel-playbook-label">Your experience level</label>
-            <select id="playbookExperience" class="intel-playbook-select">
-                <option value="complete beginner">Complete beginner</option>
-                <option value="some experience" selected>Some experience</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-                <option value="teaching others">Teaching others</option>
-            </select>
-
-            <label class="intel-playbook-label">Format</label>
-            <select id="playbookFormat" class="intel-playbook-select">
-                <option value="steps">Step-by-step guide</option>
-                <option value="weekly">Weekly plan</option>
-                <option value="checklist">Checklist</option>
-                <option value="decision">Decision guide (compare options)</option>
-                <option value="learning">Learning path (beginner &rarr; advanced)</option>
-            </select>
-
-            <label class="intel-playbook-label">Any constraints? <span style="color:var(--intel-text-tertiary);font-weight:400">(optional)</span></label>
-            <input type="text" id="playbookConstraints" class="intel-playbook-input" placeholder="e.g. No budget, solo, only weekends, already use Notion...">
-
-            <button class="intel-playbook-generate-btn" id="playbookGenerateBtn" onclick="generatePlaybook()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-                Generate Playbook
-            </button>
+<div id="digestModal" class="intel-digest-modal" style="display:none" onclick="if(event.target===this)closeDigestModal()">
+    <div class="intel-digest-modal-content">
+        <div class="intel-digest-modal-header">
+            <h2 class="intel-digest-modal-title">Weekly Knowledge Brief</h2>
+            <button class="intel-playbook-modal-close" onclick="closeDigestModal()">&times;</button>
         </div>
-    </div>
-</div>
-
-<!-- Playbook View (full-screen overlay) -->
-<div id="playbookView" class="intel-playbook-view" style="display:none">
-    <div class="intel-playbook-view-header">
-        <button class="intel-playbook-back" onclick="closePlaybookView()">&larr; Back to {{ domain.name if domain else 'domain' }}</button>
-        <div class="intel-playbook-view-meta" id="playbookViewMeta"></div>
-        <button class="intel-playbook-regen" onclick="openPlaybookModal()">Regenerate</button>
-    </div>
-    <div class="intel-playbook-view-body" id="playbookViewBody">
-        <div class="intel-playbook-loading" id="playbookLoading" style="display:none">
-            <div class="intel-spinner"></div>
-            <span>Generating your playbook...</span>
+        <div class="intel-digest-modal-body" id="digestModalBody">
+            <div class="intel-playbook-loading" id="digestLoading" style="display:flex">
+                <div class="intel-spinner"></div>
+                <span>Generating preview...</span>
+            </div>
         </div>
-        <div class="intel-playbook-content" id="playbookContent"></div>
     </div>
 </div>
 
 <script>
-function openPlaybookModal() {
-    document.getElementById('playbookModal').style.display = 'flex';
-}
-function closePlaybookModal() {
-    document.getElementById('playbookModal').style.display = 'none';
-}
-function closePlaybookView() {
-    document.getElementById('playbookView').style.display = 'none';
+function closeDigestModal() {
+    document.getElementById('digestModal').style.display = 'none';
 }
 
-async function generatePlaybook() {
-    const goal = document.getElementById('playbookGoal').value.trim();
-    const experience = document.getElementById('playbookExperience').value;
-    const format_type = document.getElementById('playbookFormat').value;
-    const constraints = document.getElementById('playbookConstraints').value.trim();
-
-    closePlaybookModal();
-    const view = document.getElementById('playbookView');
-    view.style.display = 'flex';
-    document.getElementById('playbookLoading').style.display = 'flex';
-    document.getElementById('playbookContent').innerHTML = '';
+async function previewDigest() {
+    const modal = document.getElementById('digestModal');
+    const body = document.getElementById('digestModalBody');
+    modal.style.display = 'flex';
+    body.innerHTML = '<div class="intel-playbook-loading" style="display:flex"><div class="intel-spinner"></div><span>Generating preview...</span></div>';
 
     try {
-        const domainId = {{ domain.id if domain else 0 }};
-        const resp = await fetch(`/api/generate-playbook/${domainId}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ goal, experience, format_type, constraints }),
-        });
+        const resp = await fetch('/api/digest/preview');
         const data = await resp.json();
 
-        document.getElementById('playbookLoading').style.display = 'none';
-
-        if (data.error) {
-            document.getElementById('playbookContent').innerHTML =
-                `<div class="intel-playbook-error">${data.error}</div>`;
+        if (!data.has_content) {
+            body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--intel-text-tertiary);font-size:14px;">No new sources this week. Add some content to see your digest!</div>';
             return;
         }
 
-        // Render markdown
-        let html = data.content
-            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code>$1</code>')
-            .replace(/^- (.*$)/gm, '<li>$1</li>')
-            .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
-            .replace(/(<li>.*<\/li>
-?)+/g, '<ul>$&</ul>')
-            .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
-            .replace(/✓ Validated/g, '<span class="intel-playbook-validated">✓ Validated</span>')
-            .replace(/
-
-/g, '</p><p>')
-            .replace(/
-/g, '<br>');
-        html = '<p>' + html + '</p>';
-
-        document.getElementById('playbookContent').innerHTML = html;
-        document.getElementById('playbookViewMeta').textContent =
-            `${data.source_count} sources · ${data.insight_count} insights`;
+        // Show the rendered HTML digest
+        const stats = `<div style="text-align:center;padding:8px 16px;background:var(--intel-accent-light);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--intel-accent);">Preview — ${data.stats.new_sources} sources · ${data.stats.new_insights} insights · ${data.stats.domains_updated} domains</div>`;
+        body.innerHTML = stats + '<div style="border:1px solid var(--intel-border);border-radius:8px;overflow:hidden;">' + data.html_content + '</div>';
 
     } catch (err) {
-        document.getElementById('playbookLoading').style.display = 'none';
-        document.getElementById('playbookContent').innerHTML =
-            `<div class="intel-playbook-error">Failed to generate playbook. Please try again.</div>`;
+        body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--intel-text-tertiary);">Failed to generate preview.</div>';
     }
 }
-
-// Check for existing playbook on page load
-{% if domain %}
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const resp = await fetch('/api/playbook/{{ domain.id }}');
-        const data = await resp.json();
-        if (data.exists) {
-            const btn = document.querySelector('.intel-playbook-btn');
-            if (btn) {
-                btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> View Playbook`;
-                btn.onclick = () => {
-                    const view = document.getElementById('playbookView');
-                    view.style.display = 'flex';
-                    let html = data.content
-                        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-                        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-                        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                        .replace(/`(.*?)`/g, '<code>$1</code>')
-                        .replace(/^- (.*$)/gm, '<li>$1</li>')
-                        .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
-                        .replace(/(<li>.*<\/li>
-?)+/g, '<ul>$&</ul>')
-                        .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
-                        .replace(/✓ Validated/g, '<span class="intel-playbook-validated">✓ Validated</span>')
-                        .replace(/
-
-/g, '</p><p>')
-                        .replace(/
-/g, '<br>');
-                    document.getElementById('playbookContent').innerHTML = '<p>' + html + '</p>';
-                    document.getElementById('playbookViewMeta').textContent =
-                        `${data.source_count} sources · Generated ${new Date(data.created_at).toLocaleDateString()}`;
-                };
-            }
-        }
-    } catch (e) {}
-});
-{% endif %}
 </script>
 
 <!-- Knowledge Graph Overlay -->

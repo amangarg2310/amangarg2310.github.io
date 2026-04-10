@@ -46,22 +46,29 @@
 .intel-playbook-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    font-size: 12.5px;
-    font-weight: 500;
+    gap: 7px;
+    padding: 9px 20px;
+    font-size: 13px;
+    font-weight: 600;
     font-family: var(--intel-font);
-    color: var(--intel-accent);
-    background: var(--intel-accent-light);
-    border: 1px solid rgba(79, 110, 247, 0.15);
-    border-radius: var(--intel-radius-xs);
+    color: #7a5c10;
+    background: linear-gradient(135deg, #fdf6e8 0%, #f5ecd4 100%);
+    border: 1px solid #e8d9ab;
+    border-radius: 20px;
     cursor: pointer;
     transition: all var(--intel-transition);
-    margin-top: 8px;
+    margin-top: 10px;
+    box-shadow: 0 1px 3px rgba(139, 105, 20, 0.06);
+    letter-spacing: -0.01em;
 }
 .intel-playbook-btn:hover {
-    background: rgba(79, 110, 247, 0.12);
-    border-color: var(--intel-accent);
+    background: linear-gradient(135deg, #f8efd5 0%, #f0e3c0 100%);
+    border-color: #d4c48e;
+    box-shadow: 0 3px 12px rgba(139, 105, 20, 0.12);
+    transform: translateY(-1px);
+}
+.intel-playbook-btn svg {
+    stroke: #b8860b;
 }
 .intel-playbook-unlock {
     display: inline-flex;
@@ -347,6 +354,78 @@
     }
     .intel-playbook-content h1 { font-size: 22px; }
     .intel-playbook-content h2 { font-size: 16px; }
+
+/* ══════════════════════════════════════════════════════════════
+   DIGEST PREVIEW
+   ══════════════════════════════════════════════════════════════ */
+
+.intel-digest-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: var(--intel-font);
+    color: var(--intel-text-secondary);
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius-xs);
+    cursor: pointer;
+    transition: all var(--intel-transition);
+    text-decoration: none;
+}
+.intel-digest-preview-btn:hover {
+    border-color: var(--intel-accent);
+    color: var(--intel-accent);
+    background: var(--intel-accent-light);
+}
+.intel-digest-preview-btn svg { stroke: currentColor; }
+
+.intel-digest-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.intel-digest-modal-content {
+    background: var(--intel-bg);
+    border: 1px solid var(--intel-border);
+    border-radius: var(--intel-radius);
+    width: 640px;
+    max-width: 92vw;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--intel-shadow-lg);
+    animation: playbookModalIn 0.25s ease-out;
+}
+.intel-digest-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--intel-border);
+    background: var(--intel-surface);
+}
+.intel-digest-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--intel-text);
+    font-family: var(--intel-font);
+    margin: 0;
+}
+.intel-digest-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
 }
 
 
