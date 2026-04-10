@@ -2266,19 +2266,11 @@ async function _renderGraph() {
     // Map each domain to its category color
     function getClusterColor(n) {
         if (n.type === 'source') return '#475569';
-        if (n.level === 0) return catColorMap[n.id] || '#a78bfa';
-        // Level-1: check parent in catColorMap
-        if (n.parentId && catColorMap[n.parentId]) return catColorMap[n.parentId];
-        // Level-2: check grandparent
-        const parent = nodeById[n.parentId];
-        if (parent && parent.parentId && catColorMap[parent.parentId]) return catColorMap[parent.parentId];
-        // Fallback: assign a stable color per parent group (or per domain if orphan)
-        const key = n.parentId || n.id;
-        if (!catColorMap[key]) {
-            catColorMap[key] = clusterPalette[_catIdx % clusterPalette.length];
-            _catIdx++;
-        }
-        return catColorMap[key];
+        // Level-based coloring — matches knowledge map pastels
+        if (n.level === 0) return '#c4a46c';  // warm amber (categories)
+        if (n.level === 1) return '#9b8ec4';  // soft lavender (domains)
+        if (n.level === 2) return '#6db88a';  // sage green (sub-topics)
+        return '#94a3b8'; // fallback slate
     }
 
     const C = {

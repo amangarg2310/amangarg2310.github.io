@@ -3262,3 +3262,33 @@
     .intel-nav-logout { display: none; }  /* Show only gear icon for settings */
     .intel-kb-header { flex-direction: column; gap: 12px; align-items: flex-start; }
 }
+
+/* ── Additional Mobile Optimizations ── */
+@media (max-width: 640px) {
+    .intel-domains-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .intel-footer-inner {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+    .intel-footer-brand {
+        flex-direction: column;
+        gap: 4px;
+    }
+    .intel-footer {
+        padding: 24px 16px;
+    }
+    .intel-stats-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .intel-kb-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+}
+

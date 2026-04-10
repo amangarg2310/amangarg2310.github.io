@@ -680,8 +680,10 @@ def domain_page(domain_name):
 
 @app.route("/setup")
 def setup_page():
-    """API key setup page."""
-    # Show which keys are already configured
+    """API key setup page — redirects to home if keys are already set via environment."""
+    # If OpenAI key is configured (env or DB), skip setup entirely
+    if config.get_api_key('openai'):
+        return redirect(url_for('index'))
     configured = {}
     for service in ('openai', 'anthropic', 'supadata'):
         key = config.get_api_key(service)
