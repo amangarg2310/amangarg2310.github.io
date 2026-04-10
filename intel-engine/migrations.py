@@ -503,47 +503,114 @@ def _consolidate_taxonomy(conn):
 
 
 def _refresh_domain_icons(conn):
-    """Assign contextual icons to all domains still showing the default book emoji.
+    """Assign contextual icons to all domains with generic/wrong icons.
 
-    Runs idempotently — only updates domains with the default icon.
+    Two-tier approach:
+    1. Curated name→icon map for known domains (researched, contextual)
+    2. Smart keyword matching with longest-match-first ordering
     """
-    ICON_KEYWORDS = {
-        'ai': '🤖', 'artificial intelligence': '🤖', 'machine learning': '🤖',
-        'claude': '🤖', 'gpt': '🤖', 'llm': '🤖', 'agent': '🤖',
-        'mobile': '📱', 'phone': '📱', 'ios': '📱', 'android': '📱',
-        'app': '📲', 'development': '💻', 'programming': '💻', 'code': '💻',
-        'design': '🎨', 'branding': '🏷️', 'ux': '✨',
-        'trading': '📈', 'stock': '📈', 'finance': '💰', 'invest': '💰',
-        'real estate': '🏠', 'zillow': '🏠', 'housing': '🏠',
-        'tool': '🔧', 'setup': '⚙️', 'config': '⚙️',
-        'rag': '🔍', 'search': '🔍', 'retrieval': '🔍',
-        'note': '📝', 'writing': '✍️', 'notebook': '📓',
-        'data': '📊', 'analytics': '📊',
-        'video': '🎬', 'content': '🎬',
-        'security': '🔒', 'web': '🌐',
-        'startup': '🚀', 'growth': '🚀',
-        'psychology': '🧠', 'marketing': '📣',
+    # Tier 1: Exact name matches (case-insensitive) — hand-researched
+    CURATED_ICONS = {
+        # AI & Claude ecosystem
+        'artificial intelligence': '🤖',
+        'claude code': '💻',
+        'claude co-work': '🤝',
+        'claude agent teams': '🧑‍🤝‍🧑',
+        'rag ai agent': '🔍',
+        'ai design': '🎨',
+        'ai tools': '🤖',
+        'ai tools setup': '⚙️',
+        # Content & knowledge tools
+        'note-taking tools': '📝',
+        'notebooklm integration': '📓',
+        # Ethics & philosophy
+        'animal ethics': '🐾',
+        # Finance & trading
+        'stock trading': '📈',
+        # Apps & mobile
+        'app development': '📲',
+        'mobile app validation': '✅',
+        'app branding': '🏷️',
+        'budgeting app': '💰',
+        'mobile technology': '📱',
+        # Projects / brands
+        'openclaw': '🦞',
     }
 
+    # Tier 2: Keyword matching — sorted longest first so specific beats generic
+    ICON_KEYWORDS = [
+        # Multi-word (most specific) first
+        ('artificial intelligence', '🤖'), ('machine learning', '🤖'),
+        ('real estate', '🏠'), ('note-taking', '📝'), ('open source', '🔓'),
+        ('social media', '📱'), ('web development', '🌐'),
+        ('content creation', '🎬'), ('data science', '📊'),
+        ('mobile dev', '📱'),
+        # Single-word (broader)
+        ('claude', '🤖'), ('gpt', '🤖'), ('llm', '🤖'),
+        ('agent', '🤖'), ('ai', '🤖'),
+        ('mobile', '📱'), ('phone', '📱'), ('ios', '📱'), ('android', '📱'),
+        ('app', '📲'),
+        ('trading', '📈'), ('stock', '📈'), ('finance', '💰'),
+        ('invest', '💰'), ('budget', '💰'),
+        ('animal', '🐾'), ('pet', '🐾'), ('wildlife', '🦁'),
+        ('ethic', '⚖️'), ('moral', '⚖️'),
+        ('design', '🎨'), ('branding', '🏷️'), ('ux', '✨'),
+        ('code', '💻'), ('programming', '💻'), ('development', '💻'),
+        ('notebook', '📓'), ('note', '📝'), ('writing', '✍️'),
+        ('search', '🔍'), ('rag', '🔍'), ('retrieval', '🔍'),
+        ('data', '📊'), ('analytics', '📊'),
+        ('video', '🎬'), ('content', '🎬'),
+        ('security', '🔒'), ('cyber', '🔒'),
+        ('web', '🌐'), ('startup', '🚀'), ('growth', '🚀'),
+        ('psychology', '🧠'), ('marketing', '📣'),
+        ('collaboration', '🤝'), ('co-work', '🤝'), ('team', '👥'),
+        ('validation', '✅'), ('testing', '🧪'),
+        ('integration', '🔗'), ('automation', '⚡'),
+        ('education', '🎓'), ('learning', '🎓'),
+        ('health', '💪'), ('fitness', '💪'),
+        ('cooking', '🍳'), ('food', '🍽️'),
+        ('music', '🎵'), ('gaming', '🎮'),
+        ('photo', '📷'), ('science', '🔬'),
+        ('history', '🏛️'), ('philosophy', '💭'),
+        ('strategy', '♟️'), ('negotiation', '🤝'),
+        ('career', '🎯'), ('productivity', '⏱️'),
+    ]
+
     try:
+        # Broaden scope: fix ALL domains with generic/wrong icons
         domains = conn.execute(
-            "SELECT id, name FROM domains WHERE icon = '📚' OR icon IS NULL"
+            "SELECT id, name, description FROM domains WHERE icon IN ('📚', '📂', '🔧', '⚙️') OR icon IS NULL"
         ).fetchall()
 
         if not domains:
             return
 
+        updated = 0
         for d in domains:
-            name_lower = d[1].lower()
-            icon = '📂'  # Generic folder fallback — better than book
-            for keyword, emoji in ICON_KEYWORDS.items():
-                if keyword in name_lower:
-                    icon = emoji
-                    break
+            name_lower = d[1].lower().strip()
+            desc = (d[2] or '').lower()
+            icon = None
+
+            # Tier 1: Exact curated match
+            if name_lower in CURATED_ICONS:
+                icon = CURATED_ICONS[name_lower]
+
+            # Tier 2: Keyword match (longest first — already sorted)
+            if not icon:
+                for keyword, emoji in ICON_KEYWORDS:
+                    if keyword in name_lower or keyword in desc:
+                        icon = emoji
+                        break
+
+            # Fallback: knowledge lightbulb (better than folder/book)
+            if not icon:
+                icon = '💡'
+
             conn.execute("UPDATE domains SET icon = ? WHERE id = ?", (icon, d[0]))
+            updated += 1
 
         conn.commit()
-        logger.info(f"Refreshed icons for {len(domains)} domains")
+        logger.info(f"Refreshed icons for {updated} domains")
 
     except sqlite3.OperationalError as e:
         logger.warning(f"Icon refresh skipped: {e}")

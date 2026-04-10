@@ -80,6 +80,22 @@ def needs_setup() -> bool:
     return not config.get_api_key('openai')
 
 
+def check_daily_limit(user_id: int, limit: int = 25) -> tuple[bool, int]:
+    """Check if user has exceeded daily source ingestion limit.
+    Returns (exceeded: bool, count: int).
+    """
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM sources WHERE user_id = ? AND created_at >= datetime('now', '-1 day')",
+            (user_id,),
+        ).fetchone()
+        count = row[0] if row else 0
+        return (count >= limit, count)
+    except Exception:
+        return (False, 0)
+
+
 def allowed_file(filename: str) -> bool:
     """Check if file extension is allowed."""
     return '.' in filename and \
@@ -725,12 +741,17 @@ def api_ingest():
     from youtube_ingest import extract_video_id
     from article_ingest import generate_article_id
 
+    uid = current_user.id
+
+    # Rate limit: max 25 sources per day per user
+    exceeded, count = check_daily_limit(uid)
+    if exceeded:
+        return jsonify({"error": f"Daily limit reached ({count}/25 sources today). Try again tomorrow."}), 429
+
     data = request.get_json()
     url = (data or {}).get('url', '').strip()
     if not url:
         return jsonify({"error": "No URL provided"}), 400
-
-    uid = current_user.id
     source_type = detect_source_type(url)
 
     if source_type == 'playlist':
@@ -838,6 +859,11 @@ def api_upload():
     original_filename = secure_filename(file.filename)
     source_type = get_source_type_from_ext(original_filename)
 
+    # Rate limit: max 25 sources per day per user
+    exceeded, count = check_daily_limit(current_user.id)
+    if exceeded:
+        return jsonify({"error": f"Daily limit reached ({count}/25 sources today). Try again tomorrow."}), 429
+
     # Generate a unique filename to avoid collisions
     import uuid
     unique_name = f"{uuid.uuid4().hex[:8]}_{original_filename}"
@@ -888,6 +914,11 @@ def api_ingest_text():
         title = content[:60] + ("..." if len(content) > 60 else "")
 
     uid = current_user.id
+
+    # Rate limit: max 25 sources per day per user
+    exceeded, count = check_daily_limit(uid)
+    if exceeded:
+        return jsonify({"error": f"Daily limit reached ({count}/25 sources today). Try again tomorrow."}), 429
     source_vid = _hash_text_id(content)
     _update_status(source_vid, 'processing', 'Processing text...', 5, title=title)
 

@@ -862,13 +862,35 @@ def reprocess_pipeline(source_id: int, db_path=None, reclassify: bool = False) -
 
         all_insights = []
         extraction_errors = []
-        for i, chunk in enumerate(chunks):
-            progress = 20 + int((i / max(len(chunks), 1)) * 40)
-            _update_status(video_id, 'processing',
-                           f'Re-extracting insights ({i+1}/{len(chunks)})...', progress,
-                           title=source['title'], channel=source['channel'])
-            insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
-            all_insights.extend(insights)
+        if len(chunks) <= 1:
+            for i, chunk in enumerate(chunks):
+                _update_status(video_id, 'processing',
+                               f'Re-extracting insights ({i+1}/{len(chunks)})...', 30,
+                               title=source['title'], channel=source['channel'])
+                insights = extract_insights(chunk, chunk_index=i, errors=extraction_errors)
+                all_insights.extend(insights)
+        else:
+            completed = 0
+            chunk_error_lists = [[] for _ in chunks]
+            with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as executor:
+                futures = {
+                    executor.submit(extract_insights, chunk, chunk_index=i, errors=chunk_error_lists[i]): i
+                    for i, chunk in enumerate(chunks)
+                }
+                chunk_results = [None] * len(chunks)
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    chunk_results[idx] = future.result()
+                    completed += 1
+                    progress = 20 + int((completed / len(chunks)) * 40)
+                    _update_status(video_id, 'processing',
+                                   f'Re-extracting insights ({completed}/{len(chunks)})...',
+                                   progress, title=source['title'], channel=source['channel'])
+                for result in chunk_results:
+                    if result:
+                        all_insights.extend(result)
+                for el in chunk_error_lists:
+                    extraction_errors.extend(el)
 
         # Store detailed diagnostics if extraction failed
         if not all_insights and chunks and word_count >= 30:

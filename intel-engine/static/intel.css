@@ -1026,7 +1026,7 @@
 .intel-domain-card:nth-child(5) { animation-delay: 0.25s; }
 .intel-domain-card:nth-child(6) { animation-delay: 0.3s; }
 
-.intel-domain-icon { font-size: 36px; margin-bottom: 16px; display: block; }
+.intel-domain-icon { font-size: 18px; margin-bottom: 8px; display: block; }
 .intel-domain-parent { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--intel-text-tertiary); margin-bottom: 4px; }
 .intel-domain-name { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
 .intel-domain-desc { font-size: 13px; color: var(--intel-text-secondary); line-height: 1.5; margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1212,13 +1212,14 @@
 /* ── Tree Connectors (SVG) ── */
 .bio-connector {
     fill: none;
-    stroke: var(--intel-border);
+    stroke: #d4c4a8;
     stroke-width: 1.5;
     stroke-linecap: round;
     opacity: 0;
     animation: bioGrow 0.5s ease-out forwards;
 }
 .bio-connector.bio-connector-thin {
+    stroke: #a8d4b8;
     stroke-width: 1;
     stroke-dasharray: 4 3;
 }
@@ -1266,19 +1267,19 @@
     align-items: center;
     gap: 10px;
     padding: 14px 24px;
-    background: var(--intel-surface);
-    border: 1.5px solid var(--intel-border);
+    background: linear-gradient(135deg, #faf6f0 0%, #f5ede0 100%);
+    border: 1.5px solid #e0d5c4;
     border-radius: 20px;
     box-shadow: 0 2px 12px rgba(30, 25, 15, 0.06);
     transition: all 0.25s ease;
 }
 .bio-node-cat:hover .bio-node-core {
-    border-color: var(--intel-accent);
-    box-shadow: 0 4px 20px rgba(79, 110, 247, 0.1);
+    border-color: #c4a46c;
+    box-shadow: 0 4px 20px rgba(196, 164, 108, 0.15);
 }
 .bio-node-cat[data-expanded="true"] .bio-node-core {
-    border-color: var(--intel-accent);
-    background: rgba(79, 110, 247, 0.04);
+    border-color: #c4a46c;
+    background: linear-gradient(135deg, #f7f0e4 0%, #f0e6d4 100%);
 }
 .bio-node-cat .bio-node-icon { font-size: 22px; }
 .bio-node-cat .bio-node-name {
@@ -1306,8 +1307,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    background: var(--intel-surface);
-    border: 1px solid var(--intel-border);
+    background: linear-gradient(135deg, #f5f3fb 0%, #eeeafc 100%);
+    border: 1px solid #ddd6f0;
     border-radius: 14px;
     text-decoration: none;
     color: inherit;
@@ -1315,11 +1316,11 @@
 }
 .bio-node-domain:hover .bio-node-core {
     border-color: var(--intel-accent);
-    box-shadow: 0 2px 12px rgba(79, 110, 247, 0.08);
+    box-shadow: 0 2px 12px rgba(79, 110, 247, 0.12);
 }
 .bio-node-domain[data-expanded="true"] .bio-node-core {
     border-color: var(--intel-accent);
-    background: rgba(79, 110, 247, 0.04);
+    background: linear-gradient(135deg, #f0ecfa 0%, #e8e2f8 100%);
 }
 .bio-node-domain .bio-node-icon { font-size: 18px; }
 .bio-node-domain .bio-node-name {
@@ -1360,20 +1361,20 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    background: var(--intel-surface);
-    border: 1px solid var(--intel-border);
+    background: linear-gradient(135deg, #f2f8f5 0%, #e8f4ee 100%);
+    border: 1px solid #cce5d6;
     border-radius: 10px;
     transition: all 0.25s ease;
 }
 .bio-node-sub:hover .bio-node-core {
-    border-color: var(--intel-accent);
+    border-color: #6db88a;
 }
 .bio-node-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--intel-accent);
-    opacity: 0.5;
+    background: #6db88a;
+    opacity: 0.6;
 }
 .bio-node-sub .bio-node-name {
     font-size: 12px;
@@ -3054,6 +3055,7 @@
     background: #1a1916;
     color: rgba(255, 255, 255, 0.5);
     padding: 40px 32px;
+    font-family: var(--intel-font);
 }
 .intel-footer-inner {
     max-width: 1200px;

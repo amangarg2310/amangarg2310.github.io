@@ -45,6 +45,7 @@ from embeddings import generate_embedding, batch_generate_embeddings, cosine_sim
 logger = logging.getLogger(__name__)
 
 DOMAIN_ICONS = {
+    # General disciplines
     "product marketing": "📦", "growth": "📈", "sales": "💰",
     "engineering": "⚙️", "design": "🎨", "data science": "📊",
     "ai tools": "🤖", "ai agents": "🤖", "leadership": "👑", "startups": "🚀",
@@ -60,6 +61,17 @@ DOMAIN_ICONS = {
     "mathematics": "🔢", "philosophy": "💭", "history": "🏛️",
     "marketing": "📣", "branding": "🏷️", "analytics": "📈",
     "ux design": "✨", "web development": "🌐", "mobile development": "📱",
+    # Specific domains commonly created by the LLM
+    "artificial intelligence": "🤖", "machine learning": "🤖",
+    "claude code": "💻", "claude co-work": "🤝", "claude agent teams": "🧑‍🤝‍🧑",
+    "rag ai agent": "🔍", "ai design": "🎨",
+    "note-taking tools": "📝", "note-taking": "📝",
+    "notebooklm integration": "📓", "notebook": "📓",
+    "animal ethics": "🐾", "ethics": "⚖️",
+    "stock trading": "📈", "trading": "📈",
+    "app development": "📲", "mobile app validation": "✅",
+    "app branding": "🏷️", "budgeting app": "💰",
+    "mobile technology": "📱", "openclaw": "🦞",
 }
 
 DETECTION_PROMPT = """You are a domain taxonomy classifier. Classify content into a HIERARCHICAL domain structure.
@@ -78,7 +90,7 @@ RULES:
 
 5. **SUB-TOPICS**: 2-4 thematic areas this content covers. Think "what chapters would this belong to" — not granular steps.
 
-6. **ICON**: A single emoji that visually represents this specific DOMAIN (not the parent). Be distinctive — \U0001f916 for AI, \U0001f4f1 for mobile, \U0001f527 for tools, \U0001f9e0 for psychology, \U0001f3a8 for design, \U0001f4bb for programming, \U0001f680 for startups, \U0001f4ca for data, \U0001f512 for security, \U0001f3ac for video, \U0001f4c8 for trading/finance. Pick the MOST specific emoji. Never use \U0001f4da.
+6. **ICON**: Pick the ONE emoji someone would instantly associate with this domain. Think contextually — what image comes to mind? Examples: 🐾 animals, 📈 trading, 🤝 collaboration, 📝 notes/writing, 🎨 design, 💻 coding, 🔍 search/RAG, 📓 notebooks, 🦞 seafood/claw brands, ⚖️ ethics, ✅ validation, 📲 apps, 🏷️ branding, 💰 finance/budgeting. Be creative and specific. NEVER use generic fallbacks like 📚 📂 🔧.
 
 7. **PARENT_ICON**: Same — a single emoji for the parent category.
 
