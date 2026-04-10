@@ -242,6 +242,10 @@ def run_migrations(db_path=None):
     # lowest-id row, re-point children and sources to it, then delete extras.
     _deduplicate_domains(conn)
 
+    # One-time taxonomy consolidation and icon refresh
+    _consolidate_taxonomy(conn)
+    _refresh_domain_icons(conn)
+
     conn.commit()
 
     # FTS5 virtual table for keyword search (separate from executescript)
@@ -385,6 +389,164 @@ def _deduplicate_domains(conn):
 
     except sqlite3.OperationalError as e:
         logger.warning(f"Domain deduplication skipped: {e}")
+
+
+def _consolidate_taxonomy(conn):
+    """One-time audit: merge small categories, fix name collisions, assign better structure.
+
+    Runs idempotently — checks if merges are needed before executing.
+    Uses the same merge pattern as _deduplicate_domains: re-point children/sources/insights.
+    """
+    try:
+        # Find level-0 categories with 0 or 1 child domains — candidates for merging
+        small_cats = conn.execute("""
+            SELECT p.id, p.name, COUNT(d.id) as child_count
+            FROM domains p
+            LEFT JOIN domains d ON d.parent_id = p.id AND d.level = 1
+            WHERE p.level = 0
+            GROUP BY p.id
+            HAVING child_count <= 1
+        """).fetchall()
+
+        if not small_cats:
+            return
+
+        # Find the largest level-0 category to use as merge target
+        largest = conn.execute("""
+            SELECT p.id, p.name, COUNT(d.id) as child_count
+            FROM domains p
+            LEFT JOIN domains d ON d.parent_id = p.id AND d.level = 1
+            WHERE p.level = 0
+            GROUP BY p.id
+            ORDER BY child_count DESC
+            LIMIT 1
+        """).fetchone()
+
+        if not largest:
+            return
+
+        target_id = largest[0]
+        target_name = largest[1]
+
+        for cat in small_cats:
+            cat_id, cat_name, child_count = cat[0], cat[1], cat[2]
+            if cat_id == target_id:
+                continue  # Don't merge the target into itself
+
+            # Merge: move all level-1 children of this small category to the target
+            conn.execute(
+                "UPDATE domains SET parent_id = ?, path = REPLACE(path, ?, ?) WHERE parent_id = ? AND level = 1",
+                (target_id, f"/{cat_name}/", f"/{target_name}/", cat_id),
+            )
+
+            # Move any sources directly attached to this category
+            conn.execute(
+                "UPDATE sources SET domain_id = ? WHERE domain_id = ?",
+                (target_id, cat_id),
+            )
+            conn.execute(
+                "UPDATE insights SET domain_id = ? WHERE domain_id = ?",
+                (target_id, cat_id),
+            )
+
+            # Move level-2 sub-topics that were children of this category
+            conn.execute(
+                "UPDATE domains SET parent_id = ? WHERE parent_id = ? AND level = 2",
+                (target_id, cat_id),
+            )
+
+            # Delete the empty category
+            conn.execute("DELETE FROM domains WHERE id = ?", (cat_id,))
+            logger.info(f"Taxonomy consolidation: merged category \'{cat_name}\' → \'{target_name}\'")
+
+        # Fix name collisions: level-0 and level-1 with the same name
+        collisions = conn.execute("""
+            SELECT p.id as parent_id, p.name, d.id as domain_id
+            FROM domains p
+            JOIN domains d ON d.parent_id = p.id
+            WHERE p.level = 0 AND d.level = 1
+              AND p.name = d.name COLLATE NOCASE
+        """).fetchall()
+
+        for col in collisions:
+            parent_id, name, domain_id = col[0], col[1], col[2]
+            # Move sources from the level-1 duplicate up to the level-0 parent
+            conn.execute(
+                "UPDATE sources SET domain_id = ? WHERE domain_id = ?",
+                (parent_id, domain_id),
+            )
+            conn.execute(
+                "UPDATE insights SET domain_id = ? WHERE domain_id = ?",
+                (parent_id, domain_id),
+            )
+            # Move sub-topics from level-1 to level-0
+            conn.execute(
+                "UPDATE domains SET parent_id = ? WHERE parent_id = ? AND level = 2",
+                (parent_id, domain_id),
+            )
+            # Delete the level-1 duplicate
+            conn.execute("DELETE FROM domains WHERE id = ?", (domain_id,))
+            logger.info(f"Taxonomy consolidation: fixed name collision \'{name}\' — collapsed level-1 into level-0")
+
+        # Repair counts for all domains
+        conn.execute("""
+            UPDATE domains SET
+                source_count = (SELECT COUNT(*) FROM sources WHERE domain_id = domains.id),
+                insight_count = (SELECT COUNT(*) FROM insights WHERE domain_id = domains.id)
+        """)
+
+        conn.commit()
+        logger.info("Taxonomy consolidation complete")
+
+    except sqlite3.OperationalError as e:
+        logger.warning(f"Taxonomy consolidation skipped: {e}")
+
+
+def _refresh_domain_icons(conn):
+    """Assign contextual icons to all domains still showing the default book emoji.
+
+    Runs idempotently — only updates domains with the default icon.
+    """
+    ICON_KEYWORDS = {
+        'ai': '🤖', 'artificial intelligence': '🤖', 'machine learning': '🤖',
+        'claude': '🤖', 'gpt': '🤖', 'llm': '🤖', 'agent': '🤖',
+        'mobile': '📱', 'phone': '📱', 'ios': '📱', 'android': '📱',
+        'app': '📲', 'development': '💻', 'programming': '💻', 'code': '💻',
+        'design': '🎨', 'branding': '🏷️', 'ux': '✨',
+        'trading': '📈', 'stock': '📈', 'finance': '💰', 'invest': '💰',
+        'real estate': '🏠', 'zillow': '🏠', 'housing': '🏠',
+        'tool': '🔧', 'setup': '⚙️', 'config': '⚙️',
+        'rag': '🔍', 'search': '🔍', 'retrieval': '🔍',
+        'note': '📝', 'writing': '✍️', 'notebook': '📓',
+        'data': '📊', 'analytics': '📊',
+        'video': '🎬', 'content': '🎬',
+        'security': '🔒', 'web': '🌐',
+        'startup': '🚀', 'growth': '🚀',
+        'psychology': '🧠', 'marketing': '📣',
+    }
+
+    try:
+        domains = conn.execute(
+            "SELECT id, name FROM domains WHERE icon = '📚' OR icon IS NULL"
+        ).fetchall()
+
+        if not domains:
+            return
+
+        for d in domains:
+            name_lower = d[1].lower()
+            icon = '📂'  # Generic folder fallback — better than book
+            for keyword, emoji in ICON_KEYWORDS.items():
+                if keyword in name_lower:
+                    icon = emoji
+                    break
+            conn.execute("UPDATE domains SET icon = ? WHERE id = ?", (icon, d[0]))
+
+        conn.commit()
+        logger.info(f"Refreshed icons for {len(domains)} domains")
+
+    except sqlite3.OperationalError as e:
+        logger.warning(f"Icon refresh skipped: {e}")
 
 
 def _add_column(conn, table: str, column: str, definition: str):

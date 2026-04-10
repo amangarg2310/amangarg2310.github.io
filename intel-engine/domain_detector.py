@@ -74,16 +74,20 @@ RULES:
 
 3. **DOMAIN NAME** = the core subject, 1-3 words. Could be a tool ("Claude Code"), a discipline ("Data Engineering"), a concept ("Growth Strategy"), or a field ("Behavioral Economics"). Whatever best answers: "This is a source about ___."
 
-4. **PARENT CATEGORY**: Broad 2-3 word grouping. Reuse an existing parent when it fits. Only create new ones for genuinely different areas.
+4. **PARENT CATEGORY**: Broad 2-3 word grouping. STRONGLY PREFER reusing an existing parent — create a new one ONLY if NONE of the existing parents could reasonably contain this domain. Ask: "Would someone browsing the existing categories be surprised to find this domain there?" If not, reuse it.
 
 5. **SUB-TOPICS**: 2-4 thematic areas this content covers. Think "what chapters would this belong to" — not granular steps.
+
+6. **ICON**: A single emoji that visually represents this specific DOMAIN (not the parent). Be distinctive — \U0001f916 for AI, \U0001f4f1 for mobile, \U0001f527 for tools, \U0001f9e0 for psychology, \U0001f3a8 for design, \U0001f4bb for programming, \U0001f680 for startups, \U0001f4ca for data, \U0001f512 for security, \U0001f3ac for video, \U0001f4c8 for trading/finance. Pick the MOST specific emoji. Never use \U0001f4da.
+
+7. **PARENT_ICON**: Same — a single emoji for the parent category.
 
 CONTENT TITLE: {title}
 CONTENT SOURCE: {channel}
 EXCERPT: {excerpt}
 
 Return ONLY valid JSON:
-{{"domain": "Name", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false}}"""
+{{"domain": "Name", "parent": "Category", "sub_topics": ["Topic1", "Topic2"], "description": "One sentence", "is_new": true/false, "icon": "\U0001f916", "parent_icon": "\U0001f4e6"}}"""
 
 
 def get_existing_domains(db_path=None, user_id=None) -> list[dict]:
@@ -315,7 +319,7 @@ def detect_domain_hierarchical(title: str, channel: str, transcript_excerpt: str
     }
 
 
-_PARENT_STOP_WORDS = {'tools', 'development', 'management', 'engineering', 'automation', 'technology', 'platform', 'software', 'systems'}
+_PARENT_STOP_WORDS = {'tools', 'development', 'management', 'engineering', 'automation', 'technology', 'platform', 'software', 'systems', 'setup', 'configuration', 'integration', 'applications'}
 
 
 def _normalize_parent(name: str) -> str:
@@ -354,6 +358,14 @@ def _find_matching_parent(conn, parent_name: str, user_id=None) -> tuple[int, st
         if _normalize_parent(p[1]) == normalized:
             logger.info(f"Auto-merged parent '{parent_name}' → existing '{p[1]}'")
             return (p[0], p[1])
+
+    # 3. RapidFuzz token match (e.g. "AI Tools Setup" ~ "AI Tools" → match)
+    if fuzz:
+        for p in parents:
+            score = fuzz.token_set_ratio(parent_name.lower(), p[1].lower())
+            if score >= 80:
+                logger.info(f"Fuzzy-matched parent '{parent_name}' → existing '{p[1]}' (score={score})")
+                return (p[0], p[1])
 
     return None
 

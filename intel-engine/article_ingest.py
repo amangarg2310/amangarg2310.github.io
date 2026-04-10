@@ -76,7 +76,39 @@ def ingest_article(url: str) -> ArticleMeta:
     except Exception as e:
         logger.warning(f"trafilatura failed for {url}: {e}")
 
-    # Fallback to BeautifulSoup
+    # Fallback 1: requests library with full browser headers (handles cookies/sessions)
+    if not text_content:
+        try:
+            html = _fetch_with_requests(url)
+            if html:
+                # Try trafilatura extraction on the fetched HTML
+                try:
+                    import trafilatura
+                    text_content = trafilatura.extract(
+                        html,
+                        include_comments=False,
+                        include_tables=True,
+                        favor_precision=False,
+                        favor_recall=True,
+                    )
+                    metadata = trafilatura.extract_metadata(html)
+                    if metadata:
+                        title = title or metadata.title
+                        if metadata.sitename:
+                            site_name = metadata.sitename
+                except ImportError:
+                    pass
+
+                # If trafilatura didn't extract, try BeautifulSoup on the fetched HTML
+                if not text_content:
+                    text_content, bs_title = _beautifulsoup_parse(html)
+                    title = title or bs_title
+        except Exception as e:
+            logger.warning(f"requests fallback failed for {url}: {e}")
+            if "403" in str(e) or "401" in str(e):
+                access_denied = True
+
+    # Fallback 2: urllib with basic headers (legacy)
     if not text_content:
         try:
             text_content, title = _beautifulsoup_extract(url)
@@ -107,6 +139,56 @@ def ingest_article(url: str) -> ArticleMeta:
         site_name=site_name,
         text_content=text_content,
     )
+
+
+def _fetch_with_requests(url: str) -> str:
+    """Fetch page HTML using requests with full browser headers and cookie support."""
+    import requests
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+    }
+
+    session = requests.Session()
+    resp = session.get(url, headers=headers, timeout=30, allow_redirects=True)
+    resp.raise_for_status()
+    return resp.text
+
+
+def _beautifulsoup_parse(html: str) -> tuple[str, Optional[str]]:
+    """Parse already-fetched HTML with BeautifulSoup."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    title = None
+    title_tag = soup.find("title")
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+
+    for tag in soup.find_all(["script", "style", "nav", "footer", "header", "aside"]):
+        tag.decompose()
+
+    main = soup.find("article") or soup.find("main") or soup.find(class_="content") or soup.body
+    if main:
+        text = main.get_text(separator="\n", strip=True)
+    else:
+        text = soup.get_text(separator="\n", strip=True)
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    text = "\n".join(lines)
+
+    return text, title
 
 
 def _beautifulsoup_extract(url: str) -> tuple[str, Optional[str]]:
