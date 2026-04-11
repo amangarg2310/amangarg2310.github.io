@@ -623,8 +623,8 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="bio-tree" id="bioTree">
             <div class="intel-tree-guide" id="treeGuide">
                 <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
-                <img class="intel-guide-arrow" src="{{ url_for('static', filename='guide-arrow.png') }}" alt="" draggable="false">
             </div>
+            <img class="intel-guide-arrow" id="guideArrow" src="{{ url_for('static', filename='guide-arrow.png') }}" alt="" draggable="false">
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
                 <!-- Level 0: Category nodes (always visible, leftmost column) -->
@@ -796,12 +796,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Subtle tree hint — fades after first interaction
         var hint = document.getElementById('treeGuide');
         if (hint && !localStorage.getItem('distylme-guide-v4')) {
-            hint.style.display = 'block';
+            hint.style.display = 'block'; var arr = document.getElementById('guideArrow'); if (arr) arr.style.display = 'block';
             setTimeout(function() { hint.style.opacity = '1'; }, 100);
             document.addEventListener('click', function hintHandler(e) {
                 if (e.target.closest && e.target.closest('.bio-node')) {
                     hint.style.opacity = '0';
-                    setTimeout(function() { hint.style.display = 'none'; }, 300);
+                    setTimeout(function() { hint.style.display = 'none'; var arr2 = document.getElementById('guideArrow'); if (arr2) arr2.style.display = 'none'; }, 300);
                     localStorage.setItem('distylme-guide-v4', '1');
                     document.removeEventListener('click', hintHandler);
                 }
