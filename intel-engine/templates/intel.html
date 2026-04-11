@@ -303,16 +303,25 @@
                     {% if synthesis %} &middot; Synthesis v{{ synthesis.version }}{% endif %}
                 </p>
                 {% if domain.source_count >= 2 and synthesis %}
-                <button class="intel-playbook-btn" onclick="openPlaybookModal()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                        <polyline points="10 9 9 9 8 9"/>
-                    </svg>
-                    Generate Playbook
-                </button>
+                <div class="intel-playbook-actions">
+                    <button class="intel-playbook-btn" onclick="openPlaybookModal()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        Generate Playbook
+                    </button>
+                    <button class="intel-digest-preview-btn" onclick="previewDigest()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                            <polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                        Preview Digest
+                    </button>
+                </div>
                 {% elif domain.source_count < 2 %}
                 <div class="intel-playbook-unlock">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -509,6 +518,23 @@
 </div>
 
 <script>
+function renderMarkdown(text) {
+    if (!text) return '';
+    return text
+        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/^- (.*$)/gm, '<li>$1</li>')
+        .replace(/^\d+\. (.*$)/gm, '<li>$1</li>')
+        .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
+        .replace(/\u2713 Validated/g, '<span class="intel-playbook-validated">\u2713 Validated</span>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+}
+
 function openPlaybookModal() {
     document.getElementById('playbookModal').style.display = 'flex';
 }
@@ -520,104 +546,66 @@ function closePlaybookView() {
 }
 
 async function generatePlaybook() {
-    const goal = document.getElementById('playbookGoal').value.trim();
-    const experience = document.getElementById('playbookExperience').value;
-    const format_type = document.getElementById('playbookFormat').value;
-    const constraints = document.getElementById('playbookConstraints').value.trim();
+    var goal = document.getElementById('playbookGoal').value.trim();
+    var experience = document.getElementById('playbookExperience').value;
+    var format_type = document.getElementById('playbookFormat').value;
+    var constraints = document.getElementById('playbookConstraints').value.trim();
 
     closePlaybookModal();
-    const view = document.getElementById('playbookView');
+    var view = document.getElementById('playbookView');
     view.style.display = 'flex';
     document.getElementById('playbookLoading').style.display = 'flex';
     document.getElementById('playbookContent').innerHTML = '';
 
     try {
-        const domainId = {{ domain.id if domain else 0 }};
-        const resp = await fetch(`/api/generate-playbook/${domainId}`, {
+        var domainId = {{ domain.id if domain else 0 }};
+        var resp = await fetch('/api/generate-playbook/' + domainId, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ goal, experience, format_type, constraints }),
+            body: JSON.stringify({ goal: goal, experience: experience, format_type: format_type, constraints: constraints }),
         });
-        const data = await resp.json();
+        var data = await resp.json();
 
         document.getElementById('playbookLoading').style.display = 'none';
 
         if (data.error) {
             document.getElementById('playbookContent').innerHTML =
-                `<div class="intel-playbook-error">${data.error}</div>`;
+                '<div class="intel-playbook-error">' + data.error + '</div>';
             return;
         }
 
-        // Render markdown
-        let html = data.content
-            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code>$1</code>')
-            .replace(/^- (.*$)/gm, '<li>$1</li>')
-            .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
-            .replace(/(<li>.*<\/li>
-?)+/g, '<ul>$&</ul>')
-            .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
-            .replace(/✓ Validated/g, '<span class="intel-playbook-validated">✓ Validated</span>')
-            .replace(/
-
-/g, '</p><p>')
-            .replace(/
-/g, '<br>');
-        html = '<p>' + html + '</p>';
-
-        document.getElementById('playbookContent').innerHTML = html;
+        document.getElementById('playbookContent').innerHTML = '<p>' + renderMarkdown(data.content) + '</p>';
         document.getElementById('playbookViewMeta').textContent =
-            `${data.source_count} sources · ${data.insight_count} insights`;
+            data.source_count + ' sources \u00b7 ' + data.insight_count + ' insights';
 
     } catch (err) {
         document.getElementById('playbookLoading').style.display = 'none';
         document.getElementById('playbookContent').innerHTML =
-            `<div class="intel-playbook-error">Failed to generate playbook. Please try again.</div>`;
+            '<div class="intel-playbook-error">Failed to generate playbook. Please try again.</div>';
     }
 }
 
 // Check for existing playbook on page load
 {% if domain %}
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const resp = await fetch('/api/playbook/{{ domain.id }}');
-        const data = await resp.json();
-        if (data.exists) {
-            const btn = document.querySelector('.intel-playbook-btn');
-            if (btn) {
-                btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> View Playbook`;
-                btn.onclick = () => {
-                    const view = document.getElementById('playbookView');
-                    view.style.display = 'flex';
-                    let html = data.content
-                        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-                        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-                        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                        .replace(/`(.*?)`/g, '<code>$1</code>')
-                        .replace(/^- (.*$)/gm, '<li>$1</li>')
-                        .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
-                        .replace(/(<li>.*<\/li>
-?)+/g, '<ul>$&</ul>')
-                        .replace(/\[Source: ([^\]]+)\]/g, '<cite class="intel-playbook-cite">[Source: $1]</cite>')
-                        .replace(/✓ Validated/g, '<span class="intel-playbook-validated">✓ Validated</span>')
-                        .replace(/
-
-/g, '</p><p>')
-                        .replace(/
-/g, '<br>');
-                    document.getElementById('playbookContent').innerHTML = '<p>' + html + '</p>';
-                    document.getElementById('playbookViewMeta').textContent =
-                        `${data.source_count} sources · Generated ${new Date(data.created_at).toLocaleDateString()}`;
-                };
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/playbook/{{ domain.id }}')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.exists) {
+                var btn = document.querySelector('.intel-playbook-btn');
+                if (btn) {
+                    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> View Playbook';
+                    btn.onclick = function() {
+                        var view = document.getElementById('playbookView');
+                        view.style.display = 'flex';
+                        document.getElementById('playbookContent').innerHTML = '<p>' + renderMarkdown(data.content) + '</p>';
+                        document.getElementById('playbookViewMeta').textContent =
+                            data.source_count + ' sources \u00b7 Generated ' + new Date(data.created_at).toLocaleDateString();
+                    };
+                }
             }
-        }
-    } catch (e) {}
+        })
+        .catch(function() {});
 });
 {% endif %}
 </script>
@@ -658,6 +646,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_sources }}</span> sources</div>
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_insights }}</span> insights</div>
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_domains }}</span> domains</div>
+        </div>
+
+        <!-- Onboarding tooltip (shows once) -->
+        <div class="intel-onboard-tip" id="onboardTip" style="display:none">
+            <div class="intel-onboard-tip-content">
+                <span class="intel-onboard-tip-icon">💡</span>
+                <div class="intel-onboard-tip-text">
+                    <strong>Click</strong> to expand &middot; <strong>Double-click</strong> to open
+                </div>
+                <button class="intel-onboard-tip-dismiss" onclick="dismissOnboardTip()">Got it</button>
+            </div>
         </div>
 
         <div class="bio-tree" id="bioTree">
@@ -832,6 +831,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(bioDrawConnectors);
         window.addEventListener('resize', bioDrawConnectors);
+
+        // Onboarding tooltip — show once per user
+        if (!localStorage.getItem('distylme-onboard-seen')) {
+            var tip = document.getElementById('onboardTip');
+            if (tip) {
+                tip.style.display = 'block';
+                setTimeout(function() { tip.classList.add('visible'); }, 200);
+                setTimeout(function() { dismissOnboardTip(); }, 8000);
+            }
+        }
+    });
+
+    function dismissOnboardTip() {
+        var tip = document.getElementById('onboardTip');
+        if (tip) {
+            tip.classList.remove('visible');
+            setTimeout(function() { tip.style.display = 'none'; }, 300);
+        }
+        localStorage.setItem('distylme-onboard-seen', '1');
+    }
+
+    // Dismiss on first node interaction
+    document.addEventListener('click', function tipHandler(e) {
+        if (e.target.closest && e.target.closest('.bio-node')) {
+            dismissOnboardTip();
+            document.removeEventListener('click', tipHandler);
+        }
     });
     </script>
 
