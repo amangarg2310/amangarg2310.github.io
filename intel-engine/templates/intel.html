@@ -600,22 +600,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h1 class="intel-kb-title">Knowledge Base</h1>
                 <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ total_domains }} domains</p>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-                <button class="intel-playbook-btn intel-digest-btn" onclick="previewDigest()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                        <polyline points="22,6 12,13 2,6"/>
-                    </svg>
-                    Preview Digest
-                </button>
-                <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"/>
-                        <line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
-                    Add Source
-                </a>
-            </div>
+            <a href="{{ url_for('index') }}" class="intel-nav-graph-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Source
+            </a>
         </div>
 
         {% if knowledge_categories %}
@@ -625,15 +616,20 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_domains }}</span> domains</div>
         </div>
 
-        <!-- Onboarding tooltip (shows once) -->
-        <div class="intel-onboard-tip" id="onboardTip" style="display:none">
-            <div class="intel-onboard-tip-content">
-                <span class="intel-onboard-tip-icon">💡</span>
-                <div class="intel-onboard-tip-text">
-                    <strong>Click</strong> to expand &middot; <strong>Double-click</strong> to open
+        <!-- Onboarding coachmark (shows once, premium design) -->
+        <div class="intel-coachmark" id="coachmark" style="display:none">
+            <div class="intel-coachmark-card">
+                <div class="intel-coachmark-step">1 of 1</div>
+                <p class="intel-coachmark-text">
+                    <strong>Click</strong> a domain to expand its topics.
+                    <strong>Double-click</strong> to open the full knowledge page.
+                </p>
+                <div class="intel-coachmark-footer">
+                    <div class="intel-coachmark-dots"><span class="active"></span></div>
+                    <button class="intel-coachmark-dismiss" onclick="dismissCoachmark()">Got it</button>
                 </div>
-                <button class="intel-onboard-tip-dismiss" onclick="dismissOnboardTip()">Got it</button>
             </div>
+            <div class="intel-coachmark-arrow"></div>
         </div>
 
         <div class="bio-tree" id="bioTree">
@@ -809,31 +805,31 @@ document.addEventListener('DOMContentLoaded', function() {
         requestAnimationFrame(bioDrawConnectors);
         window.addEventListener('resize', bioDrawConnectors);
 
-        // Onboarding tooltip — show once per user
-        if (!localStorage.getItem('distylme-onboard-seen')) {
-            var tip = document.getElementById('onboardTip');
-            if (tip) {
-                tip.style.display = 'block';
-                setTimeout(function() { tip.classList.add('visible'); }, 200);
-                setTimeout(function() { dismissOnboardTip(); }, 8000);
+        // Onboarding coachmark — show once per user (premium UX)
+        if (!localStorage.getItem('distylme-onboard-v2')) {
+            var cm = document.getElementById('coachmark');
+            if (cm) {
+                cm.style.display = 'block';
+                setTimeout(function() { cm.classList.add('visible'); }, 300);
+                setTimeout(function() { dismissCoachmark(); }, 10000);
             }
         }
     });
 
-    function dismissOnboardTip() {
-        var tip = document.getElementById('onboardTip');
-        if (tip) {
-            tip.classList.remove('visible');
-            setTimeout(function() { tip.style.display = 'none'; }, 300);
+    function dismissCoachmark() {
+        var cm = document.getElementById('coachmark');
+        if (cm) {
+            cm.classList.remove('visible');
+            setTimeout(function() { cm.style.display = 'none'; }, 400);
         }
-        localStorage.setItem('distylme-onboard-seen', '1');
+        localStorage.setItem('distylme-onboard-v2', '1');
     }
 
-    // Dismiss on first node interaction
-    document.addEventListener('click', function tipHandler(e) {
+    // Auto-dismiss on first node interaction
+    document.addEventListener('click', function cmHandler(e) {
         if (e.target.closest && e.target.closest('.bio-node')) {
-            dismissOnboardTip();
-            document.removeEventListener('click', tipHandler);
+            dismissCoachmark();
+            document.removeEventListener('click', cmHandler);
         }
     });
     </script>

@@ -384,53 +384,94 @@
     flex-wrap: wrap;
 }
 
-/* ── Onboarding Tooltip (Knowledge Base) ── */
-.intel-onboard-tip {
+/* ── Onboarding Coachmark (Knowledge Base — shows once) ── */
+.intel-coachmark {
     text-align: center;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.4s ease, transform 0.4s ease;
+    transform: translateY(8px);
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    z-index: 50;
 }
-.intel-onboard-tip.visible {
+.intel-coachmark.visible {
     opacity: 1;
     transform: translateY(0);
 }
-.intel-onboard-tip-content {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 18px;
-    background: var(--intel-surface);
-    border: 1px solid var(--intel-border);
+.intel-coachmark-card {
+    display: inline-block;
+    text-align: left;
+    padding: 16px 20px 14px;
+    background: var(--intel-text);
     border-radius: 12px;
-    box-shadow: var(--intel-shadow-lg);
-    font-size: 13px;
-    color: var(--intel-text-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 12px 40px rgba(0, 0, 0, 0.08);
+    max-width: 320px;
+    position: relative;
+}
+.intel-coachmark-arrow {
+    width: 12px;
+    height: 12px;
+    background: var(--intel-text);
+    transform: rotate(45deg);
+    margin: -6px auto 0;
+    border-radius: 0 0 3px 0;
+}
+.intel-coachmark-step {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 6px;
     font-family: var(--intel-font);
 }
-.intel-onboard-tip-icon {
-    font-size: 16px;
-    line-height: 1;
+.intel-coachmark-text {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 0 0 12px;
+    font-family: var(--intel-font);
 }
-.intel-onboard-tip-text strong {
-    color: var(--intel-text);
+.intel-coachmark-text strong {
+    color: #fff;
     font-weight: 600;
 }
-.intel-onboard-tip-dismiss {
-    background: none;
+.intel-coachmark-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.intel-coachmark-dots {
+    display: flex;
+    gap: 5px;
+}
+.intel-coachmark-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+}
+.intel-coachmark-dots span.active {
+    background: #fff;
+    width: 16px;
+    border-radius: 3px;
+}
+.intel-coachmark-dismiss {
+    background: rgba(255, 255, 255, 0.12);
     border: none;
-    font-size: 11.5px;
-    color: var(--intel-accent);
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
     cursor: pointer;
     font-family: var(--intel-font);
-    font-weight: 500;
-    padding: 2px 8px;
+    padding: 5px 14px;
     border-radius: 6px;
-    transition: background var(--intel-transition);
+    transition: background 0.15s ease;
+    letter-spacing: -0.01em;
 }
-.intel-onboard-tip-dismiss:hover {
-    background: var(--intel-accent-light);
+.intel-coachmark-dismiss:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* ══════════════════════════════════════════════════════════════
