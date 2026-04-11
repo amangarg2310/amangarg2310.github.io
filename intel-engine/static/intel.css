@@ -93,16 +93,16 @@
 }
 .intel-playbook-modal-content {
     background: var(--intel-surface);
-    border: 1px solid var(--intel-border);
-    border-radius: var(--intel-radius);
-    padding: 32px;
-    width: 460px;
+    border: 1px solid var(--intel-border-light);
+    border-radius: 18px;
+    padding: 36px 32px 28px;
+    width: 480px;
     max-width: 90vw;
     max-height: 85vh;
     overflow-y: auto;
     position: relative;
-    box-shadow: var(--intel-shadow-lg);
-    animation: playbookModalIn 0.25s ease-out;
+    box-shadow: 0 20px 60px rgba(30, 25, 15, 0.12), 0 4px 12px rgba(30, 25, 15, 0.06);
+    animation: playbookModalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes playbookModalIn {
     from { opacity: 0; transform: translateY(12px) scale(0.97); }
@@ -121,12 +121,18 @@
     padding: 4px;
 }
 .intel-playbook-modal-close:hover { color: var(--intel-text); }
-.intel-playbook-modal-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--intel-text);
-    margin: 0 0 4px;
-    font-family: var(--intel-font);
+.intel-playbook-modal-content {
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border-light);
+    border-radius: 18px;
+    padding: 36px 32px 28px;
+    width: 480px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(30, 25, 15, 0.12), 0 4px 12px rgba(30, 25, 15, 0.06);
+    animation: playbookModalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .intel-playbook-modal-subtitle {
     font-size: 13.5px;
@@ -139,7 +145,17 @@
 .intel-playbook-form {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
+}
+.intel-playbook-row {
+    display: flex;
+    gap: 12px;
+}
+.intel-playbook-row .intel-playbook-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 .intel-playbook-label {
     font-size: 13px;
@@ -150,15 +166,16 @@
 }
 .intel-playbook-input,
 .intel-playbook-select {
-    padding: 10px 14px;
+    padding: 11px 14px;
     font-size: 14px;
     font-family: var(--intel-font);
-    border: 1px solid var(--intel-border);
-    border-radius: var(--intel-radius-xs);
+    border: 1.5px solid var(--intel-border-light);
+    border-radius: 10px;
     background: var(--intel-bg);
     color: var(--intel-text);
-    transition: border-color var(--intel-transition);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     outline: none;
+    -webkit-appearance: none;
 }
 .intel-playbook-input:focus,
 .intel-playbook-select:focus {
@@ -174,20 +191,21 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px 20px;
-    font-size: 14px;
+    padding: 14px 24px;
+    font-size: 14.5px;
     font-weight: 600;
     font-family: var(--intel-font);
     color: #fff;
-    background: linear-gradient(135deg, var(--intel-accent), var(--intel-accent-hover));
+    background: linear-gradient(135deg, #7a5c10 0%, #a67c1a 100%);
     border: none;
-    border-radius: var(--intel-radius-xs);
+    border-radius: 12px;
     cursor: pointer;
-    transition: all var(--intel-transition);
-    margin-top: 6px;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+    letter-spacing: -0.01em;
 }
 .intel-playbook-generate-btn:hover {
-    box-shadow: 0 4px 16px rgba(79, 110, 247, 0.3);
+    box-shadow: 0 6px 20px rgba(122, 92, 16, 0.25);
     transform: translateY(-1px);
 }
 
@@ -418,28 +436,7 @@
    DIGEST PREVIEW
    ══════════════════════════════════════════════════════════════ */
 
-.intel-digest-preview-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    font-size: 12.5px;
-    font-weight: 500;
-    font-family: var(--intel-font);
-    color: var(--intel-text-secondary);
-    background: var(--intel-surface);
-    border: 1px solid var(--intel-border);
-    border-radius: var(--intel-radius-xs);
-    cursor: pointer;
-    transition: all var(--intel-transition);
-    text-decoration: none;
-}
-.intel-digest-preview-btn:hover {
-    border-color: var(--intel-accent);
-    color: var(--intel-accent);
-    background: var(--intel-accent-light);
-}
-.intel-digest-preview-btn svg { stroke: currentColor; }
+/* Digest button uses .intel-playbook-btn class */
 
 .intel-digest-modal {
     position: fixed;

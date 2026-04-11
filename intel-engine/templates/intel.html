@@ -314,7 +314,7 @@
                         </svg>
                         Generate Playbook
                     </button>
-                    <button class="intel-digest-preview-btn" onclick="previewDigest()">
+                    <button class="intel-playbook-btn intel-digest-btn" onclick="previewDigest()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                             <polyline points="22,6 12,13 2,6"/>
@@ -468,28 +468,31 @@
 
         <div class="intel-playbook-form">
             <label class="intel-playbook-label">What do you want to accomplish?</label>
-            <input type="text" id="playbookGoal" class="intel-playbook-input" placeholder="e.g. Launch my app in 30 days, Learn to bake sourdough, Build a home gym routine...">
+            <input type="text" id="playbookGoal" class="intel-playbook-input" placeholder="e.g. Build a daily routine, launch in 30 days, master the basics...">
 
-            <label class="intel-playbook-label">Your experience level</label>
-            <select id="playbookExperience" class="intel-playbook-select">
-                <option value="complete beginner">Complete beginner</option>
-                <option value="some experience" selected>Some experience</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-                <option value="teaching others">Teaching others</option>
-            </select>
+            <div class="intel-playbook-row">
+                <div class="intel-playbook-field">
+                    <label class="intel-playbook-label">Format</label>
+                    <select id="playbookFormat" class="intel-playbook-select">
+                        <option value="steps">Step-by-step guide</option>
+                        <option value="weekly">Weekly plan</option>
+                        <option value="checklist">Checklist</option>
+                        <option value="decision">Compare options</option>
+                        <option value="learning">Learning path</option>
+                    </select>
+                </div>
+                <div class="intel-playbook-field">
+                    <label class="intel-playbook-label">Experience</label>
+                    <select id="playbookExperience" class="intel-playbook-select">
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate" selected>Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+                </div>
+            </div>
 
-            <label class="intel-playbook-label">Format</label>
-            <select id="playbookFormat" class="intel-playbook-select">
-                <option value="steps">Step-by-step guide</option>
-                <option value="weekly">Weekly plan</option>
-                <option value="checklist">Checklist</option>
-                <option value="decision">Decision guide (compare options)</option>
-                <option value="learning">Learning path (beginner &rarr; advanced)</option>
-            </select>
-
-            <label class="intel-playbook-label">Any constraints? <span style="color:var(--intel-text-tertiary);font-weight:400">(optional)</span></label>
-            <input type="text" id="playbookConstraints" class="intel-playbook-input" placeholder="e.g. No budget, solo, only weekends, already use Notion...">
+            <label class="intel-playbook-label">Anything else we should know? <span style="color:var(--intel-text-tertiary);font-weight:400">(optional)</span></label>
+            <input type="text" id="playbookConstraints" class="intel-playbook-input" placeholder="e.g. No budget, already use Notion, only have 2hrs/week...">
 
             <button class="intel-playbook-generate-btn" id="playbookGenerateBtn" onclick="generatePlaybook()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -624,8 +627,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p class="intel-kb-meta">{{ total_sources }} sources · {{ total_insights }} insights across {{ total_domains }} domains</p>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-                <button class="intel-digest-preview-btn" onclick="previewDigest()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button class="intel-playbook-btn intel-digest-btn" onclick="previewDigest()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                         <polyline points="22,6 12,13 2,6"/>
                     </svg>
@@ -2367,6 +2370,7 @@ function askQuestion(questionText) {
     });
 }
 </script>
+
 
 
 
