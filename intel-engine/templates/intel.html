@@ -2728,10 +2728,25 @@ async function _renderGraph() {
         }));
     }
 
-    // Zoom to fit all nodes after simulation settles
+    // Zoom to fit — exclude outlier nodes that are far from the cluster
     setTimeout(() => {
-        if (_graphInstance) {
-            _graphInstance.zoomToFit(600, 60);
+        if (_graphInstance && _graphData && _graphData.nodes.length > 0) {
+            // Calculate median position to find the main cluster
+            var xs = _graphData.nodes.map(function(n) { return n.x || 0; }).sort(function(a,b) { return a-b; });
+            var ys = _graphData.nodes.map(function(n) { return n.y || 0; }).sort(function(a,b) { return a-b; });
+            var medX = xs[Math.floor(xs.length / 2)];
+            var medY = ys[Math.floor(ys.length / 2)];
+            // Calculate distances from median
+            var dists = _graphData.nodes.map(function(n) {
+                return Math.sqrt(Math.pow((n.x||0) - medX, 2) + Math.pow((n.y||0) - medY, 2));
+            }).sort(function(a,b) { return a-b; });
+            // Use 85th percentile distance as the cutoff — excludes far outliers
+            var cutoff = dists[Math.floor(dists.length * 0.85)] * 1.5;
+            // Zoom to fit only the main cluster (nodes within cutoff)
+            _graphInstance.zoomToFit(600, 60, function(node) {
+                var d = Math.sqrt(Math.pow((node.x||0) - medX, 2) + Math.pow((node.y||0) - medY, 2));
+                return d <= cutoff;
+            });
         }
     }, 1500);
 
