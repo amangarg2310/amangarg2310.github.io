@@ -622,11 +622,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         <div class="bio-tree" id="bioTree">
             <div class="intel-tree-guide" id="treeGuide">
-                <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
-                <svg class="intel-guide-arrow" width="100" height="50" viewBox="0 0 100 50" fill="none">
-                    <path d="M15 4 C25 4, 35 8, 45 16 C55 24, 65 35, 78 40 C82 41, 86 42, 88 41" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.25"/>
-                    <path d="M82 35 C84 38, 87 40, 88 41 C86 41, 83 42, 80 44" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.25"/>
-                </svg>
+                <div class="intel-guide-content">
+                    <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
+                    <svg class="intel-guide-arrow" width="140" height="80" viewBox="0 0 140 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Hand-drawn brush-stroke arrow — swoops down-left toward first node -->
+                        <path d="M120 8 C115 8, 108 10, 100 15 C88 22, 72 34, 55 45 C42 53, 30 60, 22 65 C18 67, 15 69, 12 70"
+                              stroke="#9a9590" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <!-- Slight wobble pass for sketch feel -->
+                        <path d="M118 10 C112 11, 105 14, 97 19 C85 27, 70 38, 53 49 C40 57, 28 63, 20 68"
+                              stroke="#9a9590" stroke-width="1" stroke-linecap="round" fill="none" opacity="0.4"/>
+                        <!-- Arrowhead — angular, hand-drawn style -->
+                        <path d="M22 58 L12 70 L26 66" stroke="#9a9590" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </svg>
+                </div>
             </div>
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
@@ -818,44 +826,102 @@ document.addEventListener('DOMContentLoaded', function() {
          DIGEST PREVIEW PAGE
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-digest-page">
-        <div class="intel-digest-page-header">
-            <a href="{{ url_for('knowledge_page') }}" class="intel-playbook-back">&larr; Back to Knowledge Base</a>
+        <!-- Newsletter-style header -->
+        <div class="intel-digest-header-bar">
+            <a href="{{ url_for('knowledge_page') }}" class="intel-digest-back-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                Back
+            </a>
         </div>
+
         <div class="intel-digest-page-content">
             {% if digest_data and digest_data.has_content %}
-            <div class="intel-digest-page-title">
-                <h1>Weekly Knowledge Brief</h1>
-                <p class="intel-digest-page-meta">{{ digest_data.date_range }} &middot; {{ digest_data.stats.new_sources }} source{{ 's' if digest_data.stats.new_sources != 1 else '' }} &middot; {{ digest_data.stats.new_insights }} insight{{ 's' if digest_data.stats.new_insights != 1 else '' }}</p>
+
+            <!-- Newsletter masthead -->
+            <div class="intel-digest-masthead">
+                <div class="intel-digest-masthead-tag">Your Knowledge Brief</div>
+                <h1 class="intel-digest-masthead-title">What you learned this week</h1>
+                <p class="intel-digest-masthead-meta">{{ digest_data.date_range }}</p>
+                <div class="intel-digest-stats-row">
+                    <div class="intel-digest-stat">
+                        <span class="intel-digest-stat-value">{{ digest_data.stats.new_sources }}</span>
+                        <span class="intel-digest-stat-label">sources</span>
+                    </div>
+                    <div class="intel-digest-stat">
+                        <span class="intel-digest-stat-value">{{ digest_data.stats.new_insights }}</span>
+                        <span class="intel-digest-stat-label">insights</span>
+                    </div>
+                    <div class="intel-digest-stat">
+                        <span class="intel-digest-stat-value">{{ digest_data.stats.domains_updated }}</span>
+                        <span class="intel-digest-stat-label">domains</span>
+                    </div>
+                </div>
             </div>
+
+            <div class="intel-digest-divider"></div>
+
+            <!-- Domain sections -->
             {% for domain in digest_data.domain_updates %}
-            <div class="intel-digest-domain-card">
-                <div class="intel-digest-domain-header">
-                    <span class="intel-digest-domain-icon">{{ domain.domain_icon }}</span>
-                    <span class="intel-digest-domain-name">{{ domain.domain_name }}</span>
-                    <span class="intel-digest-domain-count">{{ domain.sources|length }} new</span>
+            <div class="intel-digest-section">
+                <div class="intel-digest-section-header">
+                    <span class="intel-digest-section-icon">{{ domain.domain_icon }}</span>
+                    <div>
+                        <h2 class="intel-digest-section-name">{{ domain.domain_name }}</h2>
+                        <span class="intel-digest-section-count">{{ domain.sources|length }} new source{{ 's' if domain.sources|length != 1 else '' }}</span>
+                    </div>
                 </div>
-                {% for source in domain.sources %}
-                <div class="intel-digest-source">
-                    <span class="intel-digest-source-title">{{ source.title }}</span>
-                    {% if source.channel %}<span class="intel-digest-source-channel">&middot; {{ source.channel }}</span>{% endif %}
-                    {% if source.impact %}<div class="intel-digest-source-impact">{{ source.impact[:150] }}</div>{% endif %}
+
+                <div class="intel-digest-sources">
+                    {% for source in domain.sources %}
+                    <div class="intel-digest-source-card">
+                        <div class="intel-digest-source-title">{{ source.title }}</div>
+                        {% if source.channel %}<div class="intel-digest-source-channel">{{ source.channel }}</div>{% endif %}
+                        {% if source.impact %}<div class="intel-digest-source-impact">{{ source.impact[:200] }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
-                {% for insight in domain.top_insights %}
-                <div class="intel-digest-insight">
-                    <span class="intel-digest-insight-type">[{{ insight.type }}]</span>
-                    {{ insight.title }}
+
+                {% if domain.top_insights %}
+                <div class="intel-digest-insights-block">
+                    <div class="intel-digest-insights-label">Key takeaways</div>
+                    {% for insight in domain.top_insights %}
+                    <div class="intel-digest-insight-item">
+                        <div class="intel-digest-insight-bullet"></div>
+                        <div>
+                            <span class="intel-digest-insight-title">{{ insight.title }}</span>
+                            {% if insight.content %}<span class="intel-digest-insight-desc">{{ insight.content }}</span>{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                {% endif %}
+
                 {% if domain.suggested_question %}
-                <div class="intel-digest-question">{{ domain.suggested_question }}</div>
+                <div class="intel-digest-cta">
+                    <span class="intel-digest-cta-label">Explore</span>
+                    {{ domain.suggested_question }}
+                </div>
                 {% endif %}
             </div>
+
+            {% if not loop.last %}<div class="intel-digest-divider"></div>{% endif %}
             {% endfor %}
+
+            <!-- Footer -->
+            <div class="intel-digest-footer">
+                <a href="{{ url_for('index') }}">Add more sources</a>
+                <span>&middot;</span>
+                <a href="{{ url_for('knowledge_page') }}">View knowledge base</a>
+            </div>
+
             {% else %}
             <div class="intel-digest-empty">
                 <h2>No new sources this week</h2>
-                <p>Add some content to see your digest! <a href="{{ url_for('index') }}">Add a source &rarr;</a></p>
+                <p>Add some content to see your digest.</p>
+                <a href="{{ url_for('index') }}" class="intel-digest-empty-cta">Add a source &rarr;</a>
             </div>
             {% endif %}
         </div>
