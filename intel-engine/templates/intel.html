@@ -584,6 +584,34 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(function() {});
 });
+
+function closeDigestModal() {
+    var m = document.getElementById('digestModal');
+    if (m) m.style.display = 'none';
+}
+
+function previewDigest() {
+    var modal = document.getElementById('digestModal');
+    var body = document.getElementById('digestModalBody');
+    if (!modal || !body) return;
+    modal.style.display = 'flex';
+    body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:60px 0;font-size:14px;color:#a8a49f;"><div class="intel-spinner"></div><span>Generating preview...</span></div>';
+    fetch('/api/digest/preview')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.has_content) {
+                body.innerHTML = '<div style="text-align:center;padding:40px;color:#a8a49f;font-size:14px;">No new sources this week. Add some content to see your digest!</div>';
+                return;
+            }
+            var info = 'Preview: ' + data.stats.new_sources + ' sources, ' + data.stats.new_insights + ' insights, ' + data.stats.domains_updated + ' domains';
+            var header = '<div style="text-align:center;padding:8px 16px;background:rgba(79,110,247,0.07);border-radius:8px;margin-bottom:16px;font-size:12px;color:#4f6ef7;">' + info + '</div>';
+            body.innerHTML = header + '<div style="border:1px solid #e4e0da;border-radius:8px;overflow:hidden;">' + data.html_content + '</div>';
+        })
+        .catch(function() {
+            body.innerHTML = '<div style="text-align:center;padding:40px;color:#a8a49f;">Failed to load digest preview.</div>';
+        });
+}
+
 {% endif %}
 </script>
 
@@ -616,23 +644,12 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="intel-stat-item"><span class="intel-stat-value">{{ total_domains }}</span> domains</div>
         </div>
 
-        <!-- Onboarding coachmark (shows once, premium design) -->
-        <div class="intel-coachmark" id="coachmark" style="display:none">
-            <div class="intel-coachmark-card">
-                <div class="intel-coachmark-step">1 of 1</div>
-                <p class="intel-coachmark-text">
-                    <strong>Click</strong> a domain to expand its topics.
-                    <strong>Double-click</strong> to open the full knowledge page.
-                </p>
-                <div class="intel-coachmark-footer">
-                    <div class="intel-coachmark-dots"><span class="active"></span></div>
-                    <button class="intel-coachmark-dismiss" onclick="dismissCoachmark()">Got it</button>
-                </div>
-            </div>
-            <div class="intel-coachmark-arrow"></div>
-        </div>
-
         <div class="bio-tree" id="bioTree">
+            <div class="intel-tree-hint" id="treeHint">
+                <span>click to expand</span>
+                <span class="intel-tree-hint-sep">&middot;</span>
+                <span>double-click to open</span>
+            </div>
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
                 <!-- Level 0: Category nodes (always visible, leftmost column) -->
@@ -805,31 +822,19 @@ document.addEventListener('DOMContentLoaded', function() {
         requestAnimationFrame(bioDrawConnectors);
         window.addEventListener('resize', bioDrawConnectors);
 
-        // Onboarding coachmark — show once per user (premium UX)
-        if (!localStorage.getItem('distylme-onboard-v2')) {
-            var cm = document.getElementById('coachmark');
-            if (cm) {
-                cm.style.display = 'block';
-                setTimeout(function() { cm.classList.add('visible'); }, 300);
-                setTimeout(function() { dismissCoachmark(); }, 10000);
-            }
-        }
-    });
-
-    function dismissCoachmark() {
-        var cm = document.getElementById('coachmark');
-        if (cm) {
-            cm.classList.remove('visible');
-            setTimeout(function() { cm.style.display = 'none'; }, 400);
-        }
-        localStorage.setItem('distylme-onboard-v2', '1');
-    }
-
-    // Auto-dismiss on first node interaction
-    document.addEventListener('click', function cmHandler(e) {
-        if (e.target.closest && e.target.closest('.bio-node')) {
-            dismissCoachmark();
-            document.removeEventListener('click', cmHandler);
+        // Subtle tree hint — fades after first interaction
+        var hint = document.getElementById('treeHint');
+        if (hint && !localStorage.getItem('distylme-hint-v3')) {
+            hint.style.display = 'flex';
+            setTimeout(function() { hint.style.opacity = '1'; }, 100);
+            document.addEventListener('click', function hintHandler(e) {
+                if (e.target.closest && e.target.closest('.bio-node')) {
+                    hint.style.opacity = '0';
+                    setTimeout(function() { hint.style.display = 'none'; }, 300);
+                    localStorage.setItem('distylme-hint-v3', '1');
+                    document.removeEventListener('click', hintHandler);
+                }
+            });
         }
     });
     </script>
@@ -2362,33 +2367,7 @@ function askQuestion(questionText) {
     </div>
 </div>
 
-<script>
-function closeDigestModal() {
-    document.getElementById('digestModal').style.display = 'none';
-}
 
-function previewDigest() {
-    var modal = document.getElementById('digestModal');
-    var body = document.getElementById('digestModalBody');
-    if (!modal || !body) { alert('Digest preview not available on this page.'); return; }
-    modal.style.display = 'flex';
-    body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:60px 0;font-size:14px;color:#a8a49f;"><div class="intel-spinner"></div><span>Generating preview...</span></div>';
-
-    fetch('/api/digest/preview')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (!data.has_content) {
-                body.innerHTML = '<div style="text-align:center;padding:40px;color:#a8a49f;font-size:14px;">No new sources this week. Add some content to see your digest!</div>';
-                return;
-            }
-            var stats = '<div style="text-align:center;padding:8px 16px;background:rgba(79,110,247,0.07);border-radius:8px;margin-bottom:16px;font-size:12px;color:#4f6ef7;">Preview \u2014 ' + data.stats.new_sources + ' sources \u00b7 ' + data.stats.new_insights + ' insights \u00b7 ' + data.stats.domains_updated + ' domains</div>';
-            body.innerHTML = stats + '<div style="border:1px solid #e4e0da;border-radius:8px;overflow:hidden;">' + data.html_content + '</div>';
-        })
-        .catch(function() {
-            body.innerHTML = '<div style="text-align:center;padding:40px;color:#a8a49f;">Failed to generate preview.</div>';
-        });
-}
-</script>
 
 <!-- Knowledge Graph Overlay -->
 <div id="graphOverlay" style="display:none;position:fixed;inset:0;background:#080b12;z-index:1000;flex-direction:column;">

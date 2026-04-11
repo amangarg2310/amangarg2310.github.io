@@ -384,94 +384,23 @@
     flex-wrap: wrap;
 }
 
-/* ── Onboarding Coachmark (Knowledge Base — shows once) ── */
-.intel-coachmark {
-    text-align: center;
-    margin-bottom: 20px;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    position: relative;
-    z-index: 50;
-}
-.intel-coachmark.visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-.intel-coachmark-card {
-    display: inline-block;
-    text-align: left;
-    padding: 16px 20px 14px;
-    background: var(--intel-text);
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 12px 40px rgba(0, 0, 0, 0.08);
-    max-width: 320px;
-    position: relative;
-}
-.intel-coachmark-arrow {
-    width: 12px;
-    height: 12px;
-    background: var(--intel-text);
-    transform: rotate(45deg);
-    margin: -6px auto 0;
-    border-radius: 0 0 3px 0;
-}
-.intel-coachmark-step {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(255, 255, 255, 0.4);
-    margin-bottom: 6px;
-    font-family: var(--intel-font);
-}
-.intel-coachmark-text {
-    font-size: 13.5px;
-    line-height: 1.55;
-    color: rgba(255, 255, 255, 0.85);
-    margin: 0 0 12px;
-    font-family: var(--intel-font);
-}
-.intel-coachmark-text strong {
-    color: #fff;
-    font-weight: 600;
-}
-.intel-coachmark-footer {
-    display: flex;
+/* ── Tree Hint (subtle, inline, fades on interaction) ── */
+.intel-tree-hint {
+    display: none;
     align-items: center;
-    justify-content: space-between;
-}
-.intel-coachmark-dots {
-    display: flex;
-    gap: 5px;
-}
-.intel-coachmark-dots span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-}
-.intel-coachmark-dots span.active {
-    background: #fff;
-    width: 16px;
-    border-radius: 3px;
-}
-.intel-coachmark-dismiss {
-    background: rgba(255, 255, 255, 0.12);
-    border: none;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 0 12px;
     font-size: 12px;
-    font-weight: 600;
-    color: #fff;
-    cursor: pointer;
+    font-weight: 400;
+    color: var(--intel-text-tertiary);
     font-family: var(--intel-font);
-    padding: 5px 14px;
-    border-radius: 6px;
-    transition: background 0.15s ease;
-    letter-spacing: -0.01em;
+    letter-spacing: 0.01em;
+    opacity: 0;
+    transition: opacity 0.4s ease;
 }
-.intel-coachmark-dismiss:hover {
-    background: rgba(255, 255, 255, 0.2);
+.intel-tree-hint-sep {
+    opacity: 0.4;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1727,6 +1656,8 @@
     cursor: pointer;
     user-select: none;
     transition: transform 0.25s ease;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
 }
 .bio-node:hover { transform: translateX(2px); }
 
@@ -1752,6 +1683,7 @@
 
 /* ── Category Nodes (Level 0) ── */
 .bio-node-cat .bio-node-core {
+    outline: none;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1792,6 +1724,7 @@
 
 /* ── Domain Nodes (Level 1) ── */
 .bio-node-domain .bio-node-core {
+    outline: none;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1846,6 +1779,7 @@
 
 /* ── Sub-topic Nodes (Level 2) ── */
 .bio-node-sub .bio-node-core {
+    outline: none;
     display: flex;
     align-items: center;
     gap: 6px;
