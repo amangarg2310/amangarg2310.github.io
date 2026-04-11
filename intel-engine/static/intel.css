@@ -404,9 +404,10 @@
     letter-spacing: 0.01em;
 }
 .intel-guide-arrow {
-    width: 31px;
+    width: 35px;
     height: auto;
-    margin: -4px 0 0 -4px;
+    display: block;
+    margin: 0;
     pointer-events: none;
     user-select: none;
 }
