@@ -387,28 +387,25 @@
 /* ── Tree Guide (contextual hint, fades after first interaction) ── */
 .intel-tree-guide {
     display: none;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 16px;
-    margin: 0 auto 16px;
-    width: fit-content;
-    font-size: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0 0 0 16px;
+    margin: 0 0 48px;
+    font-size: 12.5px;
     color: var(--intel-text-tertiary);
     font-family: var(--intel-font);
-    background: var(--intel-surface-hover);
-    border: 1px solid var(--intel-border-light);
-    border-radius: 8px;
     opacity: 0;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.6s ease;
 }
 .intel-tree-guide.visible {
     opacity: 1;
 }
-.intel-tree-guide svg {
-    color: var(--intel-accent);
-    opacity: 0.5;
-    flex-shrink: 0;
+.intel-guide-text {
+    letter-spacing: 0.01em;
+}
+.intel-guide-arrow {
+    margin: 4px 0 0 8px;
+    color: var(--intel-text-tertiary);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -417,48 +414,113 @@
 
 /* Digest button uses .intel-playbook-btn class */
 
-.intel-digest-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
-    z-index: 900;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* ── Digest Preview Page ── */
+.intel-digest-page {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
 }
-.intel-digest-modal-content {
-    background: var(--intel-bg);
-    border: 1px solid var(--intel-border);
-    border-radius: var(--intel-radius);
-    width: 640px;
-    max-width: 92vw;
-    max-height: 85vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    box-shadow: var(--intel-shadow-lg);
-    animation: playbookModalIn 0.25s ease-out;
+.intel-digest-page-header {
+    margin-bottom: 24px;
 }
-.intel-digest-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--intel-border);
+.intel-digest-page-title {
+    margin-bottom: 28px;
+}
+.intel-digest-page-title h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--intel-text);
+    font-family: var(--intel-font);
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+}
+.intel-digest-page-meta {
+    font-size: 13px;
+    color: var(--intel-text-tertiary);
+    font-family: var(--intel-font);
+}
+.intel-digest-domain-card {
+    padding: 18px 20px;
     background: var(--intel-surface);
+    border: 1px solid var(--intel-border);
+    border-left: 3px solid #c4a46c;
+    border-radius: 10px;
+    margin-bottom: 16px;
 }
-.intel-digest-modal-title {
-    font-size: 16px;
+.intel-digest-domain-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.intel-digest-domain-icon { font-size: 18px; }
+.intel-digest-domain-name {
+    font-size: 15px;
     font-weight: 600;
     color: var(--intel-text);
     font-family: var(--intel-font);
-    margin: 0;
 }
-.intel-digest-modal-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
+.intel-digest-domain-count {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
+    margin-left: auto;
+}
+.intel-digest-source {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--intel-border-light);
+}
+.intel-digest-source:last-of-type { border-bottom: none; }
+.intel-digest-source-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--intel-text);
+    font-family: var(--intel-font);
+}
+.intel-digest-source-channel {
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+}
+.intel-digest-source-impact {
+    font-size: 12px;
+    color: var(--intel-text-secondary);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+.intel-digest-insight {
+    padding: 4px 0;
+    font-size: 12.5px;
+    color: var(--intel-text);
+}
+.intel-digest-insight-type {
+    font-size: 11px;
+    color: var(--intel-accent);
+    font-weight: 500;
+}
+.intel-digest-question {
+    margin-top: 10px;
+    padding: 8px 14px;
+    background: var(--intel-accent-light);
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: var(--intel-accent);
+}
+.intel-digest-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+.intel-digest-empty h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--intel-text);
+    margin: 0 0 8px;
+}
+.intel-digest-empty p {
+    font-size: 14px;
+    color: var(--intel-text-tertiary);
+}
+.intel-digest-empty a {
+    color: var(--intel-accent);
+    text-decoration: none;
 }
 
 }

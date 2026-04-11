@@ -314,13 +314,13 @@
                         </svg>
                         Generate Playbook
                     </button>
-                    <button class="intel-playbook-btn intel-digest-btn" onclick="previewDigest()">
+                    <a href="{{ url_for('digest_preview_page') }}" class="intel-playbook-btn intel-digest-btn">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                             <polyline points="22,6 12,13 2,6"/>
                         </svg>
                         Preview Digest
-                    </button>
+                    </a>
                 </div>
                 {% elif domain.source_count < 2 %}
                 <div class="intel-playbook-unlock">
@@ -585,53 +585,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(function() {});
 });
 
-function closeDigestModal() {
-    var m = document.getElementById('digestModal');
-    if (m) m.style.display = 'none';
-}
-
-function previewDigest() {
-    var modal = document.getElementById('digestModal');
-    var body = document.getElementById('digestModalBody');
-    if (!modal || !body) return;
-    modal.style.display = 'flex';
-    body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:60px 0;font-size:14px;color:#a8a49f;"><div class="intel-spinner"></div><span>Generating preview...</span></div>';
-    fetch('/api/digest/preview')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (!data.has_content) {
-                body.innerHTML = '<div style="text-align:center;padding:40px;color:#a8a49f;font-size:14px;">No new sources this week. Add some content to see your digest!</div>';
-                return;
-            }
-            var info = 'Preview: ' + data.stats.new_sources + ' sources, ' + data.stats.new_insights + ' insights, ' + data.stats.domains_updated + ' domains';
-            var header = '<div style="text-align:center;padding:8px 16px;background:rgba(79,110,247,0.07);border-radius:8px;margin-bottom:16px;font-size:12px;color:#4f6ef7;">' + info + '</div>';
-            body.innerHTML = header + '<div style="border:1px solid #e4e0da;border-radius:8px;overflow:hidden;">' + data.html_content + '</div>';
-        })
-        .catch(function() {
-            body.innerHTML = '<div style="text-align:center;padding:40px;color:#a8a49f;">Failed to load digest preview.</div>';
-        });
-}
-
 {% endif %}
 </script>
 
         
-<!-- ══════════════════════════════════════════════════════════
-     DIGEST PREVIEW MODAL
-     ══════════════════════════════════════════════════════════ -->
-<div id="digestModal" class="intel-digest-modal" style="display:none" onclick="if(event.target===this)closeDigestModal()">
-    <div class="intel-digest-modal-content">
-        <div class="intel-digest-modal-header">
-            <h2 class="intel-digest-modal-title">Weekly Knowledge Brief</h2>
-            <button class="intel-playbook-modal-close" onclick="closeDigestModal()">&times;</button>
-        </div>
-        <div class="intel-digest-modal-body" id="digestModalBody">
-            <div class="intel-playbook-loading" id="digestLoading" style="display:flex">
-                <div class="intel-spinner"></div>
-                <span>Generating preview...</span>
-            </div>
-        </div>
-    </div>
 </div>
 
         </main>
@@ -665,11 +622,11 @@ function previewDigest() {
 
         <div class="bio-tree" id="bioTree">
             <div class="intel-tree-guide" id="treeGuide">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M15 15l-2 5L9 9l11 4-5 2z"/>
-                    <path d="M21 3l-8.5 8.5"/>
+                <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
+                <svg class="intel-guide-arrow" width="100" height="50" viewBox="0 0 100 50" fill="none">
+                    <path d="M15 4 C25 4, 35 8, 45 16 C55 24, 65 35, 78 40 C82 41, 86 42, 88 41" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.25"/>
+                    <path d="M82 35 C84 38, 87 40, 88 41 C86 41, 83 42, 80 44" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.25"/>
                 </svg>
-                <span>Click to expand &middot; Double-click to open</span>
             </div>
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
@@ -855,6 +812,54 @@ function previewDigest() {
         }
     });
     </script>
+
+    {% elif digest_preview is defined and digest_preview %}
+    <!-- ══════════════════════════════════════════════════════════
+         DIGEST PREVIEW PAGE
+         ══════════════════════════════════════════════════════════ -->
+    <div class="intel-digest-page">
+        <div class="intel-digest-page-header">
+            <a href="{{ url_for('knowledge_page') }}" class="intel-playbook-back">&larr; Back to Knowledge Base</a>
+        </div>
+        <div class="intel-digest-page-content">
+            {% if digest_data and digest_data.has_content %}
+            <div class="intel-digest-page-title">
+                <h1>Weekly Knowledge Brief</h1>
+                <p class="intel-digest-page-meta">{{ digest_data.date_range }} &middot; {{ digest_data.stats.new_sources }} source{{ 's' if digest_data.stats.new_sources != 1 else '' }} &middot; {{ digest_data.stats.new_insights }} insight{{ 's' if digest_data.stats.new_insights != 1 else '' }}</p>
+            </div>
+            {% for domain in digest_data.domain_updates %}
+            <div class="intel-digest-domain-card">
+                <div class="intel-digest-domain-header">
+                    <span class="intel-digest-domain-icon">{{ domain.domain_icon }}</span>
+                    <span class="intel-digest-domain-name">{{ domain.domain_name }}</span>
+                    <span class="intel-digest-domain-count">{{ domain.sources|length }} new</span>
+                </div>
+                {% for source in domain.sources %}
+                <div class="intel-digest-source">
+                    <span class="intel-digest-source-title">{{ source.title }}</span>
+                    {% if source.channel %}<span class="intel-digest-source-channel">&middot; {{ source.channel }}</span>{% endif %}
+                    {% if source.impact %}<div class="intel-digest-source-impact">{{ source.impact[:150] }}</div>{% endif %}
+                </div>
+                {% endfor %}
+                {% for insight in domain.top_insights %}
+                <div class="intel-digest-insight">
+                    <span class="intel-digest-insight-type">[{{ insight.type }}]</span>
+                    {{ insight.title }}
+                </div>
+                {% endfor %}
+                {% if domain.suggested_question %}
+                <div class="intel-digest-question">{{ domain.suggested_question }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="intel-digest-empty">
+                <h2>No new sources this week</h2>
+                <p>Add some content to see your digest! <a href="{{ url_for('index') }}">Add a source &rarr;</a></p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
     {% else %}
     <!-- ══════════════════════════════════════════════════════════
@@ -1046,7 +1051,6 @@ function previewDigest() {
 
     {% endif %}
 
-</div>
 
 <!-- Footer -->
 <footer class="intel-footer">

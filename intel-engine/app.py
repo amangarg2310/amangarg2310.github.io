@@ -1595,6 +1595,16 @@ def api_dismiss_taxonomy_change(change_id):
 # DIGEST ENDPOINTS
 # ══════════════════════════════════════════════════════════════
 
+@app.route("/digest-preview")
+@login_required
+def digest_preview_page():
+    """Digest preview — full page view of the weekly knowledge brief."""
+    from digest import generate_digest
+    uid = current_user.id
+    result = generate_digest(uid)
+    return render_template("intel.html", digest_preview=True, digest_data=result)
+
+
 @app.route("/api/digest/preview")
 @login_required
 def api_digest_preview():
