@@ -196,7 +196,7 @@
     font-weight: 600;
     font-family: var(--intel-font);
     color: #fff;
-    background: linear-gradient(135deg, #7a5c10 0%, #a67c1a 100%);
+    background: #1a1916;
     border: none;
     border-radius: 12px;
     cursor: pointer;
@@ -205,7 +205,8 @@
     letter-spacing: -0.01em;
 }
 .intel-playbook-generate-btn:hover {
-    box-shadow: 0 6px 20px rgba(122, 92, 16, 0.25);
+    background: #2d2b26;
+    box-shadow: 0 6px 20px rgba(26, 25, 22, 0.2);
     transform: translateY(-1px);
 }
 
