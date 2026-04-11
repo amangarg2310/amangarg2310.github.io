@@ -796,7 +796,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Subtle tree hint — fades after first interaction
         var hint = document.getElementById('treeGuide');
         if (hint && !localStorage.getItem('distylme-guide-v4')) {
-            hint.style.display = 'flex';
+            hint.style.display = 'block';
             setTimeout(function() { hint.style.opacity = '1'; }, 100);
             document.addEventListener('click', function hintHandler(e) {
                 if (e.target.closest && e.target.closest('.bio-node')) {

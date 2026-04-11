@@ -387,8 +387,7 @@
 /* ── Tree Guide (contextual hint, fades after first interaction) ── */
 .intel-tree-guide {
     display: none;
-    flex-direction: column;
-    align-items: flex-start;
+    position: relative;
     padding: 0 0 0 8px;
     margin: 0;
     opacity: 0;
@@ -402,12 +401,14 @@
     color: var(--intel-text-tertiary);
     font-family: var(--intel-font);
     letter-spacing: 0.01em;
+    display: block;
 }
 .intel-guide-arrow {
+    position: absolute;
+    top: 22px;
+    left: -5px;
     width: 40px;
     height: auto;
-    display: block;
-    margin: 4px 0 0 -8px;
     pointer-events: none;
     user-select: none;
 }
