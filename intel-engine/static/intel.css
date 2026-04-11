@@ -422,9 +422,10 @@
 
 /* ── Digest Preview Page (newsletter format) ── */
 .intel-digest-page {
-    max-width: 600px;
+    max-width: 640px;
+    width: 100%;
     margin: 0 auto;
-    padding: 0 20px 64px;
+    padding: 0 32px 64px;
     font-family: var(--intel-font);
 }
 .intel-digest-header-bar {
@@ -602,6 +603,10 @@
     display: block;
     margin-top: 2px;
     line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 /* Explore CTA */

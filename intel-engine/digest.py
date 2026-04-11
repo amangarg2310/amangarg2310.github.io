@@ -85,6 +85,13 @@ def generate_digest(user_id: int, since_date: str = None, db_path=None) -> dict:
         # Get new insights for these sources
         source_ids = [s["id"] for s in group["sources"]]
         placeholders = ",".join("?" * len(source_ids))
+        # Count ALL insights for stats accuracy
+        insight_count = conn.execute(f"""
+            SELECT COUNT(*) FROM insights WHERE source_id IN ({placeholders})
+        """, source_ids).fetchone()[0]
+        total_insights += insight_count
+
+        # Get top 3 for display
         insights = conn.execute(f"""
             SELECT title, content, actionability, insight_type
             FROM insights
@@ -93,8 +100,6 @@ def generate_digest(user_id: int, since_date: str = None, db_path=None) -> dict:
                 CASE actionability WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC
             LIMIT 3
         """, source_ids).fetchall()
-
-        total_insights += len(insights)
 
         # Get suggested question
         synth = conn.execute("""
@@ -114,6 +119,7 @@ def generate_digest(user_id: int, since_date: str = None, db_path=None) -> dict:
             "domain_name": group["domain_name"],
             "domain_icon": group["domain_icon"],
             "domain_id": did,
+            "insight_count": insight_count,
             "sources": [
                 {
                     "title": s["title"] or "Untitled",
@@ -124,7 +130,7 @@ def generate_digest(user_id: int, since_date: str = None, db_path=None) -> dict:
                 for s in group["sources"][:5]  # Cap at 5 per domain
             ],
             "top_insights": [
-                {"title": i["title"], "content": i["content"][:150], "type": i["insight_type"]}
+                {"title": i["title"], "content": i["content"][:80], "type": i["insight_type"]}
                 for i in insights
             ],
             "suggested_question": suggested_q,
@@ -136,9 +142,12 @@ def generate_digest(user_id: int, since_date: str = None, db_path=None) -> dict:
     domain_updates.sort(key=lambda d: len(d["sources"]), reverse=True)
     domain_updates = domain_updates[:5]
 
+    # Recalculate stats based on what's SHOWN (after 5-domain cap)
+    shown_sources = sum(len(d["sources"]) for d in domain_updates)
+    shown_insights = sum(d.get("insight_count", 0) for d in domain_updates)
     stats = {
-        "new_sources": len(sources),
-        "new_insights": total_insights,
+        "new_sources": shown_sources,
+        "new_insights": shown_insights,
         "domains_updated": len(domain_updates),
     }
 
