@@ -624,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="intel-tree-guide" id="treeGuide">
                 <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
             </div>
-            <img class="intel-guide-arrow" id="guideArrow" src="{{ url_for('static', filename='guide-arrow.png') }}" alt="" draggable="false">
+            <img class="intel-guide-arrow" id="guideArrow" src="{{ url_for('static', filename='guide-arrow.png') }}?v={{ cache_bust }}" alt="" draggable="false">
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
                 <!-- Level 0: Category nodes (always visible, leftmost column) -->
