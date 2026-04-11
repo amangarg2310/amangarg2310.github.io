@@ -615,6 +615,25 @@ function previewDigest() {
 {% endif %}
 </script>
 
+        
+<!-- ══════════════════════════════════════════════════════════
+     DIGEST PREVIEW MODAL
+     ══════════════════════════════════════════════════════════ -->
+<div id="digestModal" class="intel-digest-modal" style="display:none" onclick="if(event.target===this)closeDigestModal()">
+    <div class="intel-digest-modal-content">
+        <div class="intel-digest-modal-header">
+            <h2 class="intel-digest-modal-title">Weekly Knowledge Brief</h2>
+            <button class="intel-playbook-modal-close" onclick="closeDigestModal()">&times;</button>
+        </div>
+        <div class="intel-digest-modal-body" id="digestModalBody">
+            <div class="intel-playbook-loading" id="digestLoading" style="display:flex">
+                <div class="intel-spinner"></div>
+                <span>Generating preview...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
         </main>
     </div>
 
@@ -645,10 +664,12 @@ function previewDigest() {
         </div>
 
         <div class="bio-tree" id="bioTree">
-            <div class="intel-tree-hint" id="treeHint">
-                <span>click to expand</span>
-                <span class="intel-tree-hint-sep">&middot;</span>
-                <span>double-click to open</span>
+            <div class="intel-tree-guide" id="treeGuide">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 15l-2 5L9 9l11 4-5 2z"/>
+                    <path d="M21 3l-8.5 8.5"/>
+                </svg>
+                <span>Click to expand &middot; Double-click to open</span>
             </div>
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
@@ -659,7 +680,6 @@ function previewDigest() {
                          data-href="{{ url_for('domain_page', domain_name=cat.name, level=0) }}"
                          onclick="bioToggle(this, 'cat-{{ loop.index0 }}')"
                          ondblclick="window.location.href=this.dataset.href">
-                        <div class="bio-node-pulse"></div>
                         <div class="bio-node-core">
                             <span class="bio-node-icon">{{ cat.icon }}</span>
                             <span class="bio-node-name">{{ cat.name }}</span>
@@ -680,7 +700,6 @@ function previewDigest() {
                          data-href="{{ url_for('domain_page', domain_name=d.name) }}"
                          onclick="bioToggle(this, 'dom-{{ d.id }}')"
                          ondblclick="window.location.href=this.dataset.href">
-                        <div class="bio-node-pulse"></div>
                         <div class="bio-node-core">
                             <span class="bio-node-icon">{{ d.icon }}</span>
                             <span class="bio-node-name">{{ d.name }}</span>
@@ -691,7 +710,6 @@ function previewDigest() {
                     </div>
                     {% else %}
                     <a href="{{ url_for('domain_page', domain_name=d.name) }}" class="bio-node bio-node-domain" data-id="dom-{{ d.id }}" data-has-children="false">
-                        <div class="bio-node-pulse"></div>
                         <div class="bio-node-core">
                             <span class="bio-node-icon">{{ d.icon }}</span>
                             <span class="bio-node-name">{{ d.name }}</span>
@@ -711,7 +729,6 @@ function previewDigest() {
                     {% for sub in d.children %}
                     <div class="bio-node bio-node-sub" data-href="{{ url_for('domain_page', domain_name=sub.name) }}"
                          ondblclick="window.location.href=this.dataset.href">
-                        <div class="bio-node-pulse"></div>
                         <span class="bio-node-core">
                             <span class="bio-node-dot"></span>
                             <span class="bio-node-name">{{ sub.name }}</span>
@@ -823,15 +840,15 @@ function previewDigest() {
         window.addEventListener('resize', bioDrawConnectors);
 
         // Subtle tree hint — fades after first interaction
-        var hint = document.getElementById('treeHint');
-        if (hint && !localStorage.getItem('distylme-hint-v3')) {
+        var hint = document.getElementById('treeGuide');
+        if (hint && !localStorage.getItem('distylme-guide-v4')) {
             hint.style.display = 'flex';
             setTimeout(function() { hint.style.opacity = '1'; }, 100);
             document.addEventListener('click', function hintHandler(e) {
                 if (e.target.closest && e.target.closest('.bio-node')) {
                     hint.style.opacity = '0';
                     setTimeout(function() { hint.style.display = 'none'; }, 300);
-                    localStorage.setItem('distylme-hint-v3', '1');
+                    localStorage.setItem('distylme-guide-v4', '1');
                     document.removeEventListener('click', hintHandler);
                 }
             });
@@ -2349,23 +2366,6 @@ function askQuestion(questionText) {
 
 
 
-<!-- ══════════════════════════════════════════════════════════
-     DIGEST PREVIEW MODAL
-     ══════════════════════════════════════════════════════════ -->
-<div id="digestModal" class="intel-digest-modal" style="display:none" onclick="if(event.target===this)closeDigestModal()">
-    <div class="intel-digest-modal-content">
-        <div class="intel-digest-modal-header">
-            <h2 class="intel-digest-modal-title">Weekly Knowledge Brief</h2>
-            <button class="intel-playbook-modal-close" onclick="closeDigestModal()">&times;</button>
-        </div>
-        <div class="intel-digest-modal-body" id="digestModalBody">
-            <div class="intel-playbook-loading" id="digestLoading" style="display:flex">
-                <div class="intel-spinner"></div>
-                <span>Generating preview...</span>
-            </div>
-        </div>
-    </div>
-</div>
 
 
 

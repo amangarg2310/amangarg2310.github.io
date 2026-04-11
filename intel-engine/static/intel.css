@@ -384,23 +384,31 @@
     flex-wrap: wrap;
 }
 
-/* ── Tree Hint (subtle, inline, fades on interaction) ── */
-.intel-tree-hint {
+/* ── Tree Guide (contextual hint, fades after first interaction) ── */
+.intel-tree-guide {
     display: none;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 6px 0 12px;
+    gap: 8px;
+    padding: 8px 16px;
+    margin: 0 auto 16px;
+    width: fit-content;
     font-size: 12px;
-    font-weight: 400;
     color: var(--intel-text-tertiary);
     font-family: var(--intel-font);
-    letter-spacing: 0.01em;
+    background: var(--intel-surface-hover);
+    border: 1px solid var(--intel-border-light);
+    border-radius: 8px;
     opacity: 0;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.5s ease;
 }
-.intel-tree-hint-sep {
-    opacity: 0.4;
+.intel-tree-guide.visible {
+    opacity: 1;
+}
+.intel-tree-guide svg {
+    color: var(--intel-accent);
+    opacity: 0.5;
+    flex-shrink: 0;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1661,25 +1669,7 @@
 }
 .bio-node:hover { transform: translateX(2px); }
 
-/* ── Pulse Ring (bioluminescence) ── */
-.bio-node-pulse {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-.bio-node:hover .bio-node-pulse {
-    opacity: 1;
-    animation: bioPulse 2s ease-in-out infinite;
-}
-@keyframes bioPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 110, 247, 0.2); }
-    50% { box-shadow: 0 0 0 16px rgba(79, 110, 247, 0); }
-}
+/* Pulse animation removed — clean hover transitions only */
 
 /* ── Category Nodes (Level 0) ── */
 .bio-node-cat .bio-node-core {
