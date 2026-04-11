@@ -405,11 +405,10 @@
 .intel-guide-arrow {
     display: none;
     position: absolute;
-    top: 20px;
-    left: -20px;
+    top: 18px;
+    left: -14px;
     width: 12px;
     height: auto;
-    transform: scaleX(-1);
     z-index: 5;
     pointer-events: none;
     user-select: none;
@@ -1796,7 +1795,7 @@ body {
 .intel-kb-page {
     max-width: 900px;
     margin: 0;
-    padding: 48px 24px 80px;
+    padding: 48px 24px 80px 48px;
 }
 .intel-kb-header {
     display: flex;
