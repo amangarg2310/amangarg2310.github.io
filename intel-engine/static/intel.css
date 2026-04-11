@@ -387,29 +387,27 @@
 /* ── Tree Guide (contextual hint, fades after first interaction) ── */
 .intel-tree-guide {
     display: none;
-    padding: 0 0 0 4px;
-    margin: 0 0 40px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0 0 48px 8px;
+    margin: 0;
     opacity: 0;
     transition: opacity 0.6s ease;
 }
 .intel-tree-guide.visible {
     opacity: 1;
 }
-.intel-guide-inner {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
 .intel-guide-text {
     font-size: 13px;
     color: var(--intel-text-tertiary);
     font-family: var(--intel-font);
     letter-spacing: 0.01em;
+    margin-bottom: 4px;
 }
 .intel-guide-arrow {
-    width: 45px;
+    width: 40px;
     height: auto;
-    margin: 2px 0 0 2px;
+    margin-left: 0;
     pointer-events: none;
     user-select: none;
 }
