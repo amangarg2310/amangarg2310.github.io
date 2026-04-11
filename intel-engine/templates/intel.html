@@ -622,18 +622,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         <div class="bio-tree" id="bioTree">
             <div class="intel-tree-guide" id="treeGuide">
-                <div class="intel-guide-content">
+                <div class="intel-guide-inner">
                     <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
-                    <svg class="intel-guide-arrow" width="140" height="80" viewBox="0 0 140 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Hand-drawn brush-stroke arrow — swoops down-left toward first node -->
-                        <path d="M120 8 C115 8, 108 10, 100 15 C88 22, 72 34, 55 45 C42 53, 30 60, 22 65 C18 67, 15 69, 12 70"
-                              stroke="#9a9590" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-                        <!-- Slight wobble pass for sketch feel -->
-                        <path d="M118 10 C112 11, 105 14, 97 19 C85 27, 70 38, 53 49 C40 57, 28 63, 20 68"
-                              stroke="#9a9590" stroke-width="1" stroke-linecap="round" fill="none" opacity="0.4"/>
-                        <!-- Arrowhead — angular, hand-drawn style -->
-                        <path d="M22 58 L12 70 L26 66" stroke="#9a9590" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                    </svg>
+                    <img class="intel-guide-arrow" src="{{ url_for('static', filename='guide-arrow.png') }}" alt="" draggable="false">
                 </div>
             </div>
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>

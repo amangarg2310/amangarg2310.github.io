@@ -387,31 +387,31 @@
 /* ── Tree Guide (contextual hint, fades after first interaction) ── */
 .intel-tree-guide {
     display: none;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 0;
-    margin: 0 0 24px;
+    padding: 0 0 0 4px;
+    margin: 0 0 40px;
     opacity: 0;
     transition: opacity 0.6s ease;
 }
 .intel-tree-guide.visible {
     opacity: 1;
 }
-.intel-guide-content {
-    display: flex;
+.intel-guide-inner {
+    display: inline-flex;
+    flex-direction: column;
     align-items: flex-start;
-    gap: 0;
 }
 .intel-guide-text {
     font-size: 13px;
     color: var(--intel-text-tertiary);
     font-family: var(--intel-font);
     letter-spacing: 0.01em;
-    padding-top: 4px;
 }
 .intel-guide-arrow {
-    flex-shrink: 0;
-    margin-top: -4px;
+    width: 45px;
+    height: auto;
+    margin: 2px 0 0 2px;
+    pointer-events: none;
+    user-select: none;
 }
 
 /* ══════════════════════════════════════════════════════════════
