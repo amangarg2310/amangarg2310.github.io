@@ -11,6 +11,10 @@ import os
 import sys
 import sqlite3
 import threading
+import time as _time
+
+# Cache-bust token — generated at app startup, changes on each deploy
+_CACHE_BUST = str(int(_time.time()))
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +40,11 @@ run_migrations()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32).hex())
+
+@app.context_processor
+def inject_cache_bust():
+    return {'cache_bust': _CACHE_BUST}
+
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 # Flask-Login setup
