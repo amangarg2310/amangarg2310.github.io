@@ -830,77 +830,80 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="intel-digest-page-content">
             {% if digest_data and digest_data.has_content %}
 
-            <!-- Newsletter masthead -->
+            <!-- Masthead -->
             <div class="intel-digest-masthead">
                 <div class="intel-digest-masthead-tag">Your Knowledge Brief</div>
                 <h1 class="intel-digest-masthead-title">What you learned this week</h1>
-                <p class="intel-digest-masthead-meta">{{ digest_data.date_range }}</p>
-                <div class="intel-digest-stats-row">
-                    <div class="intel-digest-stat">
-                        <span class="intel-digest-stat-value">{{ digest_data.stats.new_sources }}</span>
-                        <span class="intel-digest-stat-label">sources</span>
-                    </div>
-                    <div class="intel-digest-stat">
-                        <span class="intel-digest-stat-value">{{ digest_data.stats.new_insights }}</span>
-                        <span class="intel-digest-stat-label">insights</span>
-                    </div>
-                    <div class="intel-digest-stat">
-                        <span class="intel-digest-stat-value">{{ digest_data.stats.domains_updated }}</span>
-                        <span class="intel-digest-stat-label">domains</span>
-                    </div>
-                </div>
+                <p class="intel-digest-masthead-meta">{{ digest_data.date_range }} &middot; {{ digest_data.stats.new_sources }} sources &middot; {{ digest_data.stats.domains_updated }} domains</p>
             </div>
 
             <div class="intel-digest-divider"></div>
 
-            <!-- Domain sections -->
             {% for domain in digest_data.domain_updates %}
             <div class="intel-digest-section">
+
+                <!-- Domain header -->
                 <div class="intel-digest-section-header">
                     <span class="intel-digest-section-icon">{{ domain.domain_icon }}</span>
                     <div>
                         <h2 class="intel-digest-section-name">{{ domain.domain_name }}</h2>
-                        <span class="intel-digest-section-count">{{ domain.sources|length }} new source{{ 's' if domain.sources|length != 1 else '' }}</span>
+                        <span class="intel-digest-section-count">{{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} &middot; {{ domain.insight_count }} insights</span>
                     </div>
                 </div>
 
-                <div class="intel-digest-sources">
-                    {% for source in domain.sources %}
-                    <div class="intel-digest-source-card">
-                        <div class="intel-digest-source-title">{{ source.title }}</div>
-                        {% if source.channel %}<div class="intel-digest-source-channel">{{ source.channel }}</div>{% endif %}
-                        {% if source.impact %}<div class="intel-digest-source-impact">{{ source.impact[:200] }}</div>{% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
+                <!-- TLDR — what this domain is about -->
+                {% if domain.tldr %}
+                <p class="intel-digest-tldr">{{ domain.tldr }}</p>
+                {% endif %}
 
-                {% if domain.top_insights %}
-                <div class="intel-digest-insights-block">
-                    <div class="intel-digest-insights-label">Key takeaways</div>
-                    {% for insight in domain.top_insights %}
-                    <div class="intel-digest-insight-item">
-                        <div class="intel-digest-insight-bullet"></div>
-                        <div>
-                            <span class="intel-digest-insight-title">{{ insight.title }}</span>
-                            {% if insight.content %}<span class="intel-digest-insight-desc">{{ insight.content }}</span>{% endif %}
-                        </div>
+                <!-- What's new — ingestion impact -->
+                {% if domain.what_changed %}
+                <div class="intel-digest-changed">
+                    <div class="intel-digest-label">What&rsquo;s new</div>
+                    <p class="intel-digest-changed-text">{{ domain.what_changed }}</p>
+                </div>
+                {% endif %}
+
+                <!-- Validated — convergence agreements -->
+                {% if domain.validated %}
+                <div class="intel-digest-validated">
+                    <div class="intel-digest-label">Validated by multiple sources</div>
+                    {% for v in domain.validated %}
+                    <div class="intel-digest-validated-item">
+                        <span class="intel-digest-check">&check;</span>
+                        <span>{{ v.claim }}</span>
+                        <span class="intel-digest-check-count">({{ v.count }} sources)</span>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
-                {% if domain.suggested_question %}
-                <div class="intel-digest-cta">
-                    <span class="intel-digest-cta-label">Explore</span>
-                    {{ domain.suggested_question }}
+                <!-- Action item — top high-actionability insight -->
+                {% if domain.action_item %}
+                <div class="intel-digest-action">
+                    <div class="intel-digest-label">Do this</div>
+                    <p class="intel-digest-action-text">{{ domain.action_item }}</p>
                 </div>
                 {% endif %}
+
+                <!-- Sources list (compact) -->
+                <div class="intel-digest-source-list">
+                    <div class="intel-digest-label">Sources</div>
+                    {% for src in domain.new_sources %}
+                    <span class="intel-digest-source-name">{{ src }}</span>{% if not loop.last %}<span class="intel-digest-source-sep">&middot;</span>{% endif %}
+                    {% endfor %}
+                </div>
+
+                <!-- Explore CTA -->
+                {% if domain.explore %}
+                <div class="intel-digest-cta">{{ domain.explore }}</div>
+                {% endif %}
+
             </div>
 
             {% if not loop.last %}<div class="intel-digest-divider"></div>{% endif %}
             {% endfor %}
 
-            <!-- Footer -->
             <div class="intel-digest-footer">
                 <a href="{{ url_for('index') }}">Add more sources</a>
                 <span>&middot;</span>
