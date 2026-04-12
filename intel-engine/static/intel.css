@@ -508,7 +508,95 @@
 
 /* Domain sections */
 .intel-digest-section {
+    padding: 20px 24px;
+    background: var(--intel-surface);
+    border: 1px solid var(--intel-border-light);
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+
+/* Digest page flex fill */
+.intel-digest-page { flex: 1; }
+.intel-digest-page-content {
     padding: 0;
+}
+
+/* ── Digest content section styles ── */
+.intel-digest-tldr {
+    font-size: 14px;
+    color: var(--intel-text-secondary);
+    line-height: 1.65;
+    margin: 0 0 16px;
+}
+.intel-digest-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--intel-text-tertiary);
+    margin-bottom: 6px;
+}
+.intel-digest-changed {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-left: 2.5px solid #c4a46c;
+    background: rgba(196, 164, 108, 0.04);
+    border-radius: 0 8px 8px 0;
+}
+.intel-digest-changed-text {
+    font-size: 13.5px;
+    color: var(--intel-text);
+    line-height: 1.6;
+    margin: 0;
+}
+.intel-digest-validated {
+    margin-bottom: 16px;
+}
+.intel-digest-validated-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 13.5px;
+    color: var(--intel-text);
+    line-height: 1.5;
+}
+.intel-digest-check {
+    color: var(--intel-green);
+    font-weight: 700;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+.intel-digest-check-count {
+    font-size: 11px;
+    color: var(--intel-text-tertiary);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.intel-digest-action {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: var(--intel-surface-hover);
+    border-radius: 8px;
+}
+.intel-digest-action-text {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--intel-text);
+    line-height: 1.5;
+    margin: 0;
+}
+.intel-digest-source-list {
+    margin-bottom: 12px;
+}
+.intel-digest-source-name {
+    font-size: 12px;
+    color: var(--intel-text-secondary);
+}
+.intel-digest-source-sep {
+    font-size: 12px;
+    color: var(--intel-text-tertiary);
+    margin: 0 4px;
 }
 .intel-digest-section-header {
     display: flex;

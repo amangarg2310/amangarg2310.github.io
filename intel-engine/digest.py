@@ -25,28 +25,35 @@ def _get_conn(db_path=None):
 
 
 def _extract_tldr(synthesis_content):
-    """Extract the TLDR/first paragraph from synthesis markdown."""
+    """Extract the TLDR/first paragraph from synthesis markdown as complete sentences."""
     if not synthesis_content:
         return ""
-    # The synthesis always starts with a TLDR paragraph
     lines = synthesis_content.strip().split("\n")
     tldr_lines = []
     for line in lines:
         stripped = line.strip()
         if not stripped:
             if tldr_lines:
-                break  # End of first paragraph
+                break
             continue
-        # Skip markdown headers
         if stripped.startswith("#"):
             continue
-        # Skip bullet points (those are detail, not TLDR)
         if stripped.startswith("- ") or stripped.startswith("* "):
             if not tldr_lines:
-                continue  # Skip leading bullets
-            break  # End at first bullet after text
+                continue
+            break
         tldr_lines.append(stripped)
-    return " ".join(tldr_lines)[:250]
+    full = " ".join(tldr_lines)
+    if len(full) <= 300:
+        return full
+    # Truncate at last sentence boundary before 300 chars
+    truncated = full[:300]
+    last_period = truncated.rfind(".")
+    last_dash = truncated.rfind("\u2014")
+    cut = max(last_period, last_dash)
+    if cut > 100:
+        return truncated[:cut + 1]
+    return truncated.rsplit(" ", 1)[0] + "..."
 
 
 def _extract_convergence(convergence_json):
