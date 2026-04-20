@@ -607,14 +607,16 @@ def domain_page(domain_name):
             else:
                 parent_category_icon = ''
         elif domain.get('level') == 2 and domain.get('parent_id'):
-            # level-2: parent is level-1, grandparent is level-0
+            # level-2: parent is level-1 (a Row), grandparent is level-0
             if parent:
-                parent_category_name = parent.get('name', '')
-                gp = conn.execute('SELECT name, icon FROM domains WHERE id = ?', (parent.get('parent_id', 0),)).fetchone()
-                parent_category_icon = gp['icon'] if gp else ''
-                parent_category_name = gp['name'] if gp else ''
-            else:
-                parent_category_icon = ''
+                gp_id = parent['parent_id'] if parent['parent_id'] else None
+                if gp_id:
+                    gp = conn.execute('SELECT name, icon FROM domains WHERE id = ?', (gp_id,)).fetchone()
+                    parent_category_name = gp['name'] if gp else ''
+                    parent_category_icon = gp['icon'] if gp else ''
+                else:
+                    parent_category_name = parent['name']
+                    parent_category_icon = ''
         else:
             parent_category_icon = domain.get('icon', '')
         if subtopic_scope and sources:
