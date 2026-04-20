@@ -27,7 +27,7 @@
     <meta name="twitter:description" content="Your knowledge, distilled. Paste a link, upload a document — extract every insight automatically.">
     <meta name="twitter:image" content="https://distylme.com/static/og-image.png">
     <link rel="stylesheet" href="{{ url_for('static', filename='intel.css') }}?v={{ cache_bust }}">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><path d='M6 10 L24 34 L24 14 Z' fill='%231a1916'/><path d='M42 10 L24 34 L24 14 Z' fill='%238a9dd6'/></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><path d='M6 10 L24 34 L24 14 Z' fill='%231a1916'/><path d='M42 10 L24 34 L24 14 Z' fill='%234f6ef7'/></svg>">
 </head>
 <body>
 <div class="intel-page">
@@ -37,11 +37,12 @@
         <a href="{{ url_for('index') }}" class="intel-nav-brand">
             <div class="intel-nav-logo">
                 <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
-                    <path d="M6 10 L24 34 L24 14 Z" fill="currentColor"/>
-                    <path d="M42 10 L24 34 L24 14 Z" fill="#8a9dd6"/>
+                    <path d="M6 10 L24 34 L24 14 Z" fill="#1a1916"/>
+                    <path d="M42 10 L24 34 L24 14 Z" fill="#4f6ef7"/>
+                    <line x1="24" y1="14" x2="24" y2="34" stroke="#fafaf8" stroke-width=".6" opacity=".35"/>
                 </svg>
             </div>
-            <span class="intel-nav-wordmark">distyl<span class="intel-nav-wordmark-accent">me</span></span>
+            <span class="intel-nav-wordmark">distyl<span class="intel-nav-wordmark-accent">me</span><span class="intel-nav-wordmark-dot">.</span></span>
         </a>
         {% if current_user and current_user.is_authenticated %}
         <div class="intel-nav-user">
@@ -1008,17 +1009,32 @@ document.addEventListener('DOMContentLoaded', function() {
          HOME VIEW — URL Input + Domain Grid
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-hero" id="heroSection">
-        <!-- Decorative floating SVGs -->
-        <svg class="intel-hero-decor decor-book" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        <svg class="intel-hero-decor decor-bulb" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
-        <svg class="intel-hero-decor decor-dots" width="60" height="40" viewBox="0 0 60 40"><circle cx="8" cy="20" r="6" fill="currentColor" opacity="0.4"/><circle cx="28" cy="10" r="4" fill="currentColor" opacity="0.3"/><circle cx="24" cy="30" r="3" fill="currentColor" opacity="0.25"/><circle cx="46" cy="18" r="5" fill="currentColor" opacity="0.35"/><circle cx="52" cy="34" r="2.5" fill="currentColor" opacity="0.2"/></svg>
-        <svg class="intel-hero-decor decor-cap" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
+        <!-- Ambient glow -->
+        <div class="intel-hero-glow"></div>
 
-        <div class="intel-hero-tag">Your knowledge, distilled</div>
-        <h1 class="intel-hero-title">Learn from any source.</h1>
+        <div class="intel-hero-eyebrow">
+            <span class="intel-hero-pip"></span>
+            <span>A thinking tool for readers</span>
+            <span class="intel-hero-eyebrow-sep">&middot;</span>
+            <span class="intel-hero-eyebrow-muted">made by one person &middot; v0.4</span>
+        </div>
+        <h1 class="intel-hero-title">
+            <span>Your knowledge,</span><br>
+            <span>distilled<span class="intel-hero-period">.</span></span>
+        </h1>
         <p class="intel-hero-subtitle">
-            Paste a link, upload a document, or add notes — we'll extract every insight and build your knowledge base automatically.
+            Paste a link. Upload a doc. Drop a thought. Distylme extracts every insight and compounds your understanding — source by source, day by day.
         </p>
+
+        <!-- Trust/maker row -->
+        <div class="intel-hero-trust">
+            <div class="intel-hero-maker-dot">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.39 7.36H22l-6.2 4.5 2.4 7.36L12 16.72l-6.2 4.5 2.4-7.36L2 9.36h7.61z"/></svg>
+            </div>
+            <div class="intel-hero-trust-text">
+                An open experiment in reading better. Built from my own knowledge base — curious to see what yours looks like.
+            </div>
+        </div>
 
         <!-- Multi-source input hub -->
         <div class="intel-source-hub">
