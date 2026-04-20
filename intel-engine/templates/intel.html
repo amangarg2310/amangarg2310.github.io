@@ -94,7 +94,7 @@
                 <div class="intel-taxonomy-tree">
                     {% for node in domain_tree %}
                     <div class="intel-tree-node {% if domain and domain.id == node.id %}active{% endif %}" data-level="{{ node.level }}" data-domain-id="{{ node.id }}" data-domain-name="{{ node.name }}">
-                        <div class="intel-tree-row" {% if node.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ node.id }}, '{{ node.name }}', {{ node.level }})">
+                        <div class="intel-tree-row" {% if node.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ node.id }}, {{ node.name | tojson }}, {{ node.level }})">
                             {% if node.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
                             <span class="intel-tree-icon">{{ node.icon }}</span>
                             <a href="{{ url_for('domain_page', domain_name=node.name) }}" class="intel-tree-name {% if domain and domain.name == node.name %}active{% endif %}">{{ node.name }}</a>
@@ -104,7 +104,7 @@
                         <div class="intel-tree-children {% if not (domain and domain.path and node.name in domain.path|default('', true)) %}collapsed{% endif %}">
                             {% for child in node.children %}
                             <div class="intel-tree-node {% if domain and domain.id == child.id %}active{% endif %}" data-level="{{ child.level }}" data-domain-id="{{ child.id }}" data-domain-name="{{ child.name }}">
-                                <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ child.id }}, '{{ child.name }}', {{ child.level }})">
+                                <div class="intel-tree-row" {% if child.children %}onclick="toggleTreeChildren(this)"{% endif %} oncontextmenu="showDomainMenu(event, {{ child.id }}, {{ child.name | tojson }}, {{ child.level }})">
                                     {% if child.children %}<span class="intel-tree-toggle">▶</span>{% endif %}
                                     <span class="intel-tree-icon">▸</span>
                                     <a href="{{ url_for('domain_page', domain_name=child.name) }}" class="intel-tree-name {% if domain and domain.name == child.name %}active{% endif %}">{{ child.name }}</a>
@@ -215,9 +215,10 @@
                 {% if sources %}
                 {% for source in sources %}
                 <div class="intel-source-item intel-animate-in" id="source-{{ source.id }}"
-                     style="animation-delay: {{ loop.index0 * 0.04 }}s"
+                     style="animation-delay: {{ loop.index0 * 0.04 }}s; cursor: pointer;"
                      data-source-id="{{ source.id }}"
-                     data-video-id="{{ source.video_id }}">
+                     data-video-id="{{ source.video_id }}"
+                     onclick="window.location.href='/source/{{ source.id }}'">
                     <div class="intel-source-type-icon">
                         {% if source.source_type == 'youtube' or not source.source_type %}<svg width="18" height="13" viewBox="0 0 24 17" fill="none"><rect width="24" height="17" rx="4" fill="#FF0000"/><polygon points="9.5,3.5 9.5,13.5 17,8.5" fill="white"/></svg>
                         {% elif source.source_type == 'article' %}📄
@@ -283,6 +284,9 @@
                 </button>
             </div>
         </aside>
+
+        <!-- Draggable resize handle -->
+        <div class="intel-resize-handle" id="resizeHandle"></div>
 
         <!-- ── Main Content (Right) ── -->
         <main class="intel-main-content">
@@ -586,9 +590,55 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 {% endif %}
+
+// ── Sidebar resize handle ──
+(function() {
+    var handle = document.getElementById('resizeHandle');
+    if (!handle) return;
+    var sidebar = document.getElementById('sourcesPanel');
+    if (!sidebar) return;
+    var savedWidth = localStorage.getItem('distylme-sidebar-width');
+    if (savedWidth) document.documentElement.style.setProperty('--intel-sidebar-width', savedWidth + 'px');
+
+    var dragging = false;
+    handle.addEventListener('mousedown', function(e) {
+        dragging = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        var w = Math.min(500, Math.max(200, e.clientX));
+        document.documentElement.style.setProperty('--intel-sidebar-width', w + 'px');
+    });
+    document.addEventListener('mouseup', function() {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        var width = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--intel-sidebar-width'));
+        if (width) localStorage.setItem('distylme-sidebar-width', width);
+    });
+    // Touch support
+    handle.addEventListener('touchstart', function(e) {
+        dragging = true; e.preventDefault();
+    });
+    document.addEventListener('touchmove', function(e) {
+        if (!dragging) return;
+        var w = Math.min(500, Math.max(200, e.touches[0].clientX));
+        document.documentElement.style.setProperty('--intel-sidebar-width', w + 'px');
+    });
+    document.addEventListener('touchend', function() {
+        if (!dragging) return;
+        dragging = false;
+        var width = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--intel-sidebar-width'));
+        if (width) localStorage.setItem('distylme-sidebar-width', width);
+    });
+})();
 </script>
 
-        
+
 </div>
 
         </main>
@@ -623,8 +673,8 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="bio-tree" id="bioTree">
             <div class="intel-tree-guide" id="treeGuide">
                 <span class="intel-guide-text">Click to expand &middot; Double-click to open</span>
+                <img class="intel-guide-arrow" id="guideArrow" src="{{ url_for('static', filename='guide-arrow.png') }}?v={{ cache_bust }}" alt="" draggable="false">
             </div>
-            <img class="intel-guide-arrow" id="guideArrow" src="{{ url_for('static', filename='guide-arrow.png') }}?v={{ cache_bust }}" alt="" draggable="false">
             <svg class="bio-tree-svg" id="bioTreeSvg"></svg>
             <div class="bio-tree-nodes" id="bioTreeNodes">
                 <!-- Level 0: Category nodes (always visible, leftmost column) -->
@@ -682,6 +732,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="bio-tree-level bio-tree-level-2 bio-hidden" data-parent="dom-{{ d.id }}">
                     {% for sub in d.children %}
                     <div class="bio-node bio-node-sub" data-href="{{ url_for('domain_page', domain_name=sub.name) }}"
+                         onclick="window.location.href=this.dataset.href"
                          ondblclick="window.location.href=this.dataset.href">
                         <span class="bio-node-core">
                             <span class="bio-node-dot"></span>
@@ -739,6 +790,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 collapseDescendants(cl);
             } else {
                 cl.classList.remove('bio-hidden');
+                // On mobile, scroll expanded children into view
+                if (window.innerWidth <= 640) {
+                    requestAnimationFrame(() => cl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+                }
             }
         });
 
@@ -755,6 +810,8 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.setAttribute('height', container.scrollHeight);
         svg.innerHTML = '';
 
+        const isMobile = window.innerWidth <= 640;
+
         // Find all visible parent->child level connections
         document.querySelectorAll('.bio-tree-level:not(.bio-hidden)').forEach(childLevel => {
             const parentId = childLevel.dataset.parent;
@@ -763,23 +820,31 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!parentNode || !parentNode.closest('.bio-tree-level:not(.bio-hidden)')) return;
 
             const pRect = parentNode.getBoundingClientRect();
-            // HORIZONTAL: start from right-center of parent
-            const px = pRect.right - rect.left;
-            const py = pRect.top + pRect.height / 2 - rect.top;
 
             childLevel.querySelectorAll('.bio-node').forEach((childNode, i) => {
                 const cRect = childNode.getBoundingClientRect();
-                // HORIZONTAL: end at left-center of child
-                const cx = cRect.left - rect.left;
-                const cy = cRect.top + cRect.height / 2 - rect.top;
-
-                // Horizontal S-curve: right of parent -> left of child
-                const midX = px + (cx - px) * 0.5;
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('d', `M ${px} ${py} C ${midX} ${py}, ${midX} ${cy}, ${cx} ${cy}`);
+
+                if (isMobile) {
+                    // VERTICAL: bottom-center of parent -> top-center of child
+                    const px = pRect.left + pRect.width / 2 - rect.left;
+                    const py = pRect.bottom - rect.top;
+                    const cx = cRect.left + cRect.width / 2 - rect.left;
+                    const cy = cRect.top - rect.top;
+                    const midY = py + (cy - py) * 0.5;
+                    path.setAttribute('d', `M ${px} ${py} C ${px} ${midY}, ${cx} ${midY}, ${cx} ${cy}`);
+                } else {
+                    // HORIZONTAL: right-center of parent -> left-center of child
+                    const px = pRect.right - rect.left;
+                    const py = pRect.top + pRect.height / 2 - rect.top;
+                    const cx = cRect.left - rect.left;
+                    const cy = cRect.top + cRect.height / 2 - rect.top;
+                    const midX = px + (cx - px) * 0.5;
+                    path.setAttribute('d', `M ${px} ${py} C ${midX} ${py}, ${midX} ${cy}, ${cx} ${cy}`);
+                }
+
                 path.setAttribute('class', 'bio-connector');
                 path.style.animationDelay = `${i * 0.08}s`;
-                // Thinner for level-1->2
                 if (childLevel.classList.contains('bio-tree-level-2')) {
                     path.classList.add('bio-connector-thin');
                 }
@@ -793,30 +858,16 @@ document.addEventListener('DOMContentLoaded', function() {
         requestAnimationFrame(bioDrawConnectors);
         window.addEventListener('resize', bioDrawConnectors);
 
-        // Subtle tree hint — fades after first interaction
-        var hint = document.getElementById('treeGuide');
-        if (hint && !localStorage.getItem('distylme-guide-v4')) {
-            hint.style.display = 'block'; var arr = document.getElementById('guideArrow'); if (arr) arr.style.display = 'block';
-            setTimeout(function() { hint.style.opacity = '1'; }, 100);
-            document.addEventListener('click', function hintHandler(e) {
-                if (e.target.closest && e.target.closest('.bio-node')) {
-                    hint.style.opacity = '0';
-                    setTimeout(function() { hint.style.display = 'none'; var arr2 = document.getElementById('guideArrow'); if (arr2) arr2.style.display = 'none'; }, 300);
-                    localStorage.setItem('distylme-guide-v4', '1');
-                    document.removeEventListener('click', hintHandler);
-                }
-            });
-        }
+        // Arrow + guide are always visible via CSS — no JS show/hide needed
     });
     </script>
 
 
     {% elif digest_preview is defined and digest_preview %}
     <!-- ══════════════════════════════════════════════════════════
-         DIGEST PREVIEW PAGE
+         DAILY DIGEST — bite-sized knowledge packets
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-digest-page">
-        <!-- Newsletter-style header -->
         <div class="intel-digest-header-bar">
             <a href="{{ url_for('knowledge_page') }}" class="intel-digest-back-btn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -830,78 +881,38 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="intel-digest-page-content">
             {% if digest_data and digest_data.has_content %}
 
-            <!-- Masthead -->
+            <!-- Day header -->
             <div class="intel-digest-masthead">
-                <div class="intel-digest-masthead-tag">Your Knowledge Brief</div>
-                <h1 class="intel-digest-masthead-title">What you learned this week</h1>
-                <p class="intel-digest-masthead-meta">{{ digest_data.date_range }} &middot; {{ digest_data.stats.new_sources }} sources &middot; {{ digest_data.stats.domains_updated }} domains</p>
+                <div class="intel-digest-masthead-tag">Day {{ digest_data.day_number }}</div>
+                <h1 class="intel-digest-masthead-title">Today&rsquo;s knowledge</h1>
+                <p class="intel-digest-masthead-meta">{{ digest_data.packet | length }} insights &middot; {{ digest_data.remaining }} remaining in your queue</p>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="intel-digest-progress">
+                <div class="intel-digest-progress-bar">
+                    <div class="intel-digest-progress-fill" style="width: {{ ((digest_data.total_read / digest_data.total_insights) * 100) if digest_data.total_insights else 0 }}%"></div>
+                </div>
+                <span class="intel-digest-progress-label">{{ digest_data.total_read }} of {{ digest_data.total_insights }} insights reviewed</span>
             </div>
 
             <div class="intel-digest-divider"></div>
 
-            {% for domain in digest_data.domain_updates %}
-            <div class="intel-digest-section">
-
-                <!-- Domain header -->
-                <div class="intel-digest-section-header">
-                    <span class="intel-digest-section-icon">{{ domain.domain_icon }}</span>
-                    <div>
-                        <h2 class="intel-digest-section-name">{{ domain.domain_name }}</h2>
-                        <span class="intel-digest-section-count">{{ domain.source_count }} source{{ 's' if domain.source_count != 1 else '' }} &middot; {{ domain.insight_count }} insights</span>
-                    </div>
+            <!-- Insight cards -->
+            {% for card in digest_data.packet %}
+            <div class="intel-digest-card {% if card.actionability == 'high' %}intel-digest-card--actionable{% endif %}">
+                <div class="intel-digest-card-meta">
+                    <span class="intel-digest-card-domain">{{ card.domain_icon }} {{ card.domain }}</span>
+                    <span class="intel-digest-card-type">{{ card.type | replace('_', ' ') }}</span>
+                    {% if card.actionability == 'high' %}<span class="intel-digest-card-badge">actionable</span>{% endif %}
                 </div>
-
-                <!-- TLDR — what this domain is about -->
-                {% if domain.tldr %}
-                <p class="intel-digest-tldr">{{ domain.tldr }}</p>
+                <h3 class="intel-digest-card-title">{{ card.title }}</h3>
+                <p class="intel-digest-card-content">{{ card.content }}</p>
+                {% if card.quote %}
+                <blockquote class="intel-digest-card-quote">&ldquo;{{ card.quote }}&rdquo;</blockquote>
                 {% endif %}
-
-                <!-- What's new — ingestion impact -->
-                {% if domain.what_changed %}
-                <div class="intel-digest-changed">
-                    <div class="intel-digest-label">What&rsquo;s new</div>
-                    <p class="intel-digest-changed-text">{{ domain.what_changed }}</p>
-                </div>
-                {% endif %}
-
-                <!-- Validated — convergence agreements -->
-                {% if domain.validated %}
-                <div class="intel-digest-validated">
-                    <div class="intel-digest-label">Validated by multiple sources</div>
-                    {% for v in domain.validated %}
-                    <div class="intel-digest-validated-item">
-                        <span class="intel-digest-check">&check;</span>
-                        <span>{{ v.claim }}</span>
-                        <span class="intel-digest-check-count">({{ v.count }} sources)</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                <!-- Action item — top high-actionability insight -->
-                {% if domain.action_item %}
-                <div class="intel-digest-action">
-                    <div class="intel-digest-label">Do this</div>
-                    <p class="intel-digest-action-text">{{ domain.action_item }}</p>
-                </div>
-                {% endif %}
-
-                <!-- Sources list (compact) -->
-                <div class="intel-digest-source-list">
-                    <div class="intel-digest-label">Sources</div>
-                    {% for src in domain.new_sources %}
-                    <span class="intel-digest-source-name">{{ src }}</span>{% if not loop.last %}<span class="intel-digest-source-sep">&middot;</span>{% endif %}
-                    {% endfor %}
-                </div>
-
-                <!-- Explore CTA -->
-                {% if domain.explore %}
-                <div class="intel-digest-cta">{{ domain.explore }}</div>
-                {% endif %}
-
+                <div class="intel-digest-card-source">{{ card.source }}</div>
             </div>
-
-            {% if not loop.last %}<div class="intel-digest-divider"></div>{% endif %}
             {% endfor %}
 
             <div class="intel-digest-footer">
@@ -912,10 +923,83 @@ document.addEventListener('DOMContentLoaded', function() {
 
             {% else %}
             <div class="intel-digest-empty">
-                <h2>No new sources this week</h2>
-                <p>Add some content to see your digest.</p>
+                <h2>You&rsquo;re all caught up</h2>
+                <p>No new insights to review. Add more sources to keep learning.</p>
                 <a href="{{ url_for('index') }}" class="intel-digest-empty-cta">Add a source &rarr;</a>
             </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% elif source_detail is defined and source_detail %}
+    <!-- ══════════════════════════════════════════════════════════
+         SOURCE DETAIL — view a single source and its insights
+         ══════════════════════════════════════════════════════════ -->
+    <div class="intel-source-detail-page">
+        <div class="intel-source-detail-header">
+            <a href="{{ url_for('domain_page', domain_name=source.domain_name) if source.domain_name else url_for('index') }}" class="intel-digest-back-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                Back
+            </a>
+        </div>
+
+        <div class="intel-source-detail-content">
+            <!-- Source metadata -->
+            <div class="intel-source-detail-meta">
+                <span class="intel-source-detail-type">
+                    {% if source.source_type == 'youtube' %}YouTube
+                    {% elif source.source_type == 'article' %}Article
+                    {% elif source.source_type == 'file' %}File
+                    {% elif source.source_type == 'image' %}Image
+                    {% elif source.source_type == 'text' %}Text
+                    {% else %}Source{% endif %}
+                </span>
+                {% if source.domain_name %}
+                <span class="intel-source-detail-domain">{{ source.domain_icon }} {{ source.domain_name }}</span>
+                {% endif %}
+            </div>
+
+            <h1 class="intel-source-detail-title">{{ source.title or 'Untitled' }}</h1>
+
+            {% if source.channel %}
+            <p class="intel-source-detail-channel">{{ source.channel }}</p>
+            {% endif %}
+
+            {% if source.url %}
+            <a href="{{ source.url }}" target="_blank" class="intel-source-detail-link">View original &rarr;</a>
+            {% endif %}
+
+            {% if source.ingestion_impact %}
+            <div class="intel-source-detail-impact">
+                <div class="intel-digest-card-type">impact</div>
+                <p>{{ source.ingestion_impact }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Insights as Knowledge Brief -->
+            {% if source_brief_html %}
+            <div class="intel-brief-header">
+                <h2 class="intel-brief-title">Knowledge Brief</h2>
+                <span class="intel-brief-version">{{ insight_count }} insights</span>
+            </div>
+            <div class="intel-synthesis">
+                {{ source_brief_html | safe }}
+            </div>
+            {% else %}
+            <div class="intel-digest-empty">
+                <p>No insights extracted from this source yet.</p>
+            </div>
+            {% endif %}
+
+            <!-- Transcript (collapsible) -->
+            {% if source.transcript %}
+            <details class="intel-source-detail-transcript">
+                <summary>Raw transcript</summary>
+                <pre>{{ source.transcript }}</pre>
+            </details>
             {% endif %}
         </div>
     </div>

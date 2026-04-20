@@ -2,7 +2,6 @@ services:
   - type: web
     name: intel-engine
     env: python
-    rootDir: intel-engine
     buildCommand: "pip install -r requirements.txt && python migrations.py"
     startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --log-level info"
     envVars:
@@ -16,5 +15,5 @@ services:
         sync: false
     disk:
       name: intel-data
-      mountPath: /opt/render/project/src/intel-engine/data
+      mountPath: /opt/render/project/src/data
       sizeGB: 1

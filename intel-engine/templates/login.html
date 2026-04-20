@@ -45,6 +45,7 @@
         {% endif %}
 
         <form method="POST" action="{{ url_for('login_page') }}" style="width: 100%; max-width: 400px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div style="margin-bottom: 12px;">
                 <input type="email" name="email" class="intel-input" placeholder="Email" required
                        style="padding: 14px 20px;" value="{{ request.form.get('email', '') }}">

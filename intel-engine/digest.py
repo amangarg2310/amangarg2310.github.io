@@ -38,6 +38,8 @@ def _extract_tldr(synthesis_content):
             continue
         if stripped.startswith("#"):
             continue
+        if stripped in ("---", "***", "___"):
+            continue
         if stripped.startswith("- ") or stripped.startswith("* "):
             if not tldr_lines:
                 continue

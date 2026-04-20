@@ -1,0 +1,238 @@
+/* ══════════════════════════════════════════════════════════════
+   Distylme Design System — Colors & Typography
+   Scholarly, warm, paper-like. NotebookLM/Readwise inspired.
+   ══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+    /* ── Warm paper-like surfaces ── */
+    --distyl-bg: #fafaf8;
+    --distyl-bg-warm: #f5f3ee;         /* tinted band (domain grid) */
+    --distyl-surface: #ffffff;
+    --distyl-surface-hover: #f5f4f1;
+    --distyl-surface-active: #edecea;
+    --distyl-border: #e4e0da;
+    --distyl-border-light: #eeebe6;
+
+    /* ── Text ── */
+    --distyl-fg: #1a1916;               /* primary ink */
+    --distyl-fg-secondary: #5c5a56;     /* body secondary */
+    --distyl-fg-tertiary: #a8a49f;      /* meta / tertiary */
+    --distyl-fg-inverse: #ffffff;
+
+    /* ── Brand accent — dusty periwinkle ── */
+    --distyl-accent: #8a9dd6;
+    --distyl-accent-hover: #6f83c4;
+    --distyl-accent-deep: #4a5a94;       /* for text/icons on pastel */
+    --distyl-accent-light: rgba(138, 157, 214, 0.12);
+    --distyl-accent-glow: rgba(138, 157, 214, 0.22);
+
+    /* ── Semantic colors (pastels) ── */
+    --distyl-green: #8ec9a3;             /* agreement / success — sage pastel */
+    --distyl-green-deep: #4a8a63;        /* readable text variant */
+    --distyl-green-light: rgba(142, 201, 163, 0.18);
+    --distyl-red: #e9a8a2;               /* error — dusty rose pastel */
+    --distyl-red-deep: #b8554d;          /* readable text variant */
+    --distyl-red-light: rgba(233, 168, 162, 0.22);
+    --distyl-orange: #e8b892;            /* disagree / warning — peach pastel */
+    --distyl-orange-deep: #a96a2e;       /* readable text variant */
+    --distyl-amber: #e8cf8e;             /* synthesis / TLDR accent — soft gold */
+    --distyl-amber-bg: #fdf8f1;          /* TLDR card background */
+    --distyl-amber-text: #7a5c10;
+    --distyl-purple: #c4b5e8;            /* accent alt — soft lavender */
+    --distyl-purple-deep: #7b6bb0;       /* readable text variant */
+    --distyl-emerald: #a8d6b8;           /* sub-topic — mint pastel */
+
+    /* ── Level colors (taxonomy hierarchy) ── */
+    --distyl-level-category: var(--distyl-amber);     /* categories — amber */
+    --distyl-level-domain: var(--distyl-accent);      /* domains — indigo */
+    --distyl-level-subtopic: var(--distyl-emerald);   /* sub-topics — emerald */
+
+    /* ── Dark surfaces (domains band + footer) ── */
+    --distyl-dark-band: #161922;         /* domain grid band */
+    --distyl-dark-footer: #0a0c10;       /* footer */
+    --distyl-dark-fg-dim: rgba(255, 255, 255, 0.35);
+
+    /* ── Glass / frosted ── */
+    --distyl-glass: rgba(255, 255, 255, 0.45);
+    --distyl-glass-border: rgba(255, 255, 255, 0.35);
+    --distyl-glass-blur: blur(16px);
+
+    /* ── Radii ── */
+    --distyl-radius: 14px;
+    --distyl-radius-sm: 10px;
+    --distyl-radius-xs: 7px;
+    --distyl-radius-pill: 20px;
+
+    /* ── Shadows — soft, warm, paper-tinted ── */
+    --distyl-shadow-sm: 0 1px 4px rgba(30,25,15,0.04), 0 1px 2px rgba(30,25,15,0.05);
+    --distyl-shadow-md: 0 6px 28px rgba(30,25,15,0.07), 0 2px 6px rgba(30,25,15,0.04);
+    --distyl-shadow-lg: 0 20px 60px rgba(30, 25, 15, 0.12), 0 4px 12px rgba(30, 25, 15, 0.06);
+    --distyl-shadow-focus: 0 0 0 3px rgba(79, 110, 247, 0.18);
+    --distyl-shadow-glow-accent: 0 0 0 4px rgba(79, 110, 247, 0.08);
+    --distyl-shadow-btn-accent: 0 2px 6px rgba(79, 110, 247, 0.15);
+
+    /* ── Motion ── */
+    --distyl-transition: 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
+    --distyl-transition-spring: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* ── Typography ── */
+    --distyl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --distyl-font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TYPOGRAPHY — semantic styles
+   ══════════════════════════════════════════════════════════════ */
+
+body, .distyl-body {
+    font-family: var(--distyl-font);
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--distyl-fg);
+    background: var(--distyl-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hero / display — the aspirational tagline treatment */
+.distyl-display {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+    color: var(--distyl-fg);
+}
+
+/* Eyebrow tag — "YOUR KNOWLEDGE, DISTILLED" */
+.distyl-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--distyl-accent);
+}
+
+h1, .distyl-h1 {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+    margin: 0 0 16px;
+    color: var(--distyl-fg);
+}
+
+h2, .distyl-h2 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin: 0 0 12px;
+    color: var(--distyl-fg);
+}
+
+h3, .distyl-h3 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+    margin: 0 0 10px;
+    color: var(--distyl-fg);
+}
+
+h4, .distyl-h4 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    margin: 0 0 8px;
+    color: var(--distyl-fg);
+}
+
+h5, .distyl-h5 {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 0 0 6px;
+    color: var(--distyl-fg);
+}
+
+.distyl-subtitle {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--distyl-fg-secondary);
+    line-height: 1.7;
+}
+
+p, .distyl-p {
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--distyl-fg);
+    margin: 0 0 12px;
+}
+
+/* Body for reading — synthesis / long-form */
+.distyl-body-read {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--distyl-fg);
+}
+
+.distyl-meta {
+    font-size: 12px;
+    color: var(--distyl-fg-tertiary);
+}
+
+.distyl-caption {
+    font-size: 13px;
+    color: var(--distyl-fg-secondary);
+}
+
+.distyl-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--distyl-fg-tertiary);
+}
+
+code, .distyl-code {
+    font-family: var(--distyl-font-mono);
+    font-size: 13px;
+    background: var(--distyl-surface-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--distyl-fg);
+}
+
+.distyl-link {
+    color: var(--distyl-accent);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color var(--distyl-transition);
+}
+
+.distyl-link:hover {
+    color: var(--distyl-accent-hover);
+}
+
+/* Wordmark — "distylme" with indigo "me" accent */
+.distyl-wordmark {
+    font-family: var(--distyl-font);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    color: var(--distyl-fg);
+}
+.distyl-wordmark-accent {
+    color: var(--distyl-accent);
+}
+
+/* Domain card title */
+.distyl-domain-title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--distyl-fg);
+}

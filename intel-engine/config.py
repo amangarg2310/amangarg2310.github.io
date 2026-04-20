@@ -15,7 +15,9 @@ load_dotenv()
 
 # ── Paths ──
 PROJECT_ROOT = Path(__file__).parent
-DATA_DIR = PROJECT_ROOT / "data"
+# On Render, disk is mounted at the old monorepo path — use it if it exists
+_RENDER_DATA = Path("/opt/render/project/src/intel-engine/data")
+DATA_DIR = _RENDER_DATA if _RENDER_DATA.exists() else PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "intel_engine.db"
 UPLOADS_DIR = DATA_DIR / "uploads"
 
