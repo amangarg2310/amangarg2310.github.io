@@ -85,9 +85,9 @@ Private playlists are detected and the user is told to change to Unlisted. Max 1
 
 ## Page Structure
 
-**Homepage** (`/`): Platform landing — hero section with floating decorative SVGs and aspirational tagline, multi-source input hub (Link/Upload/Text tabs), "How it Works" 3-step onboarding for empty state, domain card grid on warm tinted background band. Footer with brand.
+**Homepage** (`/`): Two-column hero — left: headline ("Your knowledge, distilled.") + subtitle + multi-source input hub (Link/Upload/Text tabs). Right: floating source cards (PDF, YouTube, Text) with animated SVG converging trails into an insight card with convergence badge + TL;DR companion chip. Below hero: "How it Works" 3-step onboarding (empty state) or domain card grid on warm tinted background band (`#eae7e0`). Footer with brand.
 
-**Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content (AI search → convergence indicators → synthesis brief). This is where the user reads and queries their knowledge. Level-2 sub-topic pages show the parent domain's content (sources, synthesis); header counts use `len(sources)` to match what's actually displayed, not the sub-topic's own (empty) counts.
+**Domain Detail** (`/domain/<name>`): Two-panel layout — sidebar (taxonomy tree + sources with ingestion impact) and main content. Streamlined flow: breadcrumb (template-only via `domain.path`) → icon + title → meta stats (source/insight counts appear once) → search bar → convergence cards → "Knowledge brief" heading → synthesis content → Playbook/Digest action buttons. No redundant headings or repeated counts. Level-2 sub-topic pages show parent domain's content; header counts use `len(sources)` to match what's displayed.
 
 **Knowledge Base** (`/knowledge`): Horizontal mind-map (NotebookLM-inspired) with color-coded levels — amber categories, indigo domains, emerald sub-topics. CSS-based connectors (no JS redraw). Click card to expand/collapse children, click label text to navigate to domain page. Staggered slide-in animation on expand. Responsive vertical fallback on mobile. Built bottom-up from level-1 domains with LEFT JOIN to parents — resilient to missing or corrupted level-0 parents. Groups domains by parent name; orphans go under "Other".
 
@@ -109,18 +109,18 @@ Private playlists are detected and the user is told to change to Unlisted. Max 1
 
 ## Design System
 
-Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD), Akadian, and Duck.school. Scholarly but visually rich:
+Premium education platform aesthetic — scholarly but visually rich. NotebookLM-inspired.
 
-- **Palette:** Warm neutrals (`#fafaf8` bg, `#e4e0da` borders), muted indigo accent (`#4f6ef7`), amber for TLDR/synthesis/convergence borders (`#d4a757`). Domain grid section uses warmer tinted background (`#f5f3ee`). Footer is dark warm (`#1a1916`).
+- **Palette:** Warm neutrals (`#fafaf8` bg, `#e4e0da` borders). Unified vivid indigo accent (`--intel-accent: #4f6ef7`, `--intel-accent-hover: #3d5ce6`, `--intel-accent-deep: #2d4bc0`). Amber for synthesis borders (`#d4a757`). Domain grid band: `#eae7e0` (contrasts with hero). Dark mode accent: `#7b94f5`. Footer: dark warm (`#1a1916`).
+- **Logo Mark:** V-mark (closing book / funnel shape). White V on indigo square in nav — left page `#ffffff`, right page `rgba(255,255,255,0.65)` on `--intel-accent` background. All auth pages (login, register, setup) use the same white-on-blue logo. Wordmark: "distyl" in dark + "me" in accent + "." period dot.
 - **Typography:** Inter font, weight 400-800. Hero heading: 48px weight 800. Section titles: 24px weight 700. Domain card names: 18px weight 700. Synthesis body: 15px, 1.8 line-height. Domain detail title: 28px weight 700.
-- **Hero Section:** Radial gradient glow (`rgba(79,110,247,0.06)`), floating decorative SVGs (book, lightbulb, dots, graduation cap) with breathing animations, "YOUR KNOWLEDGE, DISTILLED" tagline above heading.
-- **Micro-animations:** Hero elements fade up on page load (staggered 0.1-0.4s). Domain cards stagger in (intel-cardIn). Floating SVGs breathe with offset timing (5-8s cycles). Stats bar numbers pop in (intel-countPop). Processing icon pulses. Context menus slide down. Modals scale in with spring easing.
-- **Surfaces:** Gradient buttons (accent → #3d5ce6), warm shadow tints (`rgba(30,25,15,...)`), focus glow rings (`0 0 0 4px rgba(79,110,247,0.08)`). Cards lift on hover with accent border.
-- **Visual Richness:** Decorative geometric circles (CSS ::before/::after) on domain grid section. "How it Works" 3-step onboarding for empty state. Stats bar (sources/insights/domains) on knowledge page. Dark footer with brand.
+- **Hero Section:** Two-column grid. Left: headline + subtitle + multi-source input hub. Right: floating source cards (3 types with different colored icons) connected by animated SVG trails (amber, orange, green gradients with animateMotion particles) converging into an insight card (convergence badge + domain label + claim + citation) and a TL;DR companion chip. Radial gradient glow background.
+- **Micro-animations:** Hero elements fade up (staggered). Source cards float with offset breathing (5-8s). Trail particles flow along paths. Domain cards stagger in. Stats pop in. Modals scale with spring easing.
+- **Surfaces:** Gradient buttons (accent → #3d5ce6), warm shadow tints (`rgba(30,25,15,...)`), focus glow rings. Cards lift on hover with accent border.
 - **Graph:** Force-graph with breathing pulse, flowing particles, conceptual edges (amber dotted for shared topics), glassmorphism back button.
 - **Coverage Depth:** Domain cards show thin (dashed border, 1-2 sources), moderate (solid, 3-5), deep (amber border + warm gradient bg, 6+)
-- **Convergence:** Side-by-side cards — green left border for agreements, orange for disagreements — with hover lift and shadow.
-- **Knowledge Tree:** Horizontal mind-map with CSS connectors and color-coded level borders. Categories = warm amber left border, Domains = indigo left border, Sub-topics = emerald left border. Staggered slide-in from left. Click label to navigate, click card to expand. Responsive vertical on mobile.
+- **Convergence:** Side-by-side cards — green left border for agreements, orange for disagreements.
+- **Knowledge Tree:** Horizontal mind-map with CSS connectors and color-coded level borders. Categories = amber, Domains = indigo, Sub-topics = emerald. Click label to navigate, click card to expand. Responsive vertical on mobile.
 
 ## Key Patterns
 
@@ -144,6 +144,18 @@ Premium education platform aesthetic — inspired by Nod Coding (Awwwards SOTD),
 - **Progressive Summarization:** Each synthesis level references the level below by name, so the user knows where to drill deeper.
 - **Cognitive Load Theory:** Every UI element must reduce the steps between the user and the knowledge, not add navigation overhead. No features that increase clicks without increasing understanding.
 - **Threshold Concepts:** Cross-domain foundational topics are identified via topic frequency analysis and surfaced as annotations — concepts that appear across 3+ domains are likely foundational.
+
+## Deployment
+
+**Dual-push workflow** — changes must be pushed to both repos:
+- `origin` (amangarg2310.github.io monorepo): `git push origin HEAD:main`
+- `distylme` (standalone repo for Render): clone to /tmp, copy changed files, commit, push. Render auto-deploys from `distylme/main`.
+
+The monorepo has files under `intel-engine/`; the standalone repo has them at root. Cannot use `git subtree push` due to divergent histories — use the /tmp clone approach.
+
+**Auth templates** (`login.html`, `register.html`, `setup.html`): Do NOT use `csrf_token()` — Flask-WTF/CSRFProtect is not initialized in `app.py`. No hidden CSRF inputs in forms.
+
+**Template url_for references:** All `url_for()` calls must match the Flask route **function name** (not the URL path). E.g. `url_for('digest_preview_page')` not `url_for('digest_preview')`.
 
 ## Environment Variables
 
