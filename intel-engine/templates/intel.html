@@ -1023,8 +1023,13 @@ document.addEventListener('DOMContentLoaded', function() {
          HOME VIEW — URL Input + Domain Grid
          ══════════════════════════════════════════════════════════ -->
     <div class="intel-hero" id="heroSection">
-        <!-- Ambient glow -->
+        <!-- Ambient glow + grid -->
         <div class="intel-hero-glow"></div>
+        <div class="intel-hero-grid"></div>
+
+        <div class="intel-hero-inner">
+        <!-- LEFT: editorial content + source hub -->
+        <div class="intel-hero-left">
 
         <h1 class="intel-hero-title">
             <span>Your knowledge,</span><br>
@@ -1033,7 +1038,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <p class="intel-hero-subtitle">
             Paste a link. Upload a doc. Drop a thought. Distylme extracts every insight and compounds your understanding — source by source, day by day.
         </p>
-
 
         <!-- Multi-source input hub -->
         <div class="intel-source-hub">
@@ -1136,6 +1140,64 @@ document.addEventListener('DOMContentLoaded', function() {
             <!-- Inline processing status (inside source hub) -->
             <div class="intel-inline-status" id="statusCard" style="display:none"></div>
         </div>
+
+        </div><!-- /.intel-hero-left -->
+
+        <!-- RIGHT: floating distillation visual -->
+        <div class="intel-hero-right">
+            <div class="intel-hero-visual">
+                <div class="intel-hero-halo"></div>
+
+                <!-- Floating source cards -->
+                <div class="intel-hero-src" style="top:10px;left:8px">
+                    <div class="intel-hero-src-icon" style="background:#fff4dc;color:#7a5c10">PDF</div>
+                    <div><div class="intel-hero-src-title">Sweller — Cognitive Load</div><div class="intel-hero-src-meta">12 pages</div></div>
+                </div>
+                <div class="intel-hero-src" style="top:74px;right:10px">
+                    <div class="intel-hero-src-icon" style="background:#ffecec;color:#c4321f">&#9654;</div>
+                    <div><div class="intel-hero-src-title">MIT OCW lecture</div><div class="intel-hero-src-meta">YouTube &middot; 48 min</div></div>
+                </div>
+                <div class="intel-hero-src" style="top:150px;left:18px">
+                    <div class="intel-hero-src-icon" style="background:#e8f5ed;color:#1d7a38">&#9998;</div>
+                    <div><div class="intel-hero-src-title">My research notes</div><div class="intel-hero-src-meta">Text &middot; 820 words</div></div>
+                </div>
+
+                <!-- Converging trails SVG -->
+                <svg class="intel-hero-trails" viewBox="0 0 400 440" preserveAspectRatio="none" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="tr1" x1="0" x2="1"><stop offset="0" stop-color="#d4a757" stop-opacity=".1"/><stop offset="1" stop-color="#d4a757" stop-opacity=".7"/></linearGradient>
+                        <linearGradient id="tr2" x1="0" x2="1"><stop offset="0" stop-color="#e07a00" stop-opacity=".1"/><stop offset="1" stop-color="#e07a00" stop-opacity=".6"/></linearGradient>
+                        <linearGradient id="tr3" x1="0" x2="1"><stop offset="0" stop-color="#6db88a" stop-opacity=".1"/><stop offset="1" stop-color="#2ea84e" stop-opacity=".7"/></linearGradient>
+                    </defs>
+                    <path d="M 110 40  C 170 60, 180 190, 200 230" stroke="url(#tr1)" stroke-width="1.5" fill="none"/>
+                    <path d="M 330 105 C 260 120, 220 210, 200 230" stroke="url(#tr2)" stroke-width="1.5" fill="none"/>
+                    <path d="M 120 182 C 160 200, 180 220, 200 230" stroke="url(#tr3)" stroke-width="1.5" fill="none"/>
+                    <circle r="3" fill="#d4a757"><animateMotion dur="3.2s" repeatCount="indefinite" path="M 110 40  C 170 60, 180 190, 200 230"/></circle>
+                    <circle r="3" fill="#e07a00"><animateMotion dur="3.6s" begin=".8s" repeatCount="indefinite" path="M 330 105 C 260 120, 220 210, 200 230"/></circle>
+                    <circle r="3" fill="#2ea84e"><animateMotion dur="2.8s" begin="1.4s" repeatCount="indefinite" path="M 120 182 C 160 200, 180 220, 200 230"/></circle>
+                </svg>
+
+                <!-- Distilled insight card -->
+                <div class="intel-hero-insight">
+                    <div class="intel-hero-insight-head">
+                        <span class="intel-hero-insight-badge"><span class="intel-hero-insight-dot"></span>Agreement &middot; 3 sources</span>
+                        <span class="intel-hero-insight-domain">&#129504; Cognitive Load</span>
+                    </div>
+                    <div class="intel-hero-insight-body">Working memory caps at ~4 chunks — not Miller's 7&plusmn;2.</div>
+                    <div class="intel-hero-insight-foot">
+                        <span class="intel-hero-cite">[Cowan 2001]</span>
+                        <span class="intel-hero-validated">&checkmark; validated</span>
+                    </div>
+                </div>
+
+                <!-- TL;DR companion chip -->
+                <div class="intel-hero-tldr-chip">
+                    <span class="intel-hero-tldr-label">TL;DR</span>
+                    <span class="intel-hero-tldr-text">Expertise reorganizes WM limits via chunking — reduce extraneous load first.</span>
+                </div>
+            </div>
+        </div>
+        </div><!-- /.intel-hero-inner -->
 
         {% if not domains %}
         <div class="intel-how-it-works">

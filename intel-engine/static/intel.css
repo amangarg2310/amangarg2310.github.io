@@ -1499,12 +1499,10 @@ body {
 /* ── Hero / URL Input Section (Home) ── */
 .intel-hero {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 100px 24px 64px;
-    text-align: center;
-    background: radial-gradient(ellipse at 50% 0%, rgba(79, 110, 247, 0.06) 0%, transparent 70%);
+    padding: 72px 32px 64px;
+    text-align: left;
+    background: linear-gradient(180deg, #fafaf8 0%, #f6f3ed 100%);
+    border-bottom: 1px solid #eeebe6;
     overflow: hidden;
 }
 
@@ -4635,3 +4633,138 @@ body {
     }
 }
 
+
+/* ── Hero: Two-Column Layout + Distillation Visual ── */
+.intel-hero-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(to right, rgba(30,25,15,0.04) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(30,25,15,0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 25%, transparent 75%);
+    mask-image: radial-gradient(ellipse at 50% 50%, #000 25%, transparent 75%);
+}
+.intel-hero-inner {
+    position: relative; z-index: 2;
+    max-width: 1200px; margin: 0 auto;
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px;
+    align-items: center;
+}
+.intel-hero-left { display: flex; flex-direction: column; gap: 22px; }
+.intel-hero-right {
+    position: relative; height: 460px;
+    display: flex; align-items: center; justify-content: center;
+}
+.intel-hero-visual {
+    position: relative; width: 100%; max-width: 440px; height: 440px;
+}
+.intel-hero-halo {
+    position: absolute; inset: 10%; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(79,110,247,0.18), transparent 70%);
+    filter: blur(8px);
+}
+
+/* Floating source cards */
+.intel-hero-src {
+    position: absolute; z-index: 2;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; background: #fff;
+    border: 1px solid #eeebe6; border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(30,25,15,0.04), 0 12px 28px rgba(30,25,15,0.08);
+    font-size: 12px; font-family: var(--intel-font);
+    animation: heroFloat 6s ease-in-out infinite;
+}
+.intel-hero-src:nth-child(3) { animation-delay: -2s; }
+.intel-hero-src:nth-child(4) { animation-delay: -4s; }
+@keyframes heroFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+.intel-hero-src-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; flex-shrink: 0;
+}
+.intel-hero-src-title { font-size: 12.5px; font-weight: 600; color: #1a1916; letter-spacing: -0.005em; }
+.intel-hero-src-meta { font-size: 10.5px; color: #a8a49f; margin-top: 2px; }
+
+/* Converging trails SVG */
+.intel-hero-trails {
+    position: absolute; inset: 0; z-index: 1;
+    width: 100%; height: 100%;
+}
+
+/* Distilled insight card */
+.intel-hero-insight {
+    position: absolute; z-index: 3;
+    left: 50%; top: 50%; transform: translate(-50%, -22%);
+    width: 280px; background: #fff;
+    border: 1px solid #eeebe6; border-radius: 16px;
+    padding: 16px 18px 14px;
+    box-shadow: 0 2px 4px rgba(30,25,15,0.06), 0 24px 48px rgba(30,25,15,0.14);
+    font-family: var(--intel-font);
+}
+.intel-hero-insight-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+.intel-hero-insight-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #1d7a38; background: rgba(46,168,78,0.1);
+    padding: 3px 8px; border-radius: 6px;
+}
+.intel-hero-insight-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #2ea84e; display: inline-block;
+}
+.intel-hero-insight-domain { font-size: 11px; font-weight: 600; color: #5c5a56; }
+.intel-hero-insight-body {
+    font-size: 15px; font-weight: 600; color: #1a1916; line-height: 1.4; letter-spacing: -0.015em;
+}
+.intel-hero-insight-foot {
+    display: flex; justify-content: space-between; margin-top: 12px;
+    padding-top: 10px; border-top: 1px solid #f2f0ec;
+}
+.intel-hero-cite { font-size: 11px; color: var(--intel-accent); font-weight: 500; }
+.intel-hero-validated {
+    font-size: 10.5px; font-weight: 600; color: #1d7a38;
+    background: rgba(46,168,78,0.1); padding: 2px 7px; border-radius: 4px;
+}
+
+/* TL;DR companion chip */
+.intel-hero-tldr-chip {
+    position: absolute; z-index: 2; right: 0; bottom: 14px;
+    display: flex; flex-direction: column;
+    padding: 10px 14px; width: 160px;
+    background: #fdf8f1; border: 1px solid #ead9b0; border-left: 3px solid #d4a757;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 0 8px 22px rgba(30,25,15,0.06);
+    font-family: var(--intel-font);
+}
+.intel-hero-tldr-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #7a5c10;
+}
+.intel-hero-tldr-text {
+    font-size: 12px; color: #1a1916; margin-top: 4px; line-height: 1.4;
+}
+
+/* Responsive: stack on mobile */
+@media (max-width: 768px) {
+    .intel-hero-inner { grid-template-columns: 1fr; gap: 32px; }
+    .intel-hero-right { height: 340px; }
+    .intel-hero-visual { max-width: 360px; height: 340px; }
+    .intel-hero-insight { width: 240px; }
+    .intel-hero-tldr-chip { width: 140px; }
+}
+@media (max-width: 480px) {
+    .intel-hero-right { display: none; }
+}
+
+/* Dark mode: hero visual */
+[data-theme="dark"] .intel-hero-src { background: var(--intel-surface); border-color: var(--intel-border); }
+[data-theme="dark"] .intel-hero-src-title { color: var(--intel-text); }
+[data-theme="dark"] .intel-hero-insight { background: var(--intel-surface); border-color: var(--intel-border); }
+[data-theme="dark"] .intel-hero-insight-body { color: var(--intel-text); }
+[data-theme="dark"] .intel-hero-insight-foot { border-color: var(--intel-border); }
+[data-theme="dark"] .intel-hero-tldr-chip { background: rgba(212,167,87,0.08); border-color: rgba(212,167,87,0.2); }
+[data-theme="dark"] .intel-hero-grid { background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px); }
+[data-theme="dark"] .intel-hero-halo { background: radial-gradient(closest-side, rgba(79,110,247,0.12), transparent 70%); }

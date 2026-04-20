@@ -597,6 +597,7 @@ def domain_page(domain_name):
         show_filtered_banner = False
         parent_domain_name = None
         parent_category_name = None
+        parent_category_icon = ''  
         # For level-1 domains, fetch the parent category name for breadcrumb
         if domain.get('level') == 1 and domain.get('parent_id'):
             parent_cat = conn.execute('SELECT name, icon FROM domains WHERE id = ?', (domain['parent_id'],)).fetchone()
