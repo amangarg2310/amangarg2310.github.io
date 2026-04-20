@@ -829,6 +829,12 @@
 [data-theme="dark"] .intel-hero-maker-dot { background: rgba(123, 148, 245, 0.12); color: #7b94f5; }
 [data-theme="dark"] .intel-nav-wordmark-dot { color: #7b94f5; }
 
+/* Dark mode: UI Kit domain detail */
+[data-theme="dark"] .intel-tldr-card { background: rgba(212, 167, 87, 0.08); border-left-color: #b8922e; }
+[data-theme="dark"] .intel-tldr-label { color: #d4a757; }
+[data-theme="dark"] .intel-breadcrumb-link { color: var(--intel-text-tertiary); }
+[data-theme="dark"] .intel-breadcrumb-sep { color: var(--intel-border); }
+
 [data-theme="dark"] .intel-domains-band {
     background: #161922;
 }
@@ -2702,11 +2708,11 @@ body {
 }
 
 .intel-sources-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--intel-text);
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--intel-text-tertiary);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
 }
 
 .intel-sources-count {
@@ -3329,6 +3335,89 @@ body {
 }
 
 .intel-detail-icon { font-size: 42px; margin-bottom: 12px; }
+
+/* ── UI Kit: Domain Detail Redesign ── */
+
+/* Breadcrumb */
+.intel-detail-breadcrumb {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--intel-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.intel-breadcrumb-link {
+    color: var(--intel-text-tertiary);
+    text-decoration: none;
+    transition: color var(--intel-transition);
+}
+.intel-breadcrumb-link:hover { color: var(--intel-accent); }
+.intel-breadcrumb-sep { color: var(--intel-border); font-size: 13px; }
+.intel-breadcrumb-current { color: var(--intel-accent); }
+
+/* Title row: inline emoji + title */
+.intel-detail-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 6px;
+}
+.intel-detail-icon-inline { font-size: 28px; line-height: 1; }
+
+/* Convergence section heading */
+.intel-convergence-heading {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--intel-text-tertiary);
+    margin-bottom: 10px;
+}
+
+/* TL;DR card */
+.intel-tldr-card {
+    background: var(--intel-amber-bg, #fdf8f1);
+    border-left: 3px solid #d4a757;
+    border-radius: 0 var(--intel-radius-sm) var(--intel-radius-sm) 0;
+    padding: 22px 24px;
+    margin-bottom: 24px;
+}
+.intel-tldr-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--intel-amber-text, #7a5c10);
+    margin-bottom: 8px;
+}
+.intel-tldr-text {
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--intel-text);
+    margin: 0;
+}
+
+/* Knowledge brief heading refinement (match UI kit: 20px, 700) */
+.intel-brief-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+}
+
+/* Source citations in synthesis content */
+.intel-synthesis span[style*="color"],
+.intel-synthesis a { color: var(--intel-accent); }
+
+/* Meta line: lighter weight, more spacing */
+.intel-detail-meta {
+    font-size: 13px;
+    color: var(--intel-text-tertiary);
+    margin-bottom: 24px;
+}
 
 .intel-detail-title {
     font-size: 28px;
