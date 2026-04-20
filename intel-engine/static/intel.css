@@ -2159,7 +2159,7 @@ body {
 /* ── Domain Grid (Home) ── */
 /* Full-bleed warm band behind domain grid */
 .intel-domains-band {
-    background: #f5f3ee;
+    background: #eae7e0;
     border-top: 1px solid var(--intel-border-light);
     padding: 56px 0 64px;
     position: relative;
