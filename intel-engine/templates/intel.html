@@ -299,9 +299,9 @@
         <!-- ── Main Content (Right) ── -->
         <main class="intel-main-content">
             <div class="intel-detail-header">
-                {% if parent_category_name %}
+                {% if domain.path and domain.path.split("/")|length > 2 %}
                 <div class="intel-detail-breadcrumb">
-                    <a href="/domain/{{ parent_category_name }}?level=0" class="intel-breadcrumb-link">{{ parent_category_icon }} {{ parent_category_name }}</a>
+                    <a href="/domain/{{ domain.path.split('/')[1] }}?level=0" class="intel-breadcrumb-link">{{ domain.path.split('/')[1] }}</a>
                     <span class="intel-breadcrumb-sep">&rsaquo;</span>
                     <span class="intel-breadcrumb-current">{{ domain.name }}</span>
                 </div>

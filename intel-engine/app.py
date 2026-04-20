@@ -596,29 +596,6 @@ def domain_page(domain_name):
         total_parent_sources = len(sources)
         show_filtered_banner = False
         parent_domain_name = None
-        parent_category_name = None
-        parent_category_icon = ''  
-        # For level-1 domains, fetch the parent category name for breadcrumb
-        if domain.get('level') == 1 and domain.get('parent_id'):
-            parent_cat = conn.execute('SELECT name, icon FROM domains WHERE id = ?', (domain['parent_id'],)).fetchone()
-            if parent_cat:
-                parent_category_name = parent_cat['name']
-                parent_category_icon = parent_cat['icon'] or ''
-            else:
-                parent_category_icon = ''
-        elif domain.get('level') == 2 and domain.get('parent_id'):
-            # level-2: parent is level-1 (a Row), grandparent is level-0
-            if parent:
-                gp_id = parent['parent_id'] if parent['parent_id'] else None
-                if gp_id:
-                    gp = conn.execute('SELECT name, icon FROM domains WHERE id = ?', (gp_id,)).fetchone()
-                    parent_category_name = gp['name'] if gp else ''
-                    parent_category_icon = gp['icon'] if gp else ''
-                else:
-                    parent_category_name = parent['name']
-                    parent_category_icon = ''
-        else:
-            parent_category_icon = domain.get('icon', '')
         if subtopic_scope and sources:
             parent_domain_name = parent['name'] if parent else None
             filtered = []
@@ -705,9 +682,7 @@ def domain_page(domain_name):
                            convergence=convergence,
                            show_filtered_banner=show_filtered_banner,
                            total_parent_sources=total_parent_sources,
-                           parent_domain_name=parent_domain_name,
-                           parent_category_name=parent_category_name,
-                           parent_category_icon=parent_category_icon))
+                           parent_domain_name=parent_domain_name))
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return resp
 
