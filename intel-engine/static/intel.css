@@ -17,23 +17,33 @@
     --intel-text: #1a1916;
     --intel-text-secondary: #5c5a56;
     --intel-text-tertiary: #a8a49f;
-    /* Accent: muted indigo — less corporate, more thoughtful */
-    --intel-accent: #4f6ef7;
-    --intel-accent-hover: #3d5ce6;
-    --intel-accent-light: rgba(79, 110, 247, 0.07);
-    --intel-green: #2ea84e;
-    --intel-green-light: rgba(46, 168, 78, 0.08);
-    --intel-red: #e03e34;
-    --intel-red-light: rgba(224, 62, 52, 0.06);
-    --intel-orange: #e07a00;
-    --intel-purple: #8b5cf6;
+    /* Accent: dusty periwinkle — scholarly, warm, understated */
+    --intel-accent: #8a9dd6;
+    --intel-accent-hover: #6f83c4;
+    --intel-accent-deep: #4a5a94;
+    --intel-accent-light: rgba(138, 157, 214, 0.12);
+    --intel-accent-glow: rgba(138, 157, 214, 0.22);
+    --intel-green: #8ec9a3;
+    --intel-green-deep: #4a8a63;
+    --intel-green-light: rgba(142, 201, 163, 0.18);
+    --intel-red: #e9a8a2;
+    --intel-red-deep: #b8554d;
+    --intel-red-light: rgba(233, 168, 162, 0.22);
+    --intel-orange: #e8b892;
+    --intel-orange-deep: #a96a2e;
+    --intel-purple: #c4b5e8;
+    --intel-purple-deep: #7b6bb0;
+    --intel-amber: #e8cf8e;
+    --intel-amber-bg: #fdf8f1;
+    --intel-amber-text: #7a5c10;
+    --intel-emerald: #a8d6b8;
     --intel-radius: 14px;
     --intel-radius-sm: 10px;
     --intel-radius-xs: 7px;
     /* Softer, more diffuse shadows — less SaaS, more paper */
     --intel-shadow: 0 1px 4px rgba(30,25,15,0.04), 0 1px 2px rgba(30,25,15,0.05);
     --intel-shadow-lg: 0 6px 28px rgba(30,25,15,0.07), 0 2px 6px rgba(30,25,15,0.04);
-    --intel-shadow-focus: 0 0 0 3px rgba(79, 110, 247, 0.18);
+    --intel-shadow-focus: 0 0 0 3px rgba(138, 157, 214, 0.22);
     --intel-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --intel-transition: 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
     --intel-sidebar-width: 280px;
@@ -781,18 +791,24 @@
     --intel-text: #e2e5ed;
     --intel-text-secondary: #9498a6;
     --intel-text-tertiary: #5e6272;
-    --intel-accent: #6b8aff;
-    --intel-accent-hover: #8da2ff;
-    --intel-accent-light: rgba(107, 138, 255, 0.1);
-    --intel-green: #4ade80;
-    --intel-green-light: rgba(74, 222, 128, 0.1);
-    --intel-red: #f87171;
-    --intel-red-light: rgba(248, 113, 113, 0.1);
-    --intel-orange: #fb923c;
-    --intel-purple: #a78bfa;
+    --intel-accent: #a8b6de;
+    --intel-accent-hover: #bcc8e8;
+    --intel-accent-deep: #7a8bbf;
+    --intel-accent-light: rgba(168, 182, 222, 0.12);
+    --intel-accent-glow: rgba(168, 182, 222, 0.18);
+    --intel-green: #a8d6b8;
+    --intel-green-deep: #6db88a;
+    --intel-green-light: rgba(168, 214, 184, 0.15);
+    --intel-red: #e9a8a2;
+    --intel-red-deep: #d48a83;
+    --intel-red-light: rgba(233, 168, 162, 0.15);
+    --intel-orange: #e8b892;
+    --intel-orange-deep: #c9946a;
+    --intel-purple: #c4b5e8;
+    --intel-purple-deep: #a899cc;
     --intel-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
     --intel-shadow-lg: 0 6px 28px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2);
-    --intel-shadow-focus: 0 0 0 3px rgba(107, 138, 255, 0.25);
+    --intel-shadow-focus: 0 0 0 3px rgba(168, 182, 222, 0.25);
     --intel-glass: rgba(26, 29, 38, 0.5);
     --intel-glass-border: rgba(255, 255, 255, 0.1);
 }
@@ -813,7 +829,7 @@
     background: linear-gradient(135deg, var(--intel-surface) 0%, #1f1d2a 100%);
 }
 [data-theme="dark"] .intel-hub-submit.wide {
-    background: linear-gradient(135deg, var(--intel-accent), #4a6ae0);
+    background: linear-gradient(135deg, var(--intel-accent), #6f83c4);
 }
 [data-theme="dark"] .intel-synthesis {
     border-left-color: #7a6530;
@@ -867,7 +883,7 @@
     color: var(--intel-text);
 }
 [data-theme="dark"] .bio-node-sub:hover .bio-node-core {
-    border-color: #4ade80;
+    border-color: #a8d6b8;
 }
 
 /* Tree metadata text */
@@ -1446,7 +1462,7 @@ body {
     align-items: center;
     padding: 100px 24px 64px;
     text-align: center;
-    background: radial-gradient(ellipse at 50% 0%, rgba(79, 110, 247, 0.06) 0%, transparent 70%);
+    background: radial-gradient(ellipse at 50% 0%, rgba(138, 157, 214, 0.06) 0%, transparent 70%);
     overflow: hidden;
 }
 
@@ -1553,7 +1569,7 @@ body {
 
 .intel-input:focus {
     border-color: var(--intel-accent);
-    box-shadow: var(--intel-shadow-focus), 0 0 0 4px rgba(79, 110, 247, 0.08);
+    box-shadow: var(--intel-shadow-focus), 0 0 0 4px rgba(138, 157, 214, 0.08);
 }
 
 .intel-input::placeholder {
@@ -1575,25 +1591,25 @@ body {
     height: 42px;
     border-radius: 11px;
     border: none;
-    background: linear-gradient(135deg, var(--intel-accent), #3d5ce6);
+    background: linear-gradient(135deg, var(--intel-accent), #6f83c4);
     color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-    box-shadow: 0 2px 6px rgba(79, 110, 247, 0.15);
+    box-shadow: 0 2px 6px rgba(138, 157, 214, 0.15);
 }
 
 .intel-input-btn:hover {
-    background: linear-gradient(135deg, #3d5ce6, #2845d5);
-    box-shadow: 0 4px 12px rgba(79, 110, 247, 0.25);
+    background: linear-gradient(135deg, #6f83c4, #2845d5);
+    box-shadow: 0 4px 12px rgba(138, 157, 214, 0.25);
     transform: translateY(-1px);
 }
 
 .intel-input-btn:active {
     transform: translateY(0) scale(0.98);
-    box-shadow: 0 1px 4px rgba(79, 110, 247, 0.15);
+    box-shadow: 0 1px 4px rgba(138, 157, 214, 0.15);
 }
 
 .intel-input-btn:disabled {
@@ -1660,7 +1676,7 @@ body {
     align-items: center;
     justify-content: center;
     margin: 0 auto 16px;
-    box-shadow: 0 0 0 8px rgba(79, 110, 247, 0.08);
+    box-shadow: 0 0 0 8px rgba(138, 157, 214, 0.08);
 }
 .intel-step-title {
     font-size: 15px;
@@ -1705,8 +1721,8 @@ body {
     animation: intel-pulse-glow 2s ease-in-out infinite;
 }
 @keyframes intel-pulse-glow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 110, 247, 0.2); }
-    50% { box-shadow: 0 0 0 8px rgba(79, 110, 247, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(138, 157, 214, 0.2); }
+    50% { box-shadow: 0 0 0 8px rgba(138, 157, 214, 0); }
 }
 .intel-status-icon.complete { background: var(--intel-green-light); }
 .intel-status-icon.error { background: var(--intel-red-light); }
@@ -1887,7 +1903,7 @@ body {
     width: 48px;
     border-radius: var(--intel-radius-xs);
     border: none;
-    background: linear-gradient(135deg, var(--intel-accent), #3d5ce6);
+    background: linear-gradient(135deg, var(--intel-accent), #6f83c4);
     color: white;
     cursor: pointer;
     display: flex;
@@ -1895,18 +1911,18 @@ body {
     justify-content: center;
     transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(79, 110, 247, 0.15);
+    box-shadow: 0 2px 6px rgba(138, 157, 214, 0.15);
 }
 
 .intel-hub-submit:hover {
-    background: linear-gradient(135deg, #3d5ce6, #2845d5);
-    box-shadow: 0 4px 12px rgba(79, 110, 247, 0.25);
+    background: linear-gradient(135deg, #6f83c4, #2845d5);
+    box-shadow: 0 4px 12px rgba(138, 157, 214, 0.25);
     transform: translateY(-1px);
 }
 
 .intel-hub-submit:active {
     transform: translateY(0) scale(0.98);
-    box-shadow: 0 1px 4px rgba(79, 110, 247, 0.15);
+    box-shadow: 0 1px 4px rgba(138, 157, 214, 0.15);
 }
 
 .intel-hub-submit:disabled {
@@ -2059,7 +2075,7 @@ body {
     width: 220px;
     height: 220px;
     border-radius: 50%;
-    border: 2px solid rgba(79, 110, 247, 0.05);
+    border: 2px solid rgba(138, 157, 214, 0.05);
     pointer-events: none;
 }
 .intel-domains-band::after {
@@ -2141,7 +2157,7 @@ body {
 
 .intel-domain-card:hover {
     border-color: var(--intel-accent);
-    box-shadow: 0 8px 24px rgba(79, 110, 247, 0.08), 0 2px 8px rgba(30, 25, 15, 0.06);
+    box-shadow: 0 8px 24px rgba(138, 157, 214, 0.08), 0 2px 8px rgba(30, 25, 15, 0.06);
     transform: translateY(-2px);
     background: #fdfcfb;
 }
@@ -2438,7 +2454,7 @@ body {
 }
 .bio-node-domain:hover .bio-node-core {
     border-color: var(--intel-accent);
-    box-shadow: 0 2px 12px rgba(79, 110, 247, 0.12);
+    box-shadow: 0 2px 12px rgba(138, 157, 214, 0.12);
 }
 .bio-node-domain[data-expanded="true"] .bio-node-core {
     border-color: var(--intel-accent);
@@ -2471,7 +2487,7 @@ body {
 .bio-node-expand {
     font-size: 10px;
     color: var(--intel-accent);
-    background: rgba(79, 110, 247, 0.08);
+    background: rgba(138, 157, 214, 0.08);
     border-radius: 8px;
     padding: 1px 6px;
     line-height: 1.5;
@@ -2873,7 +2889,7 @@ body {
 .intel-add-source-btn:hover {
     background: var(--intel-accent-light);
     border-color: var(--intel-accent);
-    box-shadow: 0 2px 8px rgba(79, 110, 247, 0.1);
+    box-shadow: 0 2px 8px rgba(138, 157, 214, 0.1);
 }
 
 .intel-add-source-btn svg {
@@ -3387,7 +3403,7 @@ body {
     text-align: left;
 }
 
-.intel-chat-msg.user .intel-chat-msg-bubble { background: var(--intel-accent); color: white; border-bottom-right-radius: 4px; box-shadow: 0 1px 3px rgba(79,110,247,0.2); }
+.intel-chat-msg.user .intel-chat-msg-bubble { background: var(--intel-accent); color: white; border-bottom-right-radius: 4px; box-shadow: 0 1px 3px rgba(138, 157, 214,0.2); }
 .intel-chat-msg.assistant .intel-chat-msg-bubble { background: var(--intel-surface-hover); color: var(--intel-text); border-bottom-left-radius: 4px; border: 1px solid var(--intel-border-light); }
 .intel-chat-msg-bubble strong { font-weight: 600; }
 .intel-chat-msg-bubble ul { padding-left: 16px; margin: 8px 0; }
@@ -3431,7 +3447,7 @@ body {
     white-space: nowrap;
 }
 
-.intel-chat-send:hover { background: var(--intel-accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 110, 247, 0.2); }
+.intel-chat-send:hover { background: var(--intel-accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(138, 157, 214, 0.2); }
 .intel-chat-send:active { transform: translateY(0) scale(0.98); }
 .intel-chat-send:disabled { background: var(--intel-text-tertiary); cursor: not-allowed; transform: none; box-shadow: none; }
 
@@ -3462,7 +3478,7 @@ body {
 
 .intel-sidebar-progress-card {
     background: var(--intel-accent-light);
-    border: 1px solid rgba(79, 110, 247, 0.12);
+    border: 1px solid rgba(138, 157, 214, 0.12);
     border-radius: var(--intel-radius-sm);
     padding: 12px 14px;
 }
@@ -3613,14 +3629,14 @@ body {
     font-family: var(--intel-font);
     color: var(--intel-accent);
     background: var(--intel-accent-light);
-    border: 1px solid rgba(79, 110, 247, 0.2);
+    border: 1px solid rgba(138, 157, 214, 0.2);
     border-radius: var(--intel-radius-xs);
     cursor: pointer;
     transition: all var(--intel-transition);
 }
 
 .intel-generate-visual-btn:hover {
-    background: rgba(79, 110, 247, 0.10);
+    background: rgba(138, 157, 214, 0.10);
     border-color: var(--intel-accent);
 }
 
@@ -3746,7 +3762,7 @@ body {
 
 .intel-search-bar:focus-within {
     border-color: var(--intel-accent);
-    box-shadow: var(--intel-shadow-focus), 0 0 0 4px rgba(79, 110, 247, 0.08);
+    box-shadow: var(--intel-shadow-focus), 0 0 0 4px rgba(138, 157, 214, 0.08);
     transform: translateY(-1px);
 }
 
@@ -3775,7 +3791,7 @@ body {
     height: 44px;
     border: none;
     border-radius: 22px;
-    background: linear-gradient(135deg, var(--intel-accent), #3d5ce6);
+    background: linear-gradient(135deg, var(--intel-accent), #6f83c4);
     color: white;
     cursor: pointer;
     display: flex;
@@ -3783,18 +3799,18 @@ body {
     justify-content: center;
     transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(79, 110, 247, 0.25);
+    box-shadow: 0 4px 12px rgba(138, 157, 214, 0.25);
 }
 
 .intel-search-ai-btn:hover {
-    background: linear-gradient(135deg, #3d5ce6, #2845d5);
-    box-shadow: 0 6px 20px rgba(79, 110, 247, 0.35);
+    background: linear-gradient(135deg, #6f83c4, #2845d5);
+    box-shadow: 0 6px 20px rgba(138, 157, 214, 0.35);
     transform: translateY(-1px);
 }
 
 .intel-search-ai-btn:active {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(79, 110, 247, 0.2);
+    box-shadow: 0 2px 8px rgba(138, 157, 214, 0.2);
 }
 
 .intel-search-ai-btn:disabled {
@@ -4293,7 +4309,7 @@ body {
 
 /* ── Search Section Background (Domain Detail) ── */
 .intel-search-section {
-    background: linear-gradient(180deg, rgba(79, 110, 247, 0.03) 0%, transparent 100%);
+    background: linear-gradient(180deg, rgba(138, 157, 214, 0.03) 0%, transparent 100%);
     padding: 32px 0 24px;
     margin: -16px 0 24px;
     border-radius: 16px;
