@@ -316,15 +316,7 @@
                     {% if synthesis %} &middot; Synthesis v{{ synthesis.version }}{% endif %}
                 </p>
 
-                {% if subtopic_scope %}
-                <div class="intel-subtopic-banner">
-                    {% if show_filtered_banner %}
-                    Showing {{ sources|length }} of {{ total_parent_sources }} sources relevant to <strong>{{ subtopic_scope }}</strong>
-                    {% else %}
-                    Showing all sources from <strong>{{ parent_domain_name or 'parent domain' }}</strong>
-                    {% endif %}
-                </div>
-                {% endif %}
+
             </div>
 
             <!-- ── AI SEARCH (top of page) ── -->
@@ -410,12 +402,6 @@
 
             <!-- ── SYNTHESIS ── -->
             {% if synthesis and synthesis.content %}
-            <!-- TL;DR Card -->
-            <div class="intel-tldr-card">
-                <div class="intel-tldr-label">&#9670;  TL;DR &mdash; Synthesis</div>
-                <p class="intel-tldr-text">Here is what converges across your sources:</p>
-            </div>
-
             <div class="intel-brief-header">
                 <h2 class="intel-brief-title">Knowledge brief</h2>
             </div>
