@@ -42,7 +42,7 @@
         {% endif %}
 
         <form method="POST" action="{{ url_for('register_page') }}" style="width: 100%; max-width: 400px;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            
             <div style="margin-bottom: 12px;">
                 <input type="text" name="display_name" class="intel-input" placeholder="Your name" required
                        style="padding: 14px 20px;" value="{{ request.form.get('display_name', '') }}">
