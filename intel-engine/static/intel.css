@@ -1427,6 +1427,28 @@ body {
     color: var(--intel-text);
     background: var(--intel-surface-hover);
 }
+/* Avatar circle (replaces text username + sign out) */
+.intel-nav-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--intel-accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    transition: all var(--intel-transition);
+    flex-shrink: 0;
+}
+.intel-nav-avatar:hover {
+    background: var(--intel-accent-hover);
+    transform: scale(1.05);
+}
+
 
 .intel-reset-link {
     font-size: 11px;
